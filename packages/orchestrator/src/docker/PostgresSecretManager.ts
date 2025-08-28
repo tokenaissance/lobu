@@ -44,8 +44,12 @@ export class PostgresSecretManager extends BaseSecretManager {
    */
   async createUserSecret(username: string, password: string): Promise<void> {
     try {
+      const dbHost = this.config.database.host;
+      const dbPort = this.config.database.port;
+      const dbName = this.config.database.database;
+      
       const envVars = {
-        DATABASE_URL: `postgres://${username}:${password}@localhost:5432/peerbot`,
+        DATABASE_URL: `postgres://${username}:${password}@${dbHost}:${dbPort}/${dbName}`,
         DB_USERNAME: username,
         DB_PASSWORD: password
       };

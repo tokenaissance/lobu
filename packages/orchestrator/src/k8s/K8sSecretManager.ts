@@ -68,8 +68,12 @@ export class K8sSecretManager extends BaseSecretManager {
         // Secret doesn't exist, create it
       }
 
+      const dbHost = this.config.database.host;
+      const dbPort = this.config.database.port;
+      const dbName = this.config.database.database;
+      
       const secretData = {
-        'DATABASE_URL': Buffer.from(`postgres://${username}:${password}@peerbot-postgresql:5432/peerbot`).toString('base64'),
+        'DATABASE_URL': Buffer.from(`postgres://${username}:${password}@${dbHost}:${dbPort}/${dbName}`).toString('base64'),
         'DB_USERNAME': Buffer.from(username).toString('base64'),
         'DB_PASSWORD': Buffer.from(password).toString('base64')
       };

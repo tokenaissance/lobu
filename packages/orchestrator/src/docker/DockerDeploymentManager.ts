@@ -74,8 +74,12 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       const workspaceDir = `./workspaces/${userId}`;
       
       // Environment variables
+      const dbHost = this.config.database.host;
+      const dbPort = this.config.database.port;
+      const dbName = this.config.database.database;
+      
       const envVars = [
-        `DATABASE_URL=postgres://${username}:${await this.getPasswordForUser(username)}@localhost:5432/peerbot`,
+        `DATABASE_URL=postgres://${username}:${await this.getPasswordForUser(username)}@${dbHost}:${dbPort}/${dbName}`,
         'WORKER_MODE=queue',
         `USER_ID=${userId}`,
         `DEPLOYMENT_NAME=${deploymentName}`,

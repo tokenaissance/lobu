@@ -30,18 +30,58 @@ class PeerbotOrchestrator {
   }
 
   private createDeploymentManager(config: OrchestratorConfig): BaseDeploymentManager {
-    const deploymentMode = process.env.DEPLOYMENT_MODE || 'k8s';
+    // Auto-detect deployment mode based on environment
+    if (this.isKubernetesAvailable()) {
+      console.log('🚀 Kubernetes detected, using K8sDeploymentManager');
+      return new K8sDeploymentManager(config, this.dbPool);
+    }
     
-    console.log(`🚀 Creating deployment manager for mode: ${deploymentMode}`);
+    if (this.isDockerAvailable()) {
+      console.log('🚀 Docker detected, using DockerDeploymentManager');
+      return new DockerDeploymentManager(config, this.dbPool);
+    }
     
-    switch (deploymentMode.toLowerCase()) {
-      case 'docker':
-        return new DockerDeploymentManager(config, this.dbPool);
-      case 'k8s':
-      case 'kubernetes':
-        return new K8sDeploymentManager(config, this.dbPool);
-      default:
-        throw new Error(`Unsupported deployment mode: ${deploymentMode}. Use 'docker' or 'k8s'.`);
+    throw new Error('Neither Kubernetes nor Docker is available. Please ensure one is installed and accessible.');
+  }
+
+  private isKubernetesAvailable(): boolean {
+    try {
+      // Check if running in a Kubernetes cluster
+      if (process.env.KUBERNETES_SERVICE_HOST) {
+        return true;
+      }
+      
+      // Check if kubectl config is available
+      const fs = require('fs');
+      const os = require('os');
+      const path = require('path');
+      
+      // Check for kubeconfig in default locations
+      const kubeconfigPaths = [
+        process.env.KUBECONFIG,
+        path.join(os.homedir(), '.kube', 'config')
+      ].filter(Boolean);
+      
+      return kubeconfigPaths.some(configPath => {
+        try {
+          return fs.existsSync(configPath) && fs.statSync(configPath).isFile();
+        } catch {
+          return false;
+        }
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  private isDockerAvailable(): boolean {
+    try {
+      // Try to connect to Docker daemon
+      const { execSync } = require('child_process');
+      execSync('docker version', { stdio: 'ignore', timeout: 5000 });
+      return true;
+    } catch {
+      return false;
     }
   }
 
