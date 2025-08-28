@@ -1,24 +1,54 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Setting up Claude Code Slack Bot development environment..."
+echo "🚀 Setting up Peerbot development environment..."
 
-# Install dependencies
+# Fix permissions for node_modules volume
+sudo chown -R node:node /workspace/node_modules || true
+
+# Install dependencies as node user
 echo "📦 Installing dependencies with Bun..."
-bun install
+sudo -u node bun install
 
-# Build packages
+# Build packages as node user
 echo "🔨 Building packages..."
-cd packages/shared && bun run build && cd ../..
-cd packages/worker && bun run build && cd ../..
-cd packages/dispatcher && bun run build && cd ../..
-cd packages/orchestrator && bun run build && cd ../..
+sudo -u node bash -c "cd packages/shared && bun run build"
+sudo -u node bash -c "cd packages/worker && bun run build"
+sudo -u node bash -c "cd packages/dispatcher && bun run build"
+sudo -u node bash -c "cd packages/orchestrator && bun run build"
+
+# Setup shell environment
+echo "🔧 Setting up shell environment..."
+cat >> /home/node/.bashrc << 'EOF'
+
+# Peerbot Development Environment
+export PATH="/usr/local/bun/bin:$PATH"
+export BUN_INSTALL="/usr/local/bun"
+export PATH="/home/node/.npm-global/bin:$PATH"
+
+# Kubernetes aliases
+alias k="kubectl"
+alias kp="kubectl get pods"
+alias kl="kubectl logs"
+alias kd="kubectl describe"
+alias ka="kubectl apply -f"
+alias kx="kubectl exec -it"
+
+# Skaffold aliases
+alias sk="skaffold"
+alias skd="skaffold dev"
+alias skb="skaffold build"
+EOF
+
+# Setup npm global directory as node user
+sudo -u node npm config set prefix /home/node/.npm-global
+sudo -u node mkdir -p /home/node/.npm-global
 
 # Setup Claude Code MCP configuration
 echo "🤖 Setting up Claude Code MCP server..."
 if [ -f "/workspace/packages/worker/mcp-config.json" ]; then
-    mkdir -p /home/vscode/.claude
-    cp /workspace/packages/worker/mcp-config.json /home/vscode/.claude/settings.mcp.json
+    mkdir -p /home/node/.claude
+    cp /workspace/packages/worker/mcp-config.json /home/node/.claude/settings.mcp.json
     echo "✅ MCP server configuration deployed"
 fi
 
@@ -27,8 +57,8 @@ if command -v k3s &> /dev/null; then
     echo "☸️ Setting up k3s..."
     sudo k3s server --write-kubeconfig-mode 644 --disable traefik --disable metrics-server &
     sleep 10
-    sudo cp /etc/rancher/k3s/k3s.yaml /home/vscode/.kube/config
-    sudo chown vscode:vscode /home/vscode/.kube/config
+    sudo cp /etc/rancher/k3s/k3s.yaml /home/node/.kube/config
+    sudo chown node:node /home/node/.kube/config
     echo "✅ k3s is running"
 fi
 
@@ -55,7 +85,7 @@ if [ ! -f "CLAUDE.md" ]; then
     cat > CLAUDE.md << 'EOF'
 # CLAUDE.md - DevContainer Environment
 
-This is a development environment for the Claude Code Slack Bot running in a VS Code DevContainer.
+This is a development environment for the Peerbot running in a VS Code DevContainer.
 
 ## Available Commands
 
@@ -80,7 +110,6 @@ The MCP process manager server is available with these tools:
 - restart_process
 - get_process_status
 - get_process_logs
-- monitor_processes
 
 EOF
     echo "✅ Created CLAUDE.md"

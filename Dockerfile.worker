@@ -20,31 +20,30 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /bin/bash /bin/sh
 
+# Install cloudflared for multiple architectures
+RUN ARCH=$(dpkg --print-architecture) && \
+    case ${ARCH} in \
+        amd64) CF_ARCH="amd64" ;; \
+        arm64) CF_ARCH="arm64" ;; \
+        armhf) CF_ARCH="arm" ;; \
+        *) CF_ARCH="amd64" ;; \
+    esac && \
+    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /usr/local/bin/cloudflared && \
+    chmod +x /usr/local/bin/cloudflared
+
 # Create a non-root user with home directory and sudo access
 RUN addgroup --gid 1001 claude && \
     adduser --system --uid 1001 --ingroup claude --home /home/claude claude && \
     echo 'claude ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# Install Claude Code CLI and make it accessible to all users
-RUN bun install -g @anthropic-ai/claude-code@1.0.59 && \
-    echo "=== CLAUDE INSTALLATION DEBUG ===" && \
-    echo "Installing Claude CLI to shared location..." && \
-    # Copy the entire package to a shared location
-    cp -r /root/.bun/install/global/node_modules/@anthropic-ai/claude-code /opt/claude-code && \
-    # Make it executable and accessible to all users
-    chmod -R 755 /opt/claude-code && \
-    # Remove any existing symlink
-    rm -f /usr/local/bin/claude && \
-    # Create symlink to the accessible location
-    ln -sf /opt/claude-code/cli.js /usr/local/bin/claude && \
-    # Verify it works as root
-    echo "Testing as root:" && \
-    /usr/local/bin/claude --version && \
-    # Verify permissions are correct for claude user
-    echo "Checking permissions for claude user:" && \
-    ls -la /usr/local/bin/claude && \
-    ls -la /opt/claude-code/cli.js && \
-    echo "✅ Claude CLI successfully installed at /opt/claude-code and symlinked"
+# Install Claude Code CLI globally and make it accessible to all users - using npm instead
+RUN npm install -g @anthropic-ai/claude-code && \
+    echo "Npm global packages:" && \
+    npm list -g --depth=0 && \
+    echo "Looking for claude binary..." && \
+    which claude && \
+    echo "Testing claude command..." && \
+    claude --version
 
 # Ensure the non-root user can also access bun and claude
 RUN echo 'export PATH="/home/bun/.bun/bin:$PATH"' >> /home/claude/.bashrc && \

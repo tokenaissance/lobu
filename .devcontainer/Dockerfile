@@ -35,21 +35,9 @@ RUN mkdir -p /workspace
 # Note: MCP config will be copied during post-create from the mounted workspace
 
 # Create Claude Code configuration directory
-RUN mkdir -p /home/vscode/.claude && \
-    chown -R vscode:vscode /home/vscode/.claude
+RUN mkdir -p /home/node/.claude && chown -R node:node /home/node/.claude
 
-# Setup shell environment
-RUN echo 'export PATH="/usr/local/bun/bin:$PATH"' >> /home/vscode/.bashrc && \
-    echo 'export BUN_INSTALL="/usr/local/bun"' >> /home/vscode/.bashrc && \
-    echo 'alias k="kubectl"' >> /home/vscode/.bashrc && \
-    echo 'alias kp="kubectl get pods"' >> /home/vscode/.bashrc && \
-    echo 'alias kl="kubectl logs"' >> /home/vscode/.bashrc && \
-    echo 'alias kd="kubectl describe"' >> /home/vscode/.bashrc && \
-    echo 'alias ka="kubectl apply -f"' >> /home/vscode/.bashrc && \
-    echo 'alias kx="kubectl exec -it"' >> /home/vscode/.bashrc && \
-    echo 'alias sk="skaffold"' >> /home/vscode/.bashrc && \
-    echo 'alias skd="skaffold dev"' >> /home/vscode/.bashrc && \
-    echo 'alias skb="skaffold build"' >> /home/vscode/.bashrc
+# Note: Shell environment setup will be handled by post-create script
 
 # Install GitHub CLI for PR operations
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
@@ -61,12 +49,10 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
 # Setup git
 RUN git config --global --add safe.directory /workspace
 
-# Switch to vscode user
-USER vscode
+# Switch to vscode user (will be handled by devcontainer features)
+# USER vscode
 
-# Install global npm packages as vscode user
-RUN npm config set prefix /home/vscode/.npm-global && \
-    echo 'export PATH="/home/vscode/.npm-global/bin:$PATH"' >> /home/vscode/.bashrc
+# Note: npm global packages and shell config will be set up by devcontainer features
 
 WORKDIR /workspace
 

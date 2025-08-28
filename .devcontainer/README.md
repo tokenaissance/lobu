@@ -1,6 +1,6 @@
-# DevContainer for Claude Code Slack Bot
+# DevContainer for Peerbot
 
-This DevContainer provides a complete development environment for the Claude Code Slack Bot with all necessary tools pre-installed.
+This DevContainer provides a complete development environment for the Peerbot with all necessary tools pre-installed.
 
 ## Features
 

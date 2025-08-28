@@ -2,14 +2,21 @@
 
 import PgBoss from "pg-boss";
 import { WebClient } from "@slack/web-api";
-import { randomUUID } from "crypto";
+import { createHash } from "crypto";
 import type { GitHubRepositoryManager } from "../github/repository-manager";
+
+// Generate deterministic action IDs based on content to prevent conflicts during rapid message updates - fixed
+function generateDeterministicActionId(content: string, prefix: string = "action"): string {
+  const hash = createHash('sha256').update(content).digest('hex').substring(0, 8);
+  return `${prefix}_${hash}`;
+}
 // Simple blockkit detection and conversion for now
 function processMarkdownAndBlockkit(content: string): { text: string; blocks: any[] } {
   // Process blockkit with metadata
   const codeBlockRegex = /```(\w+)\s*\{([^}]+)\}\s*\n?([\s\S]*?)\n?```/g;
   let processedContent = content;
   const actionButtons: any[] = [];
+  let blockIndex = 0; // Track position to ensure unique action_ids
 
   let match;
   while ((match = codeBlockRegex.exec(content)) !== null) {
@@ -37,19 +44,21 @@ function processMarkdownAndBlockkit(content: string): { text: string; blocks: an
         
         if (language === 'blockkit') {
           const parsed = codeContent ? JSON.parse(codeContent.trim()) : { blocks: [] };
+          const actionId = generateDeterministicActionId(codeContent + metadata.action + blockIndex, 'blockkit_form');
           actionButtons.push({
             type: "button",
             text: { type: "plain_text", text: metadata.action },
-            action_id: `blockkit_form_${randomUUID()}`,
+            action_id: actionId,
             value: JSON.stringify({ blocks: parsed.blocks || [parsed] })
           });
           processedContent = processedContent.replace(fullMatch, '');
         } else {
           if (codeContent && codeContent.length <= 2000) {
+            const actionId = generateDeterministicActionId(codeContent + metadata.action + blockIndex, language);
             actionButtons.push({
               type: "button",
               text: { type: "plain_text", text: metadata.action },
-              action_id: `${language}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+              action_id: actionId,
               value: codeContent
             });
           }
@@ -58,6 +67,8 @@ function processMarkdownAndBlockkit(content: string): { text: string; blocks: an
           }
         }
       }
+      
+      blockIndex++; // Increment for each processed block to ensure unique action_ids
     } catch (error) {
       console.error('Failed to parse code block:', error);
     }

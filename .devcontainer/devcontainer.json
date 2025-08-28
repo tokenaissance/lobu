@@ -1,5 +1,5 @@
 {
-  "name": "Claude Code Slack Bot Development",
+  "name": "Peerbot Development",
   "dockerFile": "Dockerfile",
   
   // Features to add to the dev container
@@ -84,7 +84,7 @@
   "mounts": [
     "source=${localWorkspaceFolder}/.env,target=/workspace/.env,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/.env.qa,target=/workspace/.env.qa,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.kube,target=/home/node/.kube,type=bind,consistency=cached",
     "source=claude-code-slack-node-modules,target=/workspace/node_modules,type=volume"
   ],
 
@@ -95,7 +95,7 @@
   "postStartCommand": "echo '🚀 DevContainer ready! Run \"make dev\" to start development'",
 
   // User to run as
-  "remoteUser": "vscode",
+  "remoteUser": "node",
 
   // Additional runtime arguments
   "runArgs": [

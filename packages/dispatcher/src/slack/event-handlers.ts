@@ -726,6 +726,8 @@ export class SlackEventHandlers {
   ): Promise<void> {
     logger.info(`Handling blockkit form: ${actionId}`);
 
+    let blocks: any[] = [];
+    
     try {
       // Extract the blocks from the button's value
       const action = (body as any).actions?.[0];
@@ -734,7 +736,7 @@ export class SlackEventHandlers {
       }
 
       const formData = JSON.parse(action.value);
-      const blocks = formData.blocks || [];
+      blocks = formData.blocks || [];
 
       if (blocks.length === 0) {
         throw new Error("No blocks found in form data");
@@ -762,10 +764,14 @@ export class SlackEventHandlers {
     } catch (error) {
       logger.error(`Failed to handle blockkit form ${actionId}:`, error);
       
+      // Show the raw Block Kit content for troubleshooting
+      const rawBlocksJson = JSON.stringify(blocks, null, 2);
+      const truncatedBlocks = rawBlocksJson.length > 2500 ? rawBlocksJson.substring(0, 2500) + '\n...[truncated]' : rawBlocksJson;
+      
       await client.chat.postEphemeral({
         channel: channelId,
         user: userId,
-        text: `❌ Failed to open form: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        text: `❌ **Failed to open form:** ${error instanceof Error ? error.message : 'Unknown error'}\n\n**Raw Block Kit content for debugging:**\n\`\`\`json\n${truncatedBlocks}\n\`\`\`\n\n💡 *The Block Kit content may not be compatible with Slack modals. Check the Slack Block Kit documentation for modal-specific validation rules.*`,
       });
     }
   }
