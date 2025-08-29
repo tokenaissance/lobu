@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -e
 
 # Container entrypoint script for Claude Worker
 echo "🚀 Starting Claude Code Worker container..."
@@ -21,30 +21,20 @@ cleanup() {
 # Setup signal handlers for graceful shutdown
 trap cleanup SIGTERM SIGINT
 
-# Validate required environment variables
-required_vars=(
-    "SESSION_KEY"
-    "USER_ID" 
-    "USERNAME"
-    "CHANNEL_ID"
-    "REPOSITORY_URL"
-    "USER_PROMPT"
-    "SLACK_RESPONSE_CHANNEL"
-    "SLACK_RESPONSE_TS"
-    "CLAUDE_OPTIONS"
-    "SLACK_BOT_TOKEN"
-    "GITHUB_TOKEN"
-)
+echo "🔍 Environment variables provided by orchestrator:"
+echo "  - SESSION_KEY: ${SESSION_KEY:-not set}"
+echo "  - USER_ID: ${USER_ID:-not set}" 
+echo "  - CHANNEL_ID: ${CHANNEL_ID:-not set}"
+echo "  - REPOSITORY_URL: ${REPOSITORY_URL:-not set}"
+echo "  - DEPLOYMENT_NAME: ${DEPLOYMENT_NAME:-not set}"
 
-echo "🔍 Validating environment variables..."
-for var in "${required_vars[@]}"; do
-    if [[ -z "${!var:-}" ]]; then
-        echo "❌ Error: Required environment variable $var is not set"
-        exit 1
-    fi
-done
+# Basic validation for critical variables
+if [[ -z "${SESSION_KEY:-}" ]]; then
+    echo "❌ Error: SESSION_KEY is required"
+    exit 1
+fi
 
-echo "✅ All required environment variables are set"
+echo "✅ Critical environment variables are set"
 
 # Setup Google Cloud credentials if provided
 if [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
@@ -159,11 +149,26 @@ echo "✅ Git configuration completed"
 
 # Display final status
 echo "🎯 Starting worker execution..."
-echo "  - Session: $SESSION_KEY"
-echo "  - User: $USERNAME"  
-echo "  - Timeout: 5 minutes (managed by Kubernetes)"
+echo "  - Session: ${SESSION_KEY:-unknown}"
+echo "  - User ID: ${USER_ID:-unknown}"  
+echo "  - Timeout: 5 minutes (managed by orchestrator)"
 echo "  - Recovery: ${RECOVERY_MODE:-false}"
+
+# Make scripts executable
+chmod +x /app/scripts/*.sh 2>/dev/null || true
+
+# Setup MCP server
+/app/packages/worker/scripts/setup-mcp-server.sh || echo "⚠️  MCP server setup failed or not found"
+
+# Check if we need to build (dev mode or if dist does not exist)
+if [ "${BUILD_MODE:-prod}" = "dev" ] || [ ! -d "/app/packages/worker/dist" ]; then
+    echo "Building packages..."
+    cd /app/packages/shared && bun run build
+    cd /app/packages/worker && bun run build
+    chmod +x /app/packages/worker/dist/mcp/process-manager-server.mjs 2>/dev/null || true
+fi
 
 # Start the worker process
 echo "🚀 Executing Claude Worker..."
+cd /app/packages/worker
 exec bun run dist/index.js

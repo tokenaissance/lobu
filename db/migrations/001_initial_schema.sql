@@ -4,6 +4,7 @@
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS hstore;
 
 -- Create bot table for multi-bot credential support
 CREATE TABLE bots (

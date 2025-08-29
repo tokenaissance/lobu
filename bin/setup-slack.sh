@@ -507,6 +507,9 @@ setup_kubernetes() {
 
 create_env_content() {
     cat << EOF
+# Deployment Configuration
+DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-docker}
+
 # Slack App Configuration
 SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
 SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
@@ -589,5 +592,90 @@ full_setup() {
     echo "Happy coding! 🚀"
 }
 
-# Main execution - run the setup directly
-full_setup
+# K8s-only setup function for make dev
+k8s_only_setup() {
+    echo ""
+    echo "🚀 Setting up Kubernetes configuration..."
+    echo ""
+    
+    # Load existing env vars
+    load_env_file
+    
+    # Set deployment mode to kubernetes
+    export DEPLOYMENT_MODE="kubernetes"
+    
+    # Update .env file with new deployment mode
+    local new_env_content=$(create_env_content)
+    if [[ -f .env ]]; then
+        # Update existing .env file
+        if grep -q "^DEPLOYMENT_MODE=" .env; then
+            # Replace existing DEPLOYMENT_MODE line
+            sed -i.bak "s/^DEPLOYMENT_MODE=.*/DEPLOYMENT_MODE=kubernetes/" .env
+            rm .env.bak
+        else
+            # Add DEPLOYMENT_MODE at the top
+            echo "DEPLOYMENT_MODE=kubernetes" > .env.tmp
+            echo "" >> .env.tmp
+            cat .env >> .env.tmp
+            mv .env.tmp .env
+        fi
+        echo "✅ Updated DEPLOYMENT_MODE=kubernetes in .env"
+    else
+        # Create new .env file
+        echo "$new_env_content" > .env
+        echo "✅ Created .env with DEPLOYMENT_MODE=kubernetes"
+    fi
+    
+    create_values_local
+    setup_kubernetes
+    
+    echo ""
+    echo "✅ Kubernetes configuration complete!"
+}
+
+# Docker-only setup function for make dev
+docker_only_setup() {
+    echo ""
+    echo "🐳 Setting up Docker configuration..."
+    echo ""
+    
+    # Load existing env vars
+    load_env_file
+    
+    # Set deployment mode to docker
+    export DEPLOYMENT_MODE="docker"
+    
+    # Update .env file with new deployment mode
+    if [[ -f .env ]]; then
+        # Update existing .env file
+        if grep -q "^DEPLOYMENT_MODE=" .env; then
+            # Replace existing DEPLOYMENT_MODE line
+            sed -i.bak "s/^DEPLOYMENT_MODE=.*/DEPLOYMENT_MODE=docker/" .env
+            rm .env.bak
+        else
+            # Add DEPLOYMENT_MODE at the top
+            echo "DEPLOYMENT_MODE=docker" > .env.tmp
+            echo "" >> .env.tmp
+            cat .env >> .env.tmp
+            mv .env.tmp .env
+        fi
+        echo "✅ Updated DEPLOYMENT_MODE=docker in .env"
+    else
+        # Create new .env file
+        local new_env_content=$(create_env_content)
+        echo "$new_env_content" > .env
+        echo "✅ Created .env with DEPLOYMENT_MODE=docker"
+    fi
+    
+    echo ""
+    echo "✅ Docker configuration complete!"
+}
+
+# Main execution - check for setup mode
+if [[ "${1:-}" == "k8s-only" ]]; then
+    k8s_only_setup
+elif [[ "${1:-}" == "docker-only" ]]; then
+    docker_only_setup
+else
+    full_setup
+fi

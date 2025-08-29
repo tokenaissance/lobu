@@ -32,8 +32,15 @@ dev: build-worker
 	@echo "   - Start orchestrator and dispatcher with hot reload"
 	@echo "   - Use Docker containers for workers"
 	@echo ""
-	@export DEPLOYMENT_MODE=docker && \
-		export NODE_ENV=development && \
+	@read -p "Do you want to setup Kubernetes configuration? (y/N): " setup_k8s; \
+	if [ "$$setup_k8s" = "y" ] || [ "$$setup_k8s" = "Y" ]; then \
+		echo "Setting up Kubernetes configuration..."; \
+		./bin/setup-slack.sh k8s-only; \
+	else \
+		echo "Using Docker mode..."; \
+		./bin/setup-slack.sh docker-only; \
+	fi
+	@export NODE_ENV=development && \
 		bun --watch packages/orchestrator/src/index.ts & \
 		bun --watch packages/dispatcher/src/index.ts
 

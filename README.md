@@ -1,4 +1,4 @@
-# Claude Code Slack
+# Peerbot
 
 A powerful [Claude Code](https://claude.ai/code) Slack application that brings AI-powered programming assistance directly to your Slack workspace with **Kubernetes-based scaling** and **persistent thread conversations**.
 
@@ -6,16 +6,9 @@ A powerful [Claude Code](https://claude.ai/code) Slack application that brings A
 
 - Install [Docker](https://docker.com/)
 - Install [Kubernetes K3S](https://k3s.io/)
-- Run `make dev`
-- Create `.env` file as follows:
-
-```
-SLACK_SIGNING_SECRET=
-SLACK_BOT_TOKEN=
-SLACK_APP_TOKEN=
-GITHUB_TOKEN= (personal access token for the bot to interact with git)
-CLAUDE_CODE_OAUTH_TOKEN= (claude setup-token)
-```
+- Install [Postgresql >16](https://www.postgresql.org/download/linux/ubuntu/)
+- Run `make setup` to generate `.env` file
+- Run `mave dev`
 
 -- If you need to run QA tests (`./test-bot.js`), create `.env.qa` as follows:
 

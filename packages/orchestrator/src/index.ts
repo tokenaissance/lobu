@@ -116,7 +116,7 @@ class PeerbotOrchestrator {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          DATABASE_URL: `${this.config.database.connectionString}?sslmode=disable`
+          DATABASE_URL: `${this.config.database.connectionString}`
         },
         stdio: ['pipe', 'pipe', 'pipe']
       });

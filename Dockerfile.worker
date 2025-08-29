@@ -97,28 +97,9 @@ RUN mkdir -p /home/claude/.claude/projects && \
     chmod -R 755 /home/claude/.claude && \
     echo 'export PATH="/home/claude/bin:$PATH"' >> /home/claude/.bashrc
 
-# Create an entrypoint script that handles both dev and prod modes (before switching users)
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Make scripts executable\n\
-chmod +x /app/scripts/*.sh 2>/dev/null || true\n\
-\n\
-# Setup MCP server\n\
-/app/packages/worker/scripts/setup-mcp-server.sh\n\
-\n\
-# Check if we need to build (dev mode or if dist does not exist)\n\
-if [ "$BUILD_MODE" = "dev" ] || [ ! -d "/app/packages/worker/dist" ]; then\n\
-    echo "Building packages..."\n\
-    cd /app/packages/shared && bun run build\n\
-    cd /app/packages/worker && bun run build\n\
-    chmod +x /app/packages/worker/dist/mcp/process-manager-server.mjs 2>/dev/null || true\n\
-fi\n\
-\n\
-# Run the worker\n\
-cd /app/packages/worker\n\
-exec bun run dist/index.js' > /app/entrypoint.sh && \
-    chmod +x /app/entrypoint.sh && \
+# Copy the entrypoint script and make it executable
+COPY packages/worker/scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh && \
     chown claude:claude /app/entrypoint.sh
 
 # Switch to non-root user
