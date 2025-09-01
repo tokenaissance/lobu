@@ -250,12 +250,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
                 {
                   name: 'workspace',
                   mountPath: '/workspace'
-                },
-                // Mount source code in development mode for hot reload
-                ...(process.env.NODE_ENV === 'development' ? [{
-                  name: 'source-code',
-                  mountPath: '/app/packages'
-                }] : [])
+                }
               ]
             }],
             volumes: [
@@ -265,14 +260,6 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
                   claimName: `peerbot-thread-workspace-${deploymentName.replace('peerbot-worker-', '').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`
                 }
               },
-              // Mount host source code in development mode for hot reload
-              ...(process.env.NODE_ENV === 'development' ? [{
-                name: 'source-code',
-                hostPath: {
-                  path: '/Users/burakemre/Code/ai-experiments/peerbot/packages',
-                  type: 'Directory'
-                }
-              }] : [])
             ]
           }
         }
