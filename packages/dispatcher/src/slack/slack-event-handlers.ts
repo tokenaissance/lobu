@@ -11,6 +11,7 @@ import {
 } from "../queue/task-queue-producer";
 import { SessionUtils } from "@peerbot/shared";
 import logger from "../logger";
+import { convertMarkdownToSlack } from "../queue/slack-thread-processor";
 
 /**
  * Queue-based Slack event handlers that replace direct Kubernetes job creation
@@ -347,6 +348,135 @@ export class SlackEventHandlers {
       }
     });
 
+    // Handle team joins
+    this.app.event("team_join", async ({ event, client }) => {
+      logger.info("=== TEAM_JOIN HANDLER TRIGGERED (QUEUE) ===");
+
+      try {
+        // For now, just log the event
+        // TODO: Implement welcome message functionality for new team members
+        // Should:
+        // 1. Send personalized welcome DM to new user
+        // 2. Explain bot capabilities and how to get started
+        // 3. Optionally create initial user repository if auto-provisioning is enabled
+        // 4. Set up user preferences and default settings
+        // 5. Track onboarding metrics and user engagement
+        // 6. Consider team-specific welcome templates or customization
+        logger.info(`Team join: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling team join:", error);
+      }
+    });
+
+    // Handle presence changes
+    this.app.event("presence_change", async ({ event, client }) => {
+      logger.info("=== PRESENCE_CHANGE HANDLER TRIGGERED (QUEUE) ===");
+
+      try {
+        // For now, just log the event
+        // TODO: Implement worker scaling based on user presence
+        // Should consider:
+        // 1. Scale down idle workers when users go offline/away
+        // 2. Pre-scale workers when active users come online
+        // 3. Implement presence-based resource optimization
+        // 4. Track user activity patterns for predictive scaling
+        // 5. Handle bulk presence changes efficiently to avoid scaling storms
+        // 6. Consider different scaling policies per user/team (VIP users, etc.)
+        // 7. Integration with Kubernetes HPA or custom scaling logic
+        // 8. Graceful session handling during scale-down operations
+        logger.info(`Presence change: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling presence change:", error);
+      }
+    });
+
+    // Handle file sharing
+    this.app.event("file_shared", async ({ event, client }) => {
+      logger.info("=== FILE_SHARED HANDLER TRIGGERED (QUEUE) ===");
+
+      try {
+        // For now, just log the event
+        // TODO: Implement file processing and integration with Claude
+        // Should:
+        // 1. Download and analyze shared files (images, documents, code files)
+        // 2. Extract relevant information and context for Claude sessions
+        // 3. Handle different file types appropriately (code, images, docs, etc.)
+        // 4. Store file references in user repositories if needed
+        // 5. Security scanning for malicious files
+        // 6. File size and type restrictions based on team policies
+        // 7. Integration with version control for code files
+        // 8. OCR for image-based content extraction
+        logger.info(`File shared: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling file shared:", error);
+      }
+    });
+
+    // Handle file deletions
+    this.app.event("file_deleted", async ({ event, client }) => {
+      logger.info("=== FILE_DELETED HANDLER TRIGGERED (QUEUE) ===");
+
+      try {
+        // For now, just log the event
+        // TODO: Implement file deletion cleanup
+        // Should:
+        // 1. Clean up any cached file data or references
+        // 2. Update Claude session context if file was being referenced
+        // 3. Remove file from user repositories if it was stored there
+        // 4. Update any ongoing conversations that referenced the deleted file
+        // 5. Audit trail for compliance (who deleted what when)
+        // 6. Notify relevant sessions about file unavailability
+        logger.info(`File deleted: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling file deleted:", error);
+      }
+    });
+
+    // Handle group/channel joins
+    this.app.event("member_joined_channel", async ({ event, client }) => {
+      logger.info("=== MEMBER_JOINED_CHANNEL HANDLER TRIGGERED (QUEUE) ===");
+
+      try {
+        // For now, just log the event
+        // TODO: Implement channel-specific welcome messages
+        // Should:
+        // 1. Send channel-specific welcome message mentioning bot capabilities
+        // 2. Provide channel-specific usage guidelines and examples
+        // 3. Set up channel-specific user preferences if needed
+        // 4. Track channel adoption and user engagement metrics
+        // 5. Consider different welcome messages for public vs private channels
+        // 6. Integration with channel-specific repository configurations
+        // 7. Respect channel settings and permissions for bot interactions
+        logger.info(`Member joined channel: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling member joined channel:", error);
+      }
+    });
+
+    // Handle workspace invite requests
+    this.app.event("invite_requested", async ({ event, client }) => {
+      logger.info("=== INVITE_REQUESTED HANDLER TRIGGERED (QUEUE) ===");
+
+      try {
+        // For now, just log the event
+        // TODO: Implement invite request processing and approval workflow
+        // Should:
+        // 1. Validate invite requests against allowed domains/email patterns
+        // 2. Auto-approve requests from trusted domains (company email, etc.)
+        // 3. Queue requests for manual admin approval with notification system
+        // 4. Send welcome information to approved users before they join
+        // 5. Track invite metrics and conversion rates
+        // 6. Integration with external approval systems (ServiceNow, Jira, etc.)
+        // 7. Implement invite expiration and cleanup policies
+        // 8. Support for different approval workflows per team/workspace
+        // 9. Anti-spam and rate limiting for invite requests
+        // 10. Audit trail for compliance (who requested, who approved, when)
+        logger.info(`Invite requested: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling invite requested:", error);
+      }
+    });
+
     // Handle app home opened events
     this.app.event("app_home_opened", async ({ event, client }) => {
       logger.info("=== APP_HOME_OPENED HANDLER TRIGGERED (QUEUE) ===");
@@ -474,21 +604,6 @@ export class SlackEventHandlers {
       const isNewConversation = !context.threadTs || isNewSession;
 
       if (isNewConversation) {
-        // TODO: Implement deployment session resuming functionality
-        // Currently each message creates a new Claude session, which is inefficient for long conversations.
-        // Need to implement:
-        // 1. Session persistence across deployments using persistent volumes
-        // 2. Resume logic that attempts to restore previous Claude session state
-        // 3. Fallback mechanism when resuming fails (corrupted state, expired sessions, etc.)
-        // 4. Integration with Claude CLI's --resume flag functionality
-        // 5. Session metadata tracking to correlate Slack threads with Claude sessions
-        // 6. Cleanup of orphaned sessions when threads are abandoned
-        // 7. Configuration options for session resume behavior (enabled/disabled per user/team)
-        // Implementation considerations:
-        // - Use persistent volumes to store session data across pod restarts
-        // - Store session mapping in database or distributed cache for cross-pod access
-        // - Handle concurrent message scenarios where multiple requests try to resume the same session
-        // - Consider session locking mechanisms to prevent race conditions
         const deploymentPayload: WorkerDeploymentPayload = {
           userId: context.userId,
           botId: this.getBotId(),
@@ -1155,26 +1270,17 @@ export class SlackEventHandlers {
   }
 
   /**
-   * Format README content for Slack display
+   * Format README content for Slack display using existing SlackRenderer
    */
   private formatReadmeForSlack(readme: string): string {
     // Truncate README if too long (Slack has limits)
     const maxLength = 2000; // Conservative limit for Slack blocks
-    let formatted =
+    const truncatedReadme =
       readme.length > maxLength
         ? readme.substring(0, maxLength) + "..."
         : readme;
 
-    // Replace GitHub-style headings with Slack formatting
-    formatted = formatted
-      .replace(/^### (.+)$/gm, "• *$1*")
-      .replace(/^## (.+)$/gm, "• *$1*")
-      .replace(/^# (.+)$/gm, "*$1*")
-      .replace(/\*\*(.+?)\*\*/g, "*$1*")
-      .replace(/`([^`]+)`/g, "`$1`")
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<$2|$1>");
-
-    return formatted;
+    return convertMarkdownToSlack(truncatedReadme);
   }
 
   private async handleBlockkitFormSubmission(

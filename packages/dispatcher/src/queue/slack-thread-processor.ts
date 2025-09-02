@@ -186,7 +186,7 @@ class SlackRenderer extends marked.Renderer {
 /**
  * Convert markdown to Slack's mrkdwn format using marked with custom renderer
  */
-function convertMarkdownToSlack(content: string): string {
+export function convertMarkdownToSlack(content: string): string {
   const renderer = new SlackRenderer();
 
   // Configure marked options
