@@ -85,8 +85,8 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
     try {
       // Extract thread ID from deployment name for per-thread workspace isolation
       const threadId = deploymentName.replace("peerbot-worker-", "");
-      // Create workspace directory for this specific thread (use absolute path)
-      const workspaceDir = `${process.cwd()}/workspaces/${threadId}`;
+      // Create workspace directory for this specific thread in project root (use absolute path)
+      const workspaceDir = `${path.join(process.cwd(), "..", "..")}/workspaces/${threadId}`;
 
       // Environment variables
       // Parse the DATABASE_URL to extract components and reconstruct with user credentials
