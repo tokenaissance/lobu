@@ -5,14 +5,14 @@
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  make setup                              - Interactive setup for Slack bot development"
-	@echo "  make dev                                - Start local development with Docker workers"
-	@echo "  make build-worker                       - Build worker Docker image"
-	@echo "  make deploy                             - Deploy using values-local.yaml if exists, else create it from .env"
-	@echo "  make deploy --target=production         - Deploy using values-production.yaml"
-	@echo "  make deploy --target=path/to/values.yaml - Deploy using custom values file path"
-	@echo "  make test                               - Run test bot"
-	@echo "  make clean                              - Stop services and clean up resources"
+	@echo "  peerbot setup                              - Interactive setup for Slack bot development"
+	@echo "  peerbot dev                                - Start local development with Docker workers"
+	@echo "  peerbot build-worker                       - Build worker Docker image"
+	@echo "  peerbot deploy                             - Deploy using values-local.yaml if exists, else create it from .env"
+	@echo "  peerbot deploy --target=production         - Deploy using values-production.yaml"
+	@echo "  peerbot deploy --target=path/to/values.yaml - Deploy using custom values file path"
+	@echo "  peerbot test                               - Run test bot"
+	@echo "  peerbot clean                              - Stop services and clean up resources"
 
 # Interactive setup for development
 setup:

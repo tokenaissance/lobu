@@ -321,6 +321,32 @@ export class SlackEventHandlers {
       }
     });
 
+    // Handle message changes (edits)
+    this.app.event("message_changed", async ({ event, client }) => {
+      logger.info("=== MESSAGE_CHANGED HANDLER TRIGGERED (QUEUE) ===");
+      
+      try {
+        // For now, just log the event
+        // TODO: Handle message edits appropriately - may need to update or recreate worker sessions
+        logger.info(`Message changed: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling message changed:", error);
+      }
+    });
+
+    // Handle message deletions
+    this.app.event("message_deleted", async ({ event, client }) => {
+      logger.info("=== MESSAGE_DELETED HANDLER TRIGGERED (QUEUE) ===");
+      
+      try {
+        // For now, just log the event
+        // TODO: Handle message deletions appropriately - may need to stop/cleanup worker sessions
+        logger.info(`Message deleted: ${JSON.stringify(event, null, 2)}`);
+      } catch (error) {
+        logger.error("Error handling message deleted:", error);
+      }
+    });
+
     // Handle app home opened events
     this.app.event("app_home_opened", async ({ event, client }) => {
       logger.info("=== APP_HOME_OPENED HANDLER TRIGGERED (QUEUE) ===");
@@ -448,6 +474,21 @@ export class SlackEventHandlers {
       const isNewConversation = !context.threadTs || isNewSession;
 
       if (isNewConversation) {
+        // TODO: Implement deployment session resuming functionality
+        // Currently each message creates a new Claude session, which is inefficient for long conversations.
+        // Need to implement:
+        // 1. Session persistence across deployments using persistent volumes
+        // 2. Resume logic that attempts to restore previous Claude session state
+        // 3. Fallback mechanism when resuming fails (corrupted state, expired sessions, etc.)
+        // 4. Integration with Claude CLI's --resume flag functionality
+        // 5. Session metadata tracking to correlate Slack threads with Claude sessions
+        // 6. Cleanup of orphaned sessions when threads are abandoned
+        // 7. Configuration options for session resume behavior (enabled/disabled per user/team)
+        // Implementation considerations:
+        // - Use persistent volumes to store session data across pod restarts
+        // - Store session mapping in database or distributed cache for cross-pod access
+        // - Handle concurrent message scenarios where multiple requests try to resume the same session
+        // - Consider session locking mechanisms to prevent race conditions
         const deploymentPayload: WorkerDeploymentPayload = {
           userId: context.userId,
           botId: this.getBotId(),

@@ -13,8 +13,9 @@ export function initSentry() {
   Sentry.init({
     dsn: sentryDsn,
     sendDefaultPii: true,
+    profileSessionSampleRate: 1.0,
     tracesSampleRate: 1.0, // Capture 100% of traces for better visibility
-    integrations: [postgresIntegration()],
+    integrations: [Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }), postgresIntegration()],
   });
 
   console.log("✅ Sentry monitoring initialized");
