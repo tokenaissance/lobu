@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 
-const { spawn } = require('child_process');
-const path = require('path');
-const os = require('os');
+const { spawn } = require("child_process");
+const path = require("path");
+const os = require("os");
 
 // Get the directory where the package is installed
-const packageDir = path.join(__dirname, '..');
+const packageDir = path.join(__dirname, "..");
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-const command = args[0] || 'help';
+const command = args[0] || "help";
 
 // Check if make is available
 function checkMakeCommand() {
   return new Promise((resolve) => {
-    const makeCmd = os.platform() === 'win32' ? 'where' : 'which';
-    const makeTest = spawn(makeCmd, ['make'], { stdio: 'ignore' });
-    makeTest.on('close', (code) => {
+    const makeCmd = os.platform() === "win32" ? "where" : "which";
+    const makeTest = spawn(makeCmd, ["make"], { stdio: "ignore" });
+    makeTest.on("close", (code) => {
       resolve(code === 0);
     });
   });
@@ -24,41 +24,45 @@ function checkMakeCommand() {
 
 async function runPeerbot() {
   const hasMake = await checkMakeCommand();
-  
+
   if (!hasMake) {
-    console.error('❌ Error: make command not found');
-    console.error('');
+    console.error("❌ Error: make command not found");
+    console.error("");
     console.error('PeerBot requires the "make" command to be installed.');
-    console.error('');
-    if (os.platform() === 'win32') {
-      console.error('On Windows, you can install make via:');
-      console.error('  - Chocolatey: choco install make');
-      console.error('  - WSL: Use Windows Subsystem for Linux');
-      console.error('  - Git Bash: Usually includes make');
-    } else if (os.platform() === 'darwin') {
-      console.error('On macOS, install Xcode command line tools:');
-      console.error('  xcode-select --install');
+    console.error("");
+    if (os.platform() === "win32") {
+      console.error("On Windows, you can install make via:");
+      console.error("  - Chocolatey: choco install make");
+      console.error("  - WSL: Use Windows Subsystem for Linux");
+      console.error("  - Git Bash: Usually includes make");
+    } else if (os.platform() === "darwin") {
+      console.error("On macOS, install Xcode command line tools:");
+      console.error("  xcode-select --install");
     } else {
-      console.error('On Linux, install build-essential:');
-      console.error('  sudo apt-get install build-essential');
+      console.error("On Linux, install build-essential:");
+      console.error("  sudo apt-get install build-essential");
     }
     process.exit(1);
   }
 
   // Handle version command specially
-  if (command === 'version' || command === '--version' || command === '-v') {
-    const packageJson = require(path.join(packageDir, 'package.json'));
+  if (command === "version" || command === "--version" || command === "-v") {
+    const packageJson = require(path.join(packageDir, "package.json"));
     console.log(`PeerBot CLI v${packageJson.version}`);
     return;
   }
 
   // Map CLI commands to make targets
   let makeArgs;
-  if (command === 'help' || command === '--help' || command === '-h') {
-    makeArgs = ['help'];
-  } else if (['setup', 'dev', 'deploy', 'test', 'clean', 'build-worker'].includes(command)) {
+  if (command === "help" || command === "--help" || command === "-h") {
+    makeArgs = ["help"];
+  } else if (
+    ["setup", "dev", "deploy", "test", "clean", "build-worker"].includes(
+      command,
+    )
+  ) {
     // For deploy command with --target, we need to handle special parsing
-    if (command === 'deploy') {
+    if (command === "deploy") {
       // Pass the deploy command and all its arguments as separate make targets/goals
       // This allows the Makefile to parse --target=production correctly via $(MAKECMDGOALS)
       makeArgs = args;
@@ -68,35 +72,35 @@ async function runPeerbot() {
     }
   } else if (args.length === 0) {
     // No arguments - show help
-    makeArgs = ['help'];
+    makeArgs = ["help"];
   } else {
     console.error(`❌ Unknown command: ${command}`);
-    console.error('');
+    console.error("");
     console.error('Run "peerbot help" to see available commands.');
     process.exit(1);
   }
 
   // Execute make command
   // Use -- to separate make options from targets, especially for --target=production syntax
-  const finalArgs = ['--'].concat(makeArgs);
-  const make = spawn('make', finalArgs, {
+  const finalArgs = ["--"].concat(makeArgs);
+  const make = spawn("make", finalArgs, {
     cwd: packageDir,
-    stdio: 'inherit',
-    shell: true
+    stdio: "inherit",
+    shell: true,
   });
 
-  make.on('close', (code) => {
+  make.on("close", (code) => {
     process.exit(code);
   });
 
-  make.on('error', (err) => {
-    console.error('❌ Error running make:', err.message);
+  make.on("error", (err) => {
+    console.error("❌ Error running make:", err.message);
     process.exit(1);
   });
 }
 
 // Run the CLI
 runPeerbot().catch((err) => {
-  console.error('❌ Unexpected error:', err.message);
+  console.error("❌ Unexpected error:", err.message);
   process.exit(1);
 });

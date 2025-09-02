@@ -324,7 +324,7 @@ export class SlackEventHandlers {
     // Handle message changes (edits)
     this.app.event("message_changed", async ({ event, client }) => {
       logger.info("=== MESSAGE_CHANGED HANDLER TRIGGERED (QUEUE) ===");
-      
+
       try {
         // For now, just log the event
         // TODO: Handle message edits appropriately - may need to update or recreate worker sessions
@@ -337,7 +337,7 @@ export class SlackEventHandlers {
     // Handle message deletions
     this.app.event("message_deleted", async ({ event, client }) => {
       logger.info("=== MESSAGE_DELETED HANDLER TRIGGERED (QUEUE) ===");
-      
+
       try {
         // For now, just log the event
         // TODO: Handle message deletions appropriately - may need to stop/cleanup worker sessions
