@@ -28,8 +28,8 @@ fi
 # Run type checking
 echo "Running type checking..."
 if ! bun run typecheck; then
-    echo "Type checking failed. These are pre-existing issues - allowing push for Biome integration."
-    echo "TypeScript errors should be addressed in a separate commit."
+    echo "Type checking failed. Please fix the type errors and try again."
+    exit 1
 else
     echo "Type checking passed."
 fi
