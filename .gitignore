@@ -9,11 +9,11 @@ node_modules
 .tmp/*
 charts/peerbot/values-local.yaml
 
-# Build output
-packages/dispatcher/dist/
-packages/worker/dist/
-packages/core-runner/dist/
-packages/shared/dist/*
+# Build output - compiled artifacts should not be committed
+dist/
+**/dist/
+build/
+**/build/
 
 # TypeScript compilation artifacts in packages (but not scripts)
 packages/**/*.js
