@@ -20,8 +20,8 @@ jobs:
         
       - name: Setup AWS CLI
         run: |
-          sudo apt-get update
-          sudo apt-get install -y awscli
+          # AWS CLI v2 is pre-installed on GitHub Actions Ubuntu runners
+          aws --version
           
       - name: Check for state file
         working-directory: charts/peerbot/provider/hetzner
