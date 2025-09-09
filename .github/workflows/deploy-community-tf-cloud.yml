@@ -1,4 +1,4 @@
-name: Deploy to Community Kubernetes
+name: Deploy to Community (Terraform Cloud)
 
 on:
   workflow_dispatch:
@@ -17,6 +17,8 @@ env:
   IMAGE_DISPATCHER: claude-dispatcher
   IMAGE_WORKER: claude-worker
   IMAGE_ORCHESTRATOR: claude-orchestrator
+  TF_CLOUD_ORGANIZATION: "peerbot-org"  # Change this to your org
+  TF_WORKSPACE: "peerbot-hetzner"
 
 jobs:
   terraform:
@@ -41,24 +43,19 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
           
-      - name: Configure Terraform Backend
+      - name: Configure Terraform Cloud Backend
         working-directory: charts/peerbot/provider/hetzner
         run: |
           cat > backend.tf << 'EOF'
           terraform {
-            backend "s3" {
-              bucket = "${{ secrets.R2_BUCKET_NAME }}"
-              key    = "hetzner/terraform.tfstate"
-              region = "auto"
-              access_key = "${{ secrets.R2_ACCESS_KEY_ID }}"
-              secret_key = "${{ secrets.R2_SECRET_ACCESS_KEY }}"
-              endpoint = "${{ secrets.R2_ENDPOINT }}"
-              skip_credentials_validation = true
-              skip_metadata_api_check = true
-              skip_region_validation = true
-              skip_requesting_account_id = true
-              use_path_style = true
+            cloud {
+              organization = "${{ env.TF_CLOUD_ORGANIZATION }}"
+              
+              workspaces {
+                name = "${{ env.TF_WORKSPACE }}"
+              }
             }
           }
           EOF
@@ -67,29 +64,7 @@ jobs:
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_EC2_METADATA_DISABLED: true
-          TF_AWS_S3_FORCE_PATH_STYLE: true
-          AWS_S3_USE_PATH_STYLE: true
-          SSL_CERT_FILE: /dev/null
-        run: |
-          # Configure AWS CLI for R2
-          aws configure set default.s3.signature_version s3v4
-          aws configure set default.s3.addressing_style path
-          aws configure set default.s3.use_accelerate_endpoint false
-          
-          # Try terraform init with retry logic for R2 TLS issues
-          for i in {1..3}; do
-            if terraform init -reconfigure -backend-config="insecure=true"; then
-              echo "Terraform init succeeded"
-              break
-            else
-              echo "Attempt $i failed, retrying..."
-              sleep 5
-            fi
-          done
+        run: terraform init
         
       - name: Terraform Plan
         working-directory: charts/peerbot/provider/hetzner
@@ -144,55 +119,28 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
           
       - name: Get Kubeconfig from Terraform
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_EC2_METADATA_DISABLED: true
-          TF_AWS_S3_FORCE_PATH_STYLE: true
-          AWS_S3_USE_PATH_STYLE: true
-          SSL_CERT_FILE: /dev/null
         run: |
           # Configure backend
           cat > backend.tf << 'EOF'
           terraform {
-            backend "s3" {
-              bucket = "${{ secrets.R2_BUCKET_NAME }}"
-              key    = "hetzner/terraform.tfstate"
-              region = "auto"
-              access_key = "${{ secrets.R2_ACCESS_KEY_ID }}"
-              secret_key = "${{ secrets.R2_SECRET_ACCESS_KEY }}"
-              endpoint = "${{ secrets.R2_ENDPOINT }}"
-              skip_credentials_validation = true
-              skip_metadata_api_check = true
-              skip_region_validation = true
-              skip_requesting_account_id = true
-              use_path_style = true
+            cloud {
+              organization = "${{ env.TF_CLOUD_ORGANIZATION }}"
+              
+              workspaces {
+                name = "${{ env.TF_WORKSPACE }}"
+              }
             }
           }
           EOF
           
-          # Configure AWS CLI for R2
-          aws configure set default.s3.signature_version s3v4
-          aws configure set default.s3.addressing_style path
-          aws configure set default.s3.use_accelerate_endpoint false
-          
-          # Try terraform init with retry logic for R2 TLS issues
-          for i in {1..3}; do
-            if terraform init -reconfigure -backend-config="insecure=true"; then
-              echo "Terraform init succeeded"
-              break
-            else
-              echo "Attempt $i failed, retrying..."
-              sleep 5
-            fi
-          done
-          
+          terraform init
           terraform output -raw kubeconfig > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
           
