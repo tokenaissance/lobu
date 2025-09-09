@@ -40,7 +40,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.0
+          terraform_version: 1.13.0
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
           
       - name: Configure Terraform Backend
@@ -49,10 +49,10 @@ jobs:
           cat > backend.tf << 'EOF'
           terraform {
             cloud {
-              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              organization = "peerbot-community-prod"
               
               workspaces {
-                name = "${{ secrets.TF_WORKSPACE }}"
+                name = "peerbot-hetzner"
               }
             }
           }
@@ -62,7 +62,7 @@ jobs:
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
-        run: terraform init -ignore-remote-version
+        run: terraform init
         
       - name: Terraform Plan
         working-directory: charts/peerbot/provider/hetzner
@@ -116,7 +116,7 @@ jobs:
       - name: Setup Terraform for Kubeconfig
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.0
+          terraform_version: 1.13.0
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
           
       - name: Get Kubeconfig from Terraform
@@ -129,16 +129,16 @@ jobs:
           cat > backend.tf << 'EOF'
           terraform {
             cloud {
-              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              organization = "peerbot-community-prod"
               
               workspaces {
-                name = "${{ secrets.TF_WORKSPACE }}"
+                name = "peerbot-hetzner"
               }
             }
           }
           EOF
           
-          terraform init -ignore-remote-version
+          terraform init
           terraform output -raw kubeconfig > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
           
