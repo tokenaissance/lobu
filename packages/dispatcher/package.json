@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
     "start": "cd ../shared && bun run build && cd ../dispatcher && bun src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
@@ -19,6 +19,8 @@
     "@sentry/node": "^10.6.0",
     "@slack/bolt": "^3.22.0",
     "@slack/web-api": "^7.6.0",
+    "axios": "^1.7.2",
+    "express": "^4.19.2",
     "marked": "^12.0.0",
     "node-fetch": "^3.3.2",
     "pg": "^8.11.3",

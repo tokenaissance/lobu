@@ -24,6 +24,9 @@ export interface GitHubConfig {
   organization: string;
   repoTemplate?: string;
   repository?: string; // Override repository URL instead of creating user-specific ones
+  clientId?: string; // GitHub OAuth App Client ID
+  clientSecret?: string; // GitHub OAuth App Client Secret
+  ingressUrl?: string; // Public URL for OAuth callbacks
 }
 
 export interface QueueConfig {

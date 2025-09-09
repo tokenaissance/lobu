@@ -1,4 +1,5 @@
 # Dockerfile for Orchestrator - Force rebuild for simplified username Aug 26
+# syntax=docker/dockerfile:1.6-labs
 FROM oven/bun:1.2.9
 
 # Install required packages for Kubernetes client, Docker CLI, and curl for health checks
@@ -37,7 +38,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/orchestrator/package.json ./packages/orchestrator/
 
 # Install all dependencies (workspace will resolve shared)
-RUN bun install
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install
 
 # Copy source code
 COPY packages/shared/ ./packages/shared/

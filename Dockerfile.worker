@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6-labs
 FROM oven/bun:1.2.9
 
 # Build argument to control dev/prod behavior
@@ -49,10 +50,10 @@ RUN addgroup --gid 1001 claude && \
     echo 'claude ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
     usermod -aG docker claude
 
-# Install Claude Code CLI globally and make it accessible to all users - using npm instead
-RUN npm install -g @anthropic-ai/claude-code && \
-    echo "Npm global packages:" && \
-    npm list -g --depth=0 && \
+# Install Claude Code CLI globally using bun
+RUN bun install -g @anthropic-ai/claude-code && \
+    echo "Bun global packages:" && \
+    bun pm ls -g && \
     echo "Looking for claude binary..." && \
     which claude && \
     echo "Testing claude command..." && \
@@ -72,7 +73,7 @@ COPY packages/dispatcher/package.json ./packages/dispatcher/
 COPY packages/orchestrator/package.json ./packages/orchestrator/
 
 # Install all dependencies including devDependencies for building
-RUN bun install
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install
 
 # Copy source code (needed for both dev and prod)
 COPY packages/ ./packages/

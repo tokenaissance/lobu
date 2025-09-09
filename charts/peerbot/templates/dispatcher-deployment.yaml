@@ -149,6 +149,18 @@ spec:
                 secretKeyRef:
                   name: {{ include "peerbot.fullname" . }}-secrets
                   key: github-token
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "peerbot.fullname" . }}-config
+                  key: github-client-id
+                  optional: true
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "peerbot.fullname" . }}-secrets
+                  key: github-client-secret
+                  optional: true
             - name: GITHUB_ORGANIZATION
               valueFrom:
                 configMapKeyRef:
@@ -161,6 +173,14 @@ spec:
                   name: {{ include "peerbot.fullname" . }}-config
                   key: github-repository
             {{- end }}
+
+            # OAuth callback ingress URL
+            - name: INGRESS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "peerbot.fullname" . }}-config
+                  key: ingress-url
+                  optional: true
           
             # Claude configuration
             - name: MODEL
@@ -182,6 +202,14 @@ spec:
               value: "{{ .Values.dispatcher.config.nodeEnv }}"
             - name: LOG_LEVEL
               value: "{{ .Values.dispatcher.config.logLevel }}"
+
+            # Encryption key for token at-rest encryption
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "peerbot.fullname" . }}-secrets
+                  key: encryption-key
+                  optional: true
             
             # Anthropic proxy configuration
             {{- if .Values.dispatcher.anthropicProxy.enabled }}

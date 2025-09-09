@@ -1,0 +1,94 @@
+# Community deployment values for Hetzner K3s
+slack:
+  socketMode: true
+
+# Ingress configuration for community deployment
+ingress:
+  enabled: true
+  className: "traefik"  # K3s uses Traefik by default
+  annotations:
+    # Traefik annotations
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Optional: Let's Encrypt
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: community.peerbot.ai  # Change to your domain
+      paths:
+        - path: /slack
+          pathType: Prefix
+  tls:
+    - secretName: peerbot-community-tls
+      hosts:
+        - community.peerbot.ai  # Change to your domain
+
+# Resource limits for community deployment
+dispatcher:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+worker:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+orchestrator:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Database - using PostgreSQL on K3s
+postgresql:
+  enabled: true
+  auth:
+    database: peerbot
+    username: peerbot
+    # Password will be auto-generated if not set
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: "hcloud-volumes"  # Hetzner CSI driver
+
+# Redis for caching/queuing
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: "hcloud-volumes"
+
+# OAuth and encryption configuration
+# These should be set via --set flags or environment-specific secrets
+config:
+  githubClientId: ""
+  ingressUrl: "https://community.peerbot.ai"  # Change to your domain
+
+secrets:
+  githubClientSecret: ""
+  encryptionKey: ""
+  slackBotToken: ""
+  slackAppToken: ""
+  slackSigningSecret: ""
+  slackClientId: ""
+  slackClientSecret: ""
+  slackStateSecret: ""

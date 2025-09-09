@@ -19,9 +19,9 @@ help:
 # Interactive setup for development
 setup:
 	@echo "🚀 Starting PeerBot development setup..."
-	@./bin/setup-slack.sh
+	@./scripts/setup-local-dev.sh
 
-# Start local development with Docker Compose
+# Start local development with Docker Compose in foreground
 dev:
 	@if [ ! -f .env ]; then \
 		echo "❌ .env file not found!"; \
@@ -39,8 +39,20 @@ dev:
 	@echo "   - Mount source code for live changes"
 	@echo ""
 	@echo "🔨 Building all services..."
-	@docker compose -f docker-compose.dev.yml build --no-cache worker
-	@docker compose -f docker-compose.dev.yml up --build dispatcher orchestrator postgres
+	@# Support detached via variable (DETACH=1) or alias targets; note: `make -d` is a make debug flag, not detach
+	@DETACH_FLAG=""; [ "$(DETACH)" = "1" ] && DETACH_FLAG="-d"; \
+	if [ -n "$$DETACH_FLAG" ]; then echo "🧩 Running in detached mode"; fi; \
+	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml up $$DETACH_FLAG --build dispatcher orchestrator postgres
+
+# Build the worker image on demand
+build-worker:
+	@echo "📦 Building worker image..."
+	@COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build worker
+
+# Convenience alias for detached dev
+.PHONY: dev-d dev-detached
+dev-d dev-detached:
+	@$(MAKE) dev DETACH=1
 
 # Catch-all target to prevent errors when passing arguments
 %:

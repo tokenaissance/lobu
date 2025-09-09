@@ -24,7 +24,7 @@ cat >> /home/node/.bashrc << 'EOF'
 # Peerbot Development Environment
 export PATH="/usr/local/bun/bin:$PATH"
 export BUN_INSTALL="/usr/local/bun"
-export PATH="/home/node/.npm-global/bin:$PATH"
+export PATH="/home/node/.bun/install/global/node_modules/.bin:$PATH"
 
 # Kubernetes aliases
 alias k="kubectl"
@@ -40,9 +40,8 @@ alias dc="docker compose"
 alias dps="docker ps"
 EOF
 
-# Setup npm global directory as node user
-sudo -u node npm config set prefix /home/node/.npm-global
-sudo -u node mkdir -p /home/node/.npm-global
+# Setup bun global directory as node user
+sudo -u node mkdir -p /home/node/.bun/install/global
 
 # Setup Claude Code MCP configuration
 echo "🤖 Setting up Claude Code MCP server..."
@@ -121,7 +120,7 @@ echo "  2. Run 'make dev' to start development with Docker"
 echo "  3. Use './slack-qa-bot.js \"your message\"' to test the bot"
 echo ""
 echo "🛠️ Available Tools:"
-echo "  - Claude Code CLI: $(claude --version 2>/dev/null || echo 'Run: npm install -g @anthropic-ai/claude-code')"
+echo "  - Claude Code CLI: $(claude --version 2>/dev/null || echo 'Run: bun install -g @anthropic-ai/claude-code')"
 echo "  - Bun: $(bun --version)"
 echo "  - Node: $(node --version)"
 echo "  - Kubectl: $(kubectl version --client --short 2>/dev/null || echo 'Not available')"

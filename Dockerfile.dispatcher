@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6-labs
 FROM node:20-alpine
 
 # Install bun for build step
@@ -7,20 +8,19 @@ ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
 
-# Copy all package files
-COPY package.json ./
+# Only set up a minimal workspace for dispatcher + shared to avoid cache busts
 COPY tsconfig.json ./
-COPY packages/dispatcher/package.json ./packages/dispatcher/
+RUN echo '{ "name": "@peerbot/dispatcher-build", "private": true, "workspaces": [ "packages/shared", "packages/dispatcher" ] }' > package.json
 COPY packages/shared/package.json ./packages/shared/
-COPY packages/worker/package.json ./packages/worker/
-COPY packages/orchestrator/package.json ./packages/orchestrator/
+COPY packages/dispatcher/package.json ./packages/dispatcher/
 
-# Install dependencies
-RUN bun install
+# Install dependencies for dispatcher + shared only
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install && \
+    bun add dotenv
 
-# Copy source code for dispatcher and shared only
-COPY packages/dispatcher/ ./packages/dispatcher/
+# Copy source code
 COPY packages/shared/ ./packages/shared/
+COPY packages/dispatcher/ ./packages/dispatcher/
 
 # Build shared first
 WORKDIR /app/packages/shared

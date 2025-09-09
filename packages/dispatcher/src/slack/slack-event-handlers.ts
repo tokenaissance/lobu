@@ -5,13 +5,12 @@ import { SessionUtils } from "@peerbot/shared";
 import type { App } from "@slack/bolt";
 import type { GitHubRepositoryManager } from "../github/repository-manager";
 import logger from "../logger";
-import { convertMarkdownToSlack } from "../queue/slack-thread-processor";
 import type {
   QueueProducer,
   ThreadMessagePayload,
   WorkerDeploymentPayload,
 } from "../queue/task-queue-producer";
-import type { DispatcherConfig, SlackContext, ThreadSession } from "../types";
+import type { DispatcherConfig, SlackContext, ThreadSession, UserRepository } from "../types";
 import {
   setupFileHandlers,
   setupMessageHandlers,
@@ -223,6 +222,13 @@ export class SlackEventHandlers {
 
       try {
         const userId = body.user.id;
+        
+        // Handle repository modal submission
+        if (view.callback_id === 'repository_modal') {
+          await this.handleRepositoryModalSubmission(userId, view, client);
+          return;
+        }
+        
         const metadata = view.private_metadata
           ? JSON.parse(view.private_metadata)
           : {};
@@ -292,6 +298,47 @@ export class SlackEventHandlers {
         }
       } catch (error) {
         logger.error("Error handling view submission:", error);
+      }
+    });
+
+    // Handle options requests for external selects
+    this.app.options('repository_dropdown', async ({ body, options, ack }) => {
+      try {
+        const query = (options as any)?.value || '';
+        const userId = (body as any)?.user?.id;
+        
+        // Get user's GitHub token
+        const githubUser = await this.getUserGitHubInfo(userId);
+        
+        if (!githubUser.token) {
+          await ack({
+            options: []
+          });
+          return;
+        }
+        
+        // Fetch user's repositories
+        const repos = await this.repoManager.getUserRepositories(githubUser.token);
+        
+        // Filter repositories based on query
+        const filteredRepos = repos
+          .filter((repo: any) => 
+            repo.full_name.toLowerCase().includes(query.toLowerCase()) ||
+            repo.name.toLowerCase().includes(query.toLowerCase())
+          )
+          .slice(0, 100)
+          .map((repo: any) => ({
+            text: {
+              type: "plain_text" as const,
+              text: repo.full_name,
+            },
+            value: repo.clone_url,
+          }));
+        
+        await ack({ options: filteredRepos });
+      } catch (error) {
+        logger.error('Error providing repository options:', error);
+        await ack({ options: [] });
       }
     });
 
@@ -780,6 +827,21 @@ export class SlackEventHandlers {
     logger.info(`Handling block action: ${actionId}`);
 
     switch (actionId) {
+      case "github_login":
+        await this.handleGitHubLogin(userId, client);
+        break;
+
+      case "github_logout":
+        await this.handleGitHubLogout(userId, client);
+        break;
+
+      case "open_repository_modal":
+        await this.openRepositoryModal(userId, body, client);
+        break;
+
+      case "select_repository":
+        await this.handleRepositorySelection(userId, body, client);
+        break;
 
       default:
         // Handle blockkit form button clicks
@@ -852,47 +914,164 @@ export class SlackEventHandlers {
 
     try {
       const username = await this.getOrCreateUserMapping(userId, client);
-      const repository = await this.repoManager.ensureUserRepository(username);
+      
+      // Check if user has GitHub token
+      const githubUser = await this.getUserGitHubInfo(userId);
+      const isGitHubConnected = !!githubUser.token;
+      
+      let repository;
+      
+      // Initialize readme section as null
+      let readmeSection: string | null = null;
+      
+      // Try to get or create repository
+      try {
+        // First, try to get existing repository from cache (pass Slack user ID for database lookup)
+        repository = await this.repoManager.getUserRepository(username, userId);
+        
+        // If no cached repository and we have a token, create one
+        if (!repository && (this.config.github.token || isGitHubConnected)) {
+          repository = await this.repoManager.ensureUserRepository(username);
+        }
+        
+        // Fetch README.md content if we have a repository
+        if (repository) {
+          const readmeContent = await this.fetchRepositoryReadme(
+            repository.repositoryUrl
+          );
+          if (readmeContent) {
+            readmeSection = `*📖 README :*\n\`\`\`\n${readmeContent.slice(0, 500)}${readmeContent.length > 500 ? '...' : ''}\n\`\`\``;
+          }
+        }
+      } catch (error) {
+        logger.warn(`Could not get/ensure repository for user ${username}:`, error);
+        // Continue without repository - user can login with GitHub
+      }
 
-      // Fetch README.md content from the user's active repository
-      const readmeContent = await this.fetchRepositoryReadme(
-        repository.repositoryUrl
-      );
-      const readmeSection = readmeContent
-        ? `*📖 README.md - ${repository.repositoryName}:*\n\n${this.formatReadmeForSlack(readmeContent)}`
-        : "*📖 README.md:* _Unable to fetch README content_";
+      const blocks: any[] = [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: "*Welcome to Peerbot!* 👋" },
+        },
+        {
+          type: "divider",
+        },
+      ];
 
-      const homeView = {
-        type: "home",
-        blocks: [
-          {
-            type: "section",
-            text: { type: "mrkdwn", text: "*Welcome to Peerbot!* 👋" },
+      // GitHub connection section
+      if (isGitHubConnected) {
+        blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*GitHub Connected:* ✅ @${githubUser.username || 'Connected'}`,
           },
-          {
-            type: "divider",
+          accessory: {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Logout",
+            },
+            action_id: "github_logout",
+            style: "danger",
+            confirm: {
+              title: {
+                type: "plain_text",
+                text: "Disconnect GitHub?",
+              },
+              text: {
+                type: "mrkdwn",
+                text: "Are you sure you want to disconnect your GitHub account?",
+              },
+              confirm: {
+                type: "plain_text",
+                text: "Yes, disconnect",
+              },
+              deny: {
+                type: "plain_text",
+                text: "Cancel",
+              },
+            },
           },
-          {
+        });
+
+        // Repository selector button that opens modal
+        blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: repository ? `*Current Repository:* <${repository.repositoryUrl}|${repository.repositoryName}>` : "*Repository Settings:*",
+          },
+          accessory: {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Change Repository",
+            },
+            action_id: "open_repository_modal",
+          },
+        });
+      } else {
+        // Show login button if GitHub OAuth is configured
+        if (this.config.github.clientId) {
+          // Use INGRESS_URL if provided, otherwise use default dispatcher URL
+          const oauthBaseUrl = this.config.github.ingressUrl || 
+            (process.env.NODE_ENV === 'development' ? 'http://localhost:8080' : 'http://dispatcher:8080');
+          
+          blocks.push({
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `*Current Repository:*\n<${repository.repositoryUrl}|${repository.repositoryName}>`,
+              text: "*GitHub:* Not connected",
             },
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: this.config.github.repository
-                  ? "📌 Using configured repository override"
-                  : "🔧 Using auto-generated user repository",
+            accessory: {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Login with GitHub",
               },
-            ],
+              action_id: "github_login",
+              style: "primary",
+              url: `${oauthBaseUrl}/api/github/oauth/authorize?user_id=${userId}`,
+            },
+          });
+        }
+      }
+      
+      // Add "How I Work" instructions
+      blocks.push(
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*📚 How I Work:*
+• Each conversation gets its sandbox environment
+• I commit my work automatically as I go
+• You can review the generated app and the code anytime
+• Once your fix/feature is complete, you can create Pull Request for engineering review`,
           },
-          {
-            type: "divider",
+        },
+        {
+          type: "divider",
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "💬 *Get Started:*\nSend me a message or mention me in a channel to start coding together!",
           },
+        }
+      );
+
+      blocks.push(
+        {
+          type: "divider",
+        }
+      );
+      
+      // Add README section if we have one
+      if (readmeSection) {
+        blocks.push(
           {
             type: "section",
             text: {
@@ -902,16 +1081,15 @@ export class SlackEventHandlers {
           },
           {
             type: "divider",
-          },
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: "💬 *Get Started:*\nSend me a message or mention me in a channel to start coding together!",
-            },
-          },
-        ],
+          }
+        );
+      }
+      
+      const homeView = {
+        type: "home",
+        blocks: blocks,
       };
+      
 
       await client.views.publish({ user_id: userId, view: homeView });
     } catch (error) {
@@ -940,6 +1118,370 @@ export class SlackEventHandlers {
   }
 
   /**
+   * Handle GitHub login
+   */
+  private async handleGitHubLogin(userId: string, client: any): Promise<void> {
+    try {
+      // Generate OAuth URL with user ID
+      const baseUrl = process.env.INGRESS_URL || 'http://localhost:8080';
+      const authUrl = `${baseUrl}/api/github/oauth/authorize?user_id=${userId}`;
+      
+      // Send ephemeral message with link
+      const im = await client.conversations.open({ users: userId });
+      const channelId = im.channel.id;
+      await client.chat.postMessage({
+        channel: channelId,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "Click the link below to connect your GitHub account:"
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `<${authUrl}|🔗 Connect with GitHub>`
+            }
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: "This will open in your browser. You'll be redirected to GitHub to authorize access."
+              }
+            ]
+          }
+        ],
+        text: `Connect with GitHub: ${authUrl}`
+      });
+    } catch (error) {
+      logger.error(`Failed to initiate GitHub login for user ${userId}:`, error);
+      try {
+        const im = await client.conversations.open({ users: userId });
+        await client.chat.postMessage({ channel: im.channel.id, text: "❌ Failed to start GitHub login. Please try again." });
+      } catch {}
+    }
+  }
+
+  /**
+   * Handle GitHub logout
+   */
+  private async handleGitHubLogout(userId: string, client: any): Promise<void> {
+    try {
+      // Remove GitHub token from database
+      const { getDbPool } = await import('../db');
+      const dbPool = getDbPool(process.env.DATABASE_URL || this.config.queues.connectionString);
+
+      await dbPool.query(
+        `DELETE FROM user_environ 
+         WHERE user_id = (SELECT id FROM users WHERE platform = 'slack' AND platform_user_id = $1)
+         AND name IN ('GITHUB_TOKEN', 'GITHUB_USER')`,
+        [userId.toUpperCase()]
+      );
+
+      // Refresh home tab
+      await this.updateAppHome(userId, client);
+
+      // Send confirmation
+      try {
+        const im = await client.conversations.open({ users: userId });
+        await client.chat.postMessage({ channel: im.channel.id, text: "✅ Successfully disconnected from GitHub" });
+      } catch {}
+    } catch (error) {
+      logger.error(`Failed to logout user ${userId}:`, error);
+      try {
+        const im = await client.conversations.open({ users: userId });
+        await client.chat.postMessage({ channel: im.channel.id, text: "❌ Failed to disconnect from GitHub. Please try again." });
+      } catch {}
+    }
+  }
+
+  /**
+   * Handle repository modal submission
+   */
+  private async handleRepositoryModalSubmission(userId: string, view: any, client: any): Promise<void> {
+    try {
+      const values = view.state.values;
+      
+      // Get the repository URL from input or dropdown
+      let selectedRepo = values.repository_input?.repository_url?.value;
+      
+      // If no manual input, check the dropdown selection
+      if (!selectedRepo && values.repository_select?.repository_dropdown?.selected_option) {
+        selectedRepo = values.repository_select.repository_dropdown.selected_option.value;
+      }
+      
+      if (!selectedRepo) {
+        // Send error message if neither field was filled
+        const im = await client.conversations.open({ users: userId });
+        await client.chat.postMessage({ channel: im.channel.id, text: "❌ Please enter a repository URL or select from the dropdown" });
+        return;
+      }
+
+      const username = await this.getOrCreateUserMapping(userId, client);
+
+      // Clean up the repository URL
+      selectedRepo = selectedRepo.trim();
+      if (!selectedRepo.startsWith('http')) {
+        selectedRepo = `https://github.com/${selectedRepo}`;
+      }
+
+      // Update the repository cache with the selected repository
+      const repoName = selectedRepo.split('/').pop()?.replace('.git', '') || 'unknown';
+      const repository: UserRepository = {
+        username,
+        repositoryName: repoName,
+        repositoryUrl: selectedRepo.replace('.git', ''),
+        cloneUrl: selectedRepo.endsWith('.git') ? selectedRepo : `${selectedRepo}.git`,
+        createdAt: Date.now(),
+        lastUsed: Date.now(),
+      };
+
+      this.repositoryCache.set(username, {
+        repository,
+        timestamp: Date.now(),
+      });
+
+      // Persist selection
+      await this.saveSelectedRepository(userId, repository.repositoryUrl);
+
+      // Refresh home tab and confirm via DM
+      await this.updateAppHome(userId, client);
+      const im2 = await client.conversations.open({ users: userId });
+      await client.chat.postMessage({ channel: im2.channel.id, text: `✅ Repository updated to: ${repository.repositoryUrl}` });
+    } catch (error) {
+      logger.error(`Failed to handle repository modal submission for user ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Open repository selection modal
+   */
+  private async openRepositoryModal(userId: string, body: any, client: any): Promise<void> {
+    try {
+      // Get user's GitHub info to pre-populate suggestions
+      const githubUser = await this.getUserGitHubInfo(userId);
+      
+      // Create modal view
+      const modalView = {
+        type: "modal",
+        callback_id: "repository_modal",
+        title: {
+          type: "plain_text",
+          text: "Select Repository",
+        },
+        submit: {
+          type: "plain_text",
+          text: "Save",
+        },
+        close: {
+          type: "plain_text",
+          text: "Cancel",
+        },
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "Enter a GitHub repository URL or select from your repositories:",
+            },
+          },
+          {
+            type: "input",
+            block_id: "repository_input",
+            label: {
+              type: "plain_text",
+              text: "Repository URL",
+            },
+            element: {
+              type: "plain_text_input",
+              action_id: "repository_url",
+              placeholder: {
+                type: "plain_text",
+                text: "https://github.com/owner/repo",
+              },
+            },
+            hint: {
+              type: "plain_text",
+              text: "Enter the full GitHub repository URL",
+            },
+            optional: true,
+          },
+        ],
+      };
+
+      // Add external select if user is logged in with GitHub
+      if (githubUser.token) {
+        modalView.blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "Or select from your repositories:",
+          },
+        } as any);
+        
+        modalView.blocks.push({
+          type: "input",
+          block_id: "repository_select",
+          label: {
+            type: "plain_text",
+            text: "Your Repositories",
+          },
+          element: {
+            type: "external_select",
+            action_id: "repository_dropdown",
+            placeholder: {
+              type: "plain_text",
+              text: "Type to search repositories...",
+            },
+            min_query_length: 0, // Show all repos immediately
+          },
+          optional: true,
+        } as any);
+      }
+
+      // Open the modal
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: modalView,
+      });
+    } catch (error) {
+      logger.error(`Failed to open repository modal for user ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Handle repository selection
+   */
+  private async handleRepositorySelection(userId: string, body: any, client: any): Promise<void> {
+    try {
+      const selectedRepo = body.actions?.[0]?.selected_option?.value;
+      if (!selectedRepo) {
+        return;
+      }
+
+      const username = await this.getOrCreateUserMapping(userId, client);
+
+      // Update the repository cache with the selected repository
+      const repoName = selectedRepo.split('/').pop()?.replace('.git', '') || 'unknown';
+      const repository: UserRepository = {
+        username,
+        repositoryName: repoName,
+        repositoryUrl: selectedRepo.replace('.git', '').replace('https://github.com/', 'https://github.com/'),
+        cloneUrl: selectedRepo,
+        createdAt: Date.now(),
+        lastUsed: Date.now(),
+      };
+
+      this.repositoryCache.set(username, {
+        repository,
+        timestamp: Date.now(),
+      });
+
+      // Persist selection
+      await this.saveSelectedRepository(userId, repository.repositoryUrl);
+
+      // Send confirmation
+      const im = await client.conversations.open({ users: userId });
+      await client.chat.postMessage({ channel: im.channel.id, text: `✅ Repository set to: ${repoName}` });
+    } catch (error) {
+      logger.error(`Failed to select repository for user ${userId}:`, error);
+      try {
+        const im = await client.conversations.open({ users: userId });
+        await client.chat.postMessage({ channel: im.channel.id, text: "❌ Failed to select repository. Please try again." });
+      } catch {}
+    }
+  }
+
+  /**
+   * Get user's GitHub info from database
+   */
+  private async getUserGitHubInfo(userId: string): Promise<{ token?: string; username?: string }> {
+    try {
+      // Import Pool type and create connection
+      const { getDbPool } = await import('../db');
+      const dbPool = getDbPool(process.env.DATABASE_URL || this.config.queues.connectionString);
+
+      const result = await dbPool.query(
+        `SELECT name, value FROM user_environ
+         WHERE user_id = (
+           SELECT id FROM users
+           WHERE platform = 'slack' AND platform_user_id = $1
+         )
+         AND name IN ('GITHUB_TOKEN', 'GITHUB_USER')`,
+        [userId.toUpperCase()]
+      );
+
+      const info: { token?: string; username?: string } = {};
+      for (const row of result.rows) {
+        if (row.name === 'GITHUB_TOKEN') {
+          try {
+            info.token = this.decryptValue(row.value as string);
+          } catch (e) {
+            logger.warn('Failed to decrypt stored GitHub token');
+          }
+        } else if (row.name === 'GITHUB_USER') {
+          info.username = row.value;
+        }
+      }
+
+      return info;
+    } catch (error) {
+      logger.error(`Failed to get GitHub info for user ${userId}:`, error);
+      return {};
+    }
+  }
+
+  private decryptValue(payload: string): string {
+    const crypto = require('node:crypto');
+    const key: string = (process.env.ENCRYPTION_KEY || 'default-32-char-encryption-key!!').padEnd(32).slice(0, 32);
+    const parts = payload.split(':');
+    if (parts.length !== 3) throw new Error('Invalid encrypted payload');
+    const iv = Buffer.from(parts[0]!, 'hex');
+    const tag = Buffer.from(parts[1]!, 'hex');
+    const data = Buffer.from(parts[2]!, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key, 'utf8'), iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+    return decrypted.toString('utf8');
+  }
+
+  /**
+   * Persist selected repository for a Slack user
+   */
+  private async saveSelectedRepository(userId: string, repoUrl: string): Promise<void> {
+    const { getDbPool } = await import('../db');
+    const dbPool = getDbPool(process.env.DATABASE_URL || this.config.queues.connectionString);
+
+    await dbPool.query(
+      `INSERT INTO users (platform, platform_user_id) 
+       VALUES ('slack', $1) 
+       ON CONFLICT (platform, platform_user_id) DO NOTHING`,
+      [userId.toUpperCase()]
+    );
+
+    const userResult = await dbPool.query(
+      `SELECT id FROM users WHERE platform = 'slack' AND platform_user_id = $1`,
+      [userId.toUpperCase()]
+    );
+
+    if (userResult.rows.length > 0) {
+      const userDbId = userResult.rows[0].id;
+      await dbPool.query(
+        `INSERT INTO user_environ (user_id, name, value, type) 
+         VALUES ($1, 'SELECTED_REPOSITORY', $2, 'system') 
+         ON CONFLICT (user_id, name) 
+         DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [userDbId, repoUrl]
+      );
+    }
+  }
+
+  /**
    * Fetch README content from a repository URL
    */
   private async fetchRepositoryReadme(
@@ -947,8 +1489,9 @@ export class SlackEventHandlers {
   ): Promise<string | null> {
     try {
       // Extract owner and repo name from GitHub URL
+      // Updated regex to handle dots in repo names properly
       const match = repositoryUrl.match(
-        /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/
+        /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/
       );
       if (!match || !match[1] || !match[2]) {
         logger.warn(`Could not parse repository URL: ${repositoryUrl}`);
@@ -968,19 +1511,6 @@ export class SlackEventHandlers {
     }
   }
 
-  /**
-   * Format README content for Slack display using existing SlackRenderer
-   */
-  private formatReadmeForSlack(readme: string): string {
-    // Truncate README if too long (Slack has limits)
-    const maxLength = 2000; // Conservative limit for Slack blocks
-    const truncatedReadme =
-      readme.length > maxLength
-        ? `${readme.substring(0, maxLength)}...`
-        : readme;
-
-    return convertMarkdownToSlack(truncatedReadme);
-  }
 
   private extractViewInputs(stateValues: any): string {
     // This method was kept for backward compatibility but could be moved to form-handlers

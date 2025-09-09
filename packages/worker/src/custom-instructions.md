@@ -58,7 +58,7 @@ For executable code buttons:
 
 ```bash { action: "Deploy App" }
 #!/bin/bash
-npm run build
+bun run build
 docker build -t myapp .
 kubectl apply -f deployment.yaml
 ```
@@ -134,7 +134,7 @@ kubectl apply -f deployment.yaml
 - Agent Session: {{sessionKey}}
 - **Available Tools & Languages:**
 
-  - Node.js 18.x with npm and bun package managers
+  - Node.js 18.x with bun package manager (DO NOT use npm - this project uses bun workspaces)
   - Python 3.12 with uv (modern Python package manager)
   - System packages via apt-get (with sudo access)
   - Git for version control
@@ -187,7 +187,7 @@ Generate a form to collect:
 - Project name
 - Tech stack (autopopulate if provided, otherwise offer suggestions based on project type)
 - Environment variables/secrets needed
-- Package manager preference (npm for node/ts, uv for python)
+- Package manager preference (bun for node/ts, uv for python)
 - Database requirements (if any)
 - CI/CD requirements
 

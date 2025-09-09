@@ -10,12 +10,16 @@ secrets:
   slackSigningSecret: "placeholder"
   slackAppToken: "placeholder"
   githubToken: "placeholder"
+  githubClientSecret: "" # Optional: GitHub OAuth Client Secret
+  encryptionKey: ""     # Optional: 32-char key for AES-GCM at-rest encryption
   claudeCodeOAuthToken: "placeholder"
   postgresqlPassword: "placeholder"
 
 config:
   githubOrganization: "peerbot-community"
   githubRepository: "" # Optional: Override repository URL for all users
+  githubClientId: ""    # Optional: GitHub OAuth Client ID
+  ingressUrl: ""        # Optional: Public URL base for OAuth callbacks
   sessionTimeoutMinutes: "5"
 
 kubernetes:

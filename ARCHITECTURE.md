@@ -70,7 +70,7 @@ Kubernetes Pod
 **Development Server with Tunnel**:
 
 ```
-Claude → MCP → Process Manager → npm run dev (port 3000)
+Claude → MCP → Process Manager → bun run dev (port 3000)
                                  ├── cloudflared tunnel → https://random.peerbot.ai
                                  └── Logs → /tmp/claude-logs/dev-server.log
 ```
@@ -78,7 +78,7 @@ Claude → MCP → Process Manager → npm run dev (port 3000)
 **Build Process**:
 
 ```
-Claude → MCP → Process Manager → npm run build
+Claude → MCP → Process Manager → bun run build
                                  └── Logs → /tmp/claude-logs/build.log
 ```
 

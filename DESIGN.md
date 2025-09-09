@@ -209,3 +209,136 @@ Even for existing threads, workspace setup is required because each worker is a 
 5. **Working Directory** - Prepares workspace for Claude operations
 
 The persistent volume preserves the repository and session data, but container initialization is still required.
+
+## GitHub OAuth Integration
+
+### Overview
+
+Peerbot supports GitHub OAuth authentication to allow users to work with their own repositories and use their personal GitHub tokens instead of the system token.
+
+### Authentication Flow
+
+1. **Login Button**: Users see "Login with GitHub" button in Slack home tab
+2. **OAuth Redirect**: Button redirects to `/api/github/oauth/authorize` endpoint
+3. **State Encryption**: State parameter encrypted with AES-256-GCM for security
+4. **GitHub Authorization**: User authorizes app on GitHub
+5. **Callback Processing**: `/api/github/oauth/callback` exchanges code for token
+6. **Token Storage**: OAuth token stored in `user_environ` table
+7. **Home Tab Refresh**: Slack home tab automatically refreshes to show connected state
+
+### Repository Selection
+
+Repository selection follows a hierarchical system:
+
+#### 1. Environment Variable Override (Highest Priority)
+- If `GITHUB_REPOSITORY` is set, all users use this fixed repository
+- No user override possible
+- Used for single-project teams
+
+#### 2. User-Selected Repository
+- Users can select repositories via modal in Slack home tab
+- Selection stored in `user_environ` as `SELECTED_REPOSITORY`
+- Repository list fetched using user's OAuth token
+- External select with autocomplete for easy searching
+
+#### 3. Default Repository Creation
+- If `GITHUB_ORGANIZATION` is set, creates `user-[username]` repository
+- Falls back to authenticated user's account if org not available
+- Auto-creates repository with README and initial structure
+
+### Token Hierarchy
+
+When spawning workers, tokens are selected in this order:
+
+1. **User's OAuth Token** (if logged in via GitHub)
+2. **System GITHUB_TOKEN** (fallback for non-authenticated users)
+
+This allows authenticated users to work with private repositories while maintaining backward compatibility.
+
+### Database Schema
+
+User tokens and settings stored in `user_environ` table:
+
+```sql
+-- GitHub OAuth token
+name: 'GITHUB_TOKEN'
+value: 'gho_xxxxx'
+type: 'user'
+user_id: [user.id]
+
+-- GitHub username
+name: 'GITHUB_USER'  
+value: 'username'
+type: 'user'
+user_id: [user.id]
+
+-- Selected repository
+name: 'SELECTED_REPOSITORY'
+value: 'https://github.com/owner/repo'
+type: 'system'
+user_id: [user.id]
+```
+
+### UI Components
+
+#### Home Tab
+- Shows GitHub connection status
+- Displays current repository as `owner/repo` format
+- "Change Repository" button opens selection modal
+- README.md content displayed if repository has one
+- Login/Logout buttons for authentication
+
+#### Repository Modal
+- External select dropdown with autocomplete
+- Optional manual URL input field
+- Lists all accessible repositories for the user
+- Filters repositories as user types
+
+### OAuth Endpoints
+
+Dispatcher exposes OAuth endpoints on port 8080:
+
+- `GET /api/github/oauth/authorize` - Initiates OAuth flow
+- `GET /api/github/oauth/callback` - Handles GitHub callback
+- `POST /api/github/oauth/logout` - Revokes user token
+
+### Security Considerations
+
+1. **State Parameter Encryption**: Uses AES-256-GCM with 32-byte key
+2. **Token Storage**: Tokens stored encrypted in database
+3. **Secure Redirects**: Validates redirect URLs
+4. **Session Isolation**: Each user's tokens isolated by user ID
+5. **Token Revocation**: Logout removes tokens from database
+
+### Development Setup
+
+For local development with GitHub OAuth:
+
+1. Create GitHub OAuth App at https://github.com/settings/developers
+2. Set Authorization callback URL to `http://localhost:8080/api/github/oauth/callback`
+3. Add credentials to `.env`:
+   ```
+   GITHUB_CLIENT_ID=Ov23xxxxx
+   GITHUB_CLIENT_SECRET=xxxxx
+   ```
+4. Use `INGRESS_URL=http://localhost:8080` for local testing
+
+### Hot Reload Configuration
+
+Development mode supports hot reload for rapid iteration:
+
+1. **Docker Compose Dev**: Uses `docker-compose.dev.yml` for development
+2. **Volume Mounts**: Source code mounted as volumes in containers
+3. **Bun Watch Mode**: Dispatcher runs with `bun --watch src/index.ts`
+4. **Auto Restart**: File changes trigger automatic service restart
+5. **NODE_ENV**: Set to `development` for dev features
+
+To enable hot reload:
+```bash
+make dev  # Uses docker-compose.dev.yml with volume mounts
+```
+
+Package.json configuration:
+```json
+"dev": "bun --watch src/index.ts"  // Enables file watching
+```

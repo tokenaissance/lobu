@@ -26,6 +26,9 @@ services:
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
       POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      INGRESS_URL: ${INGRESS_URL:-http://localhost:8080}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
     volumes:
@@ -39,6 +42,7 @@ services:
     command: bun run dev
     ports:
       - "3000:3000"
+      - "8080:8080"  # OAuth and health endpoints
     networks:
       - peerbot-network
     depends_on:

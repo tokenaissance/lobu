@@ -81,7 +81,7 @@ export class SlackDispatcher {
     // Initialize queue producer - use DATABASE_URL for consistency
     logger.info("Initializing queue mode");
     this.queueProducer = new QueueProducer(config.queues.connectionString);
-    this.repoManager = new GitHubRepositoryManager(config.github);
+    this.repoManager = new GitHubRepositoryManager(config.github, config.queues.connectionString);
     // ThreadResponseConsumer will be created after event handlers are initialized
 
     this.setupErrorHandling();
@@ -114,8 +114,7 @@ export class SlackDispatcher {
         logger.info("✅ Anthropic proxy initialized");
       }
 
-      // Setup health endpoints FIRST - pass proxy for Socket mode
-      setupHealthEndpoints(this.anthropicProxy);
+      // Setup health endpoints will be called after event handlers are created
 
       // Start queue producer
       await this.queueProducer.start();
@@ -383,6 +382,18 @@ export class SlackDispatcher {
         this.repoManager,
         this.eventHandlers.getUserMappings()
       );
+
+      // Setup health endpoints with home tab update callback
+      setupHealthEndpoints(
+        this.anthropicProxy, 
+        config.queues.connectionString,
+        async (userId: string) => {
+          if (this.eventHandlers) {
+            const client = this.app.client;
+            await (this.eventHandlers as any).updateAppHome(userId, client);
+          }
+        }
+      );
     } catch (error) {
       logger.error("Failed to get bot info:", error);
       throw new Error("Failed to initialize bot - could not get bot user ID");
@@ -500,9 +511,12 @@ async function main() {
         allowedChannels: process.env.SLACK_ALLOWED_CHANNELS?.split(","),
       },
       github: {
-        token: process.env.GITHUB_TOKEN!,
+        token: process.env.GITHUB_TOKEN || '', // Optional - users can use OAuth instead
         organization: process.env.GITHUB_ORGANIZATION || "", // Empty string means use authenticated user
         repository: process.env.GITHUB_REPOSITORY, // Optional override repository URL
+        clientId: process.env.GITHUB_CLIENT_ID, // GitHub OAuth App Client ID
+        clientSecret: process.env.GITHUB_CLIENT_SECRET, // GitHub OAuth App Client Secret
+        ingressUrl: process.env.INGRESS_URL, // Public URL for OAuth callbacks
       },
       claude: {
         allowedTools: process.env.ALLOWED_TOOLS?.split(","),
@@ -550,8 +564,9 @@ async function main() {
     if (!config.slack.token) {
       throw new Error("SLACK_BOT_TOKEN is required");
     }
+    // GITHUB_TOKEN is optional - users can login with OAuth instead
     if (!config.github.token) {
-      throw new Error("GITHUB_TOKEN is required");
+      logger.warn("GITHUB_TOKEN not provided - users must login with GitHub OAuth to access repositories");
     }
     if (!config.queues.connectionString) {
       throw new Error("DATABASE_URL is required");

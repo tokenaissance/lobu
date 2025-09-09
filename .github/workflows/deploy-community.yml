@@ -1,0 +1,218 @@
+name: Deploy to Community Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy'
+        required: false
+        default: 'main'
+        type: string
+  repository_dispatch:
+    types: [deploy-community]
+
+env:
+  NAMESPACE: peerbot
+  DEPLOYMENT_NAME: peerbot
+  IMAGE_DISPATCHER: claude-dispatcher
+  IMAGE_WORKER: claude-worker
+  IMAGE_ORCHESTRATOR: claude-orchestrator
+
+jobs:
+  terraform:
+    name: Terraform Infrastructure
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
+        
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+          
+      - name: Configure Terraform Backend
+        working-directory: charts/peerbot/provider/hetzner
+        run: |
+          cat > backend.tf << 'EOF'
+          terraform {
+            backend "s3" {
+              bucket = "${{ secrets.TF_STATE_BUCKET }}"
+              key    = "hetzner/terraform.tfstate"
+              region = "${{ secrets.TF_STATE_REGION }}"
+              access_key = "${{ secrets.TF_STATE_ACCESS_KEY }}"
+              secret_key = "${{ secrets.TF_STATE_SECRET_KEY }}"
+              endpoint = "${{ secrets.TF_STATE_ENDPOINT }}"
+              skip_credentials_validation = true
+              skip_metadata_api_check = true
+              skip_region_validation = true
+              force_path_style = true
+            }
+          }
+          EOF
+          
+      - name: Terraform Init
+        working-directory: charts/peerbot/provider/hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+        run: terraform init
+        
+      - name: Terraform Plan
+        working-directory: charts/peerbot/provider/hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+        run: terraform plan -out=tfplan
+        
+      - name: Terraform Apply
+        working-directory: charts/peerbot/provider/hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+        run: terraform apply -auto-approve tfplan
+        
+      - name: Get Kubeconfig
+        working-directory: charts/peerbot/provider/hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+        run: |
+          terraform output -raw kubeconfig > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+
+  build-and-deploy:
+    name: Build and Deploy Applications
+    runs-on: ubuntu-latest
+    needs: terraform
+    
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup Terraform for Kubeconfig
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+          
+      - name: Get Kubeconfig from Terraform
+        working-directory: charts/peerbot/provider/hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+        run: |
+          # Configure backend
+          cat > backend.tf << 'EOF'
+          terraform {
+            backend "s3" {
+              bucket = "${{ secrets.TF_STATE_BUCKET }}"
+              key    = "hetzner/terraform.tfstate"
+              region = "${{ secrets.TF_STATE_REGION }}"
+              access_key = "${{ secrets.TF_STATE_ACCESS_KEY }}"
+              secret_key = "${{ secrets.TF_STATE_SECRET_KEY }}"
+              endpoint = "${{ secrets.TF_STATE_ENDPOINT }}"
+              skip_credentials_validation = true
+              skip_metadata_api_check = true
+              skip_region_validation = true
+              force_path_style = true
+            }
+          }
+          EOF
+          
+          terraform init
+          terraform output -raw kubeconfig > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+          
+      - name: Build and Push Dispatcher
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.dispatcher
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_DISPATCHER }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_DISPATCHER }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Build and Push Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_WORKER }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_WORKER }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Build and Push Orchestrator
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.orchestrator
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_ORCHESTRATOR }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_ORCHESTRATOR }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.13.0'
+          
+      - name: Deploy with Helm
+        run: |
+          # Update image repository to use GitHub Container Registry
+          helm upgrade --install $DEPLOYMENT_NAME charts/peerbot \
+            --namespace $NAMESPACE \
+            --create-namespace \
+            --values charts/peerbot/values-community.yaml \
+            --set dispatcher.image.repository=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_DISPATCHER }} \
+            --set dispatcher.image.tag=${{ github.sha }} \
+            --set worker.image.repository=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_WORKER }} \
+            --set worker.image.tag=${{ github.sha }} \
+            --set orchestrator.image.repository=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_ORCHESTRATOR }} \
+            --set orchestrator.image.tag=${{ github.sha }} \
+            --set config.githubClientId="${{ secrets.GITHUB_CLIENT_ID }}" \
+            --set secrets.githubClientSecret="${{ secrets.GITHUB_CLIENT_SECRET }}" \
+            --set secrets.encryptionKey="${{ secrets.ENCRYPTION_KEY }}" \
+            --set secrets.slackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
+            --set secrets.slackAppToken="${{ secrets.SLACK_APP_TOKEN }}" \
+            --set secrets.slackSigningSecret="${{ secrets.SLACK_SIGNING_SECRET }}" \
+            --set secrets.slackClientId="${{ secrets.SLACK_CLIENT_ID }}" \
+            --set secrets.slackClientSecret="${{ secrets.SLACK_CLIENT_SECRET }}" \
+            --set secrets.slackStateSecret="${{ secrets.SLACK_STATE_SECRET }}" \
+            --wait \
+            --timeout 10m
+            
+      - name: Verify Deployment
+        run: |
+          kubectl get pods -n $NAMESPACE
+          kubectl get svc -n $NAMESPACE

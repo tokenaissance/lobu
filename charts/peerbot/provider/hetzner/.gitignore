@@ -1,0 +1,36 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfplan
+crash.log
+*.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Environment files
+.env
+.env.*
+
+# Kubernetes config
+kubeconfig
+kubeconfig.yaml
+k3s_kubeconfig.yaml
+*_kubeconfig.yaml
+
+# Backup files
+*.backup
+*_backup.yaml
+
+# Generated files
+k3s_kustomization_backup.yaml
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

@@ -10,6 +10,12 @@ data:
   {{- if .Values.config.githubRepository }}
   github-repository: {{ .Values.config.githubRepository | quote }}
   {{- end }}
+  {{- if .Values.config.githubClientId }}
+  github-client-id: {{ .Values.config.githubClientId | quote }}
+  {{- end }}
+  {{- if .Values.config.ingressUrl }}
+  ingress-url: {{ .Values.config.ingressUrl | quote }}
+  {{- end }}
   
   # Session Configuration
   session-timeout-minutes: {{ .Values.config.sessionTimeoutMinutes | quote }}
