@@ -33,13 +33,12 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
         
-      - name: Generate SSH Key
+      - name: Setup SSH Key
         run: |
-          ssh-keygen -t ed25519 -f /tmp/ssh_key -N "" -C "github-actions@peerbot"
-          # Copy to expected location for compatibility
+          # Use persistent SSH key from GitHub secrets
           mkdir -p ~/.ssh
-          cp /tmp/ssh_key ~/.ssh/id_ed25519
-          cp /tmp/ssh_key.pub ~/.ssh/id_ed25519.pub
+          echo "${{ secrets.HETZNER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.HETZNER_SSH_PUBLIC_KEY }}" > ~/.ssh/id_ed25519.pub
           chmod 600 ~/.ssh/id_ed25519
           chmod 644 ~/.ssh/id_ed25519.pub
           
@@ -119,6 +118,13 @@ jobs:
           # Start SSH agent and add key for provisioners
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_ed25519
+          ssh-add ./ssh_key
+          
+          # Export SSH auth sock for Terraform
+          export SSH_AUTH_SOCK=$SSH_AUTH_SOCK
+          
+          # Show SSH agent keys for debugging
+          ssh-add -l
           
           terraform apply -auto-approve tfplan
         
