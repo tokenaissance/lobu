@@ -33,7 +33,34 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
         
+      - name: Check Hetzner API Status
+        id: check-api
+        continue-on-error: true
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+        run: |
+          # Check if Hetzner API is available
+          echo "Checking Hetzner Cloud API status..."
+          
+          # Try a simple API call with curl
+          API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $HCLOUD_TOKEN" \
+            https://api.hetzner.cloud/v1/datacenters)
+          
+          if [ "$API_RESPONSE" = "200" ]; then
+            echo "✅ Hetzner API is available"
+            echo "api_available=true" >> $GITHUB_OUTPUT
+          elif [ "$API_RESPONSE" = "503" ]; then
+            echo "⚠️ Hetzner API is unavailable (503)"
+            echo "api_available=false" >> $GITHUB_OUTPUT
+            echo "::warning::Hetzner Cloud API is currently unavailable. Infrastructure deployment will be skipped."
+          else
+            echo "⚠️ Hetzner API returned status: $API_RESPONSE"
+            echo "api_available=maybe" >> $GITHUB_OUTPUT
+          fi
+          
       - name: Setup SSH Key
+        if: steps.check-api.outputs.api_available != 'false'
         run: |
           # Use persistent SSH key from GitHub secrets
           mkdir -p ~/.ssh
@@ -57,12 +84,14 @@ jobs:
           chmod 600 ~/.ssh/config
           
       - name: Setup Terraform
+        if: steps.check-api.outputs.api_available != 'false'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.5
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
           
       - name: Configure Terraform Backend
+        if: steps.check-api.outputs.api_available != 'false'
         working-directory: charts/peerbot/provider/hetzner
         run: |
           cat > backend.tf << 'EOF'
@@ -77,7 +106,18 @@ jobs:
           }
           EOF
           
+      - name: Skip Infrastructure Due to API Outage
+        if: steps.check-api.outputs.api_available == 'false'
+        run: |
+          echo "::notice title=Deployment Skipped::Hetzner Cloud API is currently unavailable (503 errors). Infrastructure deployment has been skipped but can be retried when the API recovers."
+          echo "## ⚠️ Infrastructure Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Hetzner Cloud API is experiencing an outage. The deployment will continue with application builds only." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "You can retry this workflow once the API is available." >> $GITHUB_STEP_SUMMARY
+          
       - name: Terraform Init
+        if: steps.check-api.outputs.api_available != 'false'
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
@@ -103,13 +143,34 @@ jobs:
           terraform init -upgrade
         
       - name: Terraform Plan
+        if: steps.check-api.outputs.api_available != 'false'
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-        run: terraform plan -out=tfplan
+        run: |
+          # Retry logic for API failures
+          MAX_RETRIES=3
+          RETRY_DELAY=30
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i of $MAX_RETRIES..."
+            if terraform plan -out=tfplan; then
+              echo "Terraform plan succeeded"
+              exit 0
+            else
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "Terraform plan failed, retrying in ${RETRY_DELAY}s..."
+                sleep $RETRY_DELAY
+              else
+                echo "Terraform plan failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+          done
         
       - name: Terraform Apply
+        if: steps.check-api.outputs.api_available != 'false'
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
@@ -156,6 +217,7 @@ jobs:
           }
           
       - name: Get Kubeconfig
+        if: steps.check-api.outputs.api_available != 'false'
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
