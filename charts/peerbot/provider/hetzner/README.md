@@ -64,10 +64,7 @@ Run the setup script:
 This will configure the following secrets via gh CLI:
 
 - `HCLOUD_TOKEN` - Hetzner Cloud API token
-- `R2_BUCKET_NAME` - Cloudflare R2 bucket name
-- `R2_ACCESS_KEY_ID` - R2 Access Key ID
-- `R2_SECRET_ACCESS_KEY` - R2 Secret Access Key
-- `R2_ENDPOINT` - R2 endpoint (auto-generated from account ID)
+ 
 
 ### Deployment Workflow
 

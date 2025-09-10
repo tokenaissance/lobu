@@ -1,6 +1,6 @@
 # Terraform Cloud Setup for State Management
 
-Due to TLS compatibility issues between GitHub Actions and Cloudflare R2, we recommend using Terraform Cloud for state management.
+We recommend using Terraform Cloud for state management.
 
 ## Why Terraform Cloud?
 
@@ -61,7 +61,7 @@ If you prefer to keep everything in GitHub, you can use a GitHub repository as a
 2. Use GitHub Actions to read/write state as artifacts
 3. Implement locking using GitHub Actions concurrency
 
-## Alternative: Use S3 (non-R2)
+## Alternative: Use S3
 
 If you have AWS access, standard S3 works without TLS issues:
 
@@ -82,7 +82,6 @@ terraform {
 | Terraform Cloud | Free, reliable, no TLS issues | External dependency | Production use |
 | GitHub Artifacts | No external deps, free | Complex setup | GitHub-only teams |
 | AWS S3 | Battle-tested, reliable | AWS account required | AWS users |
-| Cloudflare R2 | S3-compatible, Cloudflare integration | TLS issues with GitHub Actions | Local development only |
 
 ## Recommendation
 

@@ -3,6 +3,22 @@ locals {
   # within your shell, such as: export TF_VAR_hcloud_token=xxxxxxxxxxx
 }
 
+# Allow callers (GH Actions or local) to control SSH firewall sources.
+variable "firewall_ssh_source" {
+  description = "CIDR list allowed to SSH to nodes"
+  type        = list(string)
+  # Safe default for CI bring-up; you may restrict to runner IP once known.
+  default     = ["0.0.0.0/0", "::/0"]
+}
+
+# Allow callers to restrict access to the Kubernetes API server.
+variable "firewall_kube_api_source" {
+  description = "CIDR list allowed to access Kube API (port 6443)"
+  type        = list(string)
+  # Default open; set to your Hetzner runner IP CIDR for tighter security.
+  default     = ["0.0.0.0/0", "::/0"]
+}
+
 module "kube-hetzner" {
   providers = {
     hcloud = hcloud
@@ -17,7 +33,7 @@ module "kube-hetzner" {
   source = "kube-hetzner/kube-hetzner/hcloud"
   #    When using the terraform registry as source, you can optionally specify a version number.
   #    See https://registry.terraform.io/modules/kube-hetzner/kube-hetzner/hcloud for the available versions
-  version = "2.17.4"
+  version = "2.18.1"
   # 2. For local dev, path to the git repo
   # source = "../../kube-hetzner/"
   # 3. If you want to use the latest master branch (see https://developer.hashicorp.com/terraform/language/modules/sources#github), use
@@ -46,7 +62,7 @@ module "kube-hetzner" {
   # ssh_hcloud_key_label = "role=admin"
 
   # If you use SSH agent and have issues with SSH connecting to your nodes, you can increase the number of auth tries (default is 2)
-  # ssh_max_auth_tries = 10
+  ssh_max_auth_tries = 2
 
   # If you want to use an ssh key that is already registered within hetzner cloud, you can pass its id.
   # If no id is passed, a new ssh key will be registered within hetzner cloud.
@@ -308,9 +324,9 @@ module "kube-hetzner" {
   # however also introduce a single point of failure, so if you need high-availability on your
   # egress, you should consider other configurations.
   # 
-  #
+  # DISABLED: Exposing API publicly for easier access
   # nat_router = {
-  #   server_type = "cax21"
+  #   server_type = "cax11"
   #   location    = "fsn1"
   #   enable_sudo = false # optional, default to false. Set to true to add nat-router user to the sudo'ers. Note that ssh as root is disabled.
   #   labels      = {} # optionally add labels.
@@ -352,8 +368,8 @@ module "kube-hetzner" {
   ]
   #
   # To disable public ips on your autoscaled nodes, uncomment the following lines:
-  autoscaler_disable_ipv4 = true
-  autoscaler_disable_ipv6 = true
+  # autoscaler_disable_ipv4 = true
+  # autoscaler_disable_ipv6 = true
 
   # ⚠️ Deprecated, will be removed after a new Cluster Autoscaler version has been released which support the new way of setting labels and taints. See above.
   # Add extra labels on nodes started by the Cluster Autoscaler
@@ -426,11 +442,10 @@ module "kube-hetzner" {
   # Enable etcd snapshot backups to S3 storage.
   # Just provide a map with the needed settings (according to your S3 storage provider) and backups to S3 will
   # be enabled (with the default settings for etcd snapshots).
-  # Cloudflare's R2 offers 10GB, 10 million reads and 1 million writes per month for free.
   # For proper context, have a look at https://docs.k3s.io/datastore/backup-restore.
   # You also can use additional parameters from https://docs.k3s.io/cli/etcd-snapshot, such as `etc-s3-folder`
   # etcd_s3_backup = {
-  #   etcd-s3-endpoint        = "xxxx.r2.cloudflarestorage.com"
+  #   etcd-s3-endpoint        = "<your-s3-endpoint>"
   #   etcd-s3-access-key      = "<access-key>"
   #   etcd-s3-secret-key      = "<secret-key>"
   #   etcd-s3-bucket          = "k3s-etcd-snapshots"
@@ -734,7 +749,7 @@ module "kube-hetzner" {
   # k3s_autoscaler_kubelet_args = []
 
   # If you want to allow all outbound traffic you can set this to "false". Default is "true".
-  # restrict_outbound_traffic = false
+  restrict_outbound_traffic = false
 
   # Allow access to the Kube API from the specified networks. The default is ["0.0.0.0/0", "::/0"].
   # Allowed values: null (disable Kube API rule entirely) or a list of allowed networks with CIDR notation.
@@ -742,12 +757,12 @@ module "kube-hetzner" {
   # you would have to connect to any control plane node via SSH, as you can run kubectl from within these.
   # Please be advised that this setting has no effect on the load balancer when the use_control_plane_lb variable is set to true. This is
   # because firewall rules cannot be applied to load balancers yet.
-  # firewall_kube_api_source = null
+  firewall_kube_api_source = var.firewall_kube_api_source
 
   # Allow SSH access from the specified networks. Default: ["0.0.0.0/0", "::/0"]
   # Allowed values: null (disable SSH rule entirely) or a list of allowed networks with CIDR notation.
   # Ideally you would set your IP there. And if it changes after cluster deploy, you can always update this variable and apply again.
-  # firewall_ssh_source = ["1.2.3.4/32"]
+  firewall_ssh_source = var.firewall_ssh_source
 
   # By default, SELinux is enabled in enforcing mode on all nodes. For container-specific SELinux issues,
   # consider using the pre-installed 'udica' tool to create custom, targeted SELinux policies instead of
@@ -839,13 +854,13 @@ module "kube-hetzner" {
 
   # When this is enabled, rather than the first node, all external traffic will be routed via a control-plane loadbalancer, allowing for high availability.
   # The default is false.
-  # use_control_plane_lb = true
+  use_control_plane_lb = true
 
   # When the above use_control_plane_lb is enabled, you can change the lb type for it, the default is "lb11".
   # control_plane_lb_type = "lb21"
 
   # When the above use_control_plane_lb is enabled, you can change to disable the public interface for control plane load balancer, the default is true.
-  # control_plane_lb_enable_public_interface = false
+  control_plane_lb_enable_public_interface = true
 
   # Let's say you are not using the control plane LB solution above, and still want to have one hostname point to all your control-plane nodes.
   # You could create multiple A records of to let's say cp.cluster.my.org pointing to all of your control-plane nodes ips.

@@ -1,8 +1,9 @@
 # Community deployment values for Hetzner K3s
 slack:
   socketMode: true
+  port: 3000  # Port for ingress to reference (dispatcher service port)
 
-# Ingress configuration for community deployment
+# Ingress configuration for community deployment (for tunnel access)
 ingress:
   enabled: true
   className: "traefik"  # K3s uses Traefik by default
@@ -63,19 +64,11 @@ postgresql:
   persistence:
     enabled: true
     size: 10Gi
-    storageClass: "hcloud-volumes"  # Hetzner CSI driver
+    storageClass: "local-path"  # Use local-path provisioner for K3s
 
-# Redis for caching/queuing
+# Redis for caching/queuing - DISABLED (not needed for socket mode)
 redis:
-  enabled: true
-  architecture: standalone
-  auth:
-    enabled: false
-  master:
-    persistence:
-      enabled: true
-      size: 2Gi
-      storageClass: "hcloud-volumes"
+  enabled: false
 
 # OAuth and encryption configuration
 # These should be set via --set flags or environment-specific secrets

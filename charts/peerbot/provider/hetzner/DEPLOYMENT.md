@@ -18,10 +18,7 @@ The workflow pulls secrets from GitHub Secrets and injects them into Helm:
 
 ### Infrastructure Secrets (Required)
 - `HCLOUD_TOKEN` - Hetzner Cloud API token
-- `R2_BUCKET_NAME` - Cloudflare R2 bucket for Terraform state
-- `R2_ACCESS_KEY_ID` - R2 access key
-- `R2_SECRET_ACCESS_KEY` - R2 secret key
-- `R2_ENDPOINT` - Auto-generated from account ID
+ 
 
 ### Application Secrets (Optional but recommended)
 - `GITHUB_CLIENT_ID` - GitHub OAuth app client ID

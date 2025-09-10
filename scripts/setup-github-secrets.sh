@@ -64,7 +64,7 @@ case $PROVIDER_CHOICE in
         ;;
 esac
 
-# Terraform State Backend (Optional)
+# Terraform State Backend (Optional - manual)
 echo ""
 echo "📦 Terraform State Backend (Optional)"
 echo "====================================="
@@ -73,40 +73,7 @@ read -n 1 CONFIGURE_BACKEND
 echo ""
 
 if [ "$CONFIGURE_BACKEND" = "y" ]; then
-    echo "Select backend type:"
-    echo "1) Cloudflare R2"
-    echo "2) AWS S3"
-    echo "3) Azure Blob Storage"
-    echo "4) Google Cloud Storage"
-    echo "5) Other S3-compatible"
-    read -p "Enter choice [1-5]: " BACKEND_CHOICE
-    
-    case $BACKEND_CHOICE in
-        1)
-            echo "Enter your Cloudflare account ID:"
-            read CLOUDFLARE_ACCOUNT_ID
-            R2_ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-            
-            echo "Enter R2 bucket name:"
-            read R2_BUCKET_NAME
-            
-            echo "Enter R2 Access Key ID:"
-            read R2_ACCESS_KEY_ID
-            
-            echo "Enter R2 Secret Access Key:"
-            read -s R2_SECRET_ACCESS_KEY
-            echo ""
-            
-            gh secret set R2_BUCKET_NAME --body "$R2_BUCKET_NAME" --repo "$REPO"
-            gh secret set R2_ACCESS_KEY_ID --body "$R2_ACCESS_KEY_ID" --repo "$REPO"
-            gh secret set R2_SECRET_ACCESS_KEY --body "$R2_SECRET_ACCESS_KEY" --repo "$REPO"
-            gh secret set R2_ENDPOINT --body "$R2_ENDPOINT" --repo "$REPO"
-            echo "✅ Configured Cloudflare R2 backend"
-            ;;
-        *)
-            echo "ℹ️  Configure other backends manually in GitHub Secrets"
-            ;;
-    esac
+    echo "ℹ️  Configure your preferred backend (e.g., Terraform Cloud, S3) manually in GitHub Secrets."
 fi
 
 # Application Secrets

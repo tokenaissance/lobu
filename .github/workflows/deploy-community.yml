@@ -21,7 +21,9 @@ env:
 jobs:
   terraform:
     name: Terraform Infrastructure
-    runs-on: ubuntu-latest
+    # Run Terraform on a self-hosted runner in Hetzner for reliable SSH provisioners
+    runs-on: [self-hosted, linux, x64, hetzner]
+    environment: community
     
     permissions:
       contents: read
@@ -59,6 +61,21 @@ jobs:
             echo "api_available=maybe" >> $GITHUB_OUTPUT
           fi
           
+      - name: Detect runner IP and set firewall TF vars
+        if: steps.check-api.outputs.api_available != 'false'
+        run: |
+          set -euo pipefail
+          echo "Detecting runner public IP..."
+          RUNNER_IP=$(curl -fsSL https://ipinfo.io/ip || curl -fsSL https://ipv4.icanhazip.com || true)
+          if [ -z "${RUNNER_IP}" ]; then
+            echo "::warning::Could not detect runner IP; using 0.0.0.0/0 temporarily"
+            RUNNER_IP="0.0.0.0"
+          fi
+          echo "Runner IP: ${RUNNER_IP}"
+          echo "TF_VAR_firewall_ssh_source=[\"${RUNNER_IP}/32\"]" >> $GITHUB_ENV
+          echo "TF_VAR_firewall_kube_api_source=[\"${RUNNER_IP}/32\"]" >> $GITHUB_ENV
+          echo "Configured firewall sources to ${RUNNER_IP}/32" >> $GITHUB_STEP_SUMMARY
+
       - name: Setup SSH Key
         if: steps.check-api.outputs.api_available != 'false'
         run: |
@@ -80,29 +97,13 @@ jobs:
           echo "SSH key fingerprint:"
           ssh-keygen -l -f ~/.ssh/id_ed25519.pub
           
-          # DO NOT add key to SSH agent to avoid "too many authentication failures"
-          # The key will be used directly via IdentityFile in SSH config
-          
-          # Configure SSH to accept new host keys automatically (for CI/CD)
-          cat >> ~/.ssh/config << 'EOL'
-          Host *
-            StrictHostKeyChecking accept-new
-            UserKnownHostsFile /dev/null
-            User root
-            IdentityFile ~/.ssh/id_ed25519
-            IdentitiesOnly yes
-            ConnectTimeout 30
-            ServerAliveInterval 60
-            ServerAliveCountMax 3
-          EOL
-          chmod 600 ~/.ssh/config
-          
       - name: Setup Terraform
         if: steps.check-api.outputs.api_available != 'false'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.5
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          terraform_wrapper: false
           
       - name: Configure Terraform Backend
         if: steps.check-api.outputs.api_available != 'false'
@@ -162,6 +163,8 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_firewall_ssh_source: ${{ env.TF_VAR_firewall_ssh_source }}
+          TF_VAR_firewall_kube_api_source: ${{ env.TF_VAR_firewall_kube_api_source }}
         run: |
           # Retry logic for API failures
           MAX_RETRIES=3
@@ -189,9 +192,9 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-        continue-on-error: true
-        id: terraform-apply
-        timeout-minutes: 15  # Increased timeout for provisioners
+          TF_VAR_firewall_ssh_source: ${{ env.TF_VAR_firewall_ssh_source }}
+          TF_VAR_firewall_kube_api_source: ${{ env.TF_VAR_firewall_kube_api_source }}
+        timeout-minutes: 20  # Increased timeout for NAT router and provisioners
         run: |
           # Verify SSH keys exist in working directory
           echo "Checking SSH keys in working directory..."
@@ -206,104 +209,42 @@ jobs:
           echo "SSH public key fingerprint:"
           ssh-keygen -l -f ./ssh_key.pub
           
-          # DO NOT use SSH agent - it causes "too many authentication failures"
-          # Terraform will use the key file directly
-          
-          # Apply Terraform - expect provisioners to fail from GitHub Actions
-          # The infrastructure will be created but K3s installation may fail
-          terraform apply -auto-approve || {
-            echo "::warning::Terraform provisioners failed (expected in GitHub Actions)"
-            echo "apply_failed=true" >> $GITHUB_OUTPUT
-            # Check what was actually created
-            terraform state list || true
-            # Mark as success if infrastructure was created
-            if terraform state show module.kube-hetzner.module.control_planes 2>/dev/null | grep -q "id"; then
-              echo "Infrastructure created successfully, provisioners failed"
-              exit 0
-            else
-              echo "Infrastructure creation failed"
-              exit 1
-            fi
-          }
+          # Apply Terraform - NAT router should make provisioners work reliably
+          terraform apply -auto-approve
         
-      - name: Wait for servers and test SSH connectivity
-        if: steps.terraform-apply.outputs.apply_failed == 'true'
+      - name: Verify cluster is ready
+        if: steps.check-api.outputs.api_available != 'false'
         working-directory: charts/peerbot/provider/hetzner
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          echo "::notice::Testing SSH connectivity to newly created servers..."
+          echo "::notice::Verifying cluster deployment..."
           
-          # Install hcloud CLI
-          curl -sSL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xz
-          sudo mv hcloud /usr/local/bin/
+          # Get kubeconfig from Terraform output
+          terraform output -raw kubeconfig > /tmp/kubeconfig
+          export KUBECONFIG=/tmp/kubeconfig
           
-          # Configure hcloud with token
-          export HCLOUD_TOKEN=$HCLOUD_TOKEN
+          # Install kubectl for verification
+          curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
           
-          # Get server IPs
-          echo "Getting server information..."
-          SERVERS=$(hcloud server list -o json)
+          # Wait for cluster to be ready
+          echo "Waiting for cluster nodes to be ready..."
+          for i in {1..30}; do
+            if kubectl get nodes 2>/dev/null | grep -q Ready; then
+              echo "✅ Cluster is ready!"
+              kubectl get nodes
+              break
+            fi
+            echo "Waiting for nodes to be ready... ($i/30)"
+            sleep 10
+          done
           
-          if [ "$(echo "$SERVERS" | jq '. | length')" -eq "0" ]; then
-            echo "::error::No servers found. Infrastructure creation failed."
-            exit 1
-          fi
-          
-          echo "Found $(echo "$SERVERS" | jq '. | length') servers"
-          hcloud server list
-          
-          # Test SSH connectivity to first server
-          FIRST_SERVER_IP=$(echo "$SERVERS" | jq -r '.[0].public_net.ipv4.ip')
-          echo "Testing SSH to first server at $FIRST_SERVER_IP..."
-          
-          # Wait for server to be ready (cloud-init might still be running)
-          sleep 30
-          
-          # Try to connect with verbose output for debugging
-          if ssh -vvv -o ConnectTimeout=10 \
-               -o StrictHostKeyChecking=no \
-               -o UserKnownHostsFile=/dev/null \
-               -o PasswordAuthentication=no \
-               -o PreferredAuthentications=publickey \
-               -o IdentitiesOnly=yes \
-               -i ./ssh_key \
-               root@$FIRST_SERVER_IP "echo 'SSH connection successful!'" 2>&1; then
-            echo "✅ SSH connection successful!"
-            echo "K3s can be installed manually or via a self-hosted runner"
-          else
-            echo "::warning::SSH connection failed. This might be due to:"
-            echo "  1. Server is still initializing (cloud-init running)"
-            echo "  2. Network restrictions from GitHub Actions"
-            echo "  3. SSH key mismatch"
-            echo ""
-            echo "Infrastructure has been created successfully:"
-            hcloud server list
-          fi
-          
-          # Create a dummy kubeconfig to allow workflow to continue
-          mkdir -p ~/.kube
-          cat > ~/.kube/config << 'EOF'
-          apiVersion: v1
-          kind: Config
-          clusters:
-          - cluster:
-              server: https://pending-setup:6443
-            name: default
-          contexts:
-          - context:
-              cluster: default
-              user: default
-            name: default
-          current-context: default
-          users:
-          - name: default
-            user:
-              token: pending
-          EOF
-          
-          # Save to tmp for next job
-          cp ~/.kube/config /tmp/kubeconfig || true
+          # Verify all expected nodes are present
+          echo "Cluster status:"
+          kubectl get nodes -o wide || echo "::warning::Could not get node status"
+          kubectl get pods -A || echo "::warning::Could not get pod status"
           
       - name: Get Kubeconfig
         if: steps.check-api.outputs.api_available != 'false'
@@ -324,8 +265,10 @@ jobs:
 
   build-and-deploy:
     name: Build and Deploy Applications
-    runs-on: ubuntu-latest
+    # Run app build + helm deploy from the same Hetzner runner for stable kube API access
+    runs-on: [self-hosted, linux, x64, hetzner]
     needs: terraform
+    environment: community
     
     permissions:
       contents: read
@@ -357,6 +300,7 @@ jobs:
         with:
           terraform_version: 1.8.5
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          terraform_wrapper: false
           
       - name: Get Kubeconfig from Terraform
         working-directory: charts/peerbot/provider/hetzner
@@ -436,6 +380,17 @@ jobs:
         with:
           version: 'v1.29.0'
           
+      - name: Setup Storage Class
+        run: |
+          # Check if local-path storage class exists, if not install it
+          if ! kubectl get storageclass local-path >/dev/null 2>&1; then
+            echo "Installing local-path storage provisioner..."
+            kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+            kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+          else
+            echo "Local-path storage class already exists"
+          fi
+          
       - name: Deploy with Helm
         run: |
           # Update image repository to use GitHub Container Registry
@@ -449,15 +404,17 @@ jobs:
             --set worker.image.tag=${{ github.sha }} \
             --set orchestrator.image.repository=ghcr.io/${{ env.OWNER_LC }}/${{ env.IMAGE_ORCHESTRATOR }} \
             --set orchestrator.image.tag=${{ github.sha }} \
-            --set config.githubClientId="${{ secrets.GITHUB_CLIENT_ID }}" \
-            --set secrets.githubClientSecret="${{ secrets.GITHUB_CLIENT_SECRET }}" \
+            --set postgresql.persistence.storageClass=local-path \
+            --set redis.enabled=false \
+            --set config.githubClientId="${{ secrets.GH_CLIENT_ID }}" \
+            --set secrets.githubClientSecret="${{ secrets.GH_CLIENT_SECRET }}" \
             --set secrets.encryptionKey="${{ secrets.ENCRYPTION_KEY }}" \
             --set secrets.slackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
             --set secrets.slackAppToken="${{ secrets.SLACK_APP_TOKEN }}" \
             --set secrets.slackSigningSecret="${{ secrets.SLACK_SIGNING_SECRET }}" \
+            --set secrets.slackStateSecret="${{ secrets.SLACK_STATE_SECRET }}" \
             --set secrets.slackClientId="${{ secrets.SLACK_CLIENT_ID }}" \
             --set secrets.slackClientSecret="${{ secrets.SLACK_CLIENT_SECRET }}" \
-            --set secrets.slackStateSecret="${{ secrets.SLACK_STATE_SECRET }}" \
             --wait \
             --timeout 10m
             
