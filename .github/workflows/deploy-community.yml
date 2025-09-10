@@ -75,7 +75,7 @@ jobs:
           rm -rf .terraform terraform.tfstate* .terraform.lock.hcl
           
           # Initialize with fresh state from Terraform Cloud
-          terraform init -upgrade -reconfigure
+          terraform init -upgrade
         
       - name: Terraform Plan
         working-directory: charts/peerbot/provider/hetzner
@@ -160,7 +160,7 @@ jobs:
           export TF_CLI_CONFIG_FILE=/tmp/terraform.rc
           
           # Initialize and get output
-          terraform init -upgrade -reconfigure
+          terraform init -upgrade
           terraform output -raw kubeconfig > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
           
