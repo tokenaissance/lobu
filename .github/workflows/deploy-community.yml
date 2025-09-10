@@ -21,8 +21,8 @@ env:
 jobs:
   terraform:
     name: Terraform Infrastructure
-    # Run Terraform on a self-hosted runner in Hetzner for reliable SSH provisioners
-    runs-on: [self-hosted, linux, x64, hetzner]
+    # Use GitHub-hosted runner since NAT router is disabled
+    runs-on: ubuntu-latest
     environment: community
     
     permissions:
