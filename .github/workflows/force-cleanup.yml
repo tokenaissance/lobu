@@ -18,6 +18,7 @@ jobs:
     - name: List all Helm releases
       run: |
         helm list -n peerbot || echo "No releases found"
+        helm list -A | grep peerbot || echo "No peerbot releases in any namespace"
         
     - name: Uninstall ALL Helm releases in namespace
       run: |
@@ -28,6 +29,15 @@ jobs:
         
     - name: Delete ALL resources in namespace
       run: |
+        echo "Checking for postgresql resources..."
+        kubectl get statefulset -n peerbot | grep postgresql || echo "No postgresql statefulsets"
+        kubectl get service -n peerbot | grep postgresql || echo "No postgresql services"
+        
+        echo "Force deleting postgresql resources..."
+        kubectl delete statefulset peerbot-postgresql -n peerbot --force --grace-period=0 --ignore-not-found=true || echo "Failed to delete statefulset"
+        kubectl delete service peerbot-postgresql -n peerbot --force --grace-period=0 --ignore-not-found=true || echo "Failed to delete service"
+        kubectl delete service peerbot-postgresql-headless -n peerbot --force --grace-period=0 --ignore-not-found=true || echo "Failed to delete headless service"
+        
         echo "Deleting all resources in peerbot namespace..."
         kubectl delete all --all -n peerbot --ignore-not-found=true || echo "Some resources couldn't be deleted"
         kubectl delete pvc --all -n peerbot --ignore-not-found=true || echo "Some PVCs couldn't be deleted"
