@@ -185,6 +185,10 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       false,
       userEnvVars
     );
+    
+    // Extract user password from DATABASE_URL for proxy authentication
+    // We'll pass it as a separate env var that the worker can use
+    // Note: The actual password is in the secret, we just need to reference it
 
     const deployment: SimpleDeployment = {
       apiVersion: "apps/v1",

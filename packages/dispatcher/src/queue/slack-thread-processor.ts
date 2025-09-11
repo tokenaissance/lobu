@@ -1008,11 +1008,7 @@ export class ThreadResponseConsumer {
       if (githubActionButtons && githubActionButtons.length > 0) {
         // Add a divider before the GitHub actions
         errorResult.blocks.push({ 
-          type: "divider",
-          text: {
-            type: "mrkdwn",
-            text: " "
-          }
+          type: "divider"
         } as any);
         
         // Add the GitHub action buttons as an actions block

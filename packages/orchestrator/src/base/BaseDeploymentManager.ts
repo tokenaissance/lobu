@@ -250,9 +250,8 @@ export abstract class BaseDeploymentManager {
       // Set the base URL to use dispatcher's proxy
       envVars.ANTHROPIC_BASE_URL = proxyUrl;
 
-      // Pass PostgreSQL credentials in x-api-key for proxy authentication
-      // The proxy will validate these, then use the OAuth token from its config
-      envVars.ANTHROPIC_API_KEY = `${username}:${process.env.POSTGRESQL_PASSWORD || "peerbot123"}`;
+      // The worker will extract PostgreSQL credentials from DATABASE_URL at runtime
+      // and set ANTHROPIC_API_KEY appropriately for proxy authentication
 
       console.log(
         `🔧 Configured worker to use Anthropic proxy at ${envVars.ANTHROPIC_BASE_URL}`
