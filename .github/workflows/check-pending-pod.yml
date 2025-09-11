@@ -1,0 +1,24 @@
+name: Check Pending Pod
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: community
+    
+    steps:
+    - name: Setup kubeconfig
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
+        chmod 600 /tmp/kubeconfig
+        echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+        
+    - name: Check Pending Pod
+      run: |
+        echo "=== Describe Pending Pod ==="
+        kubectl describe pod peerbot-worker-u095zlhk-838-220349-7fd46d448f-2pm2d -n peerbot || echo "Pod not found"
+        
+        echo -e "\n=== Check Events ==="
+        kubectl get events -n peerbot --sort-by='.lastTimestamp' | tail -20
