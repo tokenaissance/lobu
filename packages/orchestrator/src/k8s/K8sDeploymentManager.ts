@@ -231,12 +231,36 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
           },
           spec: {
             serviceAccountName: "peerbot-worker",
+            initContainers: [
+              {
+                name: "fix-permissions",
+                image: "busybox:1.36",
+                command: ["sh", "-c"],
+                args: ["chown -R 1001:1001 /workspace && chmod -R 755 /workspace"],
+                securityContext: {
+                  runAsUser: 0,
+                  runAsNonRoot: false,
+                },
+                volumeMounts: [
+                  {
+                    name: "workspace",
+                    mountPath: "/workspace",
+                  },
+                ],
+              },
+            ],
             containers: [
               {
                 name: "worker",
                 image: `${this.config.worker.image.repository}:${this.config.worker.image.tag}`,
                 imagePullPolicy:
                   this.config.worker.image.pullPolicy || "Always",
+                securityContext: {
+                  runAsUser: 1001,
+                  runAsGroup: 1001,
+                  runAsNonRoot: true,
+                  readOnlyRootFilesystem: false,
+                },
                 env: [
                   // User-specific database connection from secret
                   {
