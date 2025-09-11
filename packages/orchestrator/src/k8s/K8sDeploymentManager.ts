@@ -272,7 +272,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
                 // Override the entrypoint to set ANTHROPIC_API_KEY before running the worker
                 command: ["/bin/bash", "-c"],
                 args: [
-                  `export ANTHROPIC_API_KEY="${username}:$PEERBOT_DATABASE_PASSWORD" && exec /app/entrypoint.sh`
+                  `export ANTHROPIC_API_KEY="$PEERBOT_DATABASE_USERNAME:$PEERBOT_DATABASE_PASSWORD" && exec /app/entrypoint.sh`
                 ],
                 securityContext: {
                   runAsUser: 1001,
@@ -288,6 +288,16 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
                       secretKeyRef: {
                         name: `peerbot-user-secret-${username.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`,
                         key: "PEERBOT_DATABASE_URL",
+                      },
+                    },
+                  },
+                  // Get the database username for constructing ANTHROPIC_API_KEY
+                  {
+                    name: "PEERBOT_DATABASE_USERNAME",
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: `peerbot-user-secret-${username.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`,
+                        key: "PEERBOT_DATABASE_USERNAME",
                       },
                     },
                   },

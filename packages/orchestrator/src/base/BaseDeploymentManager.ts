@@ -231,7 +231,7 @@ export abstract class BaseDeploymentManager {
     if (process.env.ANTHROPIC_PROXY_ENABLED === "true") {
       const dispatcherService =
         process.env.DISPATCHER_SERVICE_NAME || "peerbot-dispatcher";
-      const dispatcherPort = process.env.DISPATCHER_SERVICE_PORT || "3000";
+      const dispatcherPort = process.env.DISPATCHER_SERVICE_PORT || "8080";
       const namespace = process.env.KUBERNETES_NAMESPACE || "peerbot";
 
       // Detect if we're running in Docker mode (DEPLOYMENT_MODE=docker) or Kubernetes mode
@@ -243,7 +243,8 @@ export abstract class BaseDeploymentManager {
         // The dispatcher runs on port 8080 in Docker mode for the proxy endpoint
         proxyUrl = `http://host.docker.internal:8080/api/anthropic`;
       } else {
-        // For Kubernetes mode, use internal service DNS
+        // For Kubernetes mode, use internal service DNS  
+        // The dispatcher runs on port 8080 for the proxy endpoint
         proxyUrl = `http://${dispatcherService}.${namespace}.svc.cluster.local:${dispatcherPort}/api/anthropic`;
       }
 
