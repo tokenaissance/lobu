@@ -1,0 +1,24 @@
+name: Check Deployment Issue
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: community
+    
+    steps:
+    - name: Setup kubeconfig
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
+        chmod 600 /tmp/kubeconfig
+        echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+        
+    - name: Check Deployment Issue
+      run: |
+        echo "=== Describe New Deployment ==="
+        kubectl describe deployment peerbot-worker-u095zlhk-198-723619 -n peerbot || echo "Deployment not found"
+        
+        echo -e "\n=== Check Events ==="
+        kubectl get events -n peerbot --sort-by='.lastTimestamp' | tail -20
