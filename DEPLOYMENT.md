@@ -20,6 +20,10 @@ Configure the following secrets in your GitHub repository (Settings → Secrets 
   cat ~/.kube/config | base64
   ```
 
+### Required Docker Hub Secrets
+- `DOCKER_USERNAME`: Docker Hub username
+- `DOCKER_PASSWORD`: Docker Hub personal access token (create at https://hub.docker.com/settings/security)
+
 ### Required Application Secrets
 - `GH_CLIENT_ID`: GitHub OAuth App Client ID
 - `GH_CLIENT_SECRET`: GitHub OAuth App Client Secret
@@ -27,15 +31,18 @@ Configure the following secrets in your GitHub repository (Settings → Secrets 
 - `SLACK_BOT_TOKEN`: Slack Bot User OAuth Token (xoxb-...)
 - `SLACK_APP_TOKEN`: Slack App-Level Token (xapp-...)
 - `SLACK_SIGNING_SECRET`: Slack Signing Secret
+- `GH_TOKEN_PEERBOT`: GitHub personal access token for bot operations
+- `CLAUDE_CODE_OAUTH_TOKEN`: Claude Code OAuth token
+- `POSTGRESQL_PASSWORD`: PostgreSQL database password
 
 ## Deployment Process
 
-### 1. GitHub Container Registry
+### 1. Docker Hub Registry
 
-The workflow automatically builds and pushes Docker images to GitHub Container Registry (ghcr.io). Images are tagged with:
-- `ghcr.io/{owner}/peerbot/claude-dispatcher:{sha}`
-- `ghcr.io/{owner}/peerbot/claude-worker:{sha}`
-- `ghcr.io/{owner}/peerbot/claude-orchestrator:{sha}`
+The workflow automatically builds and pushes Docker images to Docker Hub. Images are tagged with:
+- `{docker_username}/peerbot-dispatcher:{sha}`
+- `{docker_username}/peerbot-worker:{sha}`
+- `{docker_username}/peerbot-orchestrator:{sha}`
 
 ### 2. Helm Deployment
 
@@ -48,15 +55,17 @@ The deployment uses Helm to install/upgrade the Peerbot chart with:
 
 Deploy via GitHub Actions:
 
-1. **Manual Deployment:**
+1. **Automated Deployment (Recommended):**
+   - Push code changes to main branch
+   - Docker images are automatically built and pushed to Docker Hub
+   - Deployment workflow triggers automatically after Docker build succeeds
+
+2. **Manual Deployment:**
    - Go to Actions tab in your repository
    - Select "Deploy to Kubernetes" workflow
    - Click "Run workflow"
    - Select branch to deploy (default: main)
-
-2. **Automated Deployment:**
-   - Push to main branch (if configured)
-   - Or trigger via repository dispatch event
+   - Optionally specify a specific Docker image tag
 
 ### 4. Customization
 
@@ -113,7 +122,7 @@ kubectl get ingress -n peerbot
 
 ### Common Issues
 
-1. **ImagePullBackOff**: Ensure GitHub Container Registry permissions are correct
+1. **ImagePullBackOff**: Ensure Docker Hub credentials are correctly configured in GitHub secrets
 2. **Pending PVCs**: Check your storage class is available
 3. **CrashLoopBackOff**: Check secrets are properly configured
 4. **Ingress not working**: Verify ingress controller and class name

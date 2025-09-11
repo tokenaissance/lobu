@@ -59,59 +59,53 @@ set_secret() {
     fi
 }
 
-echo "📦 Setting up repository secrets..."
+echo "📦 Setting up repository-level secrets (non-sensitive)..."
 
-# Kubeconfig (base64 encoded)
-if [ -f /tmp/kubeconfig-base64.txt ]; then
-    KUBE_CONFIG=$(cat /tmp/kubeconfig-base64.txt)
-    set_secret "KUBE_CONFIG" "$KUBE_CONFIG"
-else
-    echo "⚠️  Kubeconfig not found. Encoding from Downloads..."
-    if [ -f ~/Downloads/kubeconfig.yml ]; then
-        KUBE_CONFIG=$(cat ~/Downloads/kubeconfig.yml | base64 | tr -d '\n')
-        set_secret "KUBE_CONFIG" "$KUBE_CONFIG"
-    else
-        echo "❌ No kubeconfig found. Please add it manually."
-    fi
-fi
-
-# Slack credentials
-set_secret "SLACK_BOT_TOKEN" "$SLACK_BOT_TOKEN"
-set_secret "SLACK_APP_TOKEN" "$SLACK_APP_TOKEN"
-set_secret "SLACK_SIGNING_SECRET" "$SLACK_SIGNING_SECRET"
-
-# GitHub token (different from GITHUB_TOKEN which is automatic)
-set_secret "GH_TOKEN_PEERBOT" "$GITHUB_TOKEN"
-
-# Claude Code OAuth token
-set_secret "CLAUDE_CODE_OAUTH_TOKEN" "$CLAUDE_CODE_OAUTH_TOKEN"
-
-# PostgreSQL password
-set_secret "POSTGRESQL_PASSWORD" "${POSTGRESQL_PASSWORD:-peerbot123}"
-
-# Optional: GitHub OAuth (if configured)
-if [ -n "$GITHUB_CLIENT_ID" ]; then
-    set_secret "GH_CLIENT_ID" "$GITHUB_CLIENT_ID"
-fi
-
-if [ -n "$GITHUB_CLIENT_SECRET" ]; then
-    set_secret "GH_CLIENT_SECRET" "$GITHUB_CLIENT_SECRET"
-fi
-
-# Optional: Encryption key
-if [ -n "$ENCRYPTION_KEY" ]; then
-    set_secret "ENCRYPTION_KEY" "$ENCRYPTION_KEY"
-fi
+# Docker Hub credentials (needed for docker-publish workflow)
+set_secret "DOCKER_USERNAME" "${DOCKER_USERNAME:-peerbot}"
+set_secret "DOCKER_PASSWORD" "$DOCKER_PASSWORD"
 
 echo ""
 echo "📦 Setting up environment-specific secrets (community)..."
 
-# Try to set secrets for 'community' environment
-# This will fail if the environment doesn't exist, which is fine
-set_secret "KUBE_CONFIG" "$KUBE_CONFIG" "community"
+# Kubeconfig (base64 encoded) - only in community environment
+if [ -f /tmp/kubeconfig-base64.txt ]; then
+    KUBE_CONFIG=$(cat /tmp/kubeconfig-base64.txt)
+else
+    echo "⚠️  Kubeconfig not found. Encoding from Downloads..."
+    if [ -f ~/Downloads/kubeconfig.yml ]; then
+        KUBE_CONFIG=$(cat ~/Downloads/kubeconfig.yml | base64 | tr -d '\n')
+    else
+        echo "❌ No kubeconfig found. Please add it manually."
+        KUBE_CONFIG=""
+    fi
+fi
+
+if [ -n "$KUBE_CONFIG" ]; then
+    set_secret "KUBE_CONFIG" "$KUBE_CONFIG" "community"
+fi
+
+# All sensitive secrets go only in the community environment
 set_secret "SLACK_BOT_TOKEN" "$SLACK_BOT_TOKEN" "community"
 set_secret "SLACK_APP_TOKEN" "$SLACK_APP_TOKEN" "community"
 set_secret "SLACK_SIGNING_SECRET" "$SLACK_SIGNING_SECRET" "community"
+set_secret "GH_TOKEN_PEERBOT" "$GITHUB_TOKEN" "community"
+set_secret "CLAUDE_CODE_OAUTH_TOKEN" "$CLAUDE_CODE_OAUTH_TOKEN" "community"
+set_secret "POSTGRESQL_PASSWORD" "${POSTGRESQL_PASSWORD:-peerbot123}" "community"
+
+# Optional: GitHub OAuth (if configured)
+if [ -n "$GITHUB_CLIENT_ID" ]; then
+    set_secret "GH_CLIENT_ID" "$GITHUB_CLIENT_ID" "community"
+fi
+
+if [ -n "$GITHUB_CLIENT_SECRET" ]; then
+    set_secret "GH_CLIENT_SECRET" "$GITHUB_CLIENT_SECRET" "community"
+fi
+
+# Optional: Encryption key
+if [ -n "$ENCRYPTION_KEY" ]; then
+    set_secret "ENCRYPTION_KEY" "$ENCRYPTION_KEY" "community"
+fi
 
 echo ""
 echo "✅ GitHub secrets configuration complete!"

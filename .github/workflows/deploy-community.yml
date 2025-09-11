@@ -1,14 +1,12 @@
 name: Deploy to Kubernetes
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build and Push to Docker Hub"]
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - 'packages/**'
-      - 'charts/**'
-      - 'Dockerfile.*'
-      - '.github/workflows/deploy-community.yml'
   workflow_dispatch:
     inputs:
       branch:
@@ -16,78 +14,51 @@ on:
         required: false
         default: 'main'
         type: string
+      tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'latest'
+        type: string
   repository_dispatch:
     types: [deploy-community]
 
 env:
   NAMESPACE: peerbot
   DEPLOYMENT_NAME: peerbot
-  IMAGE_DISPATCHER: peerbot/claude-dispatcher
-  IMAGE_WORKER: peerbot/claude-worker
-  IMAGE_ORCHESTRATOR: peerbot/claude-orchestrator
+  DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME || 'peerbot' }}
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy
+  deploy:
+    name: Deploy to OVH Kubernetes
     runs-on: ubuntu-latest
     environment: community
+    # Only run if the docker build workflow succeeded or this was manually triggered
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-      
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
-        
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Build and Push Dispatcher
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.dispatcher
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_DISPATCHER }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_DISPATCHER }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          
-      - name: Build and Push Worker
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.worker
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_WORKER }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_WORKER }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          
-      - name: Build and Push Orchestrator
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.orchestrator
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_ORCHESTRATOR }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_ORCHESTRATOR }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          ref: ${{ github.event.inputs.branch || github.event.workflow_run.head_branch || github.event.client_payload.ref || 'main' }}
+      
+      - name: Determine image tag
+        id: get-tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # Use the commit SHA from the workflow that triggered us
+            TAG="${{ github.event.workflow_run.head_sha }}"
+          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            # Use manual input tag
+            TAG="${{ github.event.inputs.tag }}"
+          elif [[ -n "${{ github.event.client_payload.tag }}" ]]; then
+            # Use repository dispatch tag
+            TAG="${{ github.event.client_payload.tag }}"
+          else
+            # Default to latest
+            TAG="latest"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Using Docker image tag: ${TAG}"
           
       - name: Install Helm
         uses: azure/setup-helm@v3
@@ -106,16 +77,17 @@ jobs:
           
       - name: Deploy with Helm
         run: |
+          # Deploy using Docker Hub images
           helm upgrade --install $DEPLOYMENT_NAME charts/peerbot \
             --namespace $NAMESPACE \
             --create-namespace \
             --values charts/peerbot/values-community.yaml \
-            --set dispatcher.image.repository=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_DISPATCHER }} \
-            --set dispatcher.image.tag=${{ github.sha }} \
-            --set worker.image.repository=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_WORKER }} \
-            --set worker.image.tag=${{ github.sha }} \
-            --set orchestrator.image.repository=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_ORCHESTRATOR }} \
-            --set orchestrator.image.tag=${{ github.sha }} \
+            --set dispatcher.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-dispatcher \
+            --set dispatcher.image.tag=${{ steps.get-tag.outputs.tag }} \
+            --set worker.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-worker \
+            --set worker.image.tag=${{ steps.get-tag.outputs.tag }} \
+            --set orchestrator.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-orchestrator \
+            --set orchestrator.image.tag=${{ steps.get-tag.outputs.tag }} \
             --set config.githubClientId="${{ secrets.GH_CLIENT_ID }}" \
             --set secrets.githubClientSecret="${{ secrets.GH_CLIENT_SECRET }}" \
             --set secrets.encryptionKey="${{ secrets.ENCRYPTION_KEY }}" \
@@ -128,7 +100,24 @@ jobs:
             --wait \
             --timeout 10m
             
+      - name: Run Database Migrations
+        run: |
+          # Wait for orchestrator to be ready
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=peerbot,app.kubernetes.io/component=orchestrator -n $NAMESPACE --timeout=300s
+          
+          # Run migrations
+          kubectl exec -n $NAMESPACE deployment/peerbot-orchestrator -- dbmate up || echo "Migrations may have already been applied"
+            
       - name: Verify Deployment
         run: |
+          echo "🚀 Deployment Status:"
           kubectl get pods -n $NAMESPACE
+          echo ""
+          echo "📊 Services:"
           kubectl get svc -n $NAMESPACE
+          echo ""
+          echo "📝 Recent Logs from Dispatcher:"
+          kubectl logs -n $NAMESPACE deployment/peerbot-dispatcher --tail=10 || true
+          echo ""
+          echo "📝 Recent Logs from Orchestrator:"
+          kubectl logs -n $NAMESPACE deployment/peerbot-orchestrator --tail=10 || true
