@@ -20,6 +20,9 @@ jobs:
         echo "=== Pod Status ==="
         kubectl get pods -n peerbot -l app.kubernetes.io/component=orchestrator
         
+        echo -e "\n=== Init Container Logs ==="
+        kubectl logs -n peerbot deployment/peerbot-orchestrator -c wait-for-postgres --tail=50 || echo "Could not get init logs"
+        
         echo -e "\n=== Orchestrator Logs ==="
         kubectl logs -n peerbot deployment/peerbot-orchestrator --tail=50 || echo "Could not get logs"
         
