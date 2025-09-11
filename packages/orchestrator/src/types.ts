@@ -116,6 +116,8 @@ export interface SimpleDeployment {
           name: string;
           image: string;
           imagePullPolicy?: string;
+          command?: string[];
+          args?: string[];
           securityContext?: {
             runAsUser?: number;
             runAsGroup?: number;

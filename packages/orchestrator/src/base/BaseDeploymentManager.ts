@@ -250,11 +250,8 @@ export abstract class BaseDeploymentManager {
       // Set the base URL to use dispatcher's proxy
       envVars.ANTHROPIC_BASE_URL = proxyUrl;
 
-      // For proxy authentication, we need to set ANTHROPIC_API_KEY
-      // The password is already in the secret, but we can't access it here
-      // The worker entrypoint script should extract it from DATABASE_URL
-      // For now, we'll use a dummy value and rely on the entrypoint script
-      envVars.ANTHROPIC_API_KEY = `${username}:dummy`;
+      // ANTHROPIC_API_KEY will be set by the container command override
+      // which extracts the credentials from PEERBOT_DATABASE_URL
 
       console.log(
         `🔧 Configured worker to use Anthropic proxy at ${envVars.ANTHROPIC_BASE_URL}`
