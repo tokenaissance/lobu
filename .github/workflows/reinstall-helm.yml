@@ -1,0 +1,63 @@
+name: Reinstall Helm Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reinstall:
+    runs-on: ubuntu-latest
+    environment: community
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      
+    - name: Setup kubeconfig
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
+        chmod 600 /tmp/kubeconfig
+        echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+        
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'v3.12.0'
+        
+    - name: Uninstall existing release
+      run: |
+        helm uninstall peerbot -n peerbot || echo "Release not found"
+        kubectl delete statefulset peerbot-postgresql -n peerbot --ignore-not-found=true
+        kubectl delete pvc -l app.kubernetes.io/name=postgresql -n peerbot --ignore-not-found=true
+        sleep 10
+        
+    - name: Install fresh release
+      run: |
+        helm install peerbot charts/peerbot \
+          --namespace peerbot \
+          --create-namespace \
+          --values charts/peerbot/values-community.yaml \
+          --set dispatcher.image.repository=buremba/peerbot-dispatcher \
+          --set dispatcher.image.tag=latest \
+          --set worker.image.repository=buremba/peerbot-worker \
+          --set worker.image.tag=latest \
+          --set orchestrator.image.repository=buremba/peerbot-orchestrator \
+          --set orchestrator.image.tag=latest \
+          --set config.githubClientId="${{ secrets.GH_CLIENT_ID }}" \
+          --set secrets.githubClientSecret="${{ secrets.GH_CLIENT_SECRET }}" \
+          --set secrets.encryptionKey="${{ secrets.ENCRYPTION_KEY }}" \
+          --set secrets.slackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
+          --set secrets.slackAppToken="${{ secrets.SLACK_APP_TOKEN }}" \
+          --set secrets.slackSigningSecret="${{ secrets.SLACK_SIGNING_SECRET }}" \
+          --set secrets.githubToken="${{ secrets.GH_TOKEN_PEERBOT }}" \
+          --set secrets.claudeCodeOAuthToken="${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" \
+          --set secrets.postgresqlPassword="${{ secrets.POSTGRESQL_PASSWORD }}" \
+          --wait \
+          --timeout 10m
+          
+    - name: Verify Deployment
+      run: |
+        echo "🚀 Deployment Status:"
+        kubectl get pods -n peerbot
+        echo ""
+        echo "📝 Recent Logs from Orchestrator:"
+        kubectl logs -n peerbot deployment/peerbot-orchestrator --tail=20 || echo "Orchestrator not ready yet"

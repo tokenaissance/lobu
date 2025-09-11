@@ -21,7 +21,6 @@ podSecurityStandards:
   enabled: false  # OVH may not support this
 
 securityContext:
-  enabled: true
   runAsNonRoot: true
   runAsUser: 1001
   runAsGroup: 1001
