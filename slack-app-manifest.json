@@ -46,7 +46,7 @@
     }
   },
   "oauth_config": {
-    "redirect_urls": ["https://slack.peerbot.ai/slack/oauth_redirect"],
+    "redirect_urls": [],
     "scopes": {
       "bot": [
         "app_mentions:read",

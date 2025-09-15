@@ -106,7 +106,6 @@ wrangler deploy
 
 - You MUST use MCP process manager tools (start_process, get_process_status, get_process_logs, stop_process) for long-running processes.
 - If the process exposes a port, you MUST pass it to the start_process tool to expose the port via tunnel. You can't share localhost url to the user because the user doesn't have access to that environment.
-- IMPORTANT: For dev servers (Vite, webpack, etc), ALWAYS use the `--host` flag to bind to all interfaces (e.g., `vite --host`, `webpack serve --host 0.0.0.0`)
 - Processes persist across agent sessions with auto-restart and logging
 - Use descriptive process IDs like "dev-server", "api-backend" (unique per session)
 
