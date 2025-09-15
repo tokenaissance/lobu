@@ -45,9 +45,6 @@ export class AnthropicProxy {
   }
 
   private async handleProxyRequest(req: Request, res: Response): Promise<void> {
-    logger.info(`🔧 Anthropic proxy request: ${req.method} ${req.path}`);
-    logger.info(`🔧 Headers:`, req.headers);
-
     if (!this.config.enabled) {
       res.status(503).json({ error: "Anthropic proxy is disabled" });
       return;
@@ -81,7 +78,7 @@ export class AnthropicProxy {
       // Validate PostgreSQL credentials
       const isValidUser = await this.validatePostgresCredentials(
         username,
-        password
+        password,
       );
       if (!isValidUser) {
         res.status(401).json({ error: "Invalid PostgreSQL credentials" });
@@ -98,7 +95,7 @@ export class AnthropicProxy {
 
   private async validatePostgresCredentials(
     username: string,
-    password: string
+    password: string,
   ): Promise<boolean> {
     // Parse the base connection string and replace credentials
     const baseUrl = new URL(this.config.postgresConnectionString);
@@ -118,7 +115,7 @@ export class AnthropicProxy {
     } catch (error) {
       logger.debug(
         `PostgreSQL auth failed for user ${username}:`,
-        (error as Error).message
+        (error as Error).message,
       );
       return false;
     } finally {
@@ -153,7 +150,7 @@ export class AnthropicProxy {
       req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined;
 
     logger.info(
-      `🔧 Original body type: ${typeof body}, length: ${body ? (typeof body === "string" ? body.length : JSON.stringify(body).length) : 0}`
+      `🔧 Original body type: ${typeof body}, length: ${body ? (typeof body === "string" ? body.length : JSON.stringify(body).length) : 0}`,
     );
 
     if (isOAuthToken) {
@@ -176,12 +173,12 @@ export class AnthropicProxy {
 
       const model = requestData.model || "";
       const isExpensiveModel = ["sonnet", "opus"].some((tier) =>
-        model.toLowerCase().includes(tier)
+        model.toLowerCase().includes(tier),
       );
 
       if (isExpensiveModel) {
         logger.info(
-          `🎯 Expensive model detected (${model}) - enhancing request for Claude Code CLI compatibility`
+          `🎯 Expensive model detected (${model}) - enhancing request for Claude Code CLI compatibility`,
         );
 
         // Transform request to look like Claude Code CLI
@@ -240,7 +237,7 @@ export class AnthropicProxy {
 
         body = JSON.stringify(enhancedBody);
         logger.info(
-          `📝 Enhanced body for expensive model (length: ${body.length})`
+          `📝 Enhanced body for expensive model (length: ${body.length})`,
         );
       } else {
         // For cheap models, use original body
@@ -279,7 +276,7 @@ export class AnthropicProxy {
       }
 
       logger.info(
-        `🔧 Using OAuth token with Claude Code CLI pattern for ${isExpensiveModel ? "expensive" : "cheap"} model`
+        `🔧 Using OAuth token with Claude Code CLI pattern for ${isExpensiveModel ? "expensive" : "cheap"} model`,
       );
     } else {
       logger.info(`🔧 Using regular API key routing for public Anthropic API`);
@@ -315,7 +312,7 @@ export class AnthropicProxy {
         // Skip certain headers that shouldn't be forwarded
         if (
           !["transfer-encoding", "connection", "upgrade"].includes(
-            key.toLowerCase()
+            key.toLowerCase(),
           )
         ) {
           res.setHeader(key, value);
@@ -351,7 +348,7 @@ export class AnthropicProxy {
  * Create and configure Anthropic proxy
  */
 export function createAnthropicProxy(
-  config: AnthropicProxyConfig
+  config: AnthropicProxyConfig,
 ): AnthropicProxy {
   return new AnthropicProxy(config);
 }

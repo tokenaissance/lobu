@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "rules": [
+      {
+        "effect": "allow",
+        "action": "*"
+      }
+    ]
+  },
+  "mcpServers": {
+    "process-manager": {
+      "type": "sse",
+      "url": "http://localhost:3001/sse",
+      "description": "Process management MCP server for background tasks"
+    }
+  }
+}

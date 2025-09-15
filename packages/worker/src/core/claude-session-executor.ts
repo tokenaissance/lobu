@@ -62,8 +62,8 @@ const BASE_ARGS = [
   "--verbose",
   "--output-format",
   "stream-json",
-  "--dangerously-skip-permissions",
-  "-p",
+  // Required for non-interactive execution in CI/CD environments
+  "--dangerously-skip-permissions", // Skip all permission prompts for tool usage
 ];
 
 function parseCustomEnvVars(claudeEnv?: string): Record<string, string> {
@@ -107,6 +107,9 @@ function prepareRunConfig(
   env: Record<string, string>;
 } {
   const claudeArgs = [...BASE_ARGS];
+  
+  // Add pipe path for reading prompt
+  claudeArgs.push("-p", PIPE_PATH);
 
   // Session management: use --continue for resuming, --session-id for new sessions
   if (options.resumeSessionId === "continue") {
@@ -238,6 +241,10 @@ export async function runClaudeWithProgress(
 
   // Use Claude args directly since we're using the global claude command
   const claudeArgs = config.claudeArgs;
+  
+  // Log the exact command being executed
+  logger.info(`Executing Claude with command: ${claudeCommand} ${claudeArgs.join(' ')}`);
+  console.log(`🚀 CLAUDE COMMAND: ${claudeCommand} ${claudeArgs.join(' ')}`);
 
   const claudeProcess = spawn(claudeCommand, claudeArgs, {
     stdio: ["pipe", "pipe", "pipe"],

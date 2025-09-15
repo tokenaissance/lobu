@@ -378,7 +378,8 @@ export class ClaudeWorker {
           /{{sessionKeyFormatted}}/g,
           this.config.sessionKey.replace(/\./g, "-")
         )
-        .replace(/{{makeTargetsSummary}}/g, this.getMakeTargetsSummary());
+        .replace(/{{makeTargetsSummary}}/g, this.getMakeTargetsSummary())
+        .replace(/{{workingDirectory}}/g, this.workspaceManager.getCurrentWorkingDirectory());
 
       logger.info(`[CUSTOM-INSTRUCTIONS] \n${processed}`);
 

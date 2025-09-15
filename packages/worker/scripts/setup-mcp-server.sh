@@ -2,22 +2,38 @@
 # Setup MCP server for Claude Code
 # This script is called during worker initialization
 
-echo "Setting up MCP Process Manager..."
+echo "Setting up Claude Code settings..."
 
-# Setup MCP server configuration for Claude Code
-if [ -f "/app/packages/worker/mcp-config.json" ]; then
+# Setup main Claude settings with MCP configuration
+if [ -f "/app/packages/worker/claude-settings.json" ]; then
     mkdir -p /home/claude/.claude
-    cp /app/packages/worker/mcp-config.json /home/claude/.claude/settings.mcp.json
-    echo "✅ MCP server configuration deployed to /home/claude/.claude/settings.mcp.json"
+    cp /app/packages/worker/claude-settings.json /home/claude/.claude/settings.json
+    echo "✅ Claude settings deployed to /home/claude/.claude/settings.json"
     
-    # Also ensure the MCP server is executable
-    if [ -f "/app/packages/worker/dist/mcp/process-manager-server.js" ]; then
-        chmod +x /app/packages/worker/dist/mcp/process-manager-server.js
-        echo "✅ MCP server made executable"
+    # Also copy as settings.mcp.json for compatibility
+    cp /app/packages/worker/claude-settings.json /home/claude/.claude/settings.mcp.json
+    echo "✅ MCP settings also deployed to /home/claude/.claude/settings.mcp.json"
+    
+    # Start the MCP process-manager server in the background
+    if [ -f "/app/packages/worker/dist/mcp/process-manager-server.mjs" ]; then
+        chmod +x /app/packages/worker/dist/mcp/process-manager-server.mjs
+        echo "🚀 Starting MCP process-manager server on port 3001..."
+        PORT=3001 node /app/packages/worker/dist/mcp/process-manager-server.mjs &
+        MCP_PID=$!
+        sleep 2
+        
+        # Check if the server started successfully
+        if kill -0 $MCP_PID 2>/dev/null; then
+            echo "✅ MCP server started successfully (PID: $MCP_PID)"
+        else
+            echo "❌ Failed to start MCP server"
+        fi
+    else
+        echo "⚠️ Warning: MCP server file not found"
     fi
 else
-    echo "⚠️ Warning: MCP config file not found"
+    echo "⚠️ Warning: Claude settings file not found"
 fi
 
-echo "✅ MCP Process Manager setup completed"
-echo "💡 Claude Code will automatically discover and use the MCP process management tools"
+echo "✅ Claude Code setup completed"
+echo "💡 Claude Code will use filesystem and process management tools"

@@ -25,7 +25,7 @@ export function createMockEnvironment(overrides: Record<string, string> = {}) {
     WORKSPACE_DIR: "/workspace",
     RECOVERY_MODE: "false",
     CLAUDE_OPTIONS: JSON.stringify({
-      model: "claude-3-sonnet",
+      model: process.env.AGENT_DEFAULT_MODEL || "claude-3-sonnet",
       temperature: 0.7,
     }),
     ...overrides,
@@ -304,8 +304,8 @@ export const timeoutUtils = {
       new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error(`Timeout after ${timeoutMs}ms`)),
-          timeoutMs
-        )
+          timeoutMs,
+        ),
       ),
     ]);
   },
@@ -313,7 +313,7 @@ export const timeoutUtils = {
   async retry<T>(
     operation: () => Promise<T>,
     maxAttempts: number = 3,
-    delayMs: number = 100
+    delayMs: number = 100,
   ): Promise<T> {
     let lastError: Error;
 
@@ -433,7 +433,7 @@ export const testLogger = {
   },
 
   getLogs(
-    level?: string
+    level?: string,
   ): Array<{ level: string; message: string; timestamp: Date }> {
     return level
       ? this.logs.filter((log) => log.level === level)
@@ -456,7 +456,7 @@ export const testLogger = {
 
     if (!found) {
       throw new Error(
-        `Expected ${level} log matching ${messagePattern}, but not found`
+        `Expected ${level} log matching ${messagePattern}, but not found`,
       );
     }
   },

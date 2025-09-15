@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Build worker image that orchestrator will use
@@ -27,6 +27,7 @@ services:
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
+      AGENT_DEFAULT_MODEL: ${AGENT_DEFAULT_MODEL}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
     ports:
       - "3000:3000"
@@ -48,6 +49,7 @@ services:
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
       DOCKER_HOST: unix:///var/run/docker.sock
       CLAUDE_ALLOWED_TOOLS: ${CLAUDE_ALLOWED_TOOLS}
+      AGENT_DEFAULT_MODEL: ${AGENT_DEFAULT_MODEL}
     volumes:
       # Mount Docker socket
       - /var/run/docker.sock:/var/run/docker.sock

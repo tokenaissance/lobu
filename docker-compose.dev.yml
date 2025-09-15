@@ -20,6 +20,7 @@ services:
       dockerfile: Dockerfile.dispatcher
     environment:
       NODE_ENV: development
+      AGENT_DEFAULT_MODEL: ${AGENT_DEFAULT_MODEL}
       DATABASE_URL: postgresql://postgres:${POSTGRESQL_PASSWORD:-password}@postgres:5432/peerbot?sslmode=disable
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}

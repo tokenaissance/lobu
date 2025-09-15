@@ -11,15 +11,15 @@ secrets:
   slackAppToken: "placeholder"
   githubToken: "placeholder"
   githubClientSecret: "" # Optional: GitHub OAuth Client Secret
-  encryptionKey: ""     # Optional: 32-char key for AES-GCM at-rest encryption
+  encryptionKey: "" # Optional: 32-char key for AES-GCM at-rest encryption
   claudeCodeOAuthToken: "placeholder"
   postgresqlPassword: "placeholder"
 
 config:
   githubOrganization: "peerbot-community"
   githubRepository: "" # Optional: Override repository URL for all users
-  githubClientId: ""    # Optional: GitHub OAuth Client ID
-  ingressUrl: ""        # Optional: Public URL base for OAuth callbacks
+  githubClientId: "" # Optional: GitHub OAuth Client ID
+  ingressUrl: "" # Optional: Public URL base for OAuth callbacks
   sessionTimeoutMinutes: "5"
 
 kubernetes:
@@ -91,7 +91,7 @@ slack:
   allowPrivateChannels: true
 
 claude:
-  model: "claude-sonnet-4-20250514"
+  model: "claude-opus-4-20250514"
   timeoutMinutes: "5" # Default timeout
 
 # Disable static worker deployment - workers are created dynamically by orchestrator
@@ -155,7 +155,8 @@ dispatcher:
     internalIngress:
       enabled: false # Enable if you want external ingress access
       className: ""
-      annotations: {}
+      annotations:
+        {}
         # kubernetes.io/ingress.class: internal
         # nginx.ingress.kubernetes.io/ssl-redirect: "false"
       hosts:
@@ -206,7 +207,6 @@ orchestrator:
       memory: "512Mi"
       cpu: "500m"
   maxWorkerDeployments: 5
-
 
 # pgboss configuration override
 pgboss:

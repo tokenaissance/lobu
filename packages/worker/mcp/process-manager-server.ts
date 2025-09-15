@@ -983,8 +983,7 @@ export { main as startProcessManagerServer };
 // Only run directly if this file is executed directly
 if (
   typeof process !== "undefined" &&
-  process.argv[1] &&
-  process.argv[1].endsWith("process-manager-server.ts")
+  process.argv[1]
 ) {
   main().catch((error) => {
     console.error("[Process Manager MCP] Fatal error:", error);

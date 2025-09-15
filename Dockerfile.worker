@@ -55,7 +55,6 @@ RUN addgroup --gid 1001 claude && \
     echo 'claude ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
     usermod -aG docker claude
 
-# Install Claude Code CLI globally using npm since bun global install doesn't work the same way
 RUN npm install -g @anthropic-ai/claude-code && \
     echo "NPM global packages:" && \
     npm list -g --depth=0 && \
@@ -121,10 +120,14 @@ RUN mkdir -p /home/claude/.claude/projects && \
     chmod -R 755 /home/claude/.claude && \
     echo 'export PATH="/home/claude/bin:$PATH"' >> /home/claude/.bashrc
 
+# Copy Claude settings
+COPY packages/worker/claude-settings.json /app/packages/worker/claude-settings.json
+
 # Copy the entrypoint script and make it executable
 COPY packages/worker/scripts/worker-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && \
-    chown claude:claude /app/entrypoint.sh
+    chown claude:claude /app/entrypoint.sh && \
+    chown claude:claude /app/packages/worker/claude-settings.json
 
 # Switch to non-root user
 USER claude

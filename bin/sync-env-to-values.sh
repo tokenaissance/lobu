@@ -46,7 +46,7 @@ update_yaml_value() {
     local key=$1
     local value=$2
     local yaml_path=$3
-    
+
     if [ -n "$value" ]; then
         echo "  ✓ $key: $value"
         # Use yq if available, otherwise sed
@@ -85,9 +85,9 @@ if [ -n "$WORKER_MEMORY_REQUEST" ]; then
     update_yaml_value "WORKER_MEMORY_REQUEST" "$WORKER_MEMORY_REQUEST" ".worker.resources.requests.memory"
 fi
 
-# Sync claude configuration
-if [ -n "$CLAUDE_MODEL" ]; then
-    update_yaml_value "CLAUDE_MODEL" "$CLAUDE_MODEL" ".claude.model"
+# Sync agent model configuration
+if [ -n "$AGENT_DEFAULT_MODEL" ]; then
+    update_yaml_value "AGENT_DEFAULT_MODEL" "$AGENT_DEFAULT_MODEL" ".claude.model"
 fi
 
 if [ -n "$CLAUDE_TIMEOUT_MINUTES" ]; then

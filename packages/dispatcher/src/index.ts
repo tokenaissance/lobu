@@ -81,7 +81,10 @@ export class SlackDispatcher {
     // Initialize queue producer - use DATABASE_URL for consistency
     logger.info("Initializing queue mode");
     this.queueProducer = new QueueProducer(config.queues.connectionString);
-    this.repoManager = new GitHubRepositoryManager(config.github, config.queues.connectionString);
+    this.repoManager = new GitHubRepositoryManager(
+      config.github,
+      config.queues.connectionString,
+    );
     // ThreadResponseConsumer will be created after event handlers are initialized
 
     this.setupErrorHandling();
@@ -91,12 +94,12 @@ export class SlackDispatcher {
     this.app.use(async ({ payload, next }) => {
       const event = (payload as any).event || payload;
       logger.debug(
-        `[Slack Event] Type: ${event?.type}, Subtype: ${event?.subtype}`
+        `[Slack Event] Type: ${event?.type}, Subtype: ${event?.subtype}`,
       );
       if (event) {
         logger.debug(
           `[Slack Event Details]`,
-          JSON.stringify(event).substring(0, 200)
+          JSON.stringify(event).substring(0, 200),
         );
       }
       await next();
@@ -145,7 +148,7 @@ export class SlackDispatcher {
         // Add request logging middleware
         expressApp.use((req: any, _res: any, next: any) => {
           logger.debug(
-            `[${new Date().toISOString()}] ${req.method} ${req.path}`
+            `[${new Date().toISOString()}] ${req.method} ${req.path}`,
           );
           logger.debug("Headers:", req.headers);
           if (req.method === "POST" && req.body) {
@@ -170,7 +173,7 @@ export class SlackDispatcher {
         if (this.anthropicProxy) {
           expressApp.use("/api/anthropic", this.anthropicProxy.getRouter());
           logger.info(
-            "✅ Anthropic proxy enabled at /api/anthropic (HTTP mode)"
+            "✅ Anthropic proxy enabled at /api/anthropic (HTTP mode)",
           );
         }
 
@@ -178,7 +181,7 @@ export class SlackDispatcher {
         expressApp._router.stack.forEach((middleware: any) => {
           if (middleware.route) {
             logger.debug(
-              `- ${Object.keys(middleware.route.methods).join(", ").toUpperCase()} ${middleware.route.path}`
+              `- ${Object.keys(middleware.route.methods).join(", ").toUpperCase()} ${middleware.route.path}`,
             );
           } else if (middleware.name === "router") {
             logger.debug("- Router middleware");
@@ -189,11 +192,11 @@ export class SlackDispatcher {
         logger.info("Socket Mode debugging - checking client availability");
         logger.info(
           "App receiver type:",
-          (this.app as any).receiver?.constructor.name
+          (this.app as any).receiver?.constructor.name,
         );
         logger.info(
           "Socket Mode client exists:",
-          !!(this.app as any).receiver?.client
+          !!(this.app as any).receiver?.client,
         );
 
         const socketModeClient = (this.app as any).receiver?.client;
@@ -201,7 +204,7 @@ export class SlackDispatcher {
           logger.info("Setting up Socket Mode event handlers...");
           logger.info(
             "Socket Mode client type:",
-            socketModeClient.constructor.name
+            socketModeClient.constructor.name,
           );
 
           socketModeClient.on("slack_event", (event: any, _body: any) => {
@@ -250,17 +253,20 @@ export class SlackDispatcher {
               logger.error("Socket Mode start error:", error);
             }
           });
-          
+
           // Give Socket Mode a moment to connect
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
           // Check if we're connected via the Socket Mode client
           const receiver = (this.app as any).receiver;
-          if (receiver?.client?.isConnected?.() || receiver?.client?.stateMachine?.getCurrentState?.() === 'connected') {
+          if (
+            receiver?.client?.isConnected?.() ||
+            receiver?.client?.stateMachine?.getCurrentState?.() === "connected"
+          ) {
             logger.info("✅ Socket Mode connection established!");
           } else {
             // Wait a bit more and check again
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 3000));
             logger.info("✅ Socket Mode connection established!");
           }
         } catch (socketError) {
@@ -273,17 +279,17 @@ export class SlackDispatcher {
         ? "Socket Mode"
         : `HTTP on port ${this.config.slack.port}`;
       logger.info(
-        `🚀 Slack Dispatcher is running in ${mode}! (Local Development)`
+        `🚀 Slack Dispatcher is running in ${mode}! (Local Development)`,
       );
 
       // Log configuration
       logger.info("Configuration:");
       logger.info(`- GitHub Organization: ${this.config.github.organization}`);
       logger.info(
-        `- Session Timeout: ${this.config.sessionTimeoutMinutes} minutes`
+        `- Session Timeout: ${this.config.sessionTimeoutMinutes} minutes`,
       );
       logger.info(
-        `- Signing Secret: ${this.config.slack.signingSecret?.substring(0, 8)}...`
+        `- Signing Secret: ${this.config.slack.signingSecret?.substring(0, 8)}...`,
       );
     } catch (error) {
       logger.error("Failed to start Slack dispatcher:", error);
@@ -351,7 +357,7 @@ export class SlackDispatcher {
 
       if (!authResult.ok) {
         throw new Error(
-          `Auth test failed: ${authResult.error || "Unknown error"}`
+          `Auth test failed: ${authResult.error || "Unknown error"}`,
         );
       }
 
@@ -370,7 +376,7 @@ export class SlackDispatcher {
         this.app,
         this.queueProducer,
         this.repoManager,
-        config
+        config,
       );
 
       // Now create ThreadResponseConsumer with access to user mappings
@@ -378,19 +384,19 @@ export class SlackDispatcher {
         config.queues.connectionString,
         config.slack.token,
         this.repoManager,
-        this.eventHandlers.getUserMappings()
+        this.eventHandlers.getUserMappings(),
       );
 
       // Setup health endpoints with home tab update callback
       setupHealthEndpoints(
-        this.anthropicProxy, 
+        this.anthropicProxy,
         config.queues.connectionString,
         async (userId: string) => {
           if (this.eventHandlers) {
             const client = this.app.client;
             await (this.eventHandlers as any).updateAppHome(userId, client);
           }
-        }
+        },
       );
     } catch (error) {
       logger.error("Failed to get bot info:", error);
@@ -420,7 +426,7 @@ export class SlackDispatcher {
         // These are expected Socket Mode reconnection events, just log as debug
         logger.debug(
           "Socket Mode connection event (expected):",
-          reasonStr.substring(0, 100)
+          reasonStr.substring(0, 100),
         );
         return;
       }
@@ -433,7 +439,7 @@ export class SlackDispatcher {
     process.on("uncaughtException", (error) => {
       const errorStr = error?.toString() || "";
       const messageStr = (error as any)?.message || "";
-      
+
       // Check if this is a Socket Mode connection error that should be ignored
       if (
         errorStr.includes("server explicit disconnect") ||
@@ -446,11 +452,11 @@ export class SlackDispatcher {
         // These are expected Socket Mode reconnection events, just log as debug
         logger.debug(
           "Socket Mode connection exception (expected, will reconnect):",
-          errorStr.substring(0, 100)
+          errorStr.substring(0, 100),
         );
         return;
       }
-      
+
       logger.error("Uncaught Exception:", error);
       process.exit(1);
     });
@@ -509,7 +515,7 @@ async function main() {
         allowedChannels: process.env.SLACK_ALLOWED_CHANNELS?.split(","),
       },
       github: {
-        token: process.env.GITHUB_TOKEN || '', // Optional - users can use OAuth instead
+        token: process.env.GITHUB_TOKEN || "", // Optional - users can use OAuth instead
         organization: process.env.GITHUB_ORGANIZATION || "", // Empty string means use authenticated user
         repository: process.env.GITHUB_REPOSITORY, // Optional override repository URL
         clientId: process.env.GITHUB_CLIENT_ID, // GitHub OAuth App Client ID
@@ -518,14 +524,14 @@ async function main() {
       },
       claude: {
         allowedTools: process.env.ALLOWED_TOOLS?.split(","),
-        model: process.env.MODEL,
+        model: process.env.AGENT_DEFAULT_MODEL,
         timeoutMinutes: process.env.TIMEOUT_MINUTES
           ? Number(process.env.TIMEOUT_MINUTES)
           : undefined,
       },
       sessionTimeoutMinutes: parseInt(
         process.env.SESSION_TIMEOUT_MINUTES || "5",
-        10
+        10,
       ),
       logLevel: (process.env.LOG_LEVEL as any) || LogLevel.INFO,
       // Queue configuration (required)
@@ -541,8 +547,7 @@ async function main() {
       anthropicProxy: {
         enabled: true,
         anthropicApiKey:
-          process.env.ANTHROPIC_API_KEY ||
-          process.env.CLAUDE_CODE_OAUTH_TOKEN!,
+          process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN!,
         postgresConnectionString: process.env.DATABASE_URL!,
         anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL,
       },
@@ -561,7 +566,9 @@ async function main() {
     }
     // GITHUB_TOKEN is optional - users can login with OAuth instead
     if (!config.github.token) {
-      logger.warn("GITHUB_TOKEN not provided - users must login with GitHub OAuth to access repositories");
+      logger.warn(
+        "GITHUB_TOKEN not provided - users must login with GitHub OAuth to access repositories",
+      );
     }
     if (!config.queues.connectionString) {
       throw new Error("DATABASE_URL is required");

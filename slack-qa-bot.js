@@ -23,7 +23,7 @@ if (jsonMode) {
 }
 const QA_BOT_TOKEN = process.env.QA_SLACK_BOT_TOKEN;
 const TARGET_BOT_USERNAME = process.env.QA_TARGET_BOT_USERNAME;
-const QA_CHANNEL = process.env.QA_SLACK_CHANNEL || "C0952LTF7DG"; // Default to #peerbot-qa
+const QA_CHANNEL = process.env.QA_SLACK_CHANNEL || "C0952LTF7DG";
 
 // Validate required environment variables
 if (!TARGET_BOT_USERNAME) {
@@ -47,6 +47,7 @@ async function makeSlackRequest(method, body) {
     const needsUrlEncoding = [
       "conversations.info",
       "conversations.history",
+      "conversations.replies",
     ].includes(method);
     const postData = needsUrlEncoding
       ? new URLSearchParams(body).toString()
@@ -93,359 +94,88 @@ async function makeSlackRequest(method, body) {
 
 async function waitForBotResponse(
   channel,
-  afterTimestamp,
-  timeout = 30000,
-  jsonOutput = false
+  messageTs,
+  timeout = 45000,
+  jsonOutput = false,
 ) {
   if (!jsonOutput) console.log("⏳ Waiting for bot response...");
   const startTime = Date.now();
+  let foundResponse = null;
 
   while (Date.now() - startTime < timeout) {
     try {
-      const history = await makeSlackRequest("conversations.history", {
+      // Check for replies in the thread first (most common case)
+      const threadReplies = await makeSlackRequest("conversations.replies", {
         channel: channel,
-        oldest: afterTimestamp,
+        ts: messageTs,
         limit: 10,
       });
 
-      // Look for bot messages (any message with bot_id)
-      const botMessages = history.messages.filter((msg) => msg.bot_id);
-
-      if (botMessages.length > 0) {
-        return botMessages;
+      if (threadReplies.messages && threadReplies.messages.length > 1) {
+        const botMessages = threadReplies.messages
+          .slice(1)
+          .filter((msg) => msg.bot_id);
+        if (botMessages.length > 0) {
+          foundResponse = botMessages[0];
+          if (!jsonOutput)
+            console.log(
+              `📱 Found bot response in thread at ${foundResponse.ts}`,
+            );
+          break;
+        }
       }
-    } catch (_error) {
-      // Ignore rate limit errors and continue waiting
+
+      // Also check main channel as fallback
+      const history = await makeSlackRequest("conversations.history", {
+        channel: channel,
+        oldest: (parseFloat(messageTs) - 5).toString(),
+        limit: 20,
+      });
+
+      if (history.messages) {
+        const recentBotMessages = history.messages.filter(
+          (msg) => msg.bot_id && parseFloat(msg.ts) > parseFloat(messageTs),
+        );
+        if (recentBotMessages.length > 0) {
+          foundResponse = recentBotMessages[0];
+          if (!jsonOutput)
+            console.log(
+              `📱 Found bot response in channel at ${foundResponse.ts}`,
+            );
+          break;
+        }
+      }
+    } catch (error) {
+      // Continue waiting on API errors
     }
 
-    // Wait 2 seconds before checking again
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
-  return null;
+  return foundResponse;
 }
 
-async function checkForAnyReaction(
-  channel,
-  timestamp,
-  timeout = 10000,
-  jsonOutput = false
-) {
-  if (!jsonOutput)
-    console.log(
-      "⏳ Checking for any reaction (cog=processing, checkmark=success)..."
-    );
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < timeout) {
-    try {
-      const result = await makeSlackRequest("reactions.get", {
-        channel: channel,
-        timestamp: timestamp,
-      });
-
-      if (result.message?.reactions) {
-        const eyesReaction = result.message.reactions.find(
-          (r) => r.name === "eyes"
-        );
-        const cogReaction = result.message.reactions.find(
-          (r) => r.name === "gear"
-        );
-        const checkmarkReaction = result.message.reactions.find(
-          (r) => r.name === "white_check_mark"
-        );
-
-        if (checkmarkReaction) {
-          return "success";
-        } else if (cogReaction) {
-          return "processing";
-        } else if (eyesReaction) {
-          return "processing"; // Eyes indicates bot acknowledged and is starting to process
-        }
-      }
-    } catch (_error) {
-      // Message might not exist yet or no reactions
-    }
-
-    // Wait 1 second before checking again for initial reaction
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  return "none";
-}
-
-async function waitForSuccessReaction(
-  channel,
-  timestamp,
-  timeout = 30000,
-  jsonOutput = false
-) {
-  if (!jsonOutput)
-    console.log("⏳ Waiting for success reaction (white_check_mark)...");
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < timeout) {
-    try {
-      const result = await makeSlackRequest("reactions.get", {
-        channel: channel,
-        timestamp: timestamp,
-      });
-
-      if (result.message?.reactions) {
-        const checkmarkReaction = result.message.reactions.find(
-          (r) => r.name === "white_check_mark"
-        );
-        if (checkmarkReaction) {
-          return true;
-        }
-      }
-    } catch (_error) {
-      // Message might not exist yet or no reactions
-    }
-
-    // Wait 2 seconds before checking again
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-
-  return false;
-}
-
-async function evaluateTestResult(
-  channel,
-  messageTs,
-  timeout,
-  testType = "Test",
-  options = {}
-) {
-  const { jsonOutput = false, waitForResponse = false } = options;
-
-  // First, check for any reaction within the specified timeout
-  const reactionTimeout = Math.min(timeout, 60000); // Cap at 60 seconds for initial reaction
-  const initialReaction = await checkForAnyReaction(
-    channel,
-    messageTs,
-    reactionTimeout,
-    jsonOutput
-  );
-
-  if (initialReaction === "none") {
-    // Some deployments might skip reactions; try to detect a reply anyway
-    if (!jsonOutput) {
-      console.log(
-        `⚠️ No reaction within ${reactionTimeout/1000}s; checking for a reply...`
-      );
-    }
-    const fallbackWait = Math.max(5000, Math.min(15000, timeout));
-    const maybeResponse = await waitForBotResponse(
-      channel,
-      messageTs,
-      fallbackWait,
-      jsonOutput
-    );
-    if (!maybeResponse) {
-      if (!jsonOutput) {
-        console.log(
-          `❌ No reaction or reply within ${(reactionTimeout + fallbackWait)/1000} seconds`
-        );
-        console.log("\nTroubleshooting steps:");
-        console.log(
-          "1. Check dispatcher logs for incoming events: kubectl logs -n peerbot -l app.kubernetes.io/component=dispatcher --tail=50"
-        );
-        console.log(
-          '2. Verify dispatcher is receiving Slack events: kubectl logs -n peerbot -l app.kubernetes.io/component=dispatcher --tail=50 | grep "mention"'
-        );
-        console.log(
-          '3. Check if message is queued: kubectl logs -n peerbot -l app.kubernetes.io/component=dispatcher --tail=50 | grep "Enqueuing"'
-        );
-        console.log(
-          "4. Check orchestrator for scaling issues: kubectl logs -n peerbot -l app.kubernetes.io/component=orchestrator --tail=50"
-        );
-        console.log(
-          "5. Verify worker pods exist: kubectl get pods -n peerbot | grep claude-worker"
-        );
-        console.log(
-          "6. Check PostgreSQL connection: kubectl exec -it -n peerbot deployment/peerbot-dispatcher -- nc -zv postgres-service 5432"
-        );
-        console.log(
-          "7. Restart all components if needed: kubectl rollout restart deployment -n peerbot"
-        );
-      }
-      return { success: false, error: "No reaction or reply" };
-    }
-    if (!jsonOutput) console.log("✅ Bot replied without reaction");
-    return { success: true, response: maybeResponse[0] };
-  } else if (initialReaction === "success") {
-    if (!jsonOutput)
-      console.log("✅ Bot immediately processed message (checkmark reaction)");
-  } else if (initialReaction === "processing") {
-    if (!jsonOutput) console.log("⚙️ Bot started processing (cog reaction detected)");
-
-    // Wait for success reaction
-    const hasSuccess = await waitForSuccessReaction(
-      channel,
-      messageTs,
-      timeout,
-      jsonOutput
-    );
-
-    if (!hasSuccess) {
-      if (!jsonOutput) {
-        console.log(
-          "❌ Bot started processing but never completed (no checkmark reaction)"
-        );
-        console.log("\nTroubleshooting steps:");
-        console.log(
-          "1. Check worker pod status: kubectl get pods -n peerbot | grep claude-worker"
-        );
-        console.log(
-          "2. Check worker logs for errors: kubectl logs -n peerbot -l app.kubernetes.io/component=claude-worker --tail=100"
-        );
-        console.log(
-          "3. Check if worker has sufficient resources: kubectl describe pod -n peerbot -l app.kubernetes.io/component=claude-worker"
-        );
-        console.log(
-          '4. Check queue for stuck messages: kubectl logs -n peerbot -l app.kubernetes.io/component=dispatcher --tail=50 | grep "queue"'
-        );
-        console.log(
-          "5. Restart worker pods if necessary: kubectl rollout restart deployment/peerbot-claude-worker -n peerbot"
-        );
-        console.log(
-          "6. Check orchestrator logs: kubectl logs -n peerbot -l app.kubernetes.io/component=orchestrator --tail=50"
-        );
-        console.log(
-          "7. Verify PostgreSQL queue is accessible: kubectl exec -it -n peerbot deployment/peerbot-dispatcher -- nc -zv postgres-service 5432"
-        );
-      }
-      return { success: false, error: "Bot processing incomplete" };
-    } else {
-      if (!jsonOutput)
-        console.log("✅ Bot completed processing (checkmark reaction added)");
-    }
-  }
-
-  // At this point, we know the bot processed the message (has checkmark)
-  // Always wait for response messages to include in result
-  let response = await waitForBotResponse(channel, messageTs, timeout, jsonOutput);
-
-  // For JSON mode, still wait for response even if not explicitly requested
-  if (!waitForResponse && !response) {
-    response = await waitForBotResponse(
-      channel,
-      messageTs,
-      Math.min(timeout, 10000),
-      jsonOutput
-    ); // Quick check for JSON mode
-  }
-
-  // Check for "Starting environment setup" stuck state
-  const isStuckInSetup =
-    response &&
-    response.length > 0 &&
-    response[0].text &&
-    response[0].text.includes("Starting environment setup") &&
-    response.length === 1 &&
-    !response[0].text.includes("✅");
-
-  if (isStuckInSetup) {
-    if (!jsonOutput) {
-      console.log('❌ Bot is stuck in "Starting environment setup" message');
-      console.log("\n⚠️ Bot appears to be stuck during initialization");
-      console.log("\nTroubleshooting steps:");
-      console.log(
-        "1. Check worker pod status: kubectl get pods -n peerbot | grep claude-worker"
-      );
-      console.log(
-        "2. Check worker logs for errors: kubectl logs -n peerbot -l app.kubernetes.io/component=claude-worker --tail=100"
-      );
-      console.log(
-        "3. Check if worker has sufficient resources: kubectl describe pod -n peerbot -l app.kubernetes.io/component=claude-worker"
-      );
-      console.log(
-        '4. Check queue for stuck messages: kubectl logs -n peerbot -l app.kubernetes.io/component=dispatcher --tail=50 | grep "queue"'
-      );
-      console.log(
-        "5. Restart worker pods if necessary: kubectl rollout restart deployment/peerbot-claude-worker -n peerbot"
-      );
-      console.log(
-        "6. Check orchestrator logs: kubectl logs -n peerbot -l app.kubernetes.io/component=orchestrator --tail=50"
-      );
-      console.log(
-        "7. Verify PostgreSQL queue is accessible: kubectl exec -it -n peerbot deployment/peerbot-dispatcher -- nc -zv postgres-service 5432"
-      );
-    }
-    process.exit(1);
-  }
-
-  if (response && response.length > 0) {
-    if (!jsonOutput) {
-      console.log(`✅ Bot responded with message!`);
-      console.log(`   Response: "${response[0].text?.substring(0, 200)}..."`);
-
-      // Check if response has blocks (for blockkit)
-      if (response[0].blocks && response[0].blocks.length > 0) {
-        console.log(`   Blocks: ${response[0].blocks.length} blocks found`);
-        const actionBlocks = response[0].blocks.filter(
-          (b) => b.type === "actions"
-        );
-        if (actionBlocks.length > 0) {
-          console.log(
-            `   ✨ Found ${actionBlocks.length} action block(s) with buttons!`
-          );
-        }
-      }
-
-      console.log(`\n🎉 ${testType} PASSED!`);
-    }
-    return { success: true, response: response[0] };
-  } else {
-    if (!jsonOutput) {
-      console.log("⚠️ Bot processed message but no response was sent");
-      console.log(
-        `\n⚠️ ${testType} PARTIALLY PASSED - Consider this a failure for automation purposes`
-      );
-    }
-    return { success: false, error: "No response from bot" };
-  }
-}
-
-async function runTest(messages, timeout = 30000, options = {}) {
-  const {
-    jsonOutput = false,
-    waitForResponse = false,
-    threadTs = null,
-    noWait = false,
-  } = options;
-  const quiet = jsonOutput; // JSON mode suppresses all output
-  const isSingleMessage = messages.length === 1;
-  const testType = isSingleMessage ? "Test" : "Multi-Message Test";
+async function runTest(messages, timeout = 45000, options = {}) {
+  const { jsonOutput = false, threadTs = null, noWait = false } = options;
+  const quiet = jsonOutput;
 
   if (!quiet) {
-    console.log(`🧪 Peerbot ${testType}`);
+    console.log("🧪 Peerbot Test");
     console.log("📤 Sending as: PeerQA");
     console.log(`🎯 Target: <@${TARGET_BOT_USERNAME}>`);
-    if (!isSingleMessage) {
-      console.log(`📝 Messages: ${messages.length}`);
-    }
     console.log("");
   }
 
-  const targetChannel = QA_CHANNEL; // Use from env or default
-  let firstMessageTs = threadTs; // Use provided thread or null for new thread
+  const targetChannel = QA_CHANNEL;
+  let messageTs = threadTs;
 
   try {
     for (let i = 0; i < messages.length; i++) {
       const prompt = messages[i];
-      const isFirstMessage = i === 0;
       const message = `<@${TARGET_BOT_USERNAME}> ${prompt}`;
 
       if (!quiet) {
-        if (messages.length > 1) {
-          console.log(
-            `📨 Sending message ${i + 1}/${messages.length}${isFirstMessage ? " (initial)" : " (thread)"}...`
-          );
-        } else {
-          console.log("📨 Sending test message...");
-        }
+        console.log("📨 Sending test message...");
       }
 
       const requestBody = {
@@ -453,103 +183,97 @@ async function runTest(messages, timeout = 30000, options = {}) {
         text: message,
       };
 
-      // If thread_ts is provided, always use it (even for first message)
-      // Otherwise, if not the first message, send in thread
       if (threadTs) {
         requestBody.thread_ts = threadTs;
-      } else if (!isFirstMessage && firstMessageTs) {
-        requestBody.thread_ts = firstMessageTs;
       }
 
       const msg = await makeSlackRequest("chat.postMessage", requestBody);
 
-      // Store timestamp if this is the first message and no thread was provided
-      if (isFirstMessage && !threadTs) {
-        firstMessageTs = msg.ts;
+      if (i === 0) {
+        messageTs = msg.ts;
       }
 
       if (!quiet) {
         console.log(`✅ Sent: "${message}"`);
         console.log(`   Timestamp: ${msg.ts}`);
-        if (threadTs) {
-          console.log(`   Added to existing thread: ${threadTs}`);
-        } else if (messages.length > 1) {
-          console.log(
-            `   ${isFirstMessage ? "Thread started" : "Added to thread"}`
-          );
-        }
         console.log("");
       }
-      
-      // If --no-wait flag is set, return immediately after first message
+
       if (noWait && i === 0) {
-        const returnTs = threadTs || msg.ts;
         if (jsonOutput) {
-          console.log(JSON.stringify({
-            success: true,
-            thread_ts: returnTs,
-            message_ts: msg.ts,
-            channel: targetChannel,
-          }));
-        } else {
-          console.log(`\nTo reply to this thread, use:`);
-          console.log(`./slack-qa-bot.js --thread-ts ${returnTs} "your reply"`);
+          console.log(
+            JSON.stringify({
+              success: true,
+              thread_ts: messageTs,
+              message_ts: msg.ts,
+              channel: targetChannel,
+            }),
+          );
         }
         process.exit(0);
       }
-
-      // Wait a bit between messages
-      if (i < messages.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
     }
 
-    // Wait a bit for the bot to start processing
+    // Wait a moment for processing to start
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // Evaluate test result - use the message timestamp if posting to existing thread
-    const messageToCheck = threadTs ? threadTs : firstMessageTs;
-    const result = await evaluateTestResult(
+    // Check for bot response
+    const response = await waitForBotResponse(
       targetChannel,
-      messageToCheck,
+      messageTs,
       timeout,
-      testType,
-      { jsonOutput, waitForResponse }
+      jsonOutput,
     );
 
-    if (jsonOutput) {
-      // Output JSON result
-      const output = {
-        success: result.success,
-        channel: targetChannel,
-        thread_ts: threadTs || firstMessageTs,
-        messages_sent: messages.length,
-        ...(threadTs && { posted_to_thread: threadTs }),
-        ...(result.error && { error: result.error }),
-        ...(result.response && {
-          response: {
-            text: result.response.text,
-            timestamp: result.response.ts,
-            ...(result.response.blocks && { blocks: result.response.blocks }),
-            ...(result.response.bot_id && { bot_id: result.response.bot_id }),
-          },
-        }),
-        url: `https://peerbotcommunity.slack.com/archives/${targetChannel}`,
-      };
-      console.log(JSON.stringify(output, null, 2));
-    } else if (!quiet) {
-      console.log(`\n🔗 Channel: https://peerbotcommunity.slack.com/archives/${targetChannel}`);
+    if (!response) {
+      if (!jsonOutput) {
+        console.log(`❌ No bot response within ${timeout / 1000} seconds`);
+        console.log(
+          "\n🔗 Manual check: https://peerbotcommunity.slack.com/archives/" +
+            targetChannel,
+        );
+      }
+      process.exit(1);
     }
 
-    // Exit with proper code
-    process.exit(result.success ? 0 : 1);
+    if (!jsonOutput) {
+      console.log("✅ Bot responded!");
+      console.log(`   Response: "${response.text?.substring(0, 200)}..."`);
+      console.log("\n🎉 Test PASSED!");
+    }
+
+    if (jsonOutput) {
+      console.log(
+        JSON.stringify(
+          {
+            success: true,
+            channel: targetChannel,
+            thread_ts: messageTs,
+            response: {
+              text: response.text,
+              timestamp: response.ts,
+              bot_id: response.bot_id,
+            },
+            url: `https://peerbotcommunity.slack.com/archives/${targetChannel}`,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.log(
+        `\n🔗 Channel: https://peerbotcommunity.slack.com/archives/${targetChannel}`,
+      );
+    }
+
+    process.exit(0);
   } catch (error) {
     if (jsonOutput) {
       console.log(
-        JSON.stringify({ success: false, error: error.message }, null, 2)
+        JSON.stringify({ success: false, error: error.message }, null, 2),
       );
-    } else if (!quiet) {
-      console.error(`❌ ${testType} failed:`, error.message);
+    } else {
+      console.error(`❌ Test failed: ${error.message}`);
     }
     process.exit(1);
   }
@@ -558,24 +282,18 @@ async function runTest(messages, timeout = 30000, options = {}) {
 // Parse command line arguments
 const args = process.argv.slice(2);
 let messages = [];
-let timeout = 30000; // default 30 seconds
+let timeout = 45000;
 let jsonOutput = false;
-let waitForResponse = false;
-let threadTs = null; // Thread timestamp to post to
-let noWait = false; // Skip waiting for bot reaction
+let threadTs = null;
+let noWait = false;
 
-// Parse options
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--timeout" && args[i + 1]) {
-    timeout = parseInt(args[i + 1], 10) * 1000; // convert seconds to milliseconds
-    args.splice(i, 2); // remove --timeout and its value
+    timeout = parseInt(args[i + 1], 10) * 1000;
+    args.splice(i, 2);
     i--;
   } else if (args[i] === "--json") {
     jsonOutput = true;
-    args.splice(i, 1);
-    i--;
-  } else if (args[i] === "--wait-for-response") {
-    waitForResponse = true;
     args.splice(i, 1);
     i--;
   } else if (args[i] === "--no-wait") {
@@ -587,76 +305,28 @@ for (let i = 0; i < args.length; i++) {
     args.splice(i, 2);
     i--;
   } else if (args[i] === "--help" || args[i] === "-h") {
-    console.log("Usage: slack-qa-bot.js [options] [message1] [message2] ...");
+    console.log("Usage: slack-qa-bot.js [options] [message]");
     console.log("");
     console.log("Options:");
     console.log(
-      "  --timeout <seconds>    Set timeout for bot response (default: 30)"
+      "  --timeout <seconds>    Set timeout for bot response (default: 45)",
     );
-    console.log(
-      "  --json                 Output JSON format (suppresses all other output)"
-    );
-    console.log(
-      "  --wait-for-response    Wait for bot to fully respond before exiting"
-    );
-    console.log(
-      "  --thread-ts <ts>       Post to existing thread by timestamp"
-    );
+    console.log("  --json                 Output JSON format");
+    console.log("  --thread-ts <ts>       Post to existing thread");
+    console.log("  --no-wait              Send message and exit immediately");
     console.log("  --help, -h             Show this help message");
     console.log("");
     console.log("Examples:");
-    console.log("  # Simple test");
     console.log('  ./slack-qa-bot.js "Hello bot"');
-    console.log("");
-    console.log("  # JSON output for chaining");
-    console.log(
-      '  ./slack-qa-bot.js --json "Create a function" | jq -r .thread_ts'
-    );
-    console.log("");
-    console.log("  # Multi-message in thread");
-    console.log(
-      '  ./slack-qa-bot.js "Start task" "Add more details" "Complete it"'
-    );
-    console.log("");
-    console.log("  # Wait for full response with timeout");
-    console.log(
-      '  ./slack-qa-bot.js --wait-for-response --timeout 60 "Complex task"'
-    );
-    console.log("");
-    console.log("  # Continue existing thread");
-    console.log(
-      '  THREAD=$(./slack-qa-bot.js --json "Start task" | jq -r .thread_ts)'
-    );
-    console.log(
-      '  ./slack-qa-bot.js --thread-ts $THREAD "Continue in same thread"'
-    );
+    console.log('  ./slack-qa-bot.js --json "Create a function"');
     process.exit(0);
   }
 }
 
-// Remaining args are messages
 messages = args.filter((arg) => arg.trim().length > 0);
 
 if (messages.length > 0) {
-  runTest(messages, timeout, { jsonOutput, waitForResponse, threadTs, noWait });
+  runTest(messages, timeout, { jsonOutput, threadTs, noWait });
 } else {
-  // Run default tests
-  runTest(
-    [
-      "Create me a new project for my landing page of a Pet Store? It' is a fictionary app so be creating don't ask me. Project name is \"Pet Store {timestamp}\"",
-    ],
-    timeout,
-    { jsonOutput, waitForResponse }
-  );
-  runTest(["Create a button to add a new pet to the pet store"], timeout, {
-    jsonOutput,
-    waitForResponse,
-  });
-  runTest(
-    [
-      "Create 5 tasks which will each return a random number and then you will sum all them.",
-    ],
-    timeout,
-    { jsonOutput, waitForResponse }
-  );
+  runTest(["Hello bot - simple test"], timeout, { jsonOutput });
 }
