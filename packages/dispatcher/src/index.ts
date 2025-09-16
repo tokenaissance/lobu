@@ -395,6 +395,50 @@ export class SlackDispatcher {
           if (this.eventHandlers) {
             const client = this.app.client;
             await (this.eventHandlers as any).updateAppHome(userId, client);
+            
+            // Send repository selection message after GitHub login
+            try {
+              const im = await client.conversations.open({ users: userId });
+              await client.chat.postMessage({
+                channel: im.channel?.id || userId,
+                text: "GitHub connected successfully!",
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: "✅ *GitHub connected successfully!*\n\nNow you can select a repository to work with:"
+                    }
+                  },
+                  {
+                    type: "actions",
+                    elements: [
+                      {
+                        type: "button",
+                        text: {
+                          type: "plain_text",
+                          text: "Select Repository",
+                          emoji: true
+                        },
+                        action_id: "select_repository",
+                        style: "primary"
+                      }
+                    ]
+                  },
+                  {
+                    type: "context",
+                    elements: [
+                      {
+                        type: "mrkdwn",
+                        text: "You can also visit the Home tab to manage your repositories"
+                      }
+                    ]
+                  }
+                ]
+              });
+            } catch (error) {
+              logger.error("Failed to send repository selection message:", error);
+            }
           }
         }
       );

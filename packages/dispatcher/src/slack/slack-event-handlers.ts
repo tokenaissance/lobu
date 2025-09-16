@@ -2,6 +2,7 @@
 
 import { SessionUtils } from "@peerbot/shared";
 import type { App } from "@slack/bolt";
+import { getDbPool } from "../db";
 import type { GitHubRepositoryManager } from "../github/repository-manager";
 import logger from "../logger";
 import type {
@@ -58,6 +59,61 @@ export class SlackEventHandlers {
    */
   private getBotId(): string {
     return this.config.slack.botId || "default-slack-bot";
+  }
+
+  /**
+   * Get environment variables from database with context awareness
+   * Checks both channel-specific and user-specific environments
+   */
+  private async getUserEnvironment(userId: string, channelId?: string): Promise<Record<string, string | undefined>> {
+    try {
+      const dbPool = getDbPool(this.config.queues.connectionString);
+      
+      // First try to get channel-specific environment if we have a channel
+      let channelEnv: Record<string, string> = {};
+      if (channelId && !channelId.startsWith('D')) { // Not a DM
+        const channelResult = await dbPool.query(
+          `SELECT name, value 
+           FROM channel_environ 
+           WHERE channel_id = $1 AND platform = 'slack'`,
+          [channelId]
+        );
+        
+        for (const row of channelResult.rows) {
+          if (!row.value.includes(':')) {
+            channelEnv[row.name] = row.value;
+          }
+        }
+      }
+      
+      // Get user's environment variables from database
+      const result = await dbPool.query(
+        `SELECT name, value 
+         FROM user_environ 
+         WHERE user_id = (SELECT id FROM users WHERE platform = 'slack' AND platform_user_id = $1)
+         AND type = 'user'`,
+        [userId.toUpperCase()]
+      );
+      
+      // Build environment with overrides
+      const userEnv: Record<string, string> = {};
+      for (const row of result.rows) {
+        // Skip encrypted values (like GITHUB_TOKEN)
+        if (!row.value.includes(':')) {
+          userEnv[row.name] = row.value;
+        }
+      }
+      
+      // Merge with process.env (channel env takes precedence over user env)
+      return {
+        ...process.env,
+        ...userEnv,
+        ...channelEnv
+      };
+    } catch (error) {
+      logger.error(`Failed to get environment for ${userId}/${channelId}:`, error);
+      return process.env;
+    }
   }
 
   /**
@@ -460,18 +516,39 @@ export class SlackEventHandlers {
       // Check if this is a new session (not a thread reply)
       const isNewSession = !context.threadTs;
 
-      // Check repository cache first
+      // Check for environment overrides from database
+      const userEnv = await this.getUserEnvironment(context.userId, context.channelId);
+      const overrideRepo = userEnv.GITHUB_REPOSITORY as string | undefined;
+      
       let repository;
-      const cachedRepo = this.repositoryCache.get(username);
-      if (cachedRepo && Date.now() - cachedRepo.timestamp < this.CACHE_TTL) {
-        repository = cachedRepo.repository;
-        logger.info(`Using cached repository for ${username}`);
+      if (overrideRepo) {
+        // User has overridden the repository URL
+        const repoUrl = overrideRepo;
+        const parts = repoUrl.split('/');
+        const repoName = parts[parts.length - 1];
+        
+        repository = {
+          repositoryUrl: repoUrl,
+          repositoryName: repoName,
+          cloneUrl: repoUrl.endsWith('.git') ? repoUrl : `${repoUrl}.git`,
+          createdAt: Date.now(),
+          lastUsed: Date.now()
+        };
+        
+        logger.info(`Using overridden repository for ${username}: ${repoUrl}`);
       } else {
-        repository = await this.repoManager.ensureUserRepository(username);
-        this.repositoryCache.set(username, {
-          repository,
-          timestamp: Date.now(),
-        });
+        // Normal flow - check cache then fetch
+        const cachedRepo = this.repositoryCache.get(username);
+        if (cachedRepo && Date.now() - cachedRepo.timestamp < this.CACHE_TTL) {
+          repository = cachedRepo.repository;
+          logger.info(`Using cached repository for ${username}`);
+        } else {
+          repository = await this.repoManager.ensureUserRepository(username);
+          this.repositoryCache.set(username, {
+            repository,
+            timestamp: Date.now(),
+          });
+        }
       }
 
       // Use the normalized threadTs
@@ -902,8 +979,27 @@ Branch: ${branch}`;
         await this.openRepositoryModal(userId, body, client);
         break;
 
+
+
+      case "create_personal_repo":
+        await this.handleCreatePersonalRepo(userId, channelId, client);
+        break;
+
+      case "repo_overflow_menu":
+        const selectedOption = (body as any).actions?.[0]?.selected_option?.value;
+        if (selectedOption === "change_repo") {
+          await this.openRepositoryModal(userId, body, client);
+        } else if (selectedOption === "create_personal") {
+          await this.handleCreatePersonalRepo(userId, channelId, client);
+        }
+        break;
+
+      case "github_connect":
+        await this.handleGitHubConnect(userId, channelId, client);
+        break;
+
       case "select_repository":
-        await this.handleRepositorySelection(userId, body, client);
+        await this.openRepositoryModal(userId, body, client);
         break;
 
       default:
@@ -986,15 +1082,37 @@ Branch: ${branch}`;
 
       // Initialize readme section as null
       let readmeSection: string | null = null;
-
+      
+      // Check for environment overrides from database  
+      // For home tab context, channelId is undefined (user-specific environment)
+      const userEnv = await this.getUserEnvironment(userId);
+      const overrideRepo = userEnv.GITHUB_REPOSITORY as string | undefined;
+      
       // Try to get or create repository
       try {
-        // First, try to get existing repository from cache (pass Slack user ID for database lookup)
-        repository = await this.repoManager.getUserRepository(username, userId);
+        if (overrideRepo) {
+          // User has environment override - use that instead
+          const repoUrl = overrideRepo.replace(/\/$/, '').replace(/\.git$/, '');
+          const repoName = repoUrl.split('/').pop() || 'unknown';
+          
+          repository = {
+            username,
+            repositoryName: repoName,
+            repositoryUrl: repoUrl,
+            cloneUrl: repoUrl.endsWith('.git') ? repoUrl : `${repoUrl}.git`,
+            createdAt: Date.now(),
+            lastUsed: Date.now()
+          };
+          
+          logger.info(`Using environment override repository for user ${userId}: ${repoUrl}`);
+        } else {
+          // First, try to get existing repository from cache (pass Slack user ID for database lookup)
+          repository = await this.repoManager.getUserRepository(username, userId);
 
-        // If no cached repository and we have a token, create one
-        if (!repository && (this.config.github.token || isGitHubConnected)) {
-          repository = await this.repoManager.ensureUserRepository(username);
+          // If no cached repository and we have a token, create one
+          if (!repository && (this.config.github.token || isGitHubConnected)) {
+            repository = await this.repoManager.ensureUserRepository(username);
+          }
         }
 
         // Fetch README.md content if we have a repository
@@ -1061,7 +1179,39 @@ Branch: ${branch}`;
           },
         });
 
-        // Repository selector button that opens modal
+        // Repository selector with personal repo button
+        // Username already includes "user-" prefix from getOrCreateUserMapping
+        const personalRepoName = username;
+        const needsPersonalRepo = !repository || repository.repositoryName !== personalRepoName;
+        
+        const repoSectionAccessory = needsPersonalRepo ? {
+          type: "overflow",
+          options: [
+            {
+              text: {
+                type: "plain_text",
+                text: "Switch codebase"
+              },
+              value: "change_repo"
+            },
+            {
+              text: {
+                type: "plain_text",
+                text: `Create personal`
+              },
+              value: "create_personal"
+            }
+          ],
+          action_id: "repo_overflow_menu"
+        } : {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Change Repository",
+          },
+          action_id: "open_repository_modal",
+        };
+        
         blocks.push({
           type: "section",
           text: {
@@ -1070,14 +1220,7 @@ Branch: ${branch}`;
               ? `*Current Repository:* <${repository.repositoryUrl}|${repository.repositoryName}>`
               : "*Repository Settings:*",
           },
-          accessory: {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Change Repository",
-            },
-            action_id: "open_repository_modal",
-          },
+          accessory: repoSectionAccessory
         });
       } else {
         // Show login button if GitHub OAuth is configured
@@ -1305,6 +1448,318 @@ Branch: ${branch}`;
   }
 
   /**
+   * Handle set environment action - allows users to override environment variables
+   */
+  private async handleSetEnvironment(
+    userId: string,
+    channelId: string,
+    body: any,
+    client: any
+  ): Promise<void> {
+    try {
+      const action = (body as any).actions?.[0];
+      const envString = action?.value;
+      
+      if (!envString) {
+        await client.chat.postEphemeral({
+          channel: channelId,
+          user: userId,
+          text: "❌ No environment variables specified"
+        });
+        return;
+      }
+      
+      // Parse environment variables
+      let envVars: Record<string, string> = {};
+      
+      // Try JSON format first
+      try {
+        envVars = JSON.parse(envString);
+      } catch {
+        // Fall back to key=value,key2=value2 format
+        envString.split(',').forEach((pair: string) => {
+          const [key, ...valueParts] = pair.trim().split('=');
+          const value = valueParts.join('='); // Handle values with = in them
+          if (key && value) {
+            envVars[key.trim()] = value.trim();
+          }
+        });
+      }
+      
+      // Blacklist check - prevent overriding sensitive PEERBOT_ variables
+      const blacklistedVars: string[] = [];
+      const allowedVars: Record<string, string> = {};
+      
+      Object.entries(envVars).forEach(([key, value]) => {
+        if (key.startsWith('PEERBOT_')) {
+          blacklistedVars.push(key);
+          logger.warn(`User ${userId} attempted to override blacklisted variable: ${key}`);
+        } else {
+          allowedVars[key] = value;
+        }
+      });
+      
+      // Store environment overrides in database
+      const dbPool = getDbPool(this.config.queues.connectionString);
+      
+      // Determine if this is a channel context or DM/home tab context
+      const isChannelContext = channelId && !channelId.startsWith('D');
+      
+      if (isChannelContext) {
+        // Store in channel_environ for channel-specific overrides
+        for (const [key, value] of Object.entries(allowedVars)) {
+          await dbPool.query(
+            `INSERT INTO channel_environ (platform, channel_id, name, value, type) 
+             VALUES ('slack', $1, $2, $3, 'channel') 
+             ON CONFLICT (platform, channel_id, name) 
+             DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+            [channelId, key, value]
+          );
+          logger.info(`Channel ${channelId} set environment: ${key}=${value.substring(0, 50)}...`);
+        }
+      } else {
+        // Store in user_environ for user-specific overrides (DM or home tab)
+        // First ensure user exists
+        await dbPool.query(
+          `INSERT INTO users (platform, platform_user_id) 
+           VALUES ('slack', $1) 
+           ON CONFLICT (platform, platform_user_id) DO NOTHING`,
+          [userId.toUpperCase()]
+        );
+        
+        // Get user ID
+        const userResult = await dbPool.query(
+          `SELECT id FROM users WHERE platform = 'slack' AND platform_user_id = $1`,
+          [userId.toUpperCase()]
+        );
+        const userDbId = userResult.rows[0].id;
+        
+        // Store environment variables
+        for (const [key, value] of Object.entries(allowedVars)) {
+          await dbPool.query(
+            `INSERT INTO user_environ (user_id, name, value, type) 
+             VALUES ($1, $2, $3, 'user') 
+             ON CONFLICT (user_id, name) 
+             DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+            [userDbId, key, value]
+          );
+          logger.info(`User ${userId} set environment: ${key}=${value.substring(0, 50)}...`);
+        }
+      }
+      
+      // Clear repository cache since environment changed
+      const username = await this.getOrCreateUserMapping(userId, client);
+      this.repositoryCache.delete(username);
+      
+      // Send confirmation with instructions
+      const im = await client.conversations.open({ users: userId });
+      
+      
+      await client.chat.postMessage({
+        channel: im.channel.id,
+        text: "✅ Environment configured!",
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "✅ *Environment configured!*"
+            }
+          },
+          ...(Object.keys(allowedVars).length > 0 ? [{
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "*Set variables:*\n" + 
+                Object.entries(allowedVars).map(([k, v]) => `• \`${k}\`=${v.length > 50 ? v.substring(0, 50) + '...' : v}`).join('\n')
+            }
+          }] : []),
+          ...(blacklistedVars.length > 0 ? [{
+            type: "context",
+            elements: [{
+              type: "mrkdwn",
+              text: `⚠️ ${blacklistedVars.length} PEERBOT_* variable(s) were blocked for security`
+            }]
+          }] : []),
+          {
+            type: "divider"
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "*Ready to start coding?*\nClick the *+ New Chat* button to begin a conversation with your configured repository."
+            }
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: {
+                  type: "plain_text",
+                  text: "Reset to Default",
+                  emoji: true
+                },
+                action_id: "reset_environment",
+                style: "danger"
+              }
+            ]
+          }
+        ]
+      });
+      
+      // Update home tab to reflect changes
+      await this.updateAppHome(userId, client);
+      
+    } catch (error) {
+      logger.error(`Failed to set environment for user ${userId}:`, error);
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: `❌ Failed to set environment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    }
+  }
+
+  /**
+   * Handle GitHub connect action
+   */
+  private async handleGitHubConnect(
+    userId: string,
+    channelId: string,
+    client: any
+  ): Promise<void> {
+    try {
+      // Use INGRESS_URL if provided, otherwise construct from environment
+      const baseUrl = process.env.INGRESS_URL || 'http://localhost:8080';
+      const authUrl = `${baseUrl}/api/github/oauth/authorize?user_id=${userId}`;
+      
+      // Send a message with the GitHub OAuth link
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: "Connect with GitHub",
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Connect with GitHub*\n\nClick the link below to connect your GitHub account:`
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `<${authUrl}|🔗 Connect GitHub Account>`
+            }
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: "You'll be redirected to GitHub to authorize access"
+              }
+            ]
+          }
+        ]
+      });
+    } catch (error) {
+      logger.error(`Failed to handle GitHub connect for user ${userId}:`, error);
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: `❌ Failed to generate GitHub login link: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    }
+  }
+
+  /**
+   * Handle create personal repository action
+   */
+  private async handleCreatePersonalRepo(
+    userId: string,
+    channelId: string,
+    client: any
+  ): Promise<void> {
+    try {
+      const username = await this.getOrCreateUserMapping(userId, client);
+      
+      // Create the personal repository
+      const repository = await this.repoManager.ensureUserRepository(username);
+      
+      // Clear cache and update home tab
+      this.repositoryCache.delete(username);
+      await this.updateAppHome(userId, client);
+      
+      // Send confirmation
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: `✅ Created personal repository: ${repository.repositoryUrl}`
+      });
+      
+    } catch (error) {
+      logger.error(`Failed to create personal repo for user ${userId}:`, error);
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: `❌ Failed to create personal repository: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    }
+  }
+
+  /**
+   * Handle reset environment action - clears all user environment overrides
+   */
+  private async handleResetEnvironment(
+    userId: string,
+    channelId: string,
+    client: any
+  ): Promise<void> {
+    try {
+      const dbPool = getDbPool(this.config.queues.connectionString);
+      
+      // Delete user's environment variables from database
+      const result = await dbPool.query(
+        `DELETE FROM user_environ 
+         WHERE user_id = (SELECT id FROM users WHERE platform = 'slack' AND platform_user_id = $1)
+         AND type = 'user'
+         AND name NOT IN ('GITHUB_TOKEN', 'GITHUB_USER')`,  // Keep GitHub auth
+        [userId.toUpperCase()]
+      );
+      
+      const hadOverrides = (result.rowCount || 0) > 0;
+      
+      // Clear repository cache
+      const username = await this.getOrCreateUserMapping(userId, client);
+      this.repositoryCache.delete(username);
+      
+      // Update home tab
+      await this.updateAppHome(userId, client);
+      
+      // Send confirmation
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: hadOverrides 
+          ? "✅ Environment reset to defaults. All overrides have been cleared."
+          : "ℹ️ No environment overrides were active."
+      });
+      
+    } catch (error) {
+      logger.error(`Failed to reset environment for user ${userId}:`, error);
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: `❌ Failed to reset environment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    }
+  }
+
+  /**
    * Handle repository modal submission
    */
   private async handleRepositoryModalSubmission(
@@ -1393,6 +1848,11 @@ Branch: ${branch}`;
     try {
       // Get user's GitHub info to pre-populate suggestions
       const githubUser = await this.getUserGitHubInfo(userId);
+      const username = await this.getOrCreateUserMapping(userId, client);
+      
+      // Check if personal repository exists
+      const personalRepoName = username;
+      const personalRepoUrl = `https://github.com/${this.config.github.organization}/${personalRepoName}`;
 
       // Create modal view
       const modalView = {
@@ -1452,12 +1912,30 @@ Branch: ${branch}`;
           },
         } as any);
 
+        // Check if personal repo exists and set as initial option
+        let initialOption;
+        try {
+          // Try to check if the personal repo exists
+          const repository = await this.repoManager.getUserRepository(username, userId);
+          if (repository && repository.repositoryName === personalRepoName) {
+            initialOption = {
+              text: {
+                type: "plain_text",
+                text: `${personalRepoName} (Your personal repository)`
+              },
+              value: personalRepoUrl
+            };
+          }
+        } catch (error) {
+          // Ignore error, just don't set initial option
+        }
+        
         modalView.blocks.push({
           type: "input",
           block_id: "repository_select",
           label: {
             type: "plain_text",
-            text: "Your Repositories",
+            text: "Repositories you have access to",
           },
           element: {
             type: "external_select",
@@ -1467,6 +1945,7 @@ Branch: ${branch}`;
               text: "Type to search repositories...",
             },
             min_query_length: 0, // Show all repos immediately
+            ...(initialOption && { initial_option: initialOption })
           },
           optional: true,
         } as any);
@@ -1482,64 +1961,6 @@ Branch: ${branch}`;
         `Failed to open repository modal for user ${userId}:`,
         error
       );
-    }
-  }
-
-  /**
-   * Handle repository selection
-   */
-  private async handleRepositorySelection(
-    userId: string,
-    body: any,
-    client: any
-  ): Promise<void> {
-    try {
-      const selectedRepo = body.actions?.[0]?.selected_option?.value;
-      if (!selectedRepo) {
-        return;
-      }
-
-      const username = await this.getOrCreateUserMapping(userId, client);
-
-      // Update the repository cache with the selected repository
-      const repoName =
-        selectedRepo.split("/").pop()?.replace(".git", "") || "unknown";
-      const repository: UserRepository = {
-        username,
-        repositoryName: repoName,
-        repositoryUrl: selectedRepo
-          .replace(".git", "")
-          .replace("https://github.com/", "https://github.com/"),
-        cloneUrl: selectedRepo,
-        createdAt: Date.now(),
-        lastUsed: Date.now(),
-      };
-
-      this.repositoryCache.set(username, {
-        repository,
-        timestamp: Date.now(),
-      });
-
-      // Persist selection
-      await this.saveSelectedRepository(userId, repository.repositoryUrl);
-
-      // Send confirmation
-      const im = await client.conversations.open({ users: userId });
-      await client.chat.postMessage({
-        channel: im.channel.id,
-        text: `✅ Repository set to: ${repoName}`,
-      });
-    } catch (error) {
-      logger.error(`Failed to select repository for user ${userId}:`, error);
-      try {
-        const im = await client.conversations.open({ users: userId });
-        await client.chat.postMessage({
-          channel: im.channel.id,
-          text: "❌ Failed to select repository. Please try again.",
-        });
-      } catch {
-        // Ignore error - already logged above
-      }
     }
   }
 

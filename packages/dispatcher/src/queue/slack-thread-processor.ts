@@ -473,7 +473,7 @@ async function generateGitHubActionButtons(
       // No PR but has changes OR on a session branch - show create PR button
       buttons.push({
         type: "button",
-        text: { type: "plain_text", text: "🔀 Create PR" },
+        text: { type: "plain_text", text: "🔀 Pull Request" },
         action_id: generateDeterministicActionId(
           `pr_${repoPath}_${gitBranch}`,
           "github_pr"
@@ -482,7 +482,7 @@ async function generateGitHubActionButtons(
           action: "create_pr",
           repo: repoPath,
           branch: gitBranch,
-          prompt: "Commit changes and create a pull request",
+          prompt: "Review your code, cleanup temporary files, commit changes to GIT and create a pull request",
         }),
       });
     }

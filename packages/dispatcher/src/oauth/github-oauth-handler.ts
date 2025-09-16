@@ -199,13 +199,16 @@ export class GitHubOAuthHandler {
         [userDbId, githubUsername]
       );
 
-      // Trigger home tab refresh in Slack
+      // Trigger home tab refresh and send repository selection message
       try {
         if (this.homeTabCallback) {
           logger.info(
             `Triggering home tab refresh for user ${userId} after GitHub OAuth`
           );
           await this.homeTabCallback(userId);
+          
+          // Also send a DM with repository selection prompt
+          // This requires access to Slack client, which we'll pass through the callback
         }
       } catch (error) {
         logger.error("Failed to trigger home tab refresh:", error);
