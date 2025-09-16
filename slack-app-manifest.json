@@ -21,13 +21,31 @@
         "type": "global",
         "callback_id": "create_project",
         "description": "Creates a project"
+      },
+      {
+        "name": "Experiment feature",
+        "type": "global",
+        "callback_id": "develop_feature",
+        "description": "Let's you experiment a feature"
+      },
+      {
+        "name": "Fix bug",
+        "type": "global",
+        "callback_id": "fix_bug",
+        "description": "Let's you fix a bug"
+      },
+      {
+        "name": "Ask question to the codebase",
+        "type": "global",
+        "callback_id": "ask_question",
+        "description": "Let's you ask a question to the codebase"
       }
     ],
     "slash_commands": [
       {
-        "command": "/peerbot",
+        "command": "/codebase",
         "description": "Peerbot commands - connect repositories and get help",
-        "usage_hint": "connect | help"
+        "usage_hint": "connect to a GIT repository"
       },
       {
         "command": "/login",
@@ -85,6 +103,7 @@
       "bot_events": [
         "app_home_opened",
         "app_mention",
+        "team_join",
         "member_joined_channel",
         "message.channels",
         "message.groups",

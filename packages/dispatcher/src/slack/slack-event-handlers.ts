@@ -62,17 +62,82 @@ export class SlackEventHandlers {
   }
   
   /**
+   * Setup shortcut handlers for global shortcuts
+   */
+  private setupShortcuts(): void {
+    logger.info("Setting up shortcut handlers...");
+    
+    // Handle "Create a project" shortcut
+    this.app.shortcut("create_project", async ({ ack, body, client }) => {
+      await ack();
+      const userId = body.user.id;
+      logger.info(`Create project shortcut triggered by ${userId}`);
+      
+      // Open repository selection modal similar to /codebase connect
+      await this.openRepositoryModal(userId, body, client);
+    });
+    
+    // Handle "Experiment feature" shortcut
+    this.app.shortcut("develop_feature", async ({ ack, body, client }) => {
+      await ack();
+      const userId = body.user.id;
+      logger.info(`Develop feature shortcut triggered by ${userId}`);
+      
+      // Open a modal for feature development
+      const im = await client.conversations.open({ users: userId });
+      if (im.channel?.id) {
+        await client.chat.postMessage({
+          channel: im.channel.id,
+          text: "🚀 Ready to experiment with a new feature! Start by describing what you want to build."
+        });
+      }
+    });
+    
+    // Handle "Fix bug" shortcut
+    this.app.shortcut("fix_bug", async ({ ack, body, client }) => {
+      await ack();
+      const userId = body.user.id;
+      logger.info(`Fix bug shortcut triggered by ${userId}`);
+      
+      // Open a modal for bug fixing
+      const im = await client.conversations.open({ users: userId });
+      if (im.channel?.id) {
+        await client.chat.postMessage({
+          channel: im.channel.id,
+          text: "🐛 Let's fix that bug! Describe the issue you're experiencing."
+        });
+      }
+    });
+    
+    // Handle "Ask question to the codebase" shortcut
+    this.app.shortcut("ask_question", async ({ ack, body, client }) => {
+      await ack();
+      const userId = body.user.id;
+      logger.info(`Ask question shortcut triggered by ${userId}`);
+      
+      // Open a modal for codebase Q&A
+      const im = await client.conversations.open({ users: userId });
+      if (im.channel?.id) {
+        await client.chat.postMessage({
+          channel: im.channel.id,
+          text: "❓ What would you like to know about your codebase?"
+        });
+      }
+    });
+  }
+  
+  /**
    * Setup slash command handlers
    */
   private setupSlashCommands(): void {
     logger.info("Setting up slash command handlers...");
     
-    // Handle /peerbot command
-    this.app.command("/peerbot", async ({ ack, body, client }) => {
+    // Handle /codebase command (formerly /peerbot)
+    this.app.command("/codebase", async ({ ack, body, client }) => {
       await ack();
       
       const { text, user_id, channel_id } = body;
-      logger.info(`/peerbot command received: text='${text}', user=${user_id}, channel=${channel_id}`);
+      logger.info(`/codebase command received: text='${text}', user=${user_id}, channel=${channel_id}`);
       
       if (text === "connect" || text === "repository") {
         // Open repository selection modal
@@ -83,9 +148,9 @@ export class SlackEventHandlers {
           channel: channel_id,
           user: user_id,
           text: "*Peerbot Commands:*\n" +
-                "• `/peerbot connect` - Select a GitHub repository for this channel\n" +
+                "• `/codebase connect` - Select a GitHub repository for this channel\n" +
                 "• `/login` - Connect your GitHub account\n" +
-                "• `/peerbot help` - Show this help message"
+                "• `/codebase help` - Show this help message"
         });
       } else {
         // Unknown command
@@ -93,7 +158,7 @@ export class SlackEventHandlers {
           channel: channel_id,
           user: user_id,
           text: `Unknown command: '${text}'\n` +
-                "Try `/peerbot help` for available commands."
+                "Try `/codebase help` for available commands."
         });
       }
     });
@@ -177,6 +242,9 @@ export class SlackEventHandlers {
     
     // Setup slash command handler
     this.setupSlashCommands();
+    
+    // Setup shortcut handlers
+    this.setupShortcuts();
 
     // Handle app mentions
     logger.info("Registering app_mention event handler");
