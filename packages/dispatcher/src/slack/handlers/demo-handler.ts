@@ -67,7 +67,7 @@ export async function handleTryDemo(
             type: "mrkdwn",
             text:
               "🎮 *Demo mode activated!*\n\n" +
-              `You're now connected to the *${owner}/${repo}* repository - a landing page for Peerbot.`,
+              `You're connected to the *${owner}/${repo}* - Peerbot landing page on https://peerbot.ai.`,
           },
         },
         {
