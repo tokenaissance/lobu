@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/node";
-import { postgresIntegration } from "@sentry/node";
 
 /**
  * Initialize Sentry with configuration from environment variables
@@ -17,7 +16,7 @@ export function initSentry() {
     tracesSampleRate: 1.0, // Capture 100% of traces for better visibility
     integrations: [
       Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
-      postgresIntegration(),
+      Sentry.postgresIntegration(),
     ],
   });
 

@@ -607,11 +607,11 @@ server.tool(
               // Try next host
             }
           }
-          
+
           if (serviceHealthy) {
             break;
           }
-          
+
           // Service not ready yet
           if (healthCheckAttempts % 5 === 0) {
             console.error(
@@ -991,10 +991,7 @@ async function main() {
 export { main as startProcessManagerServer };
 
 // Only run directly if this file is executed directly
-if (
-  typeof process !== "undefined" &&
-  process.argv[1]
-) {
+if (typeof process !== "undefined" && process.argv[1]) {
   main().catch((error) => {
     console.error("[Process Manager MCP] Fatal error:", error);
     process.exit(1);

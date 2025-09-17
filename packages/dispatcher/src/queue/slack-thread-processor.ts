@@ -482,7 +482,8 @@ async function generateGitHubActionButtons(
           action: "create_pr",
           repo: repoPath,
           branch: gitBranch,
-          prompt: "Review your code, cleanup temporary files, commit changes to GIT and create a pull request",
+          prompt:
+            "Review your code, cleanup temporary files, commit changes to GIT and create a pull request",
         }),
       });
     }
