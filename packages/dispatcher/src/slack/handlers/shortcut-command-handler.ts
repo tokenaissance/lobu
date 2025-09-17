@@ -636,8 +636,9 @@ export class ShortcutCommandHandler {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to create repository: ${error}`);
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      const errorMsg = errorData.message || errorData.errors?.[0]?.message || 'Unknown error';
+      throw new Error(`Failed to create repository: ${errorMsg}`);
     }
 
     return response.json();

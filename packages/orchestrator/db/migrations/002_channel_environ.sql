@@ -9,6 +9,7 @@ CREATE TABLE channel_environ (
     name VARCHAR(255) NOT NULL,
     value TEXT NOT NULL,
     type VARCHAR(10) NOT NULL DEFAULT 'channel' CHECK (type IN ('channel', 'system')),
+    set_by_user_id VARCHAR(100),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(platform, channel_id, name)
