@@ -8,6 +8,13 @@ global:
 kubernetes:
   namespace: peerbot
 
+# Configuration
+config:
+  githubOrganization: "peerbot-community"
+  githubClientId: ""  # Add your GitHub OAuth App Client ID
+  ingressUrl: "https://dispatcher.peerbot.ai"  # Critical for OAuth redirects
+  sessionTimeoutMinutes: "5"
+
 # RBAC configuration
 rbac:
   create: true
@@ -40,19 +47,19 @@ networkPolicy:
 
 # Ingress configuration for public access
 ingress:
-  enabled: false  # Configure later if needed
+  enabled: true
   className: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: peerbot.community.example.com
+    - host: dispatcher.peerbot.ai
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: peerbot-tls
       hosts:
-        - peerbot.community.example.com
+        - dispatcher.peerbot.ai
 
 # PostgreSQL configuration
 postgresql:
