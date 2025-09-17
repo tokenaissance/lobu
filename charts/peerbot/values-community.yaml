@@ -162,7 +162,7 @@ orchestrator:
     limits:
       memory: "1Gi"
       cpu: "500m"
-  maxWorkerDeployments: 10
+  maxWorkerDeployments: 100
   idleCleanupMinutes: 60
 
 # pgboss configuration
