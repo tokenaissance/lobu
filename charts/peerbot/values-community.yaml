@@ -81,7 +81,7 @@ postgresql:
 # Slack configuration
 slack:
   port: 3000
-  socketMode: true
+  socketMode: false  # HTTP mode required for web access/ingress
   allowDirectMessages: true
   allowPrivateChannels: true
 
