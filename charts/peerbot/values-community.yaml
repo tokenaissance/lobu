@@ -182,7 +182,7 @@ resourceQuota:
     memory: "32Gi"
   counts:
     pods: "50"
-    persistentvolumeclaims: "10"
+    persistentvolumeclaims: "20"
 
 # Worker-specific quota
 workerQuota:
