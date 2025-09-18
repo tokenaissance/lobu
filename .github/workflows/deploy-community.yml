@@ -1,12 +1,12 @@
 name: Deploy to Kubernetes
 
 on:
-  workflow_run:
-    workflows: ["Build and Push to Docker Hub"]
-    types:
-      - completed
-    branches:
-      - main
+  # workflow_run:
+  #   workflows: ["Build and Push to Docker Hub"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - main
   workflow_dispatch:
     inputs:
       branch:

@@ -271,6 +271,8 @@ export class ClaudeWorker {
       logger.info("About to update Slack...");
 
       // Do a final push of any remaining changes
+      let pushFailed = false;
+      let pushErrorMsg = "";
       try {
         const status = await this.workspaceManager.getRepositoryStatus();
         if (status.hasChanges) {
@@ -279,8 +281,15 @@ export class ClaudeWorker {
             `Session complete: ${status.changedFiles.length} file(s) modified`
           );
         }
-      } catch (pushError) {
+      } catch (pushError: any) {
         logger.warn("Final push failed:", pushError);
+        pushFailed = true;
+        // Check if it's a permission error
+        if (pushError?.message?.includes("403") || pushError?.message?.includes("Permission")) {
+          pushErrorMsg = "\n\n⚠️ Note: Changes were saved locally but couldn't be pushed to GitHub (permission denied). You may need to manually push the changes.";
+        } else {
+          pushErrorMsg = "\n\n⚠️ Note: Changes were saved locally but couldn't be pushed to GitHub. Make sure you have the correct permissions on the repository, login with github and try again.";
+        }
       }
 
       if (result.success) {
@@ -289,9 +298,14 @@ export class ClaudeWorker {
 
         // IMPORTANT: Always update with a message, even if Claude didn't provide final text
         // This ensures the "thinking" message is replaced
-        const finalMessage = claudeResponse?.trim()
+        let finalMessage = claudeResponse?.trim()
           ? claudeResponse
           : "✅ Task completed successfully";
+        
+        // Append push failure warning if needed
+        if (pushFailed) {
+          finalMessage += pushErrorMsg;
+        }
 
         logger.info(`Sending final message via queue: ${finalMessage}...`);
         await this.queueIntegration.updateProgress(finalMessage);
