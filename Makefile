@@ -119,24 +119,7 @@ deploy:
 	@if [ -z "$$GITHUB_ACTIONS" ]; then \
 		set -a; source .env; set +a; \
 	fi; \
-	TARGET_PATH=""; \
-	for arg in $(MAKECMDGOALS); do \
-		case $$arg in \
-			--target=*) TARGET_PATH=$${arg#--target=} ;; \
-		esac; \
-	done; \
-	if [ -n "$$TARGET_PATH" ]; then \
-		if [ -f "$$TARGET_PATH" ]; then \
-			VALUES_FILE="$$TARGET_PATH"; \
-		elif [ -f "charts/peerbot/values-$$TARGET_PATH.yaml" ]; then \
-			VALUES_FILE="charts/peerbot/values-$$TARGET_PATH.yaml"; \
-		fi; \
-	elif [ -f "charts/peerbot/values-local.yaml" ]; then \
-		VALUES_FILE="charts/peerbot/values-local.yaml"; \
-	else \
-		VALUES_FILE="charts/peerbot/values-local.yaml"; \
-	fi; \
-	echo "📋 Using values file: $$VALUES_FILE"; \
+	echo "📋 Final values file: $$VALUES_FILE"; \
 	# Determine image repository and tag based on environment
 	if [ -n "$$GITHUB_ACTIONS" ]; then \
 		IMAGE_REPO="$${DOCKER_NAMESPACE:-peerbot}"; \
