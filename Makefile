@@ -97,30 +97,27 @@ deploy:
 		cp "charts/peerbot/values.yaml" "$$VALUES_FILE"; \
 		./bin/sync-env-to-values.sh local; \
 	fi; \
-	echo "🎯 Deploying using $$VALUES_FILE"
-	@echo "🚀 Building and deploying to K8s..."
-	@# Only build images if not in CI (CI uses pre-built images from Docker Hub)
-	@if [ -z "$$GITHUB_ACTIONS" ]; then \
+	echo "🎯 Deploying using $$VALUES_FILE"; \
+	echo "🚀 Building and deploying to K8s..."; \
+	if [ -z "$$GITHUB_ACTIONS" ]; then \
 		echo "📦 Building Docker images..."; \
 		docker build -f Dockerfile.dispatcher -t peerbot-dispatcher:latest .; \
 		docker build -f Dockerfile.orchestrator -t peerbot-orchestrator:latest .; \
 		docker build -f Dockerfile.worker -t peerbot-worker:latest .; \
 	else \
 		echo "📦 Using pre-built Docker images from registry..."; \
-	fi
-	@if command -v kind >/dev/null 2>&1 && kind get clusters 2>/dev/null | grep -q kind; then \
+	fi; \
+	if command -v kind >/dev/null 2>&1 && kind get clusters 2>/dev/null | grep -q kind; then \
 		echo "📦 Loading images into kind..."; \
 		kind load docker-image peerbot-dispatcher:latest; \
 		kind load docker-image peerbot-orchestrator:latest; \
 		kind load docker-image peerbot-worker:latest; \
-	fi
-	@echo "🔧 Deploying with Helm..."
-	@# Load environment variables - from .env in local, from secrets in CI
-	@if [ -z "$$GITHUB_ACTIONS" ]; then \
+	fi; \
+	echo "🔧 Deploying with Helm..."; \
+	if [ -z "$$GITHUB_ACTIONS" ]; then \
 		set -a; source .env; set +a; \
 	fi; \
 	echo "📋 Final values file: $$VALUES_FILE"; \
-	# Determine image repository and tag based on environment
 	if [ -n "$$GITHUB_ACTIONS" ]; then \
 		IMAGE_REPO="$${DOCKER_NAMESPACE:-peerbot}"; \
 		IMAGE_TAG="$${IMAGE_TAG:-latest}"; \
