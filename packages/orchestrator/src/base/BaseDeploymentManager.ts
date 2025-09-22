@@ -6,6 +6,7 @@ import {
   OrchestratorError,
 } from "../types";
 import type { BaseSecretManager } from "./BaseSecretManager";
+import { decrypt } from "../utils/encryption";
 
 export interface DeploymentInfo {
   deploymentName: string;
@@ -55,7 +56,10 @@ export abstract class BaseDeploymentManager {
 
       const envVars: Record<string, string> = {};
       for (const row of result.rows) {
-        envVars[row.name] = row.value;
+        // All environment variables MUST be encrypted in the database
+        if (row.value) {
+          envVars[row.name] = decrypt(row.value);
+        }
       }
 
       return envVars;

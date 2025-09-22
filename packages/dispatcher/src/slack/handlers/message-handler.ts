@@ -1,5 +1,6 @@
 import { SessionUtils } from "@peerbot/shared";
 import logger from "../../logger";
+import { decrypt } from "../../utils/encryption";
 import type {
   QueueProducer,
   ThreadMessagePayload,
@@ -59,7 +60,10 @@ export class MessageHandler {
         );
 
         for (const row of channelResult.rows) {
-          envVariables[row.name] = row.value;
+          // All environment variables MUST be encrypted in the database
+          if (row.value) {
+            envVariables[row.name] = decrypt(row.value);
+          }
         }
 
         if (channelResult.rows.length > 0) {
@@ -80,8 +84,9 @@ export class MessageHandler {
 
       for (const row of userResult.rows) {
         // Only set if not already set by channel_environ
-        if (!(row.name in envVariables)) {
-          envVariables[row.name] = row.value;
+        if (!(row.name in envVariables) && row.value) {
+          // All environment variables MUST be encrypted in the database
+          envVariables[row.name] = decrypt(row.value);
         }
       }
 

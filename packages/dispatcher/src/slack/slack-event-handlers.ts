@@ -231,11 +231,15 @@ export class SlackEventHandlers {
 
     // Setup modular event handlers for files, messages, and users
     setupMessageHandlers(this.app);
-    setupUserHandlers(this.app);
+    setupUserHandlers(this.app, (userId: string, channelId: string, client: any) => 
+      this.shortcutCommandHandler.sendContextAwareWelcome(userId, channelId, client)
+    );
     setupFileHandlers(this.app);
 
     // Setup team join event handler for welcome messages
-    setupTeamJoinHandler(this.app, this.getBotId());
+    setupTeamJoinHandler(this.app, this.getBotId(), (userId: string, channelId: string, client: any, threadTs?: string) =>
+      this.shortcutCommandHandler.sendContextAwareWelcome(userId, channelId, client, threadTs)
+    );
 
     // Setup shortcuts, slash commands, and view submissions
     this.shortcutCommandHandler.setupHandlers();

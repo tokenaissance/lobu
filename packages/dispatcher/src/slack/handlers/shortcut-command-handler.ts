@@ -3,6 +3,7 @@ import logger from "../../logger";
 import { getDbPool } from "../../db";
 import type { DispatcherConfig } from "../../types";
 import { generateGitHubAuthUrl } from "../../utils/github-utils";
+import { encrypt } from "../../utils/encryption";
 import type { MessageHandler } from "./message-handler";
 import type { ActionHandler } from "./action-handler";
 import { openRepositoryModal } from "./repository-modal-utils";
@@ -135,7 +136,7 @@ export class ShortcutCommandHandler {
   /**
    * Send a context-aware welcome message based on user's login state
    */
-  private async sendContextAwareWelcome(
+  public async sendContextAwareWelcome(
     userId: string,
     channelId: string,
     client: any,
@@ -272,8 +273,7 @@ export class ShortcutCommandHandler {
     } else {
       // Logged in with repository selected - show current setup
       const repoUrl = userEnv.GITHUB_REPOSITORY as string;
-      const repoName =
-        repoUrl.split("/").pop()?.replace(".git", "") || "repository";
+      const repoName = repoUrl.split("/").pop()?.replace(".git", "");
 
       blocks.push(
         {
@@ -522,7 +522,8 @@ export class ShortcutCommandHandler {
         const isAdmin = await this.isUserChannelAdmin(userId, channelId);
 
         if (isAdmin) {
-          // Save to channel_environ
+          // Save to channel_environ (encrypted)
+          const encryptedUrl = encrypt(repositoryUrl);
           await dbPool.query(
             `INSERT INTO channel_environ (channel_id, platform, name, value, set_by_user_id, created_at, updated_at)
              VALUES ($1, 'slack', 'GITHUB_REPOSITORY', $2, $3, NOW(), NOW())
@@ -530,7 +531,7 @@ export class ShortcutCommandHandler {
              DO UPDATE SET value = EXCLUDED.value, 
                           set_by_user_id = EXCLUDED.set_by_user_id,
                           updated_at = NOW()`,
-            [channelId, repositoryUrl, userId.toUpperCase()]
+            [channelId, encryptedUrl, userId.toUpperCase()]
           );
 
           logger.info(
@@ -557,12 +558,13 @@ export class ShortcutCommandHandler {
       const userDbId = userResult.rows[0]?.id;
 
       if (userDbId) {
+        const encryptedUrl = encrypt(repositoryUrl);
         await dbPool.query(
           `INSERT INTO user_environ (user_id, name, value, type)
            VALUES ($1, 'GITHUB_REPOSITORY', $2, 'user')
            ON CONFLICT (user_id, name)
            DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-          [userDbId, repositoryUrl]
+          [userDbId, encryptedUrl]
         );
 
         logger.info(`Saved user repository for ${userId}: ${repositoryUrl}`);
@@ -604,14 +606,15 @@ export class ShortcutCommandHandler {
       const userDbId = userResult.rows[0]?.id;
 
       if (userDbId) {
-        // Save each environment variable
+        // Save each environment variable (encrypted)
         for (const [key, value] of Object.entries(envVars)) {
+          const encryptedValue = encrypt(value);
           await dbPool.query(
             `INSERT INTO user_environ (user_id, name, value, type)
              VALUES ($1, $2, $3, 'user')
              ON CONFLICT (user_id, name)
              DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-            [userDbId, key, value]
+            [userDbId, key, encryptedValue]
           );
         }
 

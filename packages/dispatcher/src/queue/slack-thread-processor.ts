@@ -471,7 +471,7 @@ async function generateGitHubActionButtons(
       // PR exists - show view button with green checkmark
       buttons.push({
         type: "button",
-        text: { type: "plain_text", text: "✅ View Pull Request" },
+        text: { type: "plain_text", text: "🔀 View Pull Request" },
         url: pullRequestUrl,
         action_id: generateDeterministicActionId(
           `view_pr_${repoPath}_${gitBranch}`,
@@ -509,7 +509,7 @@ async function generateGitHubActionButtons(
       // No PR but has changes OR on a session branch - show create PR button
       buttons.push({
         type: "button",
-        text: { type: "plain_text", text: "🔀 Pull Request" },
+        text: { type: "plain_text", text: "🔀 Create Pull Request" },
         action_id: generateDeterministicActionId(
           `pr_${repoPath}_${gitBranch}`,
           "github_pr"

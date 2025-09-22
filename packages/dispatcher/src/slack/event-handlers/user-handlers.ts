@@ -45,18 +45,35 @@ async function handlePresenceChange({ event }: EventHandlerContext) {
 /**
  * Handle group/channel joins
  */
-async function handleMemberJoinedChannel({ event }: EventHandlerContext) {
-  // For now, just log the event
-  // TODO: Implement channel-specific welcome messages
-  // Should:
-  // 1. Send channel-specific welcome message mentioning bot capabilities
-  // 2. Provide channel-specific usage guidelines and examples
-  // 3. Set up channel-specific user preferences if needed
-  // 4. Track channel adoption and user engagement metrics
-  // 5. Consider different welcome messages for public vs private channels
-  // 6. Integration with channel-specific repository configurations
-  // 7. Respect channel settings and permissions for bot interactions
+async function handleMemberJoinedChannel({ event, client }: EventHandlerContext) {
+  // Log the event for debugging
   logger.info(`Member joined channel: ${JSON.stringify(event, null, 2)}`);
+  
+  try {
+    // Skip if it's a bot joining (bot user IDs typically start with 'B' or are app users)
+    // The event.user is the user who joined
+    if (event.user.startsWith('B')) {
+      logger.info(`Skipping welcome for bot user: ${event.user}`);
+      return;
+    }
+    
+    // Also check if it's the bot itself joining
+    const authResult = await client.auth.test();
+    if (event.user === authResult.user_id) {
+      logger.info('Bot joined channel, skipping welcome message');
+      return;
+    }
+    
+    // Send context-aware ephemeral welcome message using the callback if available
+    if (memberJoinedWelcomeCallback) {
+      await memberJoinedWelcomeCallback(event.user, event.channel, client);
+      logger.info(`Sent ephemeral welcome message to user ${event.user} in channel ${event.channel}`);
+    } else {
+      logger.info(`No welcome callback configured for user ${event.user} in channel ${event.channel}`);
+    }
+  } catch (error) {
+    logger.error('Error handling member joined channel:', error);
+  }
 }
 
 /**
@@ -82,7 +99,12 @@ async function handleInviteRequested({ event }: EventHandlerContext) {
 /**
  * Setup user and team-related event handlers
  */
-export function setupUserHandlers(app: App) {
+export function setupUserHandlers(app: App, sendWelcomeCallback?: any) {
+  // Store the callback for use in handlers
+  if (sendWelcomeCallback) {
+    memberJoinedWelcomeCallback = sendWelcomeCallback;
+  }
+  
   setupEventHandlers(app, {
     team_join: handleTeamJoin,
     presence_change: handlePresenceChange,
@@ -90,3 +112,6 @@ export function setupUserHandlers(app: App) {
     invite_requested: handleInviteRequested,
   });
 }
+
+// Store the welcome callback
+let memberJoinedWelcomeCallback: any = null;
