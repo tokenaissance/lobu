@@ -1,12 +1,6 @@
-name: Deploy to Kubernetes (Legacy - Use v2)
+name: Deploy to Kubernetes
 
 on:
-  # workflow_run:
-  #   workflows: ["Build and Push to Docker Hub"]
-  #   types:
-  #     - completed
-  #   branches:
-  #     - main
   workflow_dispatch:
     inputs:
       branch:
@@ -19,13 +13,16 @@ on:
         required: false
         default: 'latest'
         type: string
-      skip_docker_check:
-        description: 'Skip Docker build check (use existing images)'
-        required: false
-        default: false
-        type: boolean
   repository_dispatch:
     types: [deploy-community]
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/**'
+      - 'charts/**'
+      - 'Dockerfile.*'
+      - '.github/workflows/deploy-community.yml'
 
 env:
   NAMESPACE: peerbot
@@ -37,30 +34,28 @@ jobs:
     name: Deploy to OVH Kubernetes
     runs-on: ubuntu-latest
     environment: community
-    # Only run if the docker build workflow succeeded, manually triggered with skip_docker_check, or repository dispatch
-    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') || (github.event_name == 'workflow_dispatch' && github.event.inputs.skip_docker_check == 'true') || github.event_name == 'repository_dispatch' }}
     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || github.event.workflow_run.head_branch || github.event.client_payload.ref || 'main' }}
+          ref: ${{ github.event.inputs.branch || github.event.client_payload.ref || github.ref }}
       
       - name: Determine image tag
         id: get-tag
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            # Use the commit SHA from the workflow that triggered us
-            TAG="${{ github.event.workflow_run.head_sha }}"
-          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
             # Use manual input tag
             TAG="${{ github.event.inputs.tag }}"
           elif [[ -n "${{ github.event.client_payload.tag }}" ]]; then
             # Use repository dispatch tag
             TAG="${{ github.event.client_payload.tag }}"
-          else
-            # Default to the current commit SHA
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            # For push events, use commit SHA
             TAG="${{ github.sha }}"
+          else
+            # Default to latest
+            TAG="latest"
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Using Docker image tag: ${TAG}"
@@ -79,96 +74,30 @@ jobs:
         run: |
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
-          
-      - name: Clean up old Helm releases
+      
+      - name: Deploy with make
+        env:
+          # Mark as GitHub Actions environment
+          GITHUB_ACTIONS: "true"
+          # Kubernetes configuration
+          NAMESPACE: ${{ env.NAMESPACE }}
+          DEPLOYMENT_NAME: ${{ env.DEPLOYMENT_NAME }}
+          # Docker image configuration
+          DOCKER_NAMESPACE: ${{ env.DOCKER_NAMESPACE }}
+          IMAGE_TAG: ${{ steps.get-tag.outputs.tag }}
+          # Application secrets
+          GITHUB_CLIENT_ID: ${{ secrets.GH_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN: ${{ secrets.SLACK_APP_TOKEN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_PEERBOT }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          POSTGRESQL_PASSWORD: ${{ secrets.POSTGRESQL_PASSWORD }}
         run: |
-          # Check for stuck deployments and rollback if needed
-          echo "Checking for stuck Helm operations..."
-          PENDING=$(helm list -n $NAMESPACE --pending -q)
-          if [ -n "$PENDING" ]; then
-            echo "Found pending release: $PENDING - attempting rollback"
-            helm rollback $PENDING -n $NAMESPACE || echo "Rollback failed, trying to delete"
-            helm delete $PENDING -n $NAMESPACE --no-hooks || echo "Delete also failed"
-          fi
-          
-          # List all Helm releases in the namespace
-          echo "Current Helm releases:"
-          helm list -n $NAMESPACE || true
-          
-          # Keep only the last 3 releases
-          RELEASES=$(helm list -n $NAMESPACE -q | head -n -3)
-          if [ -n "$RELEASES" ]; then
-            echo "Cleaning up old releases: $RELEASES"
-            for release in $RELEASES; do
-              helm uninstall $release -n $NAMESPACE || echo "Failed to uninstall $release"
-            done
-          fi
-          
-          # Also clean up orphaned secrets if needed  
-          echo "Cleaning up orphaned Helm secrets..."
-          # Keep only the last 3 Helm release secrets to stay under quota
-          kubectl get secrets -n $NAMESPACE -o name | grep "sh.helm.release" | head -n -3 | xargs -r kubectl delete -n $NAMESPACE || true
-          
-      - name: Deploy with Helm
-        run: |
-          # Check if PostgreSQL StatefulSet exists and needs to be recreated
-          if kubectl get statefulset $DEPLOYMENT_NAME-postgresql -n $NAMESPACE 2>/dev/null; then
-            echo "PostgreSQL StatefulSet exists, checking if it needs recreation..."
-            # Try a dry-run first to see if there would be issues
-            if ! helm upgrade $DEPLOYMENT_NAME charts/peerbot \
-              --namespace $NAMESPACE \
-              --dry-run \
-              --values charts/peerbot/values-community.yaml \
-              --set dispatcher.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-dispatcher \
-              --set dispatcher.image.tag=${{ steps.get-tag.outputs.tag }} \
-              --set worker.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-worker \
-              --set worker.image.tag=${{ steps.get-tag.outputs.tag }} \
-              --set orchestrator.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-orchestrator \
-              --set orchestrator.image.tag=${{ steps.get-tag.outputs.tag }} \
-              --set config.githubClientId="${{ secrets.GH_CLIENT_ID }}" \
-              --set secrets.githubClientSecret="${{ secrets.GH_CLIENT_SECRET }}" \
-              --set secrets.encryptionKey="${{ secrets.ENCRYPTION_KEY }}" \
-              --set secrets.slackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
-              --set secrets.slackAppToken="${{ secrets.SLACK_APP_TOKEN }}" \
-              --set secrets.slackSigningSecret="${{ secrets.SLACK_SIGNING_SECRET }}" \
-              --set secrets.githubToken="${{ secrets.GH_TOKEN_PEERBOT }}" \
-              --set secrets.claudeCodeOAuthToken="${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" \
-              --set secrets.postgresqlPassword="${{ secrets.POSTGRESQL_PASSWORD }}" 2>&1 | grep -q "Forbidden: updates to statefulset spec"; then
-              echo "StatefulSet update would fail due to immutable fields. Deleting and recreating..."
-              kubectl delete statefulset $DEPLOYMENT_NAME-postgresql -n $NAMESPACE --cascade=orphan || true
-            fi
-          fi
-          
-          # Deploy using Docker Hub images
-          helm upgrade --install $DEPLOYMENT_NAME charts/peerbot \
-            --namespace $NAMESPACE \
-            --create-namespace \
-            --values charts/peerbot/values-community.yaml \
-            --set dispatcher.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-dispatcher \
-            --set dispatcher.image.tag=${{ steps.get-tag.outputs.tag }} \
-            --set worker.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-worker \
-            --set worker.image.tag=${{ steps.get-tag.outputs.tag }} \
-            --set orchestrator.image.repository=${{ env.DOCKER_NAMESPACE }}/peerbot-orchestrator \
-            --set orchestrator.image.tag=${{ steps.get-tag.outputs.tag }} \
-            --set config.githubClientId="${{ secrets.GH_CLIENT_ID }}" \
-            --set secrets.githubClientSecret="${{ secrets.GH_CLIENT_SECRET }}" \
-            --set secrets.encryptionKey="${{ secrets.ENCRYPTION_KEY }}" \
-            --set secrets.slackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
-            --set secrets.slackAppToken="${{ secrets.SLACK_APP_TOKEN }}" \
-            --set secrets.slackSigningSecret="${{ secrets.SLACK_SIGNING_SECRET }}" \
-            --set secrets.githubToken="${{ secrets.GH_TOKEN_PEERBOT }}" \
-            --set secrets.claudeCodeOAuthToken="${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" \
-            --set secrets.postgresqlPassword="${{ secrets.POSTGRESQL_PASSWORD }}" \
-            --wait \
-            --timeout 10m
-            
-      - name: Run Database Migrations
-        run: |
-          # Wait for orchestrator to be ready
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=peerbot,app.kubernetes.io/component=orchestrator -n $NAMESPACE --timeout=300s
-          
-          # Run migrations
-          kubectl exec -n $NAMESPACE deployment/peerbot-orchestrator -- dbmate up || echo "Migrations may have already been applied"
+          echo "🚀 Deploying with make deploy..."
+          make deploy --target=community
             
       - name: Verify Deployment
         run: |
@@ -178,8 +107,54 @@ jobs:
           echo "📊 Services:"
           kubectl get svc -n $NAMESPACE
           echo ""
+          
+          # Wait for all pods to be ready
+          echo "⏳ Waiting for all pods to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=peerbot -n $NAMESPACE --timeout=300s || true
+          
+          echo ""
           echo "📝 Recent Logs from Dispatcher:"
-          kubectl logs -n $NAMESPACE deployment/peerbot-dispatcher --tail=10 || true
+          kubectl logs -n $NAMESPACE deployment/$DEPLOYMENT_NAME-dispatcher --tail=20 || true
           echo ""
           echo "📝 Recent Logs from Orchestrator:"
-          kubectl logs -n $NAMESPACE deployment/peerbot-orchestrator --tail=10 || true
+          kubectl logs -n $NAMESPACE deployment/$DEPLOYMENT_NAME-orchestrator --tail=20 || true
+          
+      - name: Slack Notification (Success)
+        if: success() && github.event_name == 'push'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "✅ Peerbot deployed successfully",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Peerbot Deployment Successful*\n• *Version:* `${{ steps.get-tag.outputs.tag }}`\n• *Branch:* `${{ github.ref_name }}`\n• *Deployed by:* ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          
+      - name: Slack Notification (Failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "❌ Peerbot deployment failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Peerbot Deployment Failed*\n• *Version:* `${{ steps.get-tag.outputs.tag }}`\n• *Branch:* `${{ github.ref_name }}`\n• *Failed by:* ${{ github.actor }}\n• <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
