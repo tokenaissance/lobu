@@ -95,9 +95,34 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN_PEERBOT }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           POSTGRESQL_PASSWORD: ${{ secrets.POSTGRESQL_PASSWORD }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          echo "🚀 Deploying with make deploy..."
-          TARGET=community make deploy
+          echo "🚀 Deploying with Helm..."
+          VALUES_FILE="charts/peerbot/values-community.yaml"
+          IMAGE_REPO="${DOCKER_NAMESPACE:-peerbot}"
+          IMAGE_TAG="${{ steps.get-tag.outputs.tag }}"
+          
+          helm upgrade --install "${DEPLOYMENT_NAME:-peerbot}" charts/peerbot/ \
+            --create-namespace \
+            --namespace "${NAMESPACE:-peerbot}" \
+            -f "$VALUES_FILE" \
+            --set dispatcher.image.repository="$IMAGE_REPO-dispatcher" \
+            --set dispatcher.image.tag="$IMAGE_TAG" \
+            --set orchestrator.image.repository="$IMAGE_REPO-orchestrator" \
+            --set orchestrator.image.tag="$IMAGE_TAG" \
+            --set worker.image.repository="$IMAGE_REPO-worker" \
+            --set worker.image.tag="$IMAGE_TAG" \
+            --set config.githubClientId="$GITHUB_CLIENT_ID" \
+            --set secrets.githubClientSecret="$GITHUB_CLIENT_SECRET" \
+            --set secrets.encryptionKey="$ENCRYPTION_KEY" \
+            --set secrets.slackBotToken="$SLACK_BOT_TOKEN" \
+            --set secrets.slackSigningSecret="$SLACK_SIGNING_SECRET" \
+            --set secrets.slackAppToken="$SLACK_APP_TOKEN" \
+            --set secrets.githubToken="$GITHUB_TOKEN" \
+            --set secrets.claudeCodeOAuthToken="$CLAUDE_CODE_OAUTH_TOKEN" \
+            --set secrets.postgresqlPassword="$POSTGRESQL_PASSWORD" \
+            --wait \
+            --timeout 10m
             
       - name: Verify Deployment
         run: |
@@ -118,6 +143,4 @@ jobs:
           echo ""
           echo "📝 Recent Logs from Orchestrator:"
           kubectl logs -n $NAMESPACE deployment/$DEPLOYMENT_NAME-orchestrator --tail=20 || true
-          
-      # Slack notifications removed - SLACK_WEBHOOK_URL not configured
-      # To enable Slack notifications, add SLACK_WEBHOOK_URL to repository secrets
+      
