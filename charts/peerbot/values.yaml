@@ -211,3 +211,11 @@ orchestrator:
 # pgboss configuration override
 pgboss:
   expireInHours: 1 # 1 hour minimum required by pgboss
+
+# Spegel P2P image distribution
+spegel:
+  enabled: true
+  image:
+    tag: "v0.0.25"
+  # Spegel automatically discovers other nodes via Kubernetes API
+  # No additional configuration needed for basic P2P functionality
