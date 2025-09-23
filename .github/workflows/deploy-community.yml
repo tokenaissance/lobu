@@ -75,20 +75,33 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
       
-      - name: Check and Fix Stuck Helm Release
+      - name: Check and Fix Helm Release State
         run: |
-          echo "🔍 Checking for stuck Helm releases..."
-          # Check if there's a stuck release
-          if helm list -n $NAMESPACE --pending | grep -q $DEPLOYMENT_NAME; then
-            echo "⚠️ Found stuck Helm release, attempting to rollback..."
-            helm rollback $DEPLOYMENT_NAME -n $NAMESPACE --wait --timeout=60s || true
-          fi
+          echo "🔍 Checking Helm release state..."
           
-          # Check again and delete if still stuck
-          if helm list -n $NAMESPACE --pending | grep -q $DEPLOYMENT_NAME; then
-            echo "⚠️ Rollback failed, deleting stuck release..."
-            helm delete $DEPLOYMENT_NAME -n $NAMESPACE --no-hooks || true
-            sleep 5
+          # Check if release exists
+          if helm list -n $NAMESPACE | grep -q $DEPLOYMENT_NAME; then
+            RELEASE_STATUS=$(helm list -n $NAMESPACE -o json | jq -r ".[] | select(.name==\"$DEPLOYMENT_NAME\") | .status")
+            echo "📊 Current release status: $RELEASE_STATUS"
+            
+            # Handle different states
+            case "$RELEASE_STATUS" in
+              "pending-install"|"pending-upgrade"|"pending-rollback")
+                echo "⚠️ Found stuck Helm release, attempting to rollback..."
+                helm rollback $DEPLOYMENT_NAME -n $NAMESPACE --wait --timeout=60s || true
+                ;;
+              "failed")
+                echo "⚠️ Found failed release, will upgrade..."
+                ;;
+              "deployed")
+                echo "✅ Release is deployed, will upgrade..."
+                ;;
+              *)
+                echo "⚠️ Unknown status: $RELEASE_STATUS"
+                ;;
+            esac
+          else
+            echo "📝 No existing release found, will install fresh..."
           fi
           
           echo "✅ Helm release check complete"
