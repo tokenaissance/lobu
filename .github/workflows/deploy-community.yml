@@ -75,10 +75,6 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
       
-      - name: Login to GitHub Container Registry for OCI charts
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-
       - name: Check and Fix Stuck Helm Release
         run: |
           echo "🔍 Checking for stuck Helm releases..."
@@ -118,6 +114,8 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           echo "🚀 Deploying with make deploy..."
+          # Login to GitHub Container Registry for OCI charts
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           TARGET=community make deploy
             
       - name: Verify Deployment

@@ -30,12 +30,11 @@ jobs:
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm repo update
 
-      - name: Login to GitHub Container Registry for OCI charts
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-
       - name: Package Helm Chart
         run: |
+          # Login to GitHub Container Registry for OCI charts
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+          
           # Update dependencies
           helm dependency update charts/peerbot
           
