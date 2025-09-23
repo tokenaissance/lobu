@@ -116,20 +116,7 @@ jobs:
           echo "🚀 Deploying with make deploy..."
           # Login to GitHub Container Registry for OCI charts
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-          
-          # Try to deploy, if it fails due to StatefulSet issues, delete and retry
-          if ! TARGET=community make deploy; then
-            echo "⚠️ Deployment failed, checking for StatefulSet issues..."
-            if kubectl get statefulset -n $NAMESPACE peerbot-postgresql &>/dev/null; then
-              echo "🔧 Found PostgreSQL StatefulSet, deleting and retrying..."
-              kubectl delete statefulset -n $NAMESPACE peerbot-postgresql --cascade=orphan
-              echo "🔄 Retrying deployment..."
-              TARGET=community make deploy
-            else
-              echo "❌ Deployment failed for other reasons"
-              exit 1
-            fi
-          fi
+          TARGET=community make deploy
             
       - name: Verify Deployment
         run: |

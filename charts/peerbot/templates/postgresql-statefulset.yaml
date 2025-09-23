@@ -74,7 +74,9 @@ spec:
       name: postgresql-data
     spec:
       accessModes: [ "ReadWriteOnce" ]
-      storageClassName: {{ .Values.postgresql.storageClass }}
+      {{- if .Values.postgresql.storage.storageClass }}
+      storageClassName: {{ .Values.postgresql.storage.storageClass }}
+      {{- end }}
       resources:
         requests:
           storage: {{ .Values.postgresql.storage.size }}
