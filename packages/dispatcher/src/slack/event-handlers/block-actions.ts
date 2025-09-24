@@ -70,8 +70,8 @@ export async function handleExecutableCodeBlock(
     const context = {
       channelId,
       userId,
-      userDisplayName: "Unknown User", // TODO: Get from user info
-      teamId: "", // TODO: Get from body
+      userDisplayName: (body as any).user?.name || "Unknown User",
+      teamId: (body as any).team?.id || "",
       messageTs: inputMessage.ts as string,
       threadTs: actualThreadTs,
       text: formattedInput,

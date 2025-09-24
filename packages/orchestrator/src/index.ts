@@ -8,6 +8,7 @@ initSentry();
 import { join } from "node:path";
 import { config as dotenvConfig } from "dotenv";
 import type { BaseDeploymentManager } from "./base/BaseDeploymentManager";
+import logger from "../../dispatcher/src/logger";
 import { DatabasePool } from "./db-connection-pool";
 import { DockerDeploymentManager } from "./docker/DockerDeploymentManager";
 import { K8sDeploymentManager } from "./k8s/K8sDeploymentManager";
@@ -111,9 +112,8 @@ class PeerbotOrchestrator {
    */
   private async runDbmateMigrations(): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log("📦 Running database migrations...");
+      logger.info("📦 Running database migrations...");
 
-      // TODO: Emre: I don't want to worry about migrations until we release the first version.
       const { spawn } = require("node:child_process");
       const dbmateProcess = spawn("dbmate", ["up"], {
         cwd: process.cwd(),
@@ -129,30 +129,30 @@ class PeerbotOrchestrator {
 
       dbmateProcess.stdout?.on("data", (data: any) => {
         stdout += data.toString();
-        console.log(`[dbmate up] ${data.toString().trim()}`);
+        logger.info(`[dbmate up] ${data.toString().trim()}`);
       });
 
       dbmateProcess.stderr?.on("data", (data: any) => {
         stderr += data.toString();
-        console.error(`[dbmate up] ${data.toString().trim()}`);
+        logger.error(`[dbmate up] ${data.toString().trim()}`);
       });
 
       dbmateProcess.on("close", (code: any) => {
         if (code === 0) {
-          console.log(
+          logger.info(
             "✅ Database created and migrations applied successfully"
           );
           resolve();
         } else {
-          console.error(`❌ Database migrations failed with exit code ${code}`);
-          console.error("stdout:", stdout);
-          console.error("stderr:", stderr);
+          logger.error(`❌ Database migrations failed with exit code ${code}`);
+          logger.error("stdout:", stdout);
+          logger.error("stderr:", stderr);
           reject(new Error(`dbmate failed with exit code ${code}`));
         }
       });
 
       dbmateProcess.on("error", (error: any) => {
-        console.error("❌ Failed to start dbmate:", error);
+        logger.error("❌ Failed to start dbmate:", error);
         reject(error);
       });
     });
@@ -177,7 +177,7 @@ class PeerbotOrchestrator {
 
       this.isRunning = true;
     } catch (error) {
-      console.error("❌ Failed to start orchestrator:", error);
+      logger.error("❌ Failed to start orchestrator:", error);
       process.exit(1);
     }
   }
@@ -197,7 +197,7 @@ class PeerbotOrchestrator {
       await this.queueConsumer.stop();
       await this.dbPool.close();
     } catch (error) {
-      console.error("❌ Error during shutdown:", error);
+      logger.error("❌ Error during shutdown:", error);
     }
   }
 
@@ -297,7 +297,7 @@ class PeerbotOrchestrator {
                 res.statusCode = 200;
                 res.end(JSON.stringify(result));
               } catch (error) {
-                console.error(
+                logger.error(
                   `Failed to scale deployment ${deploymentName}:`,
                   error
                 );
@@ -343,7 +343,7 @@ class PeerbotOrchestrator {
     // This prevents issues with immediate Docker API calls on startup
     setTimeout(() => {
       this.deploymentManager.reconcileDeployments().catch((error) => {
-        console.error("❌ Initial deployment reconciliation failed:", error);
+        logger.error("❌ Initial deployment reconciliation failed:", error);
       });
     }, 5000); // 5 second delay
 
@@ -352,7 +352,7 @@ class PeerbotOrchestrator {
       try {
         await this.deploymentManager.reconcileDeployments();
       } catch (error) {
-        console.error(
+        logger.error(
           "Error during deployment reconciliation - will retry on next interval:",
           error instanceof Error ? error.message : String(error)
         );
@@ -372,12 +372,12 @@ class PeerbotOrchestrator {
 
     // Handle uncaught errors
     process.on("uncaughtException", (error) => {
-      console.error("💥 Uncaught exception:", error);
+      logger.error("💥 Uncaught exception:", error);
       cleanup();
     });
 
     process.on("unhandledRejection", (reason) => {
-      console.error("💥 Unhandled rejection:", reason);
+      logger.error("💥 Unhandled rejection:", reason);
       cleanup();
     });
   }
@@ -466,7 +466,7 @@ async function main() {
       // const _status = orchestrator.getStatus();
     });
   } catch (error) {
-    console.error("💥 Failed to start Peerbot Orchestrator:", error);
+    logger.error("💥 Failed to start Peerbot Orchestrator:", error);
     process.exit(1);
   }
 }

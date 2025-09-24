@@ -277,7 +277,7 @@ export class MessageHandler {
       const isRootMessage = !context.threadTs;
       if (isDM || isRootMessage) {
         try {
-          console.log(
+          logger.info(
             `👀 REACTION CHANGE: Adding acknowledgment reaction 'eyes' to message ${context.messageTs} in channel ${context.channelId}`
           );
           await client.reactions.add({

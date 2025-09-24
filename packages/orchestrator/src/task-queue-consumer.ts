@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/node";
 import PgBoss from "pg-boss";
 import type { BaseDeploymentManager } from "./base/BaseDeploymentManager";
 import { ErrorCode, type OrchestratorConfig, OrchestratorError } from "./types";
+import logger from "../../dispatcher/src/logger";
 
 export class QueueConsumer {
   private pgBoss: PgBoss;
@@ -41,13 +42,13 @@ export class QueueConsumer {
           const client = await pool.connect();
           try {
             await client.query("SELECT setup_pgboss_rls_on_demand()");
-            console.log("✅ pgboss RLS policies configured");
+            logger.info("✅ pgboss RLS policies configured");
           } finally {
             client.release();
           }
         }
       } catch (error) {
-        console.warn(
+        logger.warn(
           "⚠️  Failed to setup pgboss RLS:",
           error instanceof Error ? error.message : String(error)
         );
@@ -55,7 +56,7 @@ export class QueueConsumer {
 
       // Create the messages queue if it doesn't exist
       await this.pgBoss.createQueue("messages");
-      console.log("✅ Created/verified messages queue");
+      logger.info("✅ Created/verified messages queue");
 
       // Subscribe to the single messages queue for all messages
       await this.pgBoss.work("messages", async (job: any) => {
@@ -68,14 +69,14 @@ export class QueueConsumer {
             },
           },
           async () => {
-            console.log("=== PG-BOSS JOB RECEIVED ===");
-            console.log("Raw job:", JSON.stringify(job, null, 2));
+            logger.info("=== PG-BOSS JOB RECEIVED ===");
+            logger.info("Raw job:", JSON.stringify(job, null, 2));
             return this.handleMessage(job);
           }
         );
       });
 
-      console.log("✅ Queue consumer started - listening for messages");
+      logger.info("✅ Queue consumer started - listening for messages");
 
       // Start background cleanup task
       this.startCleanupTask();
@@ -98,17 +99,17 @@ export class QueueConsumer {
    * Handle all messages - creates deployment for new threads or routes to existing thread queues
    */
   private async handleMessage(job: any): Promise<void> {
-    console.log("=== ORCHESTRATOR RECEIVED JOB ===");
+    logger.info("=== ORCHESTRATOR RECEIVED JOB ===");
 
     // pgBoss passes job as array sometimes, get the first item
     const actualJob = Array.isArray(job) ? job[0] : job;
     const data = actualJob?.data || actualJob;
     const jobId = actualJob?.id || "unknown";
 
-    console.log("Processing job:", jobId);
-    console.log("Job data:", JSON.stringify(data, null, 2));
+    logger.info("Processing job:", jobId);
+    logger.info("Job data:", JSON.stringify(data, null, 2));
 
-    console.log(
+    logger.info(
       `Processing message job ${jobId} for user ${data?.userId}, thread ${data?.threadId}`
     );
 
@@ -125,7 +126,7 @@ export class QueueConsumer {
       const shortUserId = data.userId.toLowerCase().slice(0, 8); // First 8 chars of user ID
       const deploymentName = `peerbot-worker-${shortUserId}-${shortThreadId}`;
 
-      console.log(
+      logger.info(
         `Thread routing - effectiveThreadId: ${effectiveThreadId}, deploymentName: ${deploymentName}`
       );
 
@@ -145,7 +146,7 @@ export class QueueConsumer {
         }
       );
 
-      console.log(`✅ Enqueued message to thread queue for ${deploymentName}`);
+      logger.info(`✅ Enqueued message to thread queue for ${deploymentName}`);
 
       // 2) Ensure worker exists in the background (don’t block queue send)
       (async () => {
@@ -158,7 +159,7 @@ export class QueueConsumer {
           );
 
           if (isNewThread) {
-            console.log(
+            logger.info(
               `New thread ${data.threadId} - creating deployment ${deploymentName}`
             );
             await this.deploymentManager.createWorkerDeployment(
@@ -166,16 +167,16 @@ export class QueueConsumer {
               data.threadId,
               data
             );
-            console.log(`✅ Created deployment: ${deploymentName}`);
+            logger.info(`✅ Created deployment: ${deploymentName}`);
           } else {
-            console.log(
+            logger.info(
               `Existing thread ${data.threadId} - ensuring worker ${deploymentName} exists`
             );
             try {
               await this.deploymentManager.scaleDeployment(deploymentName, 1);
-              console.log(`✅ Scaled existing worker ${deploymentName} to 1`);
+              logger.info(`✅ Scaled existing worker ${deploymentName} to 1`);
             } catch (_error) {
-              console.log(
+              logger.info(
                 `Worker ${deploymentName} doesn't exist, creating it for thread ${data.threadId}`
               );
               await this.deploymentManager.createWorkerDeployment(
@@ -183,24 +184,24 @@ export class QueueConsumer {
                 data.threadId,
                 data
               );
-              console.log(`✅ Created worker: ${deploymentName}`);
+              logger.info(`✅ Created worker: ${deploymentName}`);
             }
           }
 
           // Update deployment activity annotation for simplified tracking
           await this.deploymentManager.updateDeploymentActivity(deploymentName);
         } catch (bgError) {
-          console.warn(
+          logger.warn(
             `⚠️  Background ensure worker failed for ${deploymentName}:`,
             bgError instanceof Error ? bgError.message : String(bgError)
           );
         }
       })();
 
-      console.log(`✅ Message job ${jobId} queued successfully`);
+      logger.info(`✅ Message job ${jobId} queued successfully`);
     } catch (error) {
       Sentry.captureException(error);
-      console.error(`❌ Message job ${jobId} failed:`, error);
+      logger.error(`❌ Message job ${jobId} failed:`, error);
 
       // Re-throw for pgboss retry handling
       throw new OrchestratorError(
@@ -253,11 +254,11 @@ export class QueueConsumer {
         );
       }
 
-      console.log(
+      logger.info(
         `✅ Sent message to thread queue ${threadQueueName} for thread ${data.threadId}, jobId: ${jobId}`
       );
     } catch (error) {
-      console.error(`❌ [ERROR] sendToWorkerQueue failed:`, error);
+      logger.error(`❌ [ERROR] sendToWorkerQueue failed:`, error);
       throw new OrchestratorError(
         ErrorCode.QUEUE_JOB_PROCESSING_FAILED,
         `Failed to send message to thread queue: ${error instanceof Error ? error.message : String(error)}`,
@@ -277,11 +278,11 @@ export class QueueConsumer {
         return;
       }
 
-      console.log("🧹 Running worker deployment cleanup task...");
+      logger.info("🧹 Running worker deployment cleanup task...");
       try {
         await this.deploymentManager.reconcileDeployments();
       } catch (error) {
-        console.error("Error during cleanup task:", error);
+        logger.error("Error during cleanup task:", error);
       }
     }, 60 * 1000); // Run every minute
   }
@@ -297,7 +298,7 @@ export class QueueConsumer {
         isRunning: this.isRunning,
       };
     } catch (error) {
-      console.error("Failed to get queue stats:", error);
+      logger.error("Failed to get queue stats:", error);
       return { error: error instanceof Error ? error.message : String(error) };
     }
   }

@@ -49,8 +49,8 @@ function processMarkdownAndBlockkit(content: string): {
       });
 
       if (metadata.action) {
-        console.log(
-          `[DEBUG] Found action block - language: ${language}, action: ${metadata.action}, show: ${metadata.show}`
+        logger.debug(
+          `Found action block - language: ${language}, action: ${metadata.action}, show: ${metadata.show}`
         );
 
         if (language === "blockkit") {
@@ -59,8 +59,8 @@ function processMarkdownAndBlockkit(content: string): {
 
           // Skip entirely if show: false
           if (metadata.show === false) {
-            console.log(
-              `[DEBUG] Skipping blockkit with show:false - action: ${metadata.action}`
+            logger.debug(
+              `Skipping blockkit with show:false - action: ${metadata.action}`
             );
             continue;
           }

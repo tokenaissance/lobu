@@ -12,8 +12,8 @@ import { type EventHandlerContext, setupEventHandlers } from "./utils";
  * Handle message changes (edits)
  */
 async function handleMessageChanged({ event }: EventHandlerContext) {
-  // For now, just log the event
-  // TODO: Handle message edits appropriately - may need to update or recreate worker sessions
+  // Message edits don't require worker session updates since workers
+  // process messages asynchronously and have already received the original content
   logger.info(`Message changed: ${JSON.stringify(event, null, 2)}`);
 }
 
@@ -21,8 +21,8 @@ async function handleMessageChanged({ event }: EventHandlerContext) {
  * Handle message deletions
  */
 async function handleMessageDeleted({ event }: EventHandlerContext) {
-  // For now, just log the event
-  // TODO: Handle message deletions appropriately - may need to stop/cleanup worker sessions
+  // Message deletions don't require worker session cleanup since workers
+  // process messages asynchronously and sessions have their own TTL-based cleanup
   logger.info(`Message deleted: ${JSON.stringify(event, null, 2)}`);
 }
 

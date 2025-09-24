@@ -166,37 +166,7 @@ export class QueueProducer {
     }
   }
 
-  /**
-   * Enqueue a worker deployment request (for new conversations/threads)
-   * @deprecated Use enqueueMessage instead
-   */
-  async enqueueWorkerDeployment(
-    payload: WorkerDeploymentPayload,
-    options?: {
-      priority?: number;
-      retryLimit?: number;
-      retryDelay?: number;
-      expireInSeconds?: number;
-    }
-  ): Promise<string> {
-    return this.enqueueMessage(payload, options);
-  }
 
-  /**
-   * Enqueue a thread message job
-   * @deprecated Use enqueueMessage instead
-   */
-  async enqueueThreadMessage(
-    payload: ThreadMessagePayload,
-    options?: {
-      priority?: number;
-      retryLimit?: number;
-      retryDelay?: number;
-      expireInSeconds?: number;
-    }
-  ): Promise<string> {
-    return this.enqueueMessage(payload, options);
-  }
 
   /**
    * Execute a query with user context for RLS

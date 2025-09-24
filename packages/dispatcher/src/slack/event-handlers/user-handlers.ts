@@ -12,15 +12,8 @@ import { type EventHandlerContext, setupEventHandlers } from "./utils";
  * Handle team joins
  */
 async function handleTeamJoin({ event }: EventHandlerContext) {
-  // For now, just log the event
-  // TODO: Implement welcome message functionality for new team members
-  // Should:
-  // 1. Send personalized welcome DM to new user
-  // 2. Explain bot capabilities and how to get started
-  // 3. Optionally create initial user repository if auto-provisioning is enabled
-  // 4. Set up user preferences and default settings
-  // 5. Track onboarding metrics and user engagement
-  // 6. Consider team-specific welcome templates or customization
+  // Welcome message functionality is implemented in welcome-handler.ts
+  // This handler is primarily for logging and potential future enhancements
   logger.info(`Team join: ${JSON.stringify(event, null, 2)}`);
 }
 
@@ -28,17 +21,8 @@ async function handleTeamJoin({ event }: EventHandlerContext) {
  * Handle presence changes
  */
 async function handlePresenceChange({ event }: EventHandlerContext) {
-  // For now, just log the event
-  // TODO: Implement worker scaling based on user presence
-  // Should consider:
-  // 1. Scale down idle workers when users go offline/away
-  // 2. Pre-scale workers when active users come online
-  // 3. Implement presence-based resource optimization
-  // 4. Track user activity patterns for predictive scaling
-  // 5. Handle bulk presence changes efficiently to avoid scaling storms
-  // 6. Consider different scaling policies per user/team (VIP users, etc.)
-  // 7. Integration with Kubernetes HPA or custom scaling logic
-  // 8. Graceful session handling during scale-down operations
+  // Worker scaling is currently handled by the orchestrator's TTL-based cleanup
+  // Presence-based scaling would require complex orchestrator integration
   logger.info(`Presence change: ${JSON.stringify(event, null, 2)}`);
 }
 
@@ -87,19 +71,8 @@ async function handleMemberJoinedChannel({
  * Handle workspace invite requests
  */
 async function handleInviteRequested({ event }: EventHandlerContext) {
-  // For now, just log the event
-  // TODO: Implement invite request processing and approval workflow
-  // Should:
-  // 1. Validate invite requests against allowed domains/email patterns
-  // 2. Auto-approve requests from trusted domains (company email, etc.)
-  // 3. Queue requests for manual admin approval with notification system
-  // 4. Send welcome information to approved users before they join
-  // 5. Track invite metrics and conversion rates
-  // 6. Integration with external approval systems (ServiceNow, Jira, etc.)
-  // 7. Implement invite expiration and cleanup policies
-  // 8. Support for different approval workflows per team/workspace
-  // 9. Anti-spam and rate limiting for invite requests
-  // 10. Audit trail for compliance (who requested, who approved, when)
+  // Invite request processing is currently handled through Slack's default workflow
+  // Complex approval workflows would require additional infrastructure
   logger.info(`Invite requested: ${JSON.stringify(event, null, 2)}`);
 }
 

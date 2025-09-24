@@ -11,6 +11,7 @@ import {
   type SimpleDeployment,
 } from "../types";
 import { K8sSecretManager } from "./K8sSecretManager";
+import logger from "../../../dispatcher/src/logger";
 
 export class K8sDeploymentManager extends BaseDeploymentManager {
   private appsV1Api: k8s.AppsV1Api;
@@ -56,7 +57,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         }
       }
     } catch (error) {
-      console.error("❌ Failed to load Kubernetes config:", error);
+      logger.error("❌ Failed to load Kubernetes config:", error);
       throw new OrchestratorError(
         ErrorCode.DEPLOYMENT_CREATE_FAILED,
         `Failed to initialize Kubernetes client: ${error instanceof Error ? error.message : String(error)}`,
@@ -73,7 +74,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     this.appsV1Api.setDefaultAuthentication(kc);
     this.coreV1Api.setDefaultAuthentication(kc);
 
-    console.log(
+    logger.info(
       `🔧 K8s client initialized with 30s timeout for namespace: ${this.config.kubernetes.namespace}`
     );
 
@@ -149,10 +150,10 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         pvcName,
         this.config.kubernetes.namespace
       );
-      console.log(`📁 PVC ${pvcName} already exists`);
+      logger.info(`📁 PVC ${pvcName} already exists`);
     } catch (error: any) {
       if (error.statusCode === 404) {
-        console.log(`📁 Creating new PVC: ${pvcName}`);
+        logger.info(`📁 Creating new PVC: ${pvcName}`);
         // PVC doesn't exist, create it
         const pvc = {
           apiVersion: "v1",
@@ -182,9 +183,9 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
             this.config.kubernetes.namespace,
             pvc
           );
-          console.log(`✅ PVC ${pvcName} created successfully`);
+          logger.info(`✅ PVC ${pvcName} created successfully`);
         } catch (pvcError: any) {
-          console.error(`❌ Failed to create PVC ${pvcName}:`, {
+          logger.error(`❌ Failed to create PVC ${pvcName}:`, {
             statusCode: pvcError.statusCode,
             message: pvcError.message,
             body: pvcError.body,
@@ -202,7 +203,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
           throw new Error(`Failed to create PVC: ${errorMessage}`);
         }
       } else {
-        console.error(`❌ Failed to check PVC ${pvcName}:`, {
+        logger.error(`❌ Failed to check PVC ${pvcName}:`, {
           statusCode: error.statusCode,
           message: error.message,
         });
@@ -220,7 +221,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     messageData?: any,
     userEnvVars: Record<string, string> = {}
   ): Promise<void> {
-    console.log(
+    logger.info(
       `🚀 Creating K8s deployment: ${deploymentName} for user ${userId}`
     );
 
@@ -228,7 +229,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       // Create per-thread PVC for workspace persistence
       await this.ensurePersistentVolume(deploymentName, userId);
     } catch (error: any) {
-      console.error(
+      logger.error(
         `Failed during PVC setup for ${deploymentName}:`,
         error.message
       );
@@ -382,17 +383,17 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     };
 
     try {
-      console.log(`📦 Submitting deployment ${deploymentName} to K8s API...`);
+      logger.info(`📦 Submitting deployment ${deploymentName} to K8s API...`);
       const response = await this.appsV1Api.createNamespacedDeployment(
         this.config.kubernetes.namespace,
         deployment
       );
-      console.log(
+      logger.info(
         `✅ Deployment ${deploymentName} created successfully with status: ${response.response.statusCode}`
       );
     } catch (error: any) {
       // Log detailed error information
-      console.error(`❌ Failed to create deployment ${deploymentName}:`, {
+      logger.error(`❌ Failed to create deployment ${deploymentName}:`, {
         statusCode: error.statusCode,
         message: error.message,
         body: error.body,
@@ -482,10 +483,10 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         deploymentName,
         this.config.kubernetes.namespace
       );
-      console.log(`✅ Deleted deployment: ${deploymentName}`);
+      logger.info(`✅ Deleted deployment: ${deploymentName}`);
     } catch (error: any) {
       if (error.statusCode === 404) {
-        console.log(
+        logger.info(
           `⚠️  Deployment ${deploymentName} not found (already deleted)`
         );
       } else {
@@ -496,7 +497,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     // Delete associated PVC if it exists (Note: We should NOT delete user PVCs automatically
     // as they contain user data across multiple threads - they should only be deleted manually)
     // const pvcName = `peerbot-user-workspace-${deploymentId.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
-    console.log(
+    logger.info(
       `ℹ️  User PVC preserved for future threads (not auto-deleted): peerbot-user-workspace-${deploymentId.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`
     );
 
@@ -507,14 +508,14 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         secretName,
         this.config.kubernetes.namespace
       );
-      console.log(`✅ Deleted secret: ${secretName}`);
+      logger.info(`✅ Deleted secret: ${secretName}`);
     } catch (error: any) {
       if (error.statusCode === 404) {
-        console.log(
+        logger.info(
           `⚠️  Secret for ${deploymentName} not found (already deleted)`
         );
       } else {
-        console.log(
+        logger.info(
           `⚠️  Failed to delete secret for ${deploymentName}:`,
           error.message
         );
@@ -551,7 +552,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         options
       );
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Failed to update activity for deployment ${deploymentName}:`,
         error instanceof Error ? error.message : String(error)
       );
