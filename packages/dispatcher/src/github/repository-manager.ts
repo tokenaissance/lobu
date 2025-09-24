@@ -5,7 +5,7 @@ import logger from "../logger";
 import type { GitHubConfig, UserRepository } from "../types";
 
 // Import from shared package
-import { GitHubRepositoryError } from "@peerbot/shared";
+import { GitHubRepositoryError, getDbPool } from "@peerbot/shared";
 
 export class GitHubRepositoryManager {
   private octokit: Octokit;
@@ -135,7 +135,6 @@ export class GitHubRepositoryManager {
       logger.info(
         `Checking for user-selected repository for ${username} (Slack ID: ${slackUserId || "unknown"})`
       );
-      const { getDbPool } = await import("@peerbot/shared");
       const dbPool = getDbPool(this.databaseUrl || process.env.DATABASE_URL);
 
       let result;

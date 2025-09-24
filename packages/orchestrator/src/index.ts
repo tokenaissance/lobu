@@ -8,7 +8,7 @@ initSentry();
 import { join } from "node:path";
 import { config as dotenvConfig } from "dotenv";
 import type { BaseDeploymentManager } from "./base/BaseDeploymentManager";
-import { DatabasePool } from "./db-connection-pool";
+import { DatabasePool } from "@peerbot/shared";
 import logger from "../../dispatcher/src/logger";
 import { DockerDeploymentManager } from "./docker/DockerDeploymentManager";
 import { K8sDeploymentManager } from "./k8s/K8sDeploymentManager";
