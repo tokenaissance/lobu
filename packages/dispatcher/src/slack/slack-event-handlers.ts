@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 
 import type { App } from "@slack/bolt";
-import logger from "../logger";
+import { createLogger } from "@peerbot/shared";
+
+const logger = createLogger("slack-events");
 import type { GitHubRepositoryManager } from "../github/repository-manager";
 import type { QueueProducer } from "../queue/task-queue-producer";
 import type { DispatcherConfig } from "../types";

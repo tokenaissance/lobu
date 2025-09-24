@@ -6,7 +6,9 @@ import { join } from "node:path";
 import * as Sentry from "@sentry/node";
 import { parseClaudeOutput } from "./claude-response-parser";
 import { ClaudeSessionRunner } from "./core";
-import logger from "./logger";
+import { createLogger } from "@peerbot/shared";
+
+const logger = createLogger("worker");
 import { QueueIntegration } from "./task-queue-integration";
 import type { WorkerConfig } from "./types";
 import { WorkspaceManager } from "./workspace-manager";

@@ -14,15 +14,7 @@
   },
   "dependencies": {
     "@peerbot/shared": "workspace:*",
-    "@kubernetes/client-node": "^1.3.0",
-    "@modelcontextprotocol/sdk": "^1.0.5",
-    "@octokit/rest": "^21.1.1",
-    "@sentry/node": "^10.6.0",
-    "node-fetch": "^3.3.2",
-    "pg": "^8.11.3",
-    "pg-boss": "^10.0.2",
-    "winston": "^3.17.0",
-    "zod": "^3.24.4"
+    "pg-boss": "^10.0.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

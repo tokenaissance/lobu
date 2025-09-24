@@ -1,6 +1,8 @@
 import http from "node:http";
 import express from "express";
-import logger from "./logger";
+import { createLogger } from "@peerbot/shared";
+
+const logger = createLogger("http");
 import { GitHubOAuthHandler } from "./oauth/github-oauth-handler";
 import type { AnthropicProxy } from "./proxy/anthropic-proxy";
 

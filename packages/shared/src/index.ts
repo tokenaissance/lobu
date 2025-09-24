@@ -1,5 +1,4 @@
 // Export shared types
-
 export { initSentry } from "./sentry";
 
 // Export utilities
@@ -10,9 +9,10 @@ export type {
   SessionContext,
 } from "./types";
 
-// Export database utilities
-export * from "./database/connection-pool";
-export * from "./database/operations";
+// Export centralized utilities
+export * from "./logger";
+export * from "./config";
+export * from "./database";
 
 // Export encryption utilities
 export * from "./utils/encryption";

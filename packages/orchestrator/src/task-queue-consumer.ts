@@ -2,7 +2,9 @@ import * as Sentry from "@sentry/node";
 import PgBoss from "pg-boss";
 import type { BaseDeploymentManager } from "./base/BaseDeploymentManager";
 import { ErrorCode, type OrchestratorConfig, OrchestratorError } from "./types";
-import logger from "../../dispatcher/src/logger";
+import { createLogger } from "@peerbot/shared";
+
+const logger = createLogger("orchestrator");
 
 export class QueueConsumer {
   private pgBoss: PgBoss;

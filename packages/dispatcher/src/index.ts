@@ -9,7 +9,9 @@ import { join } from "node:path";
 import { App, ExpressReceiver, LogLevel } from "@slack/bolt";
 import { config as dotenvConfig } from "dotenv";
 import { GitHubRepositoryManager } from "./github/repository-manager";
-import logger from "./logger";
+import { createLogger } from "@peerbot/shared";
+
+const logger = createLogger("dispatcher");
 import {
   type AnthropicProxy,
   createAnthropicProxy,

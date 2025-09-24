@@ -10,12 +10,9 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@kubernetes/client-node": "^0.21.0",
     "@peerbot/shared": "workspace:*",
-    "@sentry/node": "^10.6.0",
     "dockerode": "^4.0.7",
     "dotenv": "^17.2.1",
-    "pg": "^8.11.5",
     "pg-boss": "^10.0.4"
   },
   "devDependencies": {

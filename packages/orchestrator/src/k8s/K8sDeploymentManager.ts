@@ -11,7 +11,9 @@ import {
   type SimpleDeployment,
 } from "../types";
 import { K8sSecretManager } from "./K8sSecretManager";
-import logger from "../../../dispatcher/src/logger";
+import { createLogger } from "@peerbot/shared";
+
+const logger = createLogger("k8s-deployment");
 
 export class K8sDeploymentManager extends BaseDeploymentManager {
   private appsV1Api: k8s.AppsV1Api;
