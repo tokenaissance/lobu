@@ -4,7 +4,7 @@ import type { App } from "@slack/bolt";
 import { createLogger } from "@peerbot/shared";
 
 const logger = createLogger("slack-events");
-import type { GitHubRepositoryManager } from "../github/repository-manager";
+import type { GitHubRepositoryManager } from "../../../../modules/github/repository-manager";
 import type { QueueProducer } from "../queue/task-queue-producer";
 import type { DispatcherConfig } from "../types";
 import {
@@ -17,7 +17,7 @@ import { setupTeamJoinHandler } from "./handlers/welcome-handler";
 import { MessageHandler } from "./handlers/message-handler";
 import { ActionHandler } from "./handlers/action-handler";
 import { ShortcutCommandHandler } from "./handlers/shortcut-command-handler";
-import { getUserGitHubInfo } from "./handlers/github-handler";
+import { getUserGitHubInfo } from "../../../../modules/github/handlers";
 
 /**
  * Queue-based Slack event handlers that route messages to appropriate queues

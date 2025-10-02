@@ -13,7 +13,7 @@ import type {
   SlackContext,
   ThreadSession,
 } from "../../types";
-import type { GitHubRepositoryManager } from "../../github/repository-manager";
+import type { GitHubRepositoryManager } from "../../../../../modules/github/repository-manager";
 import { getDbPool } from "@peerbot/shared";
 
 export class MessageHandler {

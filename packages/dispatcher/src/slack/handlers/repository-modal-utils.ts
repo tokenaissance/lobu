@@ -1,5 +1,5 @@
 import { createLogger } from "@peerbot/shared";
-import { generateGitHubAuthUrl } from "../../utils/github-utils";
+import { generateGitHubAuthUrl } from "../../../../../modules/github/utils";
 
 const logger = createLogger("dispatcher");
 

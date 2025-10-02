@@ -3,7 +3,7 @@ import express from "express";
 import { createLogger } from "@peerbot/shared";
 
 const logger = createLogger("http");
-import { GitHubOAuthHandler } from "./oauth/github-oauth-handler";
+import { GitHubOAuthHandler } from "../../../modules/github/handlers";
 import type { AnthropicProxy } from "./proxy/anthropic-proxy";
 
 let healthServer: http.Server | null = null;

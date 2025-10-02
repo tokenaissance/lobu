@@ -8,7 +8,7 @@ initSentry();
 import { join } from "node:path";
 import { App, ExpressReceiver, LogLevel } from "@slack/bolt";
 import { config as dotenvConfig } from "dotenv";
-import { GitHubRepositoryManager } from "./github/repository-manager";
+import { GitHubRepositoryManager } from "../../../modules/github/repository-manager";
 import { createLogger } from "@peerbot/shared";
 
 const logger = createLogger("dispatcher");
@@ -444,7 +444,7 @@ export class SlackDispatcher {
                           text: "Select Repository",
                           emoji: true,
                         },
-                        action_id: "select_repository",
+                        action_id: "open_repository_modal",
                         style: "primary",
                       },
                     ],

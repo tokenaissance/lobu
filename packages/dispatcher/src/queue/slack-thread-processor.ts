@@ -2,7 +2,7 @@
 
 import { WebClient } from "@slack/web-api";
 import PgBoss from "pg-boss";
-import type { GitHubRepositoryManager } from "../github/repository-manager";
+import type { GitHubRepositoryManager } from "../../../../modules/github/repository-manager";
 import { processMarkdownAndBlockkit } from "../converters/blockkit-processor";
 import { generateGitHubActionButtons } from "../converters/github-actions";
 import { convertMarkdownToSlack } from "../converters/markdown-to-slack";

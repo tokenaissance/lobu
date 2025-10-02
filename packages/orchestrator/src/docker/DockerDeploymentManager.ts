@@ -126,7 +126,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       const password = await this.getPasswordForUser(username);
 
       // Get common environment variables from base class
-      const commonEnvVars = this.generateEnvironmentVariables(
+      const commonEnvVars = await this.generateEnvironmentVariables(
         username,
         userId,
         deploymentName,

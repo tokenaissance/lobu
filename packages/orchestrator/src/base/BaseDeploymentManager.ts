@@ -213,14 +213,14 @@ export abstract class BaseDeploymentManager {
   /**
    * Generate environment variables common to all deployment types
    */
-  protected generateEnvironmentVariables(
+  protected async generateEnvironmentVariables(
     username: string,
     userId: string,
     deploymentName: string,
     messageData?: any,
     includeSecrets: boolean = true,
     userEnvVars: Record<string, string> = {}
-  ): { [key: string]: string } {
+  ): Promise<{ [key: string]: string }> {
     // Parse database connection string to extract host and port
     const dbUrl = new URL(this.config.database.connectionString);
     const dbHost = dbUrl.hostname;

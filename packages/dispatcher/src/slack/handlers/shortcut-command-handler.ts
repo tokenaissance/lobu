@@ -8,7 +8,7 @@ import { encrypt } from "@peerbot/shared";
 import type { MessageHandler } from "./message-handler";
 import type { ActionHandler } from "./action-handler";
 import { openRepositoryModal } from "./repository-modal-utils";
-import { getUserGitHubInfo } from "./github-handler";
+import { getUserGitHubInfo } from "../../../../../modules/github/handlers";
 
 export class ShortcutCommandHandler {
   constructor(

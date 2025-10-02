@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import type { GitHubRepositoryManager } from "../github/repository-manager";
-import { generateGitHubAuthUrl } from "../utils/github-utils";
-import { getUserGitHubInfo } from "../slack/handlers/github-handler";
+import type { GitHubRepositoryManager } from "../../../../modules/github/repository-manager";
+import { generateGitHubAuthUrl } from "../../../../modules/github/utils";
+import { getUserGitHubInfo } from "../../../../modules/github/handlers";
 import { generateDeterministicActionId } from "./blockkit-processor";
 import { createLogger } from "@peerbot/shared";
 

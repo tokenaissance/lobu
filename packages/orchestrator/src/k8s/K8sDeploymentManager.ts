@@ -234,7 +234,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     }
 
     // Get environment variables before creating the deployment spec
-    const envVars = this.generateEnvironmentVariables(
+    const envVars = await this.generateEnvironmentVariables(
       username,
       userId,
       deploymentName,

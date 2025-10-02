@@ -2,16 +2,16 @@ import { createLogger } from "@peerbot/shared";
 // import { getDbPool } from "@peerbot/shared"; // Currently unused
 
 const logger = createLogger("dispatcher");
-import type { GitHubRepositoryManager } from "../../github/repository-manager";
+import type { GitHubRepositoryManager } from "../../../../../modules/github/repository-manager";
 import type { QueueProducer } from "../../queue/task-queue-producer";
 import type { DispatcherConfig, SlackContext } from "../../types";
-import { generateGitHubAuthUrl } from "../../utils/github-utils";
+import { generateGitHubAuthUrl } from "../../../../../modules/github/utils";
 import type { MessageHandler } from "./message-handler";
 import {
   handleGitHubConnect,
   handleGitHubLogout,
   getUserGitHubInfo,
-} from "./github-handler";
+} from "../../../../../modules/github/handlers";
 import { moduleRegistry } from "../../../../../modules";
 import { handleTryDemo } from "./demo-handler";
 import { openRepositoryModal } from "./repository-modal-utils";

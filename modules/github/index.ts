@@ -101,7 +101,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
               text: "Select Repository",
               emoji: true,
             },
-            action_id: "select_repository",
+            action_id: "open_repository_modal",
           },
           {
             type: "button",
@@ -118,11 +118,30 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
   }
 
   async handleHomeTabAction(actionId: string, userId: string, value?: any): Promise<void> {
-    // Implementation will be added when integrating with dispatcher
+    // Home tab actions are handled by the dispatcher action handler
+    // This method is called from the dispatcher for module-specific actions
   }
 
-  async initWorkspace(config: any): Promise<void> {
-    // Implementation will be added when integrating with worker
+  async initWorkspace(config: { repositoryUrl?: string; workspaceDir?: string }): Promise<void> {
+    if (!config.repositoryUrl || !config.workspaceDir) return;
+    
+    // Clone repository if not already present
+    const repoName = this.extractRepoName(config.repositoryUrl);
+    const targetDir = `${config.workspaceDir}/${repoName}`;
+    
+    // Check if repo already exists
+    try {
+      const fs = await import('fs');
+      if (!fs.existsSync(targetDir)) {
+        const { execSync } = await import('child_process');
+        execSync(`git clone ${config.repositoryUrl} ${targetDir}`, { 
+          stdio: 'inherit',
+          cwd: config.workspaceDir 
+        });
+      }
+    } catch (error) {
+      console.warn(`Failed to clone repository: ${error}`);
+    }
   }
 
   async onSessionStart(context: SessionContext): Promise<SessionContext> {
