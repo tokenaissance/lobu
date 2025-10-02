@@ -19,15 +19,6 @@ export interface SlackConfig {
   allowPrivateChannels?: boolean;
 }
 
-export interface GitHubConfig {
-  token: string;
-  organization: string;
-  repoTemplate?: string;
-  repository?: string; // Override repository URL instead of creating user-specific ones
-  clientId?: string; // GitHub OAuth App Client ID
-  clientSecret?: string; // GitHub OAuth App Client Secret
-  ingressUrl?: string; // Public URL for OAuth callbacks
-}
 
 export interface QueueConfig {
   directMessage: string;
@@ -47,7 +38,6 @@ export interface AnthropicProxyConfig {
 
 export interface DispatcherConfig {
   slack: SlackConfig;
-  github: GitHubConfig;
   claude: Partial<ClaudeExecutionOptions>;
   sessionTimeoutMinutes: number;
   logLevel?: LogLevel;

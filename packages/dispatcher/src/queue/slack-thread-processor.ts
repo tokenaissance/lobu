@@ -2,7 +2,7 @@
 
 import { WebClient } from "@slack/web-api";
 import PgBoss from "pg-boss";
-import type { GitHubRepositoryManager } from "../../../../modules/github/repository-manager";
+import { moduleRegistry } from "../../../../modules";
 import { processMarkdownAndBlockkit } from "../converters/blockkit-processor";
 import { generateGitHubActionButtons } from "../converters/github-actions";
 import { convertMarkdownToSlack } from "../converters/markdown-to-slack";
@@ -36,20 +36,22 @@ export class ThreadResponseConsumer {
   private pgBoss: PgBoss;
   private slackClient: WebClient;
   private isRunning = false;
-  private repoManager: GitHubRepositoryManager;
+  private repoManager?: any;
   private userMappings: Map<string, string>; // slackUserId -> githubUsername
   private sessionBotMessages: Map<string, string> = new Map(); // sessionKey -> botMessageTs
 
   constructor(
     connectionString: string,
     slackToken: string,
-    repoManager: GitHubRepositoryManager,
     userMappings: Map<string, string>
   ) {
     this.pgBoss = new PgBoss(connectionString);
     this.slackClient = new WebClient(slackToken);
-    this.repoManager = repoManager;
     this.userMappings = userMappings;
+    
+    // Get repository manager from GitHub module
+    const githubModule = moduleRegistry.getModule('github');
+    this.repoManager = githubModule?.getRepositoryManager();
   }
 
   /**
@@ -392,16 +394,19 @@ export class ThreadResponseConsumer {
         );
       }
 
-      // Get GitHub action buttons for this session
-      const githubActionButtons = await generateGitHubActionButtons(
-        userId,
-        data.gitBranch,
-        data.hasGitChanges,
-        data.pullRequestUrl,
-        this.userMappings,
-        this.repoManager,
-        this.slackClient
-      );
+      // Get GitHub action buttons for this session if GitHub module is available
+      let githubActionButtons: any[] | undefined;
+      if (this.repoManager) {
+        githubActionButtons = await generateGitHubActionButtons(
+          userId,
+          data.gitBranch,
+          data.hasGitChanges,
+          data.pullRequestUrl,
+          this.userMappings,
+          this.repoManager,
+          this.slackClient
+        );
+      }
 
       // Add GitHub action buttons as a separate actions block
       if (githubActionButtons && githubActionButtons.length > 0) {
@@ -612,16 +617,19 @@ export class ThreadResponseConsumer {
         ],
       };
 
-      // Get GitHub action buttons for this session
-      const githubActionButtons = await generateGitHubActionButtons(
-        userId,
-        data.gitBranch,
-        data.hasGitChanges,
-        data.pullRequestUrl,
-        this.userMappings,
-        this.repoManager,
-        this.slackClient
-      );
+      // Get GitHub action buttons for this session if GitHub module is available
+      let githubActionButtons: any[] | undefined;
+      if (this.repoManager) {
+        githubActionButtons = await generateGitHubActionButtons(
+          userId,
+          data.gitBranch,
+          data.hasGitChanges,
+          data.pullRequestUrl,
+          this.userMappings,
+          this.repoManager,
+          this.slackClient
+        );
+      }
 
       // Add GitHub action buttons if available
       if (githubActionButtons && githubActionButtons.length > 0) {

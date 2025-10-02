@@ -8,7 +8,6 @@ import { initSentry, createLogger } from "@peerbot/shared";
 initSentry();
 
 import { moduleRegistry } from "../../../modules";
-import { GitHubModule } from "../../../modules/github";
 
 const logger = createLogger("worker");
 
@@ -26,8 +25,7 @@ export { ClaudeWorker } from "./claude-worker";
  * Main entry point - now supports both queue-based and legacy workers
  */
 async function main() {
-  // Register modules
-  moduleRegistry.register(new GitHubModule());
+  // Initialize available modules
   await moduleRegistry.initAll();
   logger.info("✅ Modules initialized");
   

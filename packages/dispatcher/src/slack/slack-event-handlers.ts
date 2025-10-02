@@ -4,7 +4,6 @@ import type { App } from "@slack/bolt";
 import { createLogger } from "@peerbot/shared";
 
 const logger = createLogger("slack-events");
-import type { GitHubRepositoryManager } from "../../../../modules/github/repository-manager";
 import type { QueueProducer } from "../queue/task-queue-producer";
 import type { DispatcherConfig } from "../types";
 import {
@@ -17,7 +16,7 @@ import { setupTeamJoinHandler } from "./handlers/welcome-handler";
 import { MessageHandler } from "./handlers/message-handler";
 import { ActionHandler } from "./handlers/action-handler";
 import { ShortcutCommandHandler } from "./handlers/shortcut-command-handler";
-import { getUserGitHubInfo } from "../../../../modules/github/handlers";
+import { moduleRegistry } from "../../../../modules";
 
 /**
  * Queue-based Slack event handlers that route messages to appropriate queues
@@ -31,9 +30,16 @@ export class SlackEventHandlers {
   constructor(
     private app: App,
     queueProducer: QueueProducer,
-    repoManager: GitHubRepositoryManager,
     private config: DispatcherConfig
   ) {
+    // Get repository manager from GitHub module
+    const githubModule = moduleRegistry.getModule('github');
+    const repoManager = githubModule?.getRepositoryManager();
+    
+    if (!repoManager) {
+      throw new Error('GitHub module not available or repository manager not found');
+    }
+
     // Initialize specialized handlers
     this.messageHandler = new MessageHandler(
       queueProducer,
