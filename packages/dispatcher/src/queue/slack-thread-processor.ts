@@ -36,7 +36,6 @@ export class ThreadResponseConsumer {
   private pgBoss: PgBoss;
   private slackClient: WebClient;
   private isRunning = false;
-  private repoManager?: any;
   private userMappings: Map<string, string>; // slackUserId -> githubUsername
   private sessionBotMessages: Map<string, string> = new Map(); // sessionKey -> botMessageTs
 
@@ -48,10 +47,6 @@ export class ThreadResponseConsumer {
     this.pgBoss = new PgBoss(connectionString);
     this.slackClient = new WebClient(slackToken);
     this.userMappings = userMappings;
-    
-    // Get repository manager from GitHub module
-    const githubModule = moduleRegistry.getModule('github');
-    this.repoManager = githubModule?.getRepositoryManager();
   }
 
   /**
@@ -395,7 +390,7 @@ export class ThreadResponseConsumer {
       }
 
       // Get action buttons from modules
-      let actionButtons: any[] = [];
+      const actionButtons: any[] = [];
       const dispatcherModules = moduleRegistry.getDispatcherModules();
       for (const module of dispatcherModules) {
         if (module.generateActionButtons) {
@@ -407,15 +402,17 @@ export class ThreadResponseConsumer {
             hasGitChanges: data.hasGitChanges,
             pullRequestUrl: data.pullRequestUrl,
             userMappings: this.userMappings,
-            slackClient: this.slackClient
+            slackClient: this.slackClient,
           });
-          actionButtons.push(...moduleButtons.map(btn => ({
-            type: "button",
-            text: { type: "plain_text", text: btn.text },
-            action_id: btn.action_id,
-            style: btn.style,
-            value: btn.value
-          })));
+          actionButtons.push(
+            ...moduleButtons.map((btn) => ({
+              type: "button",
+              text: { type: "plain_text", text: btn.text },
+              action_id: btn.action_id,
+              style: btn.style,
+              value: btn.value,
+            }))
+          );
         }
       }
 
@@ -629,7 +626,7 @@ export class ThreadResponseConsumer {
       };
 
       // Get action buttons from modules
-      let actionButtons: any[] = [];
+      const actionButtons: any[] = [];
       const dispatcherModules = moduleRegistry.getDispatcherModules();
       for (const module of dispatcherModules) {
         if (module.generateActionButtons) {
@@ -641,15 +638,17 @@ export class ThreadResponseConsumer {
             hasGitChanges: data.hasGitChanges,
             pullRequestUrl: data.pullRequestUrl,
             userMappings: this.userMappings,
-            slackClient: this.slackClient
+            slackClient: this.slackClient,
           });
-          actionButtons.push(...moduleButtons.map(btn => ({
-            type: "button",
-            text: { type: "plain_text", text: btn.text },
-            action_id: btn.action_id,
-            style: btn.style,
-            value: btn.value
-          })));
+          actionButtons.push(
+            ...moduleButtons.map((btn) => ({
+              type: "button",
+              text: { type: "plain_text", text: btn.text },
+              action_id: btn.action_id,
+              style: btn.style,
+              value: btn.value,
+            }))
+          );
         }
       }
 

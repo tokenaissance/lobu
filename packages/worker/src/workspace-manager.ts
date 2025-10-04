@@ -5,6 +5,7 @@ import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { createLogger } from "@peerbot/shared";
+import type { GitHubModule } from "../../../modules/github";
 import type {
   GitRepository,
   WorkspaceInfo,
@@ -117,16 +118,19 @@ export class WorkspaceManager {
       await this.setupGitConfig(userDirectory, username);
 
       // Setup GitHub CLI authentication through module if available
-      if (process.env.GITHUB_TOKEN && repositoryUrl.includes('github.com')) {
+      if (process.env.GITHUB_TOKEN && repositoryUrl.includes("github.com")) {
         try {
-          const { moduleRegistry } = await import('../../../modules');
-          const githubModule = moduleRegistry.getModule('github');
-          if (githubModule && 'init' in githubModule) {
+          const { moduleRegistry } = await import("../../../modules");
+          const githubModule = moduleRegistry.getModule<GitHubModule>("github");
+          if (githubModule && "init" in githubModule) {
             // GitHub module will handle CLI authentication during its own setup
             logger.info("GitHub module will handle CLI authentication");
           }
         } catch (error) {
-          logger.warn("Failed to setup GitHub CLI authentication through module:", error);
+          logger.warn(
+            "Failed to setup GitHub CLI authentication through module:",
+            error
+          );
           // Non-fatal - continue without gh CLI
         }
       }
@@ -180,11 +184,14 @@ export class WorkspaceManager {
 
       // Use GitHub token for authentication through module
       let authenticatedUrl = repositoryUrl;
-      if (this.config.githubToken && repositoryUrl.includes('github.com')) {
-        const { moduleRegistry } = await import('../../../modules');
-        const githubModule = moduleRegistry.getModule('github');
-        if (githubModule && 'addGitHubAuth' in githubModule) {
-          authenticatedUrl = (githubModule as any).addGitHubAuth(repositoryUrl, this.config.githubToken);
+      if (this.config.githubToken && repositoryUrl.includes("github.com")) {
+        const { moduleRegistry } = await import("../../../modules");
+        const githubModule = moduleRegistry.getModule<GitHubModule>("github");
+        if (githubModule && "addGitHubAuth" in githubModule) {
+          authenticatedUrl = (githubModule as any).addGitHubAuth(
+            repositoryUrl,
+            this.config.githubToken
+          );
         }
       }
 
@@ -392,7 +399,6 @@ export class WorkspaceManager {
       );
     }
   }
-
 
   /**
    * Check if directory exists

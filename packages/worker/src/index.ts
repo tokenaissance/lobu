@@ -28,7 +28,7 @@ async function main() {
   // Initialize available modules
   await moduleRegistry.initAll();
   logger.info("✅ Modules initialized");
-  
+
   logger.info(
     "🔄 Starting in queue mode (dynamic deployment-based persistent worker)"
   );

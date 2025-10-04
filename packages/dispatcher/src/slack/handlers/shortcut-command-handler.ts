@@ -59,7 +59,9 @@ export class ShortcutCommandHandler {
       const userId = body.user.id;
       logger.info(`Create project shortcut triggered by ${userId}`);
 
-      const { getUserGitHubInfo } = await import("../../../../../modules/github/handlers");
+      const { getUserGitHubInfo } = await import(
+        "../../../../../modules/github/handlers"
+      );
       await openRepositoryModal({
         userId,
         body,
@@ -145,7 +147,9 @@ export class ShortcutCommandHandler {
     threadTs?: string
   ): Promise<void> {
     // Check if user has GitHub connected
-    const { getUserGitHubInfo } = await import("../../../../../modules/github/handlers");
+    const { getUserGitHubInfo } = await import(
+      "../../../../../modules/github/handlers"
+    );
     const githubUser = await getUserGitHubInfo(userId);
     const isGitHubConnected = !!githubUser.token;
 
@@ -437,8 +441,10 @@ export class ShortcutCommandHandler {
         // Create new repository
         // Get GitHub user info
         // const username = await this.messageHandler.getOrCreateUserMapping(userId, client); // Currently unused
-        const { getUserGitHubInfo } = await import("../../../../../modules/github/handlers");
-    const githubUser = await getUserGitHubInfo(userId);
+        const { getUserGitHubInfo } = await import(
+          "../../../../../modules/github/handlers"
+        );
+        const githubUser = await getUserGitHubInfo(userId);
 
         if (!githubUser.token) {
           throw new Error(

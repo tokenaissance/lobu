@@ -19,7 +19,6 @@ export interface SlackConfig {
   allowPrivateChannels?: boolean;
 }
 
-
 export interface QueueConfig {
   directMessage: string;
   messageQueue: string;
@@ -35,7 +34,6 @@ export interface AnthropicProxyConfig {
   postgresConnectionString: string;
   anthropicBaseUrl?: string;
 }
-
 
 export interface DispatcherConfig {
   slack: SlackConfig;

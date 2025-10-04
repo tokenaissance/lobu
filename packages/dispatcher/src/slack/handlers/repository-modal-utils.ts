@@ -74,7 +74,9 @@ export async function openRepositoryModal({
         },
       });
 
-      const { generateGitHubAuthUrl } = await import("../../../../../modules/github/utils");
+      const { generateGitHubAuthUrl } = await import(
+        "../../../../../modules/github/utils"
+      );
       const authUrl = generateGitHubAuthUrl(userId);
       blocks.push({
         type: "section",

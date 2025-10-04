@@ -39,8 +39,7 @@ export class GitHubWorkspaceManager {
   async setupGitHubWorkspace(
     repositoryUrl: string,
     userDirectory: string,
-    username: string,
-    sessionKey?: string
+    username: string
   ): Promise<WorkspaceInfo> {
     try {
       logger.info(`Setting up GitHub workspace for ${username}...`);
@@ -54,7 +53,10 @@ export class GitHubWorkspaceManager {
       }
 
       // Get repository info
-      const repository = await this.getRepositoryInfo(userDirectory, repositoryUrl);
+      const repository = await this.getRepositoryInfo(
+        userDirectory,
+        repositoryUrl
+      );
 
       return {
         baseDirectory: this.config.baseDirectory,
@@ -117,7 +119,9 @@ export class GitHubWorkspaceManager {
 
       logger.info("Git configuration completed");
     } catch (error) {
-      throw new Error(`Failed to setup git configuration for ${username}: ${error}`);
+      throw new Error(
+        `Failed to setup git configuration for ${username}: ${error}`
+      );
     }
   }
 
@@ -158,7 +162,10 @@ export class GitHubWorkspaceManager {
   /**
    * Create a new branch for the session
    */
-  async createSessionBranch(userDirectory: string, sessionKey: string): Promise<string> {
+  async createSessionBranch(
+    userDirectory: string,
+    sessionKey: string
+  ): Promise<string> {
     try {
       const branchName = `claude/${sessionKey.replace(/\./g, "-")}`;
 
@@ -170,7 +177,9 @@ export class GitHubWorkspaceManager {
         await execAsync(`git checkout "${branchName}"`, {
           cwd: userDirectory,
         });
-        logger.info(`Session branch ${branchName} already exists locally, checked out`);
+        logger.info(
+          `Session branch ${branchName} already exists locally, checked out`
+        );
 
         // Pull latest changes from remote to preserve previous work
         try {
@@ -222,14 +231,20 @@ export class GitHubWorkspaceManager {
 
       return branchName;
     } catch (error) {
-      throw new Error(`Failed to create session branch for ${sessionKey}: ${error}`);
+      throw new Error(
+        `Failed to create session branch for ${sessionKey}: ${error}`
+      );
     }
   }
 
   /**
    * Commit and push changes
    */
-  async commitAndPush(userDirectory: string, branch: string, message: string): Promise<void> {
+  async commitAndPush(
+    userDirectory: string,
+    branch: string,
+    message: string
+  ): Promise<void> {
     try {
       // Add all changes
       await execAsync("git add .", { cwd: userDirectory });
@@ -237,8 +252,12 @@ export class GitHubWorkspaceManager {
       // Check if there are changes to commit
       let hasUnstagedChanges = false;
       try {
-        await execAsync("git diff --cached --exit-code", { cwd: userDirectory });
-        logger.info("No staged changes to commit - checking for unpushed commits");
+        await execAsync("git diff --cached --exit-code", {
+          cwd: userDirectory,
+        });
+        logger.info(
+          "No staged changes to commit - checking for unpushed commits"
+        );
       } catch (_error) {
         hasUnstagedChanges = true;
       }

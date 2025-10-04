@@ -1,5 +1,5 @@
 import express from "express";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 
 interface SlackMessage {
   ts: string;
@@ -97,7 +97,7 @@ export class MockSlackServer extends EventEmitter {
     });
 
     // Mock auth.test
-    this.app.post("/api/auth.test", (req, res) => {
+    this.app.post("/api/auth.test", (_req, res) => {
       res.json({
         ok: true,
         url: "https://test-workspace.slack.com/",

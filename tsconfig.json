@@ -23,9 +23,23 @@
     // Some stricter flags
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Workspace module resolution
+    "baseUrl": ".",
+    "paths": {
+      "@peerbot/shared": ["packages/shared/src/index.ts"],
+      "@peerbot/shared/*": ["packages/shared/src/*"],
+      "@peerbot/dispatcher": ["packages/dispatcher/src/index.ts"],
+      "@peerbot/dispatcher/*": ["packages/dispatcher/src/*"],
+      "@peerbot/orchestrator": ["packages/orchestrator/src/index.ts"],
+      "@peerbot/orchestrator/*": ["packages/orchestrator/src/*"],
+      "@peerbot/worker": ["packages/worker/src/index.ts"],
+      "@peerbot/worker/*": ["packages/worker/src/*"]
+    }
   },
   "include": [
+    "modules/**/*",
     "packages/*/src/**/*",
     "packages/*/__tests__/**/*",
     "src/**/*",

@@ -7,8 +7,8 @@ const logger = createLogger("github-module");
 
 // Import from shared package and local module
 import { getDbPool } from "@peerbot/shared";
-import { GitHubRepositoryError } from './errors';
-import type { GitHubConfig } from './index';
+import { GitHubRepositoryError } from "./errors";
+import type { GitHubConfig } from "./index";
 
 export interface GitHubModuleConfig extends GitHubConfig {
   // All config is already in the base GitHubConfig type

@@ -14,7 +14,11 @@ export interface HomeTabModule extends ModuleInterface {
   renderHomeTab?(userId: string): Promise<any[]>;
 
   /** Handle home tab interactions */
-  handleHomeTabAction?(actionId: string, userId: string, value?: any): Promise<void>;
+  handleHomeTabAction?(
+    actionId: string,
+    userId: string,
+    value?: any
+  ): Promise<void>;
 }
 
 export interface WorkerModule extends ModuleInterface {
@@ -30,7 +34,10 @@ export interface WorkerModule extends ModuleInterface {
 
 export interface OrchestratorModule extends ModuleInterface {
   /** Build environment variables for worker container */
-  buildEnvVars?(userId: string, baseEnv: Record<string, string>): Promise<Record<string, string>>;
+  buildEnvVars?(
+    userId: string,
+    baseEnv: Record<string, string>
+  ): Promise<Record<string, string>>;
 
   /** Get container address for module-specific services */
   getContainerAddress?(): string;
@@ -39,9 +46,13 @@ export interface OrchestratorModule extends ModuleInterface {
 export interface DispatcherModule extends ModuleInterface {
   /** Generate action buttons for thread responses */
   generateActionButtons?(context: ThreadContext): Promise<ActionButton[]>;
-  
+
   /** Handle action button clicks */
-  handleAction?(actionId: string, userId: string, context: any): Promise<boolean>;
+  handleAction?(
+    actionId: string,
+    userId: string,
+    context: any
+  ): Promise<boolean>;
 }
 
 export interface SessionContext {
@@ -55,7 +66,7 @@ export interface SessionContext {
 export interface ActionButton {
   text: string;
   action_id: string;
-  style?: 'primary' | 'danger';
+  style?: "primary" | "danger";
   value?: string;
 }
 

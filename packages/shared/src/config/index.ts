@@ -24,7 +24,6 @@ export const SlackConfigSchema = z.object({
     .default("INFO"),
 });
 
-
 // Claude configuration schema
 export const ClaudeConfigSchema = z.object({
   apiKey: z.string().optional(),
@@ -111,7 +110,6 @@ export function loadSlackConfig(): SlackConfig {
 
   return SlackConfigSchema.parse(config);
 }
-
 
 /**
  * Loads Claude configuration from environment variables

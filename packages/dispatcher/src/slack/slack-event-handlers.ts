@@ -17,6 +17,7 @@ import { MessageHandler } from "./handlers/message-handler";
 import { ActionHandler } from "./handlers/action-handler";
 import { ShortcutCommandHandler } from "./handlers/shortcut-command-handler";
 import { moduleRegistry } from "../../../../modules";
+import type { GitHubModule } from "../../../../modules/github";
 
 /**
  * Queue-based Slack event handlers that route messages to appropriate queues
@@ -33,11 +34,11 @@ export class SlackEventHandlers {
     private config: DispatcherConfig
   ) {
     // Get repository manager from GitHub module (optional)
-    const githubModule = moduleRegistry.getModule('github');
+    const githubModule = moduleRegistry.getModule<GitHubModule>("github");
     const repoManager = githubModule?.getRepositoryManager();
-    
+
     if (!repoManager) {
-      logger.warn('GitHub module not available - some features may be limited');
+      logger.warn("GitHub module not available - some features may be limited");
     }
 
     // Initialize specialized handlers
@@ -46,12 +47,7 @@ export class SlackEventHandlers {
       repoManager,
       config
     );
-    this.actionHandler = new ActionHandler(
-      repoManager,
-      queueProducer,
-      config,
-      this.messageHandler
-    );
+    this.actionHandler = new ActionHandler(queueProducer, this.messageHandler);
     this.shortcutCommandHandler = new ShortcutCommandHandler(
       app,
       config,
@@ -80,6 +76,11 @@ export class SlackEventHandlers {
       const query = options?.value || "";
       const userId = body.user?.id;
 
+      if (!userId) {
+        await ack({ options: [] });
+        return;
+      }
+
       logger.info(
         `Repository search triggered - query: "${query}", user: ${userId}`
       );
@@ -87,7 +88,14 @@ export class SlackEventHandlers {
       try {
         // Get user's GitHub token
         logger.info(`Fetching GitHub info for user ${userId}`);
-        const githubUser = await getUserGitHubInfo(userId);
+        const gitHubModule = moduleRegistry.getModule<GitHubModule>("github");
+        if (!gitHubModule) {
+          logger.warn("GitHub module not available - returning empty options");
+          await ack({ options: [] });
+          return;
+        }
+
+        const githubUser = await gitHubModule.getUserInfo(userId);
         logger.info(
           `GitHub user info retrieved: token=${!!githubUser.token}, username=${githubUser.username}`
         );

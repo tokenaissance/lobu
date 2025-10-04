@@ -2,6 +2,7 @@
 
 import PgBoss from "pg-boss";
 import { createLogger } from "@peerbot/shared";
+import type { GitHubModule } from "../../../modules/github";
 
 const logger = createLogger("worker");
 
@@ -280,11 +281,16 @@ export class QueueIntegration {
           // Check if GitHub CLI is authenticated through module
           let isAuthenticated = false;
           try {
-            const { moduleRegistry } = await import('../../../modules');
-            const githubModule = moduleRegistry.getModule('github');
-            if (githubModule && 'isGitHubCLIAuthenticated' in githubModule) {
-              isAuthenticated = await (githubModule as any).isGitHubCLIAuthenticated(workingDir);
-              logger.info(`GitHub CLI authentication status: ${isAuthenticated}`);
+            const { moduleRegistry } = await import("../../../modules");
+            const githubModule =
+              moduleRegistry.getModule<GitHubModule>("github");
+            if (githubModule && "isGitHubCLIAuthenticated" in githubModule) {
+              isAuthenticated = await (
+                githubModule as any
+              ).isGitHubCLIAuthenticated(workingDir);
+              logger.info(
+                `GitHub CLI authentication status: ${isAuthenticated}`
+              );
             } else {
               // Fallback to direct check
               logger.info("Checking GitHub CLI authentication (fallback)...");
@@ -598,13 +604,18 @@ export class QueueIntegration {
       // Generate GitHub OAuth URL for authentication through module
       let authUrl = `${process.env.INGRESS_URL || "http://localhost:8080"}/login`;
       try {
-        const { moduleRegistry } = await import('../../../modules');
-        const githubModule = moduleRegistry.getModule('github');
-        if (githubModule && 'generateOAuthUrl' in githubModule) {
-          authUrl = (githubModule as any).generateOAuthUrl(process.env.USER_ID || '');
+        const { moduleRegistry } = await import("../../../modules");
+        const githubModule = moduleRegistry.getModule<GitHubModule>("github");
+        if (githubModule && "generateOAuthUrl" in githubModule) {
+          authUrl = (githubModule as any).generateOAuthUrl(
+            process.env.USER_ID || ""
+          );
         }
       } catch (moduleError) {
-        console.warn('Failed to get GitHub OAuth URL from module, using fallback:', moduleError);
+        console.warn(
+          "Failed to get GitHub OAuth URL from module, using fallback:",
+          moduleError
+        );
       }
 
       // Create a rich message with buttons

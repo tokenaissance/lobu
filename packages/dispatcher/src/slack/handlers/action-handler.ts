@@ -3,9 +3,10 @@ import { createLogger } from "@peerbot/shared";
 
 const logger = createLogger("dispatcher");
 import type { QueueProducer } from "../../queue/task-queue-producer";
-import type { DispatcherConfig, SlackContext } from "../../types";
+import type { SlackContext } from "../../types";
 import type { MessageHandler } from "./message-handler";
 import { moduleRegistry } from "../../../../../modules";
+import type { GitHubModule } from "../../../../../modules/github";
 import { handleTryDemo } from "./demo-handler";
 import { openRepositoryModal } from "./repository-modal-utils";
 import {
@@ -16,13 +17,9 @@ import {
 
 export class ActionHandler {
   constructor(
-    private repoManager: any, // Made generic since GitHub module is optional
-    _queueProducer: QueueProducer, // Not used directly in ActionHandler
-    private config: DispatcherConfig,
+    _queueProducer: QueueProducer,
     private messageHandler: MessageHandler
-  ) {
-    // queueProducer passed for consistency but not used directly
-  }
+  ) {}
 
   /**
    * Handle block action events
@@ -42,11 +39,11 @@ export class ActionHandler {
     const dispatcherModules = moduleRegistry.getDispatcherModules();
     for (const module of dispatcherModules) {
       if (module.handleAction) {
-        const moduleHandled = await module.handleAction(actionId, userId, { 
+        const moduleHandled = await module.handleAction(actionId, userId, {
           channelId,
           client,
           body,
-          updateAppHome: this.updateAppHome.bind(this)
+          updateAppHome: this.updateAppHome.bind(this),
         });
         if (moduleHandled) {
           handled = true;
@@ -57,197 +54,205 @@ export class ActionHandler {
 
     if (!handled) {
       switch (actionId) {
-
-      case "open_repository_modal": {
-        // Get GitHub functions from module
-        const gitHubModule = moduleRegistry.getModule('github');
-        if (gitHubModule) {
-          const { getUserGitHubInfo } = await import('../../../../../modules/github/handlers');
-          await openRepositoryModal({
-            userId,
-            body,
-            client,
-            checkAdminStatus: false,
-            getGitHubUserInfo: getUserGitHubInfo,
-          });
+        case "open_repository_modal": {
+          // Get GitHub functions from module
+          const gitHubModule = moduleRegistry.getModule<GitHubModule>("github");
+          if (gitHubModule) {
+            const { getUserGitHubInfo } = await import(
+              "../../../../../modules/github/handlers"
+            );
+            await openRepositoryModal({
+              userId,
+              body,
+              client,
+              checkAdminStatus: false,
+              getGitHubUserInfo: getUserGitHubInfo,
+            });
+          }
+          break;
         }
-        break;
-      }
 
-      case "open_github_login_modal": {
-        // Get GitHub auth URL from module
-        const gitHubModule = moduleRegistry.getModule('github');
-        if (gitHubModule) {
-          const { generateGitHubAuthUrl } = await import('../../../../../modules/github/utils');
-          const authUrl = generateGitHubAuthUrl(userId);
-        await client.views.open({
-          trigger_id: body.trigger_id,
-          view: {
-            type: "modal",
-            callback_id: "github_login_modal",
-            title: {
-              type: "plain_text",
-              text: "Connect GitHub",
-            },
-            blocks: [
-              {
-                type: "header",
-                text: {
+        case "open_github_login_modal": {
+          // Get GitHub auth URL from module
+          const gitHubModule = moduleRegistry.getModule<GitHubModule>("github");
+          if (gitHubModule) {
+            const { generateGitHubAuthUrl } = await import(
+              "../../../../../modules/github/utils"
+            );
+            const authUrl = generateGitHubAuthUrl(userId);
+            await client.views.open({
+              trigger_id: body.trigger_id,
+              view: {
+                type: "modal",
+                callback_id: "github_login_modal",
+                title: {
                   type: "plain_text",
-                  text: "🔗 Connect Your GitHub Account",
-                  emoji: true,
+                  text: "Connect GitHub",
                 },
-              },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text:
-                    "Connect your GitHub account to:\n\n" +
-                    "• Access your repositories\n" +
-                    "• Create new projects\n" +
-                    "• Manage code with AI assistance\n\n" +
-                    "*Your connection is secure and encrypted.*",
-                },
-              },
-              {
-                type: "divider",
-              },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: "Click the button below to authenticate with GitHub:",
-                },
-              },
-              {
-                type: "actions",
-                elements: [
+                blocks: [
                   {
-                    type: "button",
+                    type: "header",
                     text: {
                       type: "plain_text",
-                      text: "🚀 Connect with GitHub",
+                      text: "🔗 Connect Your GitHub Account",
                       emoji: true,
                     },
-                    url: authUrl,
-                    style: "primary",
                   },
-                ],
-              },
-              {
-                type: "context",
-                elements: [
                   {
-                    type: "mrkdwn",
-                    text: "💡 *Note:* After connecting, you can select which repositories to work with.",
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text:
+                        "Connect your GitHub account to:\n\n" +
+                        "• Access your repositories\n" +
+                        "• Create new projects\n" +
+                        "• Manage code with AI assistance\n\n" +
+                        "*Your connection is secure and encrypted.*",
+                    },
+                  },
+                  {
+                    type: "divider",
+                  },
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: "Click the button below to authenticate with GitHub:",
+                    },
+                  },
+                  {
+                    type: "actions",
+                    elements: [
+                      {
+                        type: "button",
+                        text: {
+                          type: "plain_text",
+                          text: "🚀 Connect with GitHub",
+                          emoji: true,
+                        },
+                        url: authUrl,
+                        style: "primary",
+                      },
+                    ],
+                  },
+                  {
+                    type: "context",
+                    elements: [
+                      {
+                        type: "mrkdwn",
+                        text: "💡 *Note:* After connecting, you can select which repositories to work with.",
+                      },
+                    ],
                   },
                 ],
+                close: {
+                  type: "plain_text",
+                  text: "Cancel",
+                },
               },
-            ],
-            close: {
-              type: "plain_text",
-              text: "Cancel",
-            },
-          },
-        });
+            });
+          }
+          break;
         }
-        break;
-      }
 
-      case "github_connect": {
-        // This should be handled by the GitHub module, but fallback for compatibility
-        const gitHubModule = moduleRegistry.getModule('github');
-        if (gitHubModule) {
-          const { handleGitHubConnect } = await import('../../../../../modules/github/handlers');
-          await handleGitHubConnect(userId, channelId, client);
+        case "github_connect": {
+          // This should be handled by the GitHub module, but fallback for compatibility
+          const gitHubModule = moduleRegistry.getModule<GitHubModule>("github");
+          if (gitHubModule) {
+            const { handleGitHubConnect } = await import(
+              "../../../../../modules/github/handlers"
+            );
+            await handleGitHubConnect(userId, channelId, client);
+          }
+          break;
         }
-        break;
-      }
 
-      case "try_demo": {
-        // Check if this is from the home tab (view type will be 'home')
-        const fromHomeTab = body.view?.type === "home";
+        case "try_demo": {
+          // Check if this is from the home tab (view type will be 'home')
+          const fromHomeTab = body.view?.type === "home";
 
-        // Get the message timestamp to keep demo response in same thread (if not from home)
-        const demoMessageTs = body.message?.ts;
+          // Get the message timestamp to keep demo response in same thread (if not from home)
+          const demoMessageTs = body.message?.ts;
 
-        // Pass the fromHomeTab flag to ensure DM is sent when clicked from home
-        await handleTryDemo(
-          userId,
-          channelId,
-          client,
-          demoMessageTs,
-          fromHomeTab
-        );
-
-        // Clear cache and update home tab after demo setup
-        const username = await this.messageHandler.getOrCreateUserMapping(
-          userId,
-          client
-        );
-        this.messageHandler.clearCacheForUser(username);
-        await this.updateAppHome(userId, client);
-        break;
-      }
-
-      default:
-        // Handle blockkit form button clicks
-        if (actionId.startsWith("blockkit_form_")) {
-          await handleBlockkitForm(
-            actionId,
+          // Pass the fromHomeTab flag to ensure DM is sent when clicked from home
+          await handleTryDemo(
             userId,
             channelId,
-            messageTs,
-            body,
-            client
-          );
-        }
-        // Handle executable code block buttons
-        else if (
-          actionId.match(/^(bash|python|javascript|js|typescript|ts|sql|sh)_/)
-        ) {
-          await handleExecutableCodeBlock(
-            actionId,
-            userId,
-            channelId,
-            messageTs,
-            body,
             client,
-            (context: SlackContext, userRequest: string, client: any) =>
-              this.messageHandler.handleUserRequest(
-                context,
-                userRequest,
-                client
-              )
+            demoMessageTs,
+            fromHomeTab
           );
-        }
-        // Handle stop worker button clicks
-        else if (actionId.startsWith("stop_worker_")) {
-          const deploymentName = actionId.replace("stop_worker_", "");
-          await handleStopWorker(
-            deploymentName,
+
+          // Clear cache and update home tab after demo setup
+          const username = await this.messageHandler.getOrCreateUserMapping(
             userId,
-            channelId,
-            messageTs,
             client
           );
+          this.messageHandler.clearCacheForUser(username);
+          await this.updateAppHome(userId, client);
+          break;
         }
-        // Handle GitHub Pull Request button clicks
-        else if (actionId.startsWith("github_pr_")) {
-          await this.handleGitHubPullRequestAction(
-            actionId,
-            userId,
-            channelId,
-            messageTs,
-            body,
-            client
-          );
-        } else {
-          logger.info(
-            `Unsupported action: ${actionId} from user ${userId} in channel ${channelId}`
-          );
-        }
+
+        default:
+          // Handle blockkit form button clicks
+          if (actionId.startsWith("blockkit_form_")) {
+            await handleBlockkitForm(
+              actionId,
+              userId,
+              channelId,
+              messageTs,
+              body,
+              client
+            );
+          }
+          // Handle executable code block buttons
+          else if (
+            actionId.match(/^(bash|python|javascript|js|typescript|ts|sql|sh)_/)
+          ) {
+            await handleExecutableCodeBlock(
+              actionId,
+              userId,
+              channelId,
+              messageTs,
+              body,
+              client,
+              (context: SlackContext, userRequest: string, client: any) =>
+                this.messageHandler.handleUserRequest(
+                  context,
+                  userRequest,
+                  client
+                )
+            );
+          }
+          // Handle stop worker button clicks
+          else if (actionId.startsWith("stop_worker_")) {
+            const deploymentName = actionId.replace("stop_worker_", "");
+            await handleStopWorker(
+              deploymentName,
+              userId,
+              channelId,
+              messageTs,
+              client
+            );
+          }
+          // Handle GitHub Pull Request button clicks
+          else if (actionId.startsWith("github_pr_")) {
+            await this.handleGitHubPullRequestAction(
+              actionId,
+              userId,
+              channelId,
+              messageTs,
+              body,
+              client
+            );
+          } else {
+            logger.info(
+              `Unsupported action: ${actionId} from user ${userId} in channel ${channelId}`
+            );
+          }
+
+          break;
+      }
     }
   }
 
@@ -354,13 +359,13 @@ export class ActionHandler {
     );
 
     try {
-      const username = await this.messageHandler.getOrCreateUserMapping(
-        userId,
-        client
-      );
+      await this.messageHandler.getOrCreateUserMapping(userId, client);
 
       // Get GitHub connection status for demo purposes
-      const githubUser = await getUserGitHubInfo(userId);
+      const gitHubModule = moduleRegistry.getModule<GitHubModule>("github");
+      const githubUser = gitHubModule
+        ? await gitHubModule.getUserInfo(userId)
+        : { token: null, username: null };
       const isGitHubConnected = !!githubUser.token;
 
       const blocks: any[] = [
@@ -383,7 +388,10 @@ export class ActionHandler {
             blocks.push({ type: "divider" });
           }
         } catch (error) {
-          logger.error(`Failed to render home tab for module ${module.name}:`, error);
+          logger.error(
+            `Failed to render home tab for module ${module.name}:`,
+            error
+          );
         }
       }
 
@@ -425,7 +433,6 @@ export class ActionHandler {
         },
       });
 
-
       // Update the app home view
       await client.views.publish({
         user_id: userId,
@@ -439,48 +446,5 @@ export class ActionHandler {
     } catch (error) {
       logger.error(`Failed to update app home for user ${userId}:`, error);
     }
-  }
-
-
-  /**
-   * Fetch repository README content
-   */
-  private async fetchRepositoryReadme(
-    repositoryUrl: string
-  ): Promise<string | null> {
-    try {
-      const urlParts = repositoryUrl
-        .replace(/^https?:\/\//, "")
-        .replace(/\.git$/, "")
-        .split("/");
-
-      if (urlParts.length < 3) {
-        return null;
-      }
-
-      const owner = urlParts[1];
-      const repo = urlParts[2];
-      const branch = "main";
-
-      const readmeUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/README.md`;
-
-      const response = await fetch(readmeUrl);
-      if (response.ok) {
-        const content = await response.text();
-        return content.substring(0, 1000);
-      }
-
-      // Try master branch
-      const masterUrl = `https://raw.githubusercontent.com/${owner}/${repo}/master/README.md`;
-      const masterResponse = await fetch(masterUrl);
-      if (masterResponse.ok) {
-        const content = await masterResponse.text();
-        return content.substring(0, 1000);
-      }
-    } catch (error) {
-      logger.error(`Failed to fetch README for ${repositoryUrl}:`, error);
-    }
-
-    return null;
   }
 }

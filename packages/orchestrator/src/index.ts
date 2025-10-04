@@ -30,7 +30,7 @@ class PeerbotOrchestrator {
 
   constructor(config: OrchestratorConfig) {
     this.config = config;
-    
+
     // Register modules
     moduleRegistry.register(new GitHubModule());
     this.dbPool = new DatabasePool(config.database);
@@ -187,7 +187,7 @@ class PeerbotOrchestrator {
       // Initialize modules
       await moduleRegistry.initAll();
       logger.info("✅ Modules initialized");
-      
+
       // Run database migrations using dbmate (this will create database and run migrations)
       await this.runDbmateMigrations();
 

@@ -226,7 +226,7 @@ export abstract class BaseDeploymentManager {
     const dbHost = dbUrl.hostname;
     const dbPort = dbUrl.port || "5432"; // Default PostgreSQL port
 
-    const envVars: { [key: string]: string } = {
+    let envVars: { [key: string]: string } = {
       USER_ID: userId,
       USERNAME: username,
       DEPLOYMENT_NAME: deploymentName,
@@ -258,12 +258,12 @@ export abstract class BaseDeploymentManager {
         envVars.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
       }
       // OAuth token is now always handled by the proxy in dispatcher
-      
+
       // Add module-specific environment variables
       try {
-        envVars = await buildModuleEnvVars(messageData?.userId || '', envVars);
+        envVars = await buildModuleEnvVars(messageData?.userId || "", envVars);
       } catch (error) {
-        logger.warn('Failed to build module environment variables:', error);
+        logger.warn("Failed to build module environment variables:", error);
       }
     }
 

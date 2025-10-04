@@ -1,8 +1,16 @@
-import { z } from 'zod';
-import type { HomeTabModule, WorkerModule, OrchestratorModule, DispatcherModule, SessionContext, ActionButton, ThreadContext } from '../types';
-import { GitHubRepositoryManager } from './repository-manager';
-import { handleGitHubConnect, handleGitHubLogout, getUserGitHubInfo } from './handlers';
-import { generateGitHubAuthUrl } from './utils';
+import { z } from "zod";
+import type {
+  HomeTabModule,
+  WorkerModule,
+  OrchestratorModule,
+  DispatcherModule,
+  SessionContext,
+  ActionButton,
+  ThreadContext,
+} from "../types";
+import { GitHubRepositoryManager } from "./repository-manager";
+import { getUserGitHubInfo } from "./handlers";
+import { generateGitHubAuthUrl } from "./utils";
 
 // GitHub configuration schema (module-specific)
 export const GitHubConfigSchema = z.object({
@@ -36,8 +44,10 @@ export function loadGitHubConfig(): GitHubConfig {
   });
 }
 
-export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorModule, DispatcherModule {
-  name = 'github';
+export class GitHubModule
+  implements HomeTabModule, WorkerModule, OrchestratorModule, DispatcherModule
+{
+  name = "github";
   private repoManager?: GitHubRepositoryManager;
 
   isEnabled(): boolean {
@@ -46,7 +56,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
 
   async init(): Promise<void> {
     if (!this.isEnabled()) return;
-    
+
     const config = loadGitHubConfig();
     this.repoManager = new GitHubRepositoryManager(
       config,
@@ -59,7 +69,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
 
     const { token, username } = await getUserGitHubInfo(userId);
     const isGitHubConnected = !!token;
-    
+
     if (!isGitHubConnected) {
       const authUrl = generateGitHubAuthUrl(userId);
       return [
@@ -88,12 +98,18 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
       ];
     }
 
-    const userRepo = await this.repoManager.getUserRepository(username!, userId);
-    
+    const userRepo = await this.repoManager.getUserRepository(
+      username!,
+      userId
+    );
+
     if (userRepo) {
       const repoUrl = userRepo.repositoryUrl.replace(/\.git$/, "");
-      const repoDisplayName = repoUrl.replace(/^https?:\/\/(www\.)?github\.com\//, "");
-      
+      const repoDisplayName = repoUrl.replace(
+        /^https?:\/\/(www\.)?github\.com\//,
+        ""
+      );
+
       return [
         {
           type: "section",
@@ -109,7 +125,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
         },
       ];
     }
-    
+
     return [
       {
         type: "section",
@@ -144,26 +160,24 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
     ];
   }
 
-  async handleHomeTabAction(actionId: string, userId: string, value?: any): Promise<void> {
-    // Home tab actions are handled by the dispatcher action handler
-    // This method is called from the dispatcher for module-specific actions
-  }
-
-  async initWorkspace(config: { repositoryUrl?: string; workspaceDir?: string }): Promise<void> {
+  async initWorkspace(config: {
+    repositoryUrl?: string;
+    workspaceDir?: string;
+  }): Promise<void> {
     if (!config.repositoryUrl || !config.workspaceDir) return;
-    
+
     // Clone repository if not already present
     const repoName = this.extractRepoName(config.repositoryUrl);
     const targetDir = `${config.workspaceDir}/${repoName}`;
-    
+
     // Check if repo already exists
     try {
-      const fs = await import('fs');
+      const fs = await import("node:fs");
       if (!fs.existsSync(targetDir)) {
-        const { execSync } = await import('child_process');
-        execSync(`git clone ${config.repositoryUrl} ${targetDir}`, { 
-          stdio: 'inherit',
-          cwd: config.workspaceDir 
+        const { execSync } = await import("node:child_process");
+        execSync(`git clone ${config.repositoryUrl} ${targetDir}`, {
+          stdio: "inherit",
+          cwd: config.workspaceDir,
         });
       }
     } catch (error) {
@@ -195,9 +209,12 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
     ];
   }
 
-  async buildEnvVars(userId: string, baseEnv: Record<string, string>): Promise<Record<string, string>> {
+  async buildEnvVars(
+    userId: string,
+    baseEnv: Record<string, string>
+  ): Promise<Record<string, string>> {
     const { token, username } = await getUserGitHubInfo(userId);
-    
+
     if (token && username) {
       return {
         ...baseEnv,
@@ -205,7 +222,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
         GITHUB_USER: username,
       };
     }
-    
+
     return baseEnv;
   }
 
@@ -241,7 +258,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
    */
   async isGitHubCLIAuthenticated(workingDir: string): Promise<boolean> {
     try {
-      const { execSync } = await import('child_process');
+      const { execSync } = await import("node:child_process");
       execSync("gh auth status", {
         cwd: workingDir,
         stdio: "pipe",
@@ -264,7 +281,7 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
       return [];
     }
 
-    const { generateGitHubActionButtons } = await import('./actions');
+    const { generateGitHubActionButtons } = await import("./actions");
     const buttons = await generateGitHubActionButtons(
       context.userId,
       context.gitBranch,
@@ -275,38 +292,50 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
       context.slackClient
     );
 
-    return buttons?.map(button => ({
-      text: button.text?.text || '',
-      action_id: button.action_id,
-      style: button.style,
-      value: button.value
-    })) || [];
+    return (
+      buttons?.map((button) => ({
+        text: button.text?.text || "",
+        action_id: button.action_id,
+        style: button.style,
+        value: button.value,
+      })) || []
+    );
   }
 
-  async handleAction(actionId: string, userId: string, context: any): Promise<boolean> {
+  async handleAction(
+    actionId: string,
+    userId: string,
+    context: any
+  ): Promise<boolean> {
     // Handle GitHub-specific actions
     switch (actionId) {
-      case "github_login":
-        const { handleGitHubConnect } = await import('./handlers');
+      case "github_login": {
+        const { handleGitHubConnect } = await import("./handlers");
         await handleGitHubConnect(userId, context.channelId, context.client);
         return true;
-        
-      case "github_logout":
-        const { handleGitHubLogout } = await import('./handlers');
+      }
+
+      case "github_logout": {
+        const { handleGitHubLogout } = await import("./handlers");
         await handleGitHubLogout(userId, context.client);
         // Update home tab after logout - delegate back to action handler
         if (context.updateAppHome) {
           await context.updateAppHome(userId, context.client);
         }
         return true;
-        
+      }
+
       case "open_repository_modal":
         // This is handled by repository-modal-utils which should also be moved to module
         return false; // Let dispatcher handle for now
-        
+
       default:
         // Check if it's a GitHub-specific action (prefixed with github_ or contains repo operations)
-        if (actionId.startsWith('github_') || actionId.includes('pr_') || actionId.includes('view_pr_')) {
+        if (
+          actionId.startsWith("github_") ||
+          actionId.includes("pr_") ||
+          actionId.includes("view_pr_")
+        ) {
           // This is a GitHub action but not one we handle directly
           return false;
         }
@@ -317,9 +346,13 @@ export class GitHubModule implements HomeTabModule, WorkerModule, OrchestratorMo
   getRepositoryManager(): GitHubRepositoryManager | undefined {
     return this.repoManager;
   }
+
+  async getUserInfo(userId: string) {
+    return getUserGitHubInfo(userId);
+  }
 }
 
-export * from './repository-manager';
-export * from './handlers';
-export * from './utils';
-export * from './errors';
+export * from "./repository-manager";
+export * from "./handlers";
+export * from "./utils";
+export * from "./errors";

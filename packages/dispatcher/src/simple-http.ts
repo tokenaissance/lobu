@@ -8,9 +8,7 @@ import type { AnthropicProxy } from "./proxy/anthropic-proxy";
 let healthServer: http.Server | null = null;
 let proxyApp: express.Application | null = null;
 
-export function setupHealthEndpoints(
-  anthropicProxy?: AnthropicProxy
-) {
+export function setupHealthEndpoints(anthropicProxy?: AnthropicProxy) {
   if (healthServer) return;
 
   // Create Express app for proxy and health endpoints
@@ -38,7 +36,6 @@ export function setupHealthEndpoints(
     proxyApp.use("/api/anthropic", anthropicProxy.getRouter());
     logger.info("✅ Anthropic proxy enabled at :8080/api/anthropic");
   }
-
 
   // Create HTTP server with Express app
   healthServer = http.createServer(proxyApp);
