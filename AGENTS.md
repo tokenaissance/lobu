@@ -2,12 +2,12 @@
 - Monorepo managed by Bun workspaces: `packages/dispatcher`, `packages/orchestrator`, `packages/worker`, `packages/shared`.
 - Top-level tooling and ops: `Makefile`, `bin/` (CLI and setup scripts), `docker-compose*.yml`, `charts/peerbot` (Helm), `workspaces/` (local volumes), `.env*`.
 - TypeScript sources under `packages/*/src`. Tests live in `packages/*/src/__tests__` and `packages/shared/tests`.
-- **ALWAYS use `bun` commands, NEVER use `npm`** - npm is incompatible with workspace protocol
+- **ALWAYS prefer `bun` commands over `npm`**
 - When fixing unused parameter errors, remove the parameter entirely if possible rather than prefixing with underscore
 
 ## Instructions
 - You MUST only do what has been asked; nothing more, nothing less.
-- For comprehensive QA and E2E testing, see `.claude/commands/qa.md` for detailed testing procedures and examples. You can directly run `.claude/commands/slack-qa-bot.sh "Your prompt"` if there is no specific testing asked, otherwise use `./slack-qa-bot.js` to test the bot.
+- For comprehensive QA and E2E testing, see `.claude/commands/qa.md` for detailed testing procedures and examples.
 - When you make changes to worker code (`packages/worker/*`), run `make clean-workers` to ensure new workers use the updated code.
 - Anytime you make changes in the code, you MUST:
 
@@ -32,17 +32,13 @@
 ## Deployment Instructions
 
 When making changes to the Slack bot:
-1. **Development**: Use `make dev` for Docker Compose with hot reload
+1. **Development**: Use `make dev` to start the server if it's not running. Use docker compose (for docker mode) or kubectl (for kubernetes mode) to pull the logs.
 2. **Kubernetes deployment**: Use `make deploy` for production deployment
 
 ## Development Configuration
 
 - Rate limiting is disabled in local development
 - Worker image is built automatically when running `make dev`
-
-## k3s Setup
-
-For k3s clusters, you can install cri-dockerd and configure k3s to use Docker daemon for local images.
 
 ## Persistent Storage
 

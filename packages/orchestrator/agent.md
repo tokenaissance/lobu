@@ -31,7 +31,7 @@ Worker deployment and lifecycle management. Handles Docker/Kubernetes orchestrat
 
 ## Environment Variables
 - `DATABASE_URL`: PostgreSQL connection
-- `DEPLOYMENT_MODE`: Force docker/kubernetes mode
+- `DEPLOYMENT_MODE`: Set to `docker` or `kubernetes`/`k8s` (auto-detects if not set)
 - `KUBERNETES_NAMESPACE`: K8s deployment namespace
 - `WORKER_IMAGE_*`: Worker container configuration
 - `WORKER_IDLE_CLEANUP_MINUTES`: Cleanup interval

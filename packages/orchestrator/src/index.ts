@@ -13,7 +13,6 @@ import { createLogger, DatabasePool } from "@peerbot/shared";
 const logger = createLogger("orchestrator");
 import { DockerDeploymentManager } from "./docker/DockerDeploymentManager";
 import { K8sDeploymentManager } from "./k8s/K8sDeploymentManager";
-import { SubprocessDeploymentManager } from "./subprocess/SubprocessDeploymentManager";
 import { QueueConsumer } from "./task-queue-consumer";
 import type { OrchestratorConfig } from "./types";
 
@@ -37,22 +36,6 @@ class PeerbotOrchestrator {
   ): BaseDeploymentManager {
     // Check for explicit deployment mode
     const deploymentMode = process.env.DEPLOYMENT_MODE;
-
-    if (deploymentMode === "subprocess") {
-      logger.warn(
-        "⚠️  Subprocess deployment mode enabled. This shares the host kernel and is NOT recommended for untrusted multi-tenant workloads."
-      );
-      const manager = new SubprocessDeploymentManager(config, this.dbPool);
-      // Initialize asynchronously (will check for bwrap)
-      manager.initialize().catch((error) => {
-        logger.error(
-          "Failed to initialize subprocess deployment manager:",
-          error
-        );
-        process.exit(1);
-      });
-      return manager;
-    }
 
     if (deploymentMode === "docker") {
       if (!this.isDockerAvailable()) {
