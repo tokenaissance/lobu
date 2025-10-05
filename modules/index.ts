@@ -33,7 +33,10 @@ export class ModuleRegistry {
         try {
           module.registerEndpoints(app);
         } catch (error) {
-          console.error(`Failed to register endpoints for module ${module.name}:`, error);
+          console.error(
+            `Failed to register endpoints for module ${module.name}:`,
+            error
+          );
         }
       }
     }

@@ -82,8 +82,6 @@ export class ActionHandler {
           break;
         }
 
-
-
         case "try_demo": {
           // Check if this is from the home tab (view type will be 'home')
           const fromHomeTab = body.view?.type === "home";
@@ -283,7 +281,7 @@ export class ActionHandler {
       try {
         const { moduleRegistry } = await import("../../../../../modules");
         const gitHubModule = moduleRegistry.getModule("github");
-        if (gitHubModule && 'getUserInfo' in gitHubModule) {
+        if (gitHubModule && "getUserInfo" in gitHubModule) {
           githubUser = await (gitHubModule as any).getUserInfo(userId);
         }
       } catch (error) {

@@ -87,16 +87,21 @@ export class SlackEventHandlers {
         } catch (error) {
           logger.warn("Module registry not available");
         }
-        
-        if (!gitHubModule || !('handleRepositorySearch' in gitHubModule)) {
+
+        if (!gitHubModule || !("handleRepositorySearch" in gitHubModule)) {
           logger.warn("GitHub module not available - returning empty options");
           await ack({ options: [] });
           return;
         }
 
-        const options = await gitHubModule.handleRepositorySearch(query, userId);
-        
-        logger.info(`Returning ${options.length} repository options from GitHub module`);
+        const options = await gitHubModule.handleRepositorySearch(
+          query,
+          userId
+        );
+
+        logger.info(
+          `Returning ${options.length} repository options from GitHub module`
+        );
         await ack({ options });
       } catch (error) {
         // Log error but still return empty options
@@ -105,7 +110,6 @@ export class SlackEventHandlers {
       }
     });
   }
-
 
   /**
    * Get bot ID from configuration

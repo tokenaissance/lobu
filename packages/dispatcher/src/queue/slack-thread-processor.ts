@@ -405,15 +405,18 @@ export class ThreadResponseConsumer {
                 hasGitChanges: data.hasGitChanges,
                 pullRequestUrl: data.pullRequestUrl,
                 userMappings: this.userMappings,
-              }
-            }
+              },
+            },
           });
           actionButtons.push(
             ...moduleButtons
               .filter((btn) => {
                 // Validate required button properties
                 if (!btn.text || !btn.action_id) {
-                  logger.warn(`Invalid button from module ${module.name}: missing text or action_id`, btn);
+                  logger.warn(
+                    `Invalid button from module ${module.name}: missing text or action_id`,
+                    btn
+                  );
                   return false;
                 }
                 return true;
@@ -654,15 +657,18 @@ export class ThreadResponseConsumer {
                 hasGitChanges: data.hasGitChanges,
                 pullRequestUrl: data.pullRequestUrl,
                 userMappings: this.userMappings,
-              }
-            }
+              },
+            },
           });
           actionButtons.push(
             ...moduleButtons
               .filter((btn) => {
                 // Validate required button properties
                 if (!btn.text || !btn.action_id) {
-                  logger.warn(`Invalid button from module ${module.name}: missing text or action_id`, btn);
+                  logger.warn(
+                    `Invalid button from module ${module.name}: missing text or action_id`,
+                    btn
+                  );
                   return false;
                 }
                 return true;

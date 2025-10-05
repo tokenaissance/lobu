@@ -5,7 +5,7 @@ import {
   type OrchestratorConfig,
   OrchestratorError,
 } from "../types";
-import { createLogger } from "@peerbot/shared";
+import { createLogger, encrypt, decrypt } from "@peerbot/shared";
 
 const logger = createLogger("orchestrator");
 
@@ -44,7 +44,7 @@ export class PostgresSecretManager extends BaseSecretManager {
       );
 
       if (result.rows.length > 0 && result.rows[0].password) {
-        const existingPassword = result.rows[0].password;
+        const existingPassword = decrypt(result.rows[0].password);
         logger.info(`Found existing credentials for user ${username}`);
         return existingPassword;
       }
@@ -92,19 +92,19 @@ export class PostgresSecretManager extends BaseSecretManager {
         { name: "PEERBOT_DATABASE_PASSWORD", value: password, type: "system" },
       ];
 
-      // Insert or update each environment variable
+      // Insert or update each environment variable (encrypt values)
       for (const cred of credentials) {
         await this.dbPool.query(
           `
-          INSERT INTO user_environ (user_id, channel_id, repository, name, value, type, created_at, updated_at) 
+          INSERT INTO user_environ (user_id, channel_id, repository, name, value, type, created_at, updated_at)
           VALUES ($1, NULL, NULL, $2, $3, $4, NOW(), NOW())
-          ON CONFLICT (user_id, channel_id, repository, name) 
-          DO UPDATE SET 
+          ON CONFLICT (user_id, channel_id, repository, name)
+          DO UPDATE SET
             value = EXCLUDED.value,
             type = EXCLUDED.type,
             updated_at = NOW()
         `,
-          [userId, cred.name, cred.value, cred.type]
+          [userId, cred.name, encrypt(cred.value), cred.type]
         );
       }
 

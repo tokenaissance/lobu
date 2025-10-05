@@ -57,6 +57,7 @@
     "@types/node-fetch": "^2.6.12",
     "dotenv": "^17.2.1",
     "husky": "^9.1.7",
+    "pm2": "^6.0.13",
     "typescript": "^5.8.3"
   }
 }

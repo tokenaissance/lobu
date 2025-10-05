@@ -149,11 +149,11 @@ export class GitHubOAuthHandler {
       );
 
       await this.dbPool.query(
-        `INSERT INTO user_environ (user_id, channel_id, repository, name, value, type) 
-         VALUES ($1, NULL, NULL, 'GITHUB_USER', $2, 'user') 
-         ON CONFLICT (user_id, channel_id, repository, name) 
+        `INSERT INTO user_environ (user_id, channel_id, repository, name, value, type)
+         VALUES ($1, NULL, NULL, 'GITHUB_USER', $2, 'user')
+         ON CONFLICT (user_id, channel_id, repository, name)
          DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-        [userDbId, githubUsername]
+        [userDbId, encrypt(githubUsername)]
       );
 
       // Trigger home tab refresh and send repository selection message
@@ -323,7 +323,7 @@ export async function handleGitHubLoginModal(
 ): Promise<void> {
   try {
     const authUrl = generateGitHubAuthUrl(userId);
-    
+
     await client.views.open({
       trigger_id: body.trigger_id,
       view: {
@@ -489,7 +489,10 @@ export async function handleGitHubLogout(
 /**
  * Search user's accessible repositories
  */
-export async function searchUserRepos(query: string, token: string): Promise<any[]> {
+export async function searchUserRepos(
+  query: string,
+  token: string
+): Promise<any[]> {
   try {
     let url: string;
 
@@ -536,7 +539,10 @@ export async function searchUserRepos(query: string, token: string): Promise<any
 /**
  * Search organization repositories
  */
-export async function searchOrgRepos(query: string, token: string): Promise<any[]> {
+export async function searchOrgRepos(
+  query: string,
+  token: string
+): Promise<any[]> {
   const org = process.env.GITHUB_ORGANIZATION;
 
   if (!org) return [];
@@ -582,10 +588,13 @@ export async function searchOrgRepos(query: string, token: string): Promise<any[
 /**
  * Handle repository search - provides Slack option format
  */
-export async function handleRepositorySearch(query: string, userId: string): Promise<any[]> {
+export async function handleRepositorySearch(
+  query: string,
+  userId: string
+): Promise<any[]> {
   try {
     const { token } = await getUserGitHubInfo(userId);
-    
+
     if (!token) {
       return [];
     }

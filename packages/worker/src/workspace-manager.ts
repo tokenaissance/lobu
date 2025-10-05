@@ -137,6 +137,12 @@ export class WorkspaceManager {
       );
       return this.workspaceInfo;
     } catch (error: any) {
+      logger.error(`Workspace setup failed for ${username}:`, error);
+      logger.error(`Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+      });
       const workspaceError = new WorkspaceError(
         "setupWorkspace",
         `Failed to setup workspace for ${username}`,
@@ -166,7 +172,7 @@ export class WorkspaceManager {
       );
 
       // Note: GitHub authentication is handled by the GitHub module through workspace hooks
-      let authenticatedUrl = repositoryUrl;
+      const authenticatedUrl = repositoryUrl;
 
       const { stderr } = await execAsync(
         `git clone "${authenticatedUrl}" "${targetDirectory}"`,

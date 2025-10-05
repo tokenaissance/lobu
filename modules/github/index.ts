@@ -17,18 +17,20 @@ import { generateGitHubAuthUrl } from "./utils";
 export interface GitHubModuleInterface extends ModuleInterface {
   /** Add GitHub authentication to repository URL */
   addGitHubAuth(repositoryUrl: string, token: string): string;
-  
+
   /** Generate OAuth URL for user authentication */
   generateOAuthUrl(userId: string): string;
-  
+
   /** Check if GitHub CLI is authenticated */
   isGitHubCLIAuthenticated(workingDir: string): Promise<boolean>;
-  
+
   /** Get repository manager instance */
   getRepositoryManager(): any;
-  
+
   /** Get user GitHub info */
-  getUserInfo(userId: string): Promise<{ token: string | null; username: string | null }>;
+  getUserInfo(
+    userId: string
+  ): Promise<{ token: string | null; username: string | null }>;
 }
 
 // GitHub configuration schema (module-specific)
@@ -64,7 +66,12 @@ export function loadGitHubConfig(): GitHubConfig {
 }
 
 export class GitHubModule
-  implements HomeTabModule, WorkerModule, OrchestratorModule, DispatcherModule, GitHubModuleInterface
+  implements
+    HomeTabModule,
+    WorkerModule,
+    OrchestratorModule,
+    DispatcherModule,
+    GitHubModuleInterface
 {
   name = "github";
   private repoManager?: GitHubRepositoryManager;
@@ -87,7 +94,9 @@ export class GitHubModule
 
   registerEndpoints(app: any): void {
     if (!this.isEnabled() || !this.oauthHandler) {
-      console.warn("GitHub module not enabled or OAuth handler not initialized - skipping endpoint registration");
+      console.warn(
+        "GitHub module not enabled or OAuth handler not initialized - skipping endpoint registration"
+      );
       return;
     }
 
@@ -335,7 +344,7 @@ export class GitHubModule
 
     // Extract GitHub-specific fields from moduleFields
     const githubFields = context.moduleFields?.github || {};
-    
+
     const { generateGitHubActionButtons } = await import("./actions");
     const buttons = await generateGitHubActionButtons(
       context.userId,

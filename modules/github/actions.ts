@@ -9,8 +9,14 @@ import { createLogger } from "@peerbot/shared";
 const logger = createLogger("github-module");
 
 // Inline action ID generation to avoid cross-package dependencies
-function generateDeterministicActionId(content: string, prefix: string = "action"): string {
-  const hash = createHash("sha256").update(content).digest("hex").substring(0, 8);
+function generateDeterministicActionId(
+  content: string,
+  prefix: string = "action"
+): string {
+  const hash = createHash("sha256")
+    .update(content)
+    .digest("hex")
+    .substring(0, 8);
   return `${prefix}_${hash}`;
 }
 

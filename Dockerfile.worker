@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.6-labs
 FROM oven/bun:1.2.9
 
 # Build argument to control dev/prod behavior

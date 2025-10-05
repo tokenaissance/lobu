@@ -236,7 +236,7 @@ export abstract class BaseDeploymentManager {
         messageData?.messageId ||
         "",
       LOG_LEVEL: "info",
-      WORKSPACE_PATH: "/workspace",
+      WORKSPACE_DIR: "/workspace",
       SLACK_TEAM_ID: messageData?.platformMetadata?.teamId || "",
       SLACK_CHANNEL_ID: messageData?.channelId || "",
       SLACK_THREAD_TS: messageData?.threadId || "",

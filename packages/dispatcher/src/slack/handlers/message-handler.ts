@@ -254,7 +254,9 @@ export class MessageHandler {
             timestamp: Date.now(),
           });
         } else {
-          logger.warn("Repository manager not available - proceeding without repository information");
+          logger.warn(
+            "Repository manager not available - proceeding without repository information"
+          );
           repository = null;
         }
       }

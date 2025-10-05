@@ -283,8 +283,10 @@ export class QueueIntegration {
           try {
             const { moduleRegistry } = await import("../../../modules");
             const githubModule = moduleRegistry.getModule("github");
-            if (githubModule) {
-              isAuthenticated = await githubModule.isGitHubCLIAuthenticated(workingDir);
+            if (githubModule && "isGitHubCLIAuthenticated" in githubModule) {
+              isAuthenticated = await (
+                githubModule as any
+              ).isGitHubCLIAuthenticated(workingDir);
               logger.info(
                 `GitHub CLI authentication status: ${isAuthenticated}`
               );
@@ -601,11 +603,11 @@ export class QueueIntegration {
       // Generate authentication URL through module system
       let authUrl = `${process.env.INGRESS_URL || "http://localhost:8080"}/login`;
       let loginButtonText = "🔗 Login";
-      
+
       try {
         const { moduleRegistry } = await import("../../../modules");
         const githubModule = moduleRegistry.getModule("github");
-        if (githubModule && 'generateOAuthUrl' in githubModule) {
+        if (githubModule && "generateOAuthUrl" in githubModule) {
           authUrl = (githubModule as any).generateOAuthUrl(
             process.env.USER_ID || ""
           );
