@@ -103,6 +103,14 @@ export class McpConfigService {
     return config.httpServers.get(id);
   }
 
+  /**
+   * Get all HTTP proxy metadata for all MCP servers.
+   */
+  async getAllHttpServers(): Promise<Map<string, HttpMcpServerConfig>> {
+    const config = await this.loadConfig();
+    return config.httpServers;
+  }
+
   private async loadConfig(): Promise<LoadedConfig> {
     if (!this.source) {
       if (!this.cache) {

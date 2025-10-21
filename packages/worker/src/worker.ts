@@ -147,59 +147,148 @@ class ProgressProcessor {
   /**
    * Process streaming update and return formatted content for Slack
    * Returns null if the update should be skipped
+   * Now handles SDK message format directly
    */
   processUpdate(data: any): string | null {
     try {
-      // Handle both string and object data
-      let dataToCheck: string;
-
-      if (typeof data === "string" && data.trim()) {
-        dataToCheck = data;
-      } else if (typeof data === "object") {
-        dataToCheck = JSON.stringify(data);
-      } else {
+      // Skip if no data
+      if (!data || typeof data !== "object") {
         return null;
       }
 
-      // Priority 1: TodoWrite updates (full todo list refresh)
-      const todoData = this.extractTodoList(dataToCheck);
-      if (todoData) {
-        this.currentTodos = todoData;
-        return this.formatFullUpdate();
-      }
+      // Handle SDK message types
+      switch (data.type) {
+        case "assistant":
+          return this.processAssistantMessage(data);
 
-      // Priority 2: Extract text and tool uses from assistant messages
-      if (
-        typeof data === "object" &&
-        data.type === "assistant" &&
-        data.message?.content
-      ) {
-        let hasUpdate = false;
+        case "tool_call":
+          return this.processToolCall(data);
 
-        for (const contentItem of data.message.content) {
-          if (contentItem.type === "text" && contentItem.text?.trim()) {
-            // Append text to chronological output
-            this.chronologicalOutput += `${contentItem.text}\n`;
-            hasUpdate = true;
-          } else if (contentItem.type === "tool_use") {
-            // Format and append tool execution
-            const toolExecution = this.formatToolExecution(contentItem);
-            logger.info(`🔧 Detected tool execution: ${toolExecution}`);
-            this.chronologicalOutput += `${toolExecution}\n`;
-            hasUpdate = true;
+        case "result":
+          // Final result from SDK - compare with what we accumulated
+          if (data.result && String(data.result).trim()) {
+            const resultText = String(data.result).trim();
+            const accumulatedText = this.chronologicalOutput.trim();
+
+            logger.info(`Result message length: ${resultText.length} chars`);
+            logger.info(`Accumulated length: ${accumulatedText.length} chars`);
+            logger.info(`Result starts with: ${resultText.substring(0, 100)}`);
+            logger.info(
+              `Accumulated starts with: ${accumulatedText.substring(0, 100)}`
+            );
+
+            // Check if result contains content not in accumulated
+            if (!accumulatedText.includes(resultText.substring(0, 50))) {
+              logger.warn(
+                `⚠️  Result contains different content than accumulated text!`
+              );
+              logger.warn(`Result preview: ${resultText.substring(0, 200)}`);
+            }
           }
-        }
+          return null;
 
-        if (hasUpdate) {
-          return this.formatFullUpdate();
-        }
+        case "system":
+          // Skip system messages (init, completion, etc.)
+          return null;
+
+        case "error":
+          logger.error(`SDK error: ${JSON.stringify(data.error)}`);
+          return null;
+
+        default:
+          // For backwards compatibility with old subprocess format
+          return this.processLegacyFormat(data);
       }
-
-      return null;
     } catch (error) {
       logger.error("Failed to process progress update:", error);
       return null;
     }
+  }
+
+  /**
+   * Process SDK assistant messages
+   * SDK wraps content in message.message.content structure
+   */
+  private processAssistantMessage(message: any): string | null {
+    let hasUpdate = false;
+
+    // SDK format: message.message.content (nested)
+    const nestedMessage = message.message;
+    const content = nestedMessage?.content || message.content;
+
+    // Handle string content
+    if (typeof content === "string" && content.trim()) {
+      this.chronologicalOutput += `${content}\n`;
+      hasUpdate = true;
+    }
+    // Handle content blocks (array format)
+    else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === "text" && block.text?.trim()) {
+          this.chronologicalOutput += `${block.text}\n`;
+          hasUpdate = true;
+        } else if (block.type === "tool_use") {
+          // Check for TodoWrite updates
+          if (block.name === "TodoWrite" && block.input?.todos) {
+            this.currentTodos = block.input.todos;
+            hasUpdate = true;
+          }
+          // Format and append tool execution
+          const toolExecution = this.formatToolExecution(block);
+          logger.info(`🔧 Tool use: ${toolExecution}`);
+          this.chronologicalOutput += `${toolExecution}\n`;
+          hasUpdate = true;
+        }
+      }
+    }
+
+    return hasUpdate ? this.formatFullUpdate() : null;
+  }
+
+  /**
+   * Process SDK tool call messages
+   */
+  private processToolCall(message: any): string | null {
+    const toolExecution = this.formatToolExecution({
+      name: message.tool_name,
+      input: message.input,
+    });
+    logger.info(`🔧 Tool call: ${toolExecution}`);
+    this.chronologicalOutput += `${toolExecution}\n`;
+    return this.formatFullUpdate();
+  }
+
+  /**
+   * Process legacy subprocess JSON format (for backwards compatibility)
+   */
+  private processLegacyFormat(data: any): string | null {
+    // Try to extract TodoWrite from old format
+    const dataStr = JSON.stringify(data);
+    const todoData = this.extractTodoList(dataStr);
+    if (todoData) {
+      this.currentTodos = todoData;
+      return this.formatFullUpdate();
+    }
+
+    // Try old assistant message format
+    if (data.type === "assistant" && data.message?.content) {
+      let hasUpdate = false;
+      for (const contentItem of data.message.content) {
+        if (contentItem.type === "text" && contentItem.text?.trim()) {
+          this.chronologicalOutput += `${contentItem.text}\n`;
+          hasUpdate = true;
+        } else if (contentItem.type === "tool_use") {
+          const toolExecution = this.formatToolExecution(contentItem);
+          this.chronologicalOutput += `${toolExecution}\n`;
+          hasUpdate = true;
+        }
+      }
+      if (hasUpdate) {
+        return this.formatFullUpdate();
+      }
+    }
+
+    return null;
   }
 
   /**

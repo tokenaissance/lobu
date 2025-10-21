@@ -326,10 +326,9 @@ export class McpOAuthModule extends BaseModule {
    * Get status of all configured MCP servers for a user
    */
   private async getMcpStatuses(userId: string): Promise<McpStatus[]> {
-    const config = await this.configService.loadConfig();
+    const httpServers = await this.configService.getAllHttpServers();
     const statuses: McpStatus[] = [];
 
-    const httpServers = Array.from(config.httpServers.entries());
     for (const [id, serverConfig] of httpServers) {
       // Support both OAuth and input-based authentication
       const hasOAuth = !!serverConfig.oauth;

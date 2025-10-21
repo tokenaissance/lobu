@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 
 import { createLogger } from "@peerbot/core";
-import { runClaudeWithProgress } from "./session-executor";
-import { createPromptFile } from "./prompt";
+import { runClaudeWithSDK } from "./sdk-executor";
 
 const logger = createLogger("worker");
 
@@ -161,7 +160,7 @@ export class ClaudeSessionRunner {
   }
 
   /**
-   * Execute a Claude session with conversation history
+   * Execute a Claude session using SDK
    */
   async executeSession(
     options: ExecuteClaudeSessionOptions
@@ -175,45 +174,13 @@ export class ClaudeSessionRunner {
     } = options;
 
     try {
-      // Create session with conversation history from context
       logger.info(
-        `Creating session ${sessionKey} with ${context.conversationHistory?.length || 0} messages from history`
-      );
-      const sessionState = createSessionState(sessionKey, context);
-
-      // Add conversation history to session if provided
-      if (
-        context.conversationHistory &&
-        context.conversationHistory.length > 0
-      ) {
-        sessionState.conversation = [...context.conversationHistory];
-        logger.info(
-          `Loaded ${context.conversationHistory.length} messages into session`
-        );
-      }
-
-      // Add user message to conversation
-      const userMessage: ConversationMessage = {
-        role: "user",
-        content: userPrompt,
-        timestamp: Date.now(),
-      };
-
-      // Add to session state's conversation
-      sessionState.conversation = addMessageToConversation(
-        sessionState.conversation,
-        userMessage
+        `Creating SDK session ${sessionKey} with ${context.conversationHistory?.length || 0} messages from history`
       );
 
-      // Create prompt file with full conversation context (now includes the user message)
-      const promptPath = await createPromptFile(
-        context,
-        sessionState.conversation
-      );
-
-      // Execute Claude with progress monitoring
-      const result = await runClaudeWithProgress(
-        promptPath,
+      // Execute Claude with SDK
+      const result = await runClaudeWithSDK(
+        userPrompt,
         claudeOptions,
         async (update) => {
           // Call external progress callback
@@ -223,14 +190,6 @@ export class ClaudeSessionRunner {
         },
         context.workingDirectory // Pass working directory
       );
-
-      // Add Claude's response to conversation if needed
-      // Note: In stateless mode, we don't persist this
-      if (result.success && result.output) {
-        logger.info(
-          `Would add assistant response to session ${sessionKey} (no-op in stateless mode)`
-        );
-      }
 
       return {
         ...result,
@@ -259,6 +218,5 @@ export class ClaudeSessionRunner {
   }
 }
 
-// Re-export sub-modules
-export { runClaudeWithProgress } from "./session-executor";
-export { createPromptFile } from "./prompt";
+// Re-export SDK executor
+export { runClaudeWithSDK } from "./sdk-executor";
