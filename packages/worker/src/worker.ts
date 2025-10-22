@@ -784,16 +784,12 @@ export class ClaudeWorker implements WorkerExecutor {
       this.gatewayIntegration.setModuleData(moduleData);
 
       if (result.success) {
-        // Get complete output from chronological history (no need for final summary - all text is already captured)
-        const completeMessage = this.progressProcessor.getFinalOutput();
-        const finalMessage = completeMessage?.trim()
-          ? completeMessage
-          : "✅ Task completed successfully";
-
+        // All content has already been streamed during execution
+        // No need to send final delta - just signal completion
         logger.info(
-          `Sending final message via queue: ${finalMessage.substring(0, 200)}...`
+          "Session completed successfully - all content already streamed"
         );
-        await this.gatewayIntegration.signalDone(finalMessage);
+        await this.gatewayIntegration.signalDone();
       } else {
         const errorMsg = result.error || "Unknown error";
 
