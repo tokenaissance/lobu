@@ -145,7 +145,6 @@ class ProgressProcessor {
   private currentThinking: string = "";
   private chronologicalOutput: string = "";
   private lastSentContent: string = "";
-  private todoHeaderAdded: boolean = false;
 
   /**
    * Process streaming update and return formatted content for Slack
@@ -243,12 +242,6 @@ class ProgressProcessor {
             // Append task updates as chronological events
             const newTodos = block.input.todos;
 
-            // Add header on first todo list creation
-            if (!this.todoHeaderAdded && newTodos.length > 0) {
-              this.chronologicalOutput += `\n━━━━━━━━━━━━━━\n📋 **Task List**\n━━━━━━━━━━━━━━\n`;
-              this.todoHeaderAdded = true;
-            }
-
             newTodos.forEach((newTodo: any, index: number) => {
               const oldTodo = this.currentTodos[index];
 
@@ -256,8 +249,7 @@ class ProgressProcessor {
                 // New task created
                 this.chronologicalOutput += `📝 ${newTodo.content}\n`;
               } else if (oldTodo.status !== newTodo.status) {
-                // Task status changed - add divider before status update
-                this.chronologicalOutput += `━━━━━━━━━━━━━━\n`;
+                // Task status changed
                 if (newTodo.status === "in_progress") {
                   this.chronologicalOutput += `🪚 *${newTodo.activeForm}*\n`;
                 } else if (newTodo.status === "completed") {
@@ -487,7 +479,6 @@ class ProgressProcessor {
     this.chronologicalOutput = "";
     this.currentTodos = [];
     this.currentThinking = "";
-    this.todoHeaderAdded = false;
   }
 }
 
