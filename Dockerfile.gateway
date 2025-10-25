@@ -46,4 +46,5 @@ EXPOSE 3000
 WORKDIR /app
 
 # Use Bun to run from source (better WebSocket compatibility)
+# In development, docker-compose overrides this with --watch flag
 CMD ["bun", "packages/gateway/src/index.ts"]

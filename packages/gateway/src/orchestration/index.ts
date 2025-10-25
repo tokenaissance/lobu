@@ -9,6 +9,7 @@ import { buildModuleEnvVars } from "./deployment-utils";
 import { DockerDeploymentManager, K8sDeploymentManager } from "./impl";
 import { MessageConsumer } from "./message-consumer";
 import type { BaseDeploymentManager } from "./base-deployment-manager";
+import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 
 const logger = createLogger("orchestrator");
 
@@ -23,6 +24,35 @@ export class Orchestrator {
     this.config = config;
     this.deploymentManager = this.createDeploymentManager(config);
     this.queueConsumer = new MessageConsumer(config, this.deploymentManager);
+  }
+
+  /**
+   * Inject core services into the orchestrator after gateway initialization
+   * This allows the message consumer to check authentication before creating workers
+   */
+  async injectCoreServices(
+    credentialStore?: ClaudeCredentialStore,
+    systemApiKey?: string
+  ): Promise<void> {
+    // Stop the old consumer if running
+    if (this.isRunning) {
+      await this.queueConsumer.stop();
+    }
+
+    // Create new consumer with injected services
+    this.queueConsumer = new MessageConsumer(
+      this.config,
+      this.deploymentManager,
+      credentialStore,
+      systemApiKey
+    );
+
+    // Restart the consumer if orchestrator was running
+    if (this.isRunning) {
+      await this.queueConsumer.start();
+    }
+
+    logger.info("✅ Core services injected into orchestrator");
   }
 
   private createDeploymentManager(

@@ -209,7 +209,7 @@ export class ThreadResponseConsumer {
     botMessageTs: string
   ): Promise<void> {
     const key = `${this.BOT_MESSAGES_PREFIX}${sessionKey}`;
-    await this.redis.set(key, botMessageTs, DEFAULTS.SESSION_TTL_SECONDS);
+    await this.redis.set(key, botMessageTs, "EX", DEFAULTS.SESSION_TTL_SECONDS);
   }
 
   /**
@@ -442,19 +442,25 @@ export class ThreadResponseConsumer {
       // Handle message content
       if (data.content) {
         const botMessageTs = existingBotMessageTs || data.botResponseId;
-        const newBotResponseTs = await this.handleMessageUpdate(
-          data,
-          isFirstResponse,
-          botMessageTs
-        );
 
-        // Store the bot response timestamp in Redis for future updates
-        if (isFirstResponse && newBotResponseTs) {
-          await this.storeBotMessageTimestamp(
-            sessionKey,
-            newBotResponseTs,
-            data
+        // Check if message should be ephemeral
+        if (data.ephemeral) {
+          await this.handleEphemeralMessage(data);
+        } else {
+          const newBotResponseTs = await this.handleMessageUpdate(
+            data,
+            isFirstResponse,
+            botMessageTs
           );
+
+          // Store the bot response timestamp in Redis for future updates
+          if (isFirstResponse && newBotResponseTs) {
+            await this.storeBotMessageTimestamp(
+              sessionKey,
+              newBotResponseTs,
+              data
+            );
+          }
         }
       } else if (data.error) {
         const botMessageTs = existingBotMessageTs || data.botResponseId;
@@ -516,6 +522,41 @@ export class ThreadResponseConsumer {
 
       logger.error(`Failed to process thread response job ${job.id}:`, error);
       throw error; // Let the queue handle retry logic for other errors
+    }
+  }
+
+  /**
+   * Handle ephemeral message (only visible to specific user)
+   */
+  private async handleEphemeralMessage(
+    data: ThreadResponsePayload
+  ): Promise<void> {
+    const { content, channelId, userId, threadId } = data;
+
+    if (!content) return;
+
+    try {
+      logger.info(
+        `Sending ephemeral message to user ${userId} in channel ${channelId}`
+      );
+
+      // Parse content (could be JSON blocks or markdown)
+      const { text, blocks } = await this.parseMessageContent(content, data);
+
+      // Send as ephemeral message
+      await this.slackClient.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        thread_ts: threadId, // Send in thread if applicable
+        text,
+        blocks,
+      });
+
+      logger.info(`Ephemeral message sent successfully to user ${userId}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      logger.error(`Failed to send ephemeral message: ${err.message || error}`);
+      throw error;
     }
   }
 

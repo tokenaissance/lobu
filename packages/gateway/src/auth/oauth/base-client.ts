@@ -18,9 +18,12 @@ export abstract class BaseOAuth2Client {
   protected async exchangeToken<T>(
     tokenUrl: string,
     requestBody: Record<string, string> | URLSearchParams,
-    contentType: "json" | "form" = "json"
+    contentType: "json" | "form" = "json",
+    additionalHeaders?: Record<string, string>
   ): Promise<T> {
-    this.logger.info(`Exchanging code for token at ${tokenUrl}`);
+    this.logger.info(`Exchanging code for token at ${tokenUrl}`, {
+      contentType,
+    });
 
     try {
       const body =
@@ -34,6 +37,7 @@ export abstract class BaseOAuth2Client {
 
       const headers: Record<string, string> = {
         Accept: "application/json",
+        ...additionalHeaders,
       };
 
       if (contentType === "json") {
@@ -41,6 +45,12 @@ export abstract class BaseOAuth2Client {
       } else {
         headers["Content-Type"] = "application/x-www-form-urlencoded";
       }
+
+      this.logger.info(`Request details:`, {
+        headers,
+        body: body, // Log full body to debug
+        contentType,
+      });
 
       const response = await fetch(tokenUrl, {
         method: "POST",
@@ -52,6 +62,8 @@ export abstract class BaseOAuth2Client {
         const errorText = await response.text();
         this.logger.error(`Token exchange failed: ${response.status}`, {
           errorText,
+          requestBody: body,
+          requestHeaders: headers,
         });
         throw new Error(
           `Token exchange failed: ${response.status} ${response.statusText}`
@@ -108,7 +120,8 @@ export abstract class BaseOAuth2Client {
   protected async refreshAccessToken<T>(
     tokenUrl: string,
     requestBody: Record<string, string> | URLSearchParams,
-    contentType: "json" | "form" = "json"
+    contentType: "json" | "form" = "json",
+    additionalHeaders?: Record<string, string>
   ): Promise<T> {
     this.logger.info(`Refreshing token at ${tokenUrl}`);
 
@@ -124,6 +137,7 @@ export abstract class BaseOAuth2Client {
 
       const headers: Record<string, string> = {
         Accept: "application/json",
+        ...additionalHeaders,
       };
 
       if (contentType === "json") {

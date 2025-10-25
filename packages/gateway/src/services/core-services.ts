@@ -188,6 +188,7 @@ export class CoreServices {
       claudeOAuthStateStore,
       this.claudeModelPreferenceStore,
       claudeModelService,
+      this.queue,
       this.config.mcp.publicGatewayUrl,
       systemTokenAvailable
     );

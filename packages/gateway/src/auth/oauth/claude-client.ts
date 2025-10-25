@@ -64,17 +64,33 @@ export class ClaudeOAuthClient extends BaseOAuth2Client {
   async exchangeCodeForToken(
     code: string,
     codeVerifier: string,
-    customRedirectUri?: string
+    customRedirectUri?: string,
+    state?: string
   ): Promise<ClaudeCredentials> {
     const redirectUri =
       customRedirectUri || ClaudeOAuthClient.REDIRECT_URI_BASE;
 
-    const body = {
+    const body: Record<string, string> = {
       grant_type: "authorization_code",
-      code,
       client_id: ClaudeOAuthClient.CLIENT_ID,
+      code,
       redirect_uri: redirectUri,
       code_verifier: codeVerifier,
+    };
+
+    // Include state if provided (required by Claude OAuth)
+    if (state) {
+      body.state = state;
+    }
+
+    // Add browser-like headers required by Claude's OAuth server
+    const browserHeaders = {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      Referer: "https://claude.ai/",
+      Origin: "https://claude.ai",
     };
 
     const tokenData = await this.exchangeToken<{
@@ -83,7 +99,7 @@ export class ClaudeOAuthClient extends BaseOAuth2Client {
       token_type: string;
       expires_in: number;
       scope: string;
-    }>(ClaudeOAuthClient.TOKEN_URL, body, "json");
+    }>(ClaudeOAuthClient.TOKEN_URL, body, "json", browserHeaders);
 
     const expiresAt = this.calculateExpiresAt(tokenData.expires_in)!;
     const scopes = this.parseScopes(tokenData.scope);
@@ -112,13 +128,23 @@ export class ClaudeOAuthClient extends BaseOAuth2Client {
       client_id: ClaudeOAuthClient.CLIENT_ID,
     };
 
+    // Add browser-like headers for token refresh as well
+    const browserHeaders = {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      Referer: "https://claude.ai/",
+      Origin: "https://claude.ai",
+    };
+
     const tokenData = await this.refreshAccessToken<{
       access_token: string;
       refresh_token?: string;
       token_type: string;
       expires_in: number;
       scope: string;
-    }>(ClaudeOAuthClient.TOKEN_URL, body, "json");
+    }>(ClaudeOAuthClient.TOKEN_URL, body, "json", browserHeaders);
 
     const expiresAt = this.calculateExpiresAt(tokenData.expires_in)!;
     const scopes = this.parseScopes(tokenData.scope);

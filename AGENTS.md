@@ -29,10 +29,11 @@
 - **Docker Compose**: Run `make dev` to start all services with hot reload enabled (uses docker-compose.dev.yml)
 - **Logs**: View logs with `make logs` or `docker compose -f docker-compose.dev.yml logs -f [service]`
 - **Hot Reload**: Source code changes are automatically detected when NODE_ENV=development
-  - Source files are mounted as volumes in docker-compose.dev.yml
-  - Bun runs with `--watch` flag to auto-restart on file changes
-  - Changes to packages/*/src/ files trigger immediate restart (no rebuild needed)
-  - Just save the file and watch logs for "Restarting..." message
+  - **Gateway**: Source files are mounted as volumes and Bun runs with `--watch` flag
+    - Changes to `packages/gateway/src/`, `packages/core/src/`, or `packages/github/src/` trigger immediate restart
+    - Built dependencies (`packages/core/dist/`, `packages/github/dist/`) are also mounted
+    - Just save the file and watch logs for "Restarting..." message
+  - **Worker**: Worker image is rebuilt automatically in Docker mode (no rebuild needed for code changes)
   - If hot reload isn't working, verify you're using `make dev` not `docker compose up`
 
 ## Deployment Instructions

@@ -21,6 +21,7 @@
     "prepare": "husky || true",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "jscpd": "bunx jscpd --pattern \"packages/**/*.ts\" --reporters \"console\" --ignore \"**/node_modules/**,**/dist/**,**/coverage/**,**/.bun/**,**/.turbo/**,workspaces/**,charts/**,integration-tests/**,examples/**,bin/**,**/__tests__/**,**/__mocks__/**,**/*.d.ts\"",
     "dev:slack": "bun run src/entrypoints/slack-main.ts",
     "build:packages": "bun run --filter='packages/*' build",
     "test:packages": "bun run --filter='packages/*' test",
@@ -29,7 +30,8 @@
     "dev:worker": "bun run packages/worker/src/index.ts",
     "docker:build": "docker build -f docker/gateway.Dockerfile -t claude-gateway . && docker build -f docker/worker.Dockerfile -t claude-worker .",
     "k8s:deploy": "helm upgrade --install peerbot charts/peerbot --dependency-update",
-    "k8s:uninstall": "helm uninstall peerbot"
+    "k8s:uninstall": "helm uninstall peerbot",
+    "create-peerbot": "bun run packages/create-peerbot/src/index.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.14.0",
@@ -53,6 +55,7 @@
     "@types/node-fetch": "^2.6.12",
     "dotenv": "^17.2.1",
     "husky": "^9.1.7",
+    "jscpd": "^4.0.5",
     "pm2": "^6.0.13",
     "typescript": "^5.8.3"
   }

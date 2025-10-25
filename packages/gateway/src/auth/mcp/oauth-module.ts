@@ -130,7 +130,7 @@ export class McpOAuthModule extends BaseModule {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*🔌 MCP Connections*",
+          text: "* MCP Connections*",
         },
       });
 

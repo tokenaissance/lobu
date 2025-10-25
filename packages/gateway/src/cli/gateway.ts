@@ -124,6 +124,13 @@ export async function startGateway(
   // Get core services for health endpoints
   const coreServices = gateway.getCoreServices();
 
+  // Inject core services into orchestrator for authentication checks
+  await orchestrator.injectCoreServices(
+    coreServices.getClaudeCredentialStore(),
+    config.anthropicProxy.anthropicApiKey
+  );
+  logger.info("✅ Orchestrator configured with core services");
+
   // Setup health endpoints on port 8080
   setupHealthEndpoints(
     coreServices.getAnthropicProxy(),

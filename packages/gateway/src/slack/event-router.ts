@@ -448,6 +448,117 @@ export class SlackEventHandlers {
       // Update app home after successful submission
       await this.actionHandler.updateAppHome(userId, client as WebClient);
     });
+
+    // Register handler for Claude OAuth modal submissions (manual auth code entry)
+    this.app.view("claude_auth_submit", async ({ ack, body, view, client }) => {
+      const userId = body.user.id;
+      const values = view.state.values;
+
+      logger.info(`Claude auth modal submission from user ${userId}`);
+
+      // Delegate to Claude OAuth module
+      const dispatcherModules = this.moduleRegistry.getDispatcherModules();
+      for (const module of dispatcherModules) {
+        if (module.name === "claude-oauth" && module.handleViewSubmission) {
+          try {
+            await module.handleViewSubmission(
+              view.id,
+              userId,
+              values,
+              view.private_metadata || "{}"
+            );
+            logger.info(`Claude OAuth module handled auth modal submission`);
+
+            // Success - acknowledge without errors
+            await ack();
+
+            // Update app home after successful submission
+            await this.actionHandler.updateAppHome(userId, client as WebClient);
+            return;
+          } catch (error) {
+            logger.error(
+              `Claude OAuth module failed to handle auth modal:`,
+              error
+            );
+
+            // Acknowledge with error to show in modal
+            await ack({
+              response_action: "errors",
+              errors: {
+                auth_code_block:
+                  error instanceof Error
+                    ? error.message
+                    : "Authentication failed. Please try again.",
+              },
+            });
+            return;
+          }
+        }
+      }
+
+      // No module handled it - acknowledge anyway
+      await ack();
+    });
+
+    // Register handler for Claude OAuth callback modal submissions
+    this.app.view(
+      "claude_auth_callback_submit",
+      async ({ ack, body, view, client }) => {
+        const userId = body.user.id;
+        const privateMetadata = view.private_metadata || "{}";
+        const values = view.state.values;
+
+        logger.info(`Claude auth callback submission from user ${userId}`);
+
+        // Delegate to Claude OAuth module
+        const dispatcherModules = this.moduleRegistry.getDispatcherModules();
+        for (const module of dispatcherModules) {
+          if (module.name === "claude-oauth" && module.handleViewSubmission) {
+            try {
+              await module.handleViewSubmission(
+                view.id,
+                userId,
+                values,
+                privateMetadata
+              );
+              logger.info(
+                `Claude OAuth module handled auth callback submission`
+              );
+
+              // Success - acknowledge without errors
+              await ack();
+
+              // Update app home after successful submission
+              await this.actionHandler.updateAppHome(
+                userId,
+                client as WebClient
+              );
+              return;
+            } catch (error) {
+              logger.error(
+                `Claude OAuth module failed to handle auth callback:`,
+                error
+              );
+
+              // Acknowledge with error to show in modal
+              await ack({
+                response_action: "errors",
+                errors: {
+                  auth_code_block:
+                    error instanceof Error
+                      ? error.message
+                      : "Authentication failed. Please try again.",
+                },
+              });
+              return;
+            }
+          }
+        }
+
+        // No module handled it - acknowledge anyway
+        await ack();
+      }
+    );
   }
 
   /**

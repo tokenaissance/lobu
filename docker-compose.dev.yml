@@ -19,6 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile.gateway
     restart: unless-stopped  # Auto-restart on failure, but not if manually stopped
+    command: bun --watch packages/gateway/src/index.ts
     environment:
       NODE_ENV: development
       AGENT_DEFAULT_MODEL: ${AGENT_DEFAULT_MODEL}
@@ -41,6 +42,13 @@ services:
       - env_storage:/app/.peerbot/env
       # Mount MCP config for live editing
       - ./examples:/app/examples:ro
+      # Hot reload: Mount source code for gateway, core, and github
+      - ./packages/gateway/src:/app/packages/gateway/src:ro
+      - ./packages/core/src:/app/packages/core/src:ro
+      - ./packages/core/dist:/app/packages/core/dist:ro
+      - ./packages/github/src:/app/packages/github/src:ro
+      - ./packages/github/dist:/app/packages/github/dist:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
     ports:
       - "3000:3000"
       - "8080:8080"  # OAuth and health endpoints

@@ -1,10 +1,11 @@
-import { BaseModule, createLogger, decrypt, encrypt } from "@peerbot/core";
+import { BaseModule, createLogger } from "@peerbot/core";
 import type { Request, Response } from "express";
 import type { ClaudeCredentialStore } from "./credential-store";
 import type { ClaudeModelPreferenceStore } from "./model-preference-store";
 import type { ClaudeModelService } from "./model-service";
 import { ClaudeOAuthClient } from "../oauth/claude-client";
 import type { ClaudeOAuthStateStore } from "./oauth-state-store";
+import type { IMessageQueue } from "../../infrastructure/queue";
 
 const logger = createLogger("claude-oauth-module");
 
@@ -18,18 +19,21 @@ export class ClaudeOAuthModule extends BaseModule {
   private oauthClient: ClaudeOAuthClient;
   private publicGatewayUrl: string;
   private systemTokenAvailable: boolean;
+  private queue: IMessageQueue;
 
   constructor(
     private credentialStore: ClaudeCredentialStore,
     private stateStore: ClaudeOAuthStateStore,
     private modelPreferenceStore: ClaudeModelPreferenceStore,
     private modelService: ClaudeModelService,
+    queue: IMessageQueue,
     publicGatewayUrl: string,
     systemTokenAvailable: boolean
   ) {
     super();
 
     this.oauthClient = new ClaudeOAuthClient();
+    this.queue = queue;
     this.publicGatewayUrl = publicGatewayUrl;
     this.systemTokenAvailable = systemTokenAvailable;
   }
@@ -72,38 +76,6 @@ export class ClaudeOAuthModule extends BaseModule {
     return envVars;
   }
 
-  /**
-   * Generate a secure token for OAuth init URL
-   * Token contains encrypted userId and expiry
-   */
-  private generateSecureToken(userId: string): string {
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-    const payload = JSON.stringify({ userId, expiresAt });
-    return encrypt(payload);
-  }
-
-  /**
-   * Validate and decode a secure token
-   * Returns userId if valid, null if invalid or expired
-   */
-  private validateSecureToken(token: string): string | null {
-    try {
-      const decrypted = decrypt(token);
-      const data = JSON.parse(decrypted);
-      const { userId, expiresAt } = data;
-
-      // Check expiry
-      if (Date.now() > expiresAt) {
-        logger.warn("Token expired", { userId });
-        return null;
-      }
-
-      return userId;
-    } catch (error) {
-      logger.error("Failed to validate token", { error });
-      return null;
-    }
-  }
 
   /**
    * Register OAuth endpoints
@@ -134,139 +106,37 @@ export class ClaudeOAuthModule extends BaseModule {
     const blocks: any[] = [];
 
     try {
-      // Authentication section (only show if no system token)
-      if (!this.systemTokenAvailable) {
-        const hasCredentials =
-          await this.credentialStore.hasCredentials(userId);
+      const hasCredentials = await this.credentialStore.hasCredentials(userId);
+      const availableModels = await this.modelService.getAvailableModels();
+      const currentModel =
+        await this.modelPreferenceStore.getModelPreference(userId);
 
-        // Header
-        blocks.push({
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: "*🤖 Claude Authentication*",
-          },
-        });
-
-        // Status and action button
-        if (hasCredentials) {
-          // User is authenticated
-          const credentials = await this.credentialStore.getCredentials(userId);
-          const statusIcon = "🟢";
-          const statusText = "Connected";
-
-          const sectionBlock: any = {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `${statusIcon} *${statusText}*`,
-            },
-            accessory: {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Logout",
-              },
-              style: "danger",
-              action_id: "claude_logout",
-              value: "logout",
-            },
-          };
-
-          blocks.push(sectionBlock);
-
-          // Show expiry info
-          if (credentials?.expiresAt) {
-            const expiryDate = new Date(credentials.expiresAt);
-            const now = new Date();
-            const daysUntilExpiry = Math.floor(
-              (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-            );
-
-            blocks.push({
-              type: "context",
-              elements: [
-                {
-                  type: "mrkdwn",
-                  text: `Token expires in ${daysUntilExpiry} days`,
-                },
-              ],
-            });
-          }
-        } else {
-          // User is not authenticated
-          const token = this.generateSecureToken(userId);
-          const loginUrl = `${this.publicGatewayUrl}/claude/oauth/init?token=${encodeURIComponent(token)}`;
-
-          const statusIcon = "🔴";
-          const statusText = "Not Connected";
-
-          blocks.push({
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `${statusIcon} *${statusText}*\n_Using system API key_`,
-            },
-            accessory: {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "Login with Claude",
-              },
-              style: "primary",
-              url: loginUrl,
-            },
-          });
-
-          blocks.push({
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: "💡 Login to use your Claude Pro/Max subscription",
-              },
-            ],
-          });
-        }
-      } // End authentication section
-
-      // Model selection section (always show)
-      blocks.push({ type: "divider" });
+      // Single section with model dropdown and login/logout button side by side
       blocks.push({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*🎯 Model Selection*",
+          text: "*Model Selection*",
         },
       });
 
-      // Fetch available models from API
-      const availableModels = await this.modelService.getAvailableModels();
-
       if (availableModels.length === 0) {
+        // No models available - show error
         blocks.push({
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "⚠️ _Unable to fetch available models. Using default._",
+            text: "⚠️ _Unable to fetch available models._",
           },
         });
       } else {
-        const currentModel =
-          await this.modelPreferenceStore.getModelPreference(userId);
+        // Show model dropdown and login/logout button side by side using actions block
         const selectedModelInfo = availableModels.find(
           (m) => m.id === currentModel
         );
-        const selectedModelName =
-          selectedModelInfo?.display_name || "Default (from environment)";
 
-        blocks.push({
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `Current model: *${selectedModelName}*`,
-          },
-          accessory: {
+        const elements: any[] = [
+          {
             type: "static_select",
             placeholder: {
               type: "plain_text",
@@ -291,6 +161,40 @@ export class ClaudeOAuthModule extends BaseModule {
                   }
                 : undefined,
           },
+        ];
+
+        // Add login/logout button only if no system token
+        if (!this.systemTokenAvailable) {
+          if (hasCredentials) {
+            // Add logout button
+            elements.push({
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Logout",
+              },
+              style: "danger",
+              action_id: "claude_logout",
+              value: "logout",
+            });
+          } else {
+            // Add login button
+            elements.push({
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Login with Claude",
+              },
+              style: "primary",
+              action_id: "claude_auth_start",
+              value: "start_auth",
+            });
+          }
+        }
+
+        blocks.push({
+          type: "actions",
+          elements: elements,
         });
       }
     } catch (error) {
@@ -299,7 +203,7 @@ export class ClaudeOAuthModule extends BaseModule {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "⚠️ _Failed to load authentication status_",
+          text: "⚠️ _Failed to load model selection_",
         },
       });
     }
@@ -308,7 +212,7 @@ export class ClaudeOAuthModule extends BaseModule {
   }
 
   /**
-   * Handle home tab action (logout button and model selection)
+   * Handle home tab action (logout button, model selection, and auth modal)
    */
   async handleAction(
     actionId: string,
@@ -346,7 +250,245 @@ export class ClaudeOAuthModule extends BaseModule {
       return true;
     }
 
+    if (actionId === "claude_auth_start") {
+      // Open modal with Claude OAuth URL and auth code input
+      // Generate PKCE code verifier
+      const codeVerifier = this.oauthClient.generateCodeVerifier();
+
+      // Generate OAuth state for CSRF protection and store with code verifier
+      const state = await this.stateStore.create(userId, codeVerifier);
+
+      // Build Claude OAuth URL that redirects to console.anthropic.com callback
+      const authUrl = this.oauthClient.buildAuthUrl(
+        state,
+        codeVerifier,
+        "https://console.anthropic.com/oauth/code/callback"
+      );
+
+      // Detect context - where was the button clicked?
+      // For ephemeral messages, Slack doesn't include the message object
+      // We need to check the action body structure
+      const body = context.body as any;
+
+      // Check if it's from home tab (has view field) or from a message
+      const isHomeTab = !!body.view;
+
+      // For ephemeral messages in threads, the container has thread_ts
+      const container = body.container;
+      const message = body.message;
+
+      let threadTs: string | undefined;
+
+      if (container) {
+        // Ephemeral message - use container.thread_ts if in a thread
+        threadTs = container.thread_ts || container.message_ts;
+      } else if (message) {
+        // Regular message - use thread_ts or ts
+        threadTs = message.thread_ts || message.ts;
+      }
+
+      const loginContext = {
+        state,
+        source: isHomeTab ? "home_tab" : "ephemeral_message",
+        channelId: context.channelId,
+        messageTs: threadTs,
+      };
+
+      try {
+        await context.client.views.open({
+          trigger_id: context.body.trigger_id,
+          view: {
+            type: "modal",
+            callback_id: "claude_auth_submit",
+            private_metadata: JSON.stringify(loginContext), // Pass context through modal
+            title: {
+              type: "plain_text",
+              text: "Login to Claude",
+            },
+            submit: {
+              type: "plain_text",
+              text: "Submit",
+            },
+            close: {
+              type: "plain_text",
+              text: "Cancel",
+            },
+            blocks: [
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*Step 1:* Click the link below to authorize with Claude:\n\n<${authUrl}|🔗 Login with Claude>`,
+                },
+              },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: "*Step 2:* After authorizing, you'll see an authentication code.",
+                },
+              },
+              {
+                type: "input",
+                block_id: "auth_code_block",
+                element: {
+                  type: "plain_text_input",
+                  action_id: "auth_code_input",
+                  placeholder: {
+                    type: "plain_text",
+                    text: "abc123...#xyz789...",
+                  },
+                },
+                label: {
+                  type: "plain_text",
+                  text: "Authentication Code",
+                },
+              },
+            ],
+          },
+        });
+
+        logger.info(`Opened auth modal for user ${userId} with state ${state}`);
+      } catch (error) {
+        logger.error("Failed to open auth modal", { error, userId });
+      }
+
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * Handle modal submission for authorization code
+   */
+  async handleViewSubmission(
+    _viewId: string,
+    userId: string,
+    values: any,
+    privateMetadata: string
+  ): Promise<void> {
+    const input = values?.auth_code_block?.auth_code_input?.value?.trim();
+
+    if (!input) {
+      logger.warn("No input provided", { userId });
+      throw new Error("Authentication code is required");
+    }
+
+    // Parse the authentication code
+    // Expected format: CODE#STATE (e.g., NdaqposxAuKMWyGKRfjZ9C00hg7VG3z1GI8XCMxPKSgHnz70#uwXkLAjz2C3AXHGKqZfVsHx-Syr6XuNWyRoZ1R70ikA)
+    let authCode: string;
+    let state: string;
+
+    try {
+      // Check if it's a URL format (for backward compatibility)
+      if (input.startsWith("http://") || input.startsWith("https://")) {
+        const url = new URL(input);
+        authCode = url.searchParams.get("code") || "";
+        state = url.hash.substring(1); // Remove the # prefix
+      } else {
+        // Parse CODE#STATE format
+        const parts = input.split("#");
+        if (parts.length !== 2) {
+          throw new Error("Invalid format - expected CODE#STATE");
+        }
+        authCode = parts[0].trim();
+        state = parts[1].trim();
+      }
+
+      if (!authCode || !state) {
+        throw new Error("Missing code or state");
+      }
+
+      logger.info(`Parsed authentication code`, {
+        userId,
+        hasCode: !!authCode,
+        hasState: !!state,
+      });
+    } catch (parseError) {
+      logger.error("Failed to parse authentication code", {
+        userId,
+        input,
+        error: parseError,
+      });
+      throw new Error(
+        "Invalid format. Please paste the entire authentication code (CODE#STATE) from Claude."
+      );
+    }
+
+    // Retrieve and consume the OAuth state to get code verifier
+    const stateData = await this.stateStore.consume(state);
+    if (!stateData) {
+      logger.error("Failed to retrieve OAuth state", { userId, state });
+      throw new Error("Invalid or expired authentication state");
+    }
+
+    try {
+      logger.info(`Processing authorization code for user ${userId}`);
+
+      // Exchange auth code for tokens using console.anthropic.com callback
+      const credentials = await this.oauthClient.exchangeCodeForToken(
+        authCode,
+        stateData.codeVerifier,
+        "https://console.anthropic.com/oauth/code/callback",
+        state
+      );
+
+      // Store credentials
+      await this.credentialStore.setCredentials(userId, credentials);
+      logger.info(`OAuth successful for user ${userId} via modal`);
+
+      // Parse login context to determine where to send success message
+      let loginContext: any = { source: "home_tab" };
+      try {
+        loginContext = JSON.parse(privateMetadata || "{}");
+      } catch {
+        logger.warn(`Failed to parse private metadata: ${privateMetadata}`);
+      }
+
+      // Send success message based on context
+      await this.sendSuccessMessage(userId, loginContext);
+    } catch (error) {
+      logger.error("Failed to process auth code", { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Send success message after successful authentication
+   */
+  private async sendSuccessMessage(
+    userId: string,
+    loginContext: any
+  ): Promise<void> {
+    const source = loginContext.source || "home_tab";
+    let message: string;
+
+    if (source === "ephemeral_message") {
+      // User clicked login from ephemeral message in DM
+      message =
+        "✅ *Login Successful!*\n\nYou're now authenticated with Claude. Please send your message again to process it.";
+    } else {
+      // User clicked login from home tab
+      message =
+        "✅ *Login Successful!*\n\nYou're now authenticated with Claude. You can start chatting with the bot!";
+    }
+
+    // Create thread_response queue if it doesn't exist
+    await this.queue.createQueue("thread_response");
+
+    // Send ephemeral success message
+    await this.queue.send("thread_response", {
+      messageId: `auth_success_${Date.now()}`,
+      userId,
+      channelId: loginContext.channelId || userId, // Use DM channel if no channelId
+      threadId: loginContext.messageTs || undefined,
+      ephemeral: true,
+      content: message,
+      processedMessageIds: [`auth_success_${Date.now()}`],
+    });
+
+    logger.info(`Sent success message to user ${userId} via ${source}`);
   }
 
   /**

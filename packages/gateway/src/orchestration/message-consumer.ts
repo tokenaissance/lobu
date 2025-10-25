@@ -10,6 +10,7 @@ import type {
   IMessageQueue,
   QueueJob as SharedQueueJob,
 } from "../infrastructure/queue";
+import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import * as Sentry from "@sentry/node";
 
 const logger = createLogger("orchestrator");
@@ -19,13 +20,19 @@ export class MessageConsumer {
   private deploymentManager: BaseDeploymentManager;
   private config: OrchestratorConfig;
   private isRunning = false;
+  private credentialStore?: ClaudeCredentialStore;
+  private systemApiKey?: string;
 
   constructor(
     config: OrchestratorConfig,
-    deploymentManager: BaseDeploymentManager
+    deploymentManager: BaseDeploymentManager,
+    credentialStore?: ClaudeCredentialStore,
+    systemApiKey?: string
   ) {
     this.config = config;
     this.deploymentManager = deploymentManager;
+    this.credentialStore = credentialStore;
+    this.systemApiKey = systemApiKey;
 
     // Parse Redis connection string
     const url = new URL(config.queues.connectionString);
@@ -106,6 +113,59 @@ export class MessageConsumer {
     );
 
     try {
+      // Check if user has credentials or if system API key is available
+      if (this.credentialStore && !this.systemApiKey) {
+        const hasCredentials = await this.credentialStore.hasCredentials(
+          data.userId
+        );
+
+        if (!hasCredentials) {
+          logger.info(
+            `User ${data.userId} has no credentials - sending authentication prompt`
+          );
+
+          // Send ephemeral authentication prompt via thread_response queue
+          await this.queue.createQueue("thread_response");
+          await this.queue.send("thread_response", {
+            messageId: data.messageId,
+            userId: data.userId,
+            channelId: data.channelId,
+            threadId: data.threadId,
+            ephemeral: true,
+            content: JSON.stringify({
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: "🔐 *Authentication Required*\n\nYou need to login with your Claude account to use this bot. Please visit the app home tab to authenticate.",
+                  },
+                },
+                {
+                  type: "actions",
+                  elements: [
+                    {
+                      type: "button",
+                      text: {
+                        type: "plain_text",
+                        text: "Login with Claude",
+                      },
+                      style: "primary",
+                      action_id: "claude_auth_start",
+                      value: "start_auth",
+                    },
+                  ],
+                },
+              ],
+            }),
+            processedMessageIds: [data.messageId],
+          });
+
+          logger.info(`✅ Sent authentication prompt to user ${data.userId}`);
+          return; // Don't create worker
+        }
+      }
+
       // CRITICAL: For consistent worker naming, always use the targetThreadId if available
       // This ensures ALL messages in a Slack thread use the SAME worker
       // Thread ID must be the thread_ts (root message timestamp), NOT individual message timestamps!

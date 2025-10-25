@@ -356,21 +356,15 @@ export class GatewayClient {
 
     const agentOptions = {
       ...(payload.agentOptions || {}),
-      ...(process.env.CLAUDE_ALLOWED_TOOLS
-        ? { allowedTools: process.env.CLAUDE_ALLOWED_TOOLS }
-        : payload.agentOptions?.allowedTools
-          ? { allowedTools: payload.agentOptions.allowedTools }
-          : {}),
-      ...(process.env.CLAUDE_DISALLOWED_TOOLS
-        ? { disallowedTools: process.env.CLAUDE_DISALLOWED_TOOLS }
-        : payload.agentOptions?.disallowedTools
-          ? { disallowedTools: payload.agentOptions.disallowedTools }
-          : {}),
-      ...(process.env.CLAUDE_TIMEOUT_MINUTES
-        ? { timeoutMinutes: process.env.CLAUDE_TIMEOUT_MINUTES }
-        : payload.agentOptions?.timeoutMinutes
-          ? { timeoutMinutes: payload.agentOptions.timeoutMinutes }
-          : {}),
+      ...(payload.agentOptions?.allowedTools
+        ? { allowedTools: payload.agentOptions.allowedTools }
+        : {}),
+      ...(payload.agentOptions?.disallowedTools
+        ? { disallowedTools: payload.agentOptions.disallowedTools }
+        : {}),
+      ...(payload.agentOptions?.timeoutMinutes
+        ? { timeoutMinutes: payload.agentOptions.timeoutMinutes }
+        : {}),
     };
 
     return {

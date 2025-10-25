@@ -10,20 +10,31 @@ export interface ClaudeModel {
   type: string;
 }
 
-interface ModelsResponse {
-  data: ClaudeModel[];
-  has_more: boolean;
-  first_id?: string;
-  last_id?: string;
-}
-
 /**
- * Service to fetch and cache available Claude models from Anthropic API
+ * Service to provide available Claude models
  */
 export class ClaudeModelService {
-  private static readonly CACHE_KEY = "claude:available_models";
-  private static readonly CACHE_TTL_SECONDS = 24 * 60 * 60; // 24 hours
-  private static readonly API_VERSION = "2023-06-01";
+  // Hardcoded model list
+  private static readonly MODELS: ClaudeModel[] = [
+    {
+      id: "claude-sonnet-4-5",
+      display_name: "Claude Sonnet 4.5",
+      created_at: new Date().toISOString(),
+      type: "model",
+    },
+    {
+      id: "claude-haiku-4-5",
+      display_name: "Claude Haiku 4.5",
+      created_at: new Date().toISOString(),
+      type: "model",
+    },
+    {
+      id: "claude-opus-4-1",
+      display_name: "Claude Opus 4.1",
+      created_at: new Date().toISOString(),
+      type: "model",
+    },
+  ];
 
   constructor(
     private redis: Redis,
@@ -31,93 +42,10 @@ export class ClaudeModelService {
   ) {}
 
   /**
-   * Get available models from cache or API
+   * Get available models
    */
   async getAvailableModels(): Promise<ClaudeModel[]> {
-    // Try cache first
-    const cached = await this.redis.get(ClaudeModelService.CACHE_KEY);
-    if (cached) {
-      try {
-        const models = JSON.parse(cached) as ClaudeModel[];
-        logger.info(`Retrieved ${models.length} models from cache`);
-        return models;
-      } catch (error) {
-        logger.warn("Failed to parse cached models", { error });
-      }
-    }
-
-    // Fetch from API
-    logger.info("Fetching models from Anthropic API");
-    const models = await this.fetchModelsFromAPI();
-
-    // Cache the results
-    if (models.length > 0) {
-      await this.redis.setex(
-        ClaudeModelService.CACHE_KEY,
-        ClaudeModelService.CACHE_TTL_SECONDS,
-        JSON.stringify(models)
-      );
-      logger.info(
-        `Cached ${models.length} models for ${ClaudeModelService.CACHE_TTL_SECONDS}s`
-      );
-    }
-
-    return models;
-  }
-
-  /**
-   * Fetch models from Anthropic API
-   */
-  private async fetchModelsFromAPI(): Promise<ClaudeModel[]> {
-    if (!this.systemApiKey) {
-      logger.warn("No system API key available, cannot fetch models");
-      return [];
-    }
-
-    try {
-      const response = await fetch("https://api.anthropic.com/v1/models", {
-        method: "GET",
-        headers: {
-          "x-api-key": this.systemApiKey,
-          "anthropic-version": ClaudeModelService.API_VERSION,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        logger.error(
-          `Failed to fetch models: ${response.status} ${response.statusText}`
-        );
-        return [];
-      }
-
-      const data = (await response.json()) as ModelsResponse;
-
-      if (!data.data || !Array.isArray(data.data)) {
-        logger.error("Invalid response format from models API");
-        return [];
-      }
-
-      // Filter to only Claude models (exclude experimental/beta models if needed)
-      const claudeModels = data.data.filter((model) =>
-        model.id.startsWith("claude-")
-      );
-
-      logger.info(`Fetched ${claudeModels.length} Claude models from API`);
-
-      return claudeModels;
-    } catch (error) {
-      logger.error("Error fetching models from API", { error });
-      return [];
-    }
-  }
-
-  /**
-   * Refresh the model cache
-   */
-  async refreshCache(): Promise<void> {
-    logger.info("Manually refreshing model cache");
-    await this.redis.del(ClaudeModelService.CACHE_KEY);
-    await this.getAvailableModels();
+    logger.debug("Returning hardcoded model list");
+    return ClaudeModelService.MODELS;
   }
 }
