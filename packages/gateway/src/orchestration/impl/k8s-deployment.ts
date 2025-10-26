@@ -143,6 +143,7 @@ interface SimpleDeployment {
 
 export class K8sDeploymentManager extends BaseDeploymentManager {
   private appsV1Api: k8s.AppsV1Api;
+  private coreV1Api: k8s.CoreV1Api;
 
   constructor(
     config: OrchestratorConfig,
@@ -197,6 +198,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Configure K8s API clients
     this.appsV1Api = kc.makeApiClient(k8s.AppsV1Api);
+    this.coreV1Api = kc.makeApiClient(k8s.CoreV1Api);
 
     // API clients are already configured with authentication through makeApiClient
 
@@ -254,6 +256,50 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     }
   }
 
+  /**
+   * Create a PersistentVolumeClaim for a worker deployment
+   */
+  private async createPVC(pvcName: string): Promise<void> {
+    const pvc = {
+      apiVersion: "v1",
+      kind: "PersistentVolumeClaim",
+      metadata: {
+        name: pvcName,
+        namespace: this.config.kubernetes.namespace,
+        labels: {
+          ...BASE_WORKER_LABELS,
+          "app.kubernetes.io/component": "worker-storage",
+        },
+      },
+      spec: {
+        accessModes: ["ReadWriteOnce"],
+        resources: {
+          requests: {
+            storage: this.config.worker.persistence?.size || "1Gi",
+          },
+        },
+        ...(this.config.worker.persistence?.storageClass
+          ? { storageClassName: this.config.worker.persistence.storageClass }
+          : {}),
+      },
+    };
+
+    try {
+      await this.coreV1Api.createNamespacedPersistentVolumeClaim(
+        this.config.kubernetes.namespace,
+        pvc
+      );
+      logger.info(`✅ Created PVC: ${pvcName}`);
+    } catch (error) {
+      const k8sError = error as { statusCode?: number };
+      if (k8sError.statusCode === 409) {
+        logger.info(`PVC ${pvcName} already exists (reusing)`);
+      } else {
+        throw error;
+      }
+    }
+  }
+
   async createDeployment(
     deploymentName: string,
     username: string,
@@ -264,6 +310,10 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     logger.info(
       `🚀 Creating K8s deployment: ${deploymentName} for user ${userId}`
     );
+
+    // Create PVC for this deployment (per-thread persistent storage)
+    const pvcName = `${deploymentName}-pvc`;
+    await this.createPVC(pvcName);
 
     // Get environment variables before creating the deployment spec
     const envVars = await this.generateEnvironmentVariables(
@@ -344,9 +394,9 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
             volumes: [
               {
                 name: "workspace",
-                // Use ephemeral storage instead of PVC to avoid quota and multi-attach issues
-                emptyDir: {
-                  sizeLimit: "2Gi",
+                // Use per-deployment PVC for session persistence across scale-to-zero
+                persistentVolumeClaim: {
+                  claimName: pvcName,
                 },
               },
             ],
@@ -468,6 +518,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
   async deleteDeployment(deploymentId: string): Promise<void> {
     const deploymentName = `peerbot-worker-${deploymentId}`;
+    const pvcName = `${deploymentName}-pvc`;
 
     // Delete the deployment
     try {
@@ -484,6 +535,23 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         );
       } else {
         throw error;
+      }
+    }
+
+    // Delete the PVC
+    try {
+      await this.coreV1Api.deleteNamespacedPersistentVolumeClaim(
+        pvcName,
+        this.config.kubernetes.namespace
+      );
+      logger.info(`✅ Deleted PVC: ${pvcName}`);
+    } catch (error) {
+      const k8sError = error as { statusCode?: number };
+      if (k8sError.statusCode === 404) {
+        logger.info(`⚠️  PVC ${pvcName} not found (already deleted)`);
+      } else {
+        logger.error(`Failed to delete PVC ${pvcName}:`, error);
+        // Don't throw - deployment deletion should succeed even if PVC cleanup fails
       }
     }
   }

@@ -28,6 +28,7 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
   private finalContent?: string;
   private lastStatus?: string;
   private accumulatedStreamContent: string = "";
+  private lastStreamDelta: string = "";
   private recentActivities: string[] = [];
   private readonly maxActivities = 5;
 
@@ -175,6 +176,21 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
           `📝 Final result has ${actualDelta.length} new chars - sending delta only`
         );
       } else if (this.accumulatedStreamContent.length > 0) {
+        const normalizedFinal = this.normalizeForComparison(delta);
+        const normalizedLastDelta = this.normalizeForComparison(
+          this.lastStreamDelta
+        );
+
+        if (
+          normalizedFinal.length > 0 &&
+          normalizedFinal === normalizedLastDelta
+        ) {
+          logger.info(
+            `✅ Final result matches last streamed delta (normalized) - skipping duplicate`
+          );
+          return;
+        }
+
         // Content differs - log warning and send full final result
         logger.warn(`⚠️  Final result differs from accumulated content!`);
         logger.warn(
@@ -191,6 +207,7 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
     } else {
       this.accumulatedStreamContent = actualDelta;
     }
+    this.lastStreamDelta = actualDelta;
 
     await this.sendResponse({
       messageId: this.originalMessageTs,
@@ -296,5 +313,9 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
       "All retry attempts failed for sending response to dispatcher"
     );
     throw lastError;
+  }
+
+  private normalizeForComparison(text: string): string {
+    return text.replace(/\r\n/g, "\n").trim();
   }
 }

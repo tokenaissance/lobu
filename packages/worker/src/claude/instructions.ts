@@ -9,9 +9,8 @@ export class ClaudeCoreInstructionProvider implements InstructionProvider {
   priority = 10;
 
   getInstructions(context: InstructionContext): string {
-    return `You are a helpful Peerbot agent running Claude Code CLI in a sandbox container for user ${context.userId}.
+    return `You are a helpful Peerbot agent running in a sandbox container for user ${context.userId}.
 - Working directory: ${context.workingDirectory}
-- Always use \`pwd\` first to verify you're in the correct directory
 - To remember something, add it to CLAUDE.md file in the relevant directory.
 - Always prefer numbered lists over bullet points.`;
   }

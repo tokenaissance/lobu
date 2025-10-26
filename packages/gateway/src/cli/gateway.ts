@@ -16,7 +16,9 @@ let healthServer: http.Server | null = null;
 function setupHealthEndpoints(
   anthropicProxy: any,
   workerGateway: any,
-  mcpProxy: any
+  mcpProxy: any,
+  fileHandler?: any,
+  sessionManager?: any
 ) {
   if (healthServer) return;
 
@@ -60,6 +62,14 @@ function setupHealthEndpoints(
   if (mcpProxy) {
     mcpProxy.setupRoutes(proxyApp);
     logger.info("✅ MCP proxy routes enabled at :8080/mcp/*");
+  }
+
+  // Setup file routes if file handler is provided
+  if (fileHandler && sessionManager) {
+    const { createFileRoutes } = require("../api/file-routes");
+    const fileRoutes = createFileRoutes(fileHandler, sessionManager);
+    proxyApp.use("/internal/files", fileRoutes);
+    logger.info("✅ File routes enabled at :8080/internal/files/*");
   }
 
   // Create HTTP server with Express app
@@ -109,13 +119,12 @@ export async function startGateway(
     timeoutMinutes: config.claude.timeoutMinutes,
   };
 
-  gateway.registerPlatform(
-    new SlackPlatform(
-      slackPlatformConfig,
-      agentOptions,
-      config.sessionTimeoutMinutes
-    )
+  const slackPlatform = new SlackPlatform(
+    slackPlatformConfig,
+    agentOptions,
+    config.sessionTimeoutMinutes
   );
+  gateway.registerPlatform(slackPlatform);
 
   // Start gateway (initializes core services + platforms)
   await gateway.start();
@@ -131,11 +140,17 @@ export async function startGateway(
   );
   logger.info("✅ Orchestrator configured with core services");
 
+  // Get file handler from Slack platform (if available)
+  const fileHandler = slackPlatform.getFileHandler();
+  const sessionManager = coreServices.getSessionManager();
+
   // Setup health endpoints on port 8080
   setupHealthEndpoints(
     coreServices.getAnthropicProxy(),
     coreServices.getWorkerGateway(),
-    coreServices.getMcpProxy()
+    coreServices.getMcpProxy(),
+    fileHandler,
+    sessionManager
   );
 
   logger.info("✅ Peerbot Gateway is running!");

@@ -11,7 +11,7 @@ npm install -g create-peerbot
 
 mkdir my-peerbot
 cd my-peerbot
-create-peerbot
+npm create peerbot my-peerbot
 docker compose up -d
 ```
 
@@ -111,7 +111,7 @@ Initialize a new Peerbot project in the current directory.
 
 ## Usage
 
-After running `create-peerbot`:
+After running `npm create peerbot`:
 
 ```bash
 # Start services
@@ -174,7 +174,7 @@ CMD ["peerbot-worker"]
 # 1. Create project
 mkdir my-bot
 cd my-bot
-create-peerbot
+npm create peerbot
 
 # 2. Choose worker mode during init
 #    - Base image (recommended)
@@ -249,7 +249,7 @@ User creates project
         ↓
 mkdir my-bot && cd my-bot
         ↓
-create-peerbot
+npm create peerbot
         ↓
 Choose: Base image or Package?
         ↓

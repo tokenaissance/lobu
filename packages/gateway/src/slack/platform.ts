@@ -13,6 +13,7 @@ import { SocketHealthMonitor } from "./health/socket-health-monitor";
 import { SlackEventHandlers } from "./event-router";
 import { ThreadResponseConsumer } from "./thread-processor";
 import { SlackInstructionProvider } from "./instructions/provider";
+import { FileHandler } from "../services/file-handler";
 
 const logger = createLogger("slack-platform");
 
@@ -28,6 +29,7 @@ export class SlackPlatform implements PlatformAdapter {
   private threadResponseConsumer?: ThreadResponseConsumer;
   private socketHealthMonitor?: SocketHealthMonitor;
   private services!: CoreServices;
+  private fileHandler?: FileHandler;
 
   constructor(
     private readonly config: SlackPlatformConfig,
@@ -116,6 +118,9 @@ export class SlackPlatform implements PlatformAdapter {
     // Get bot info
     await this.initializeBotInfo();
 
+    // Create file handler
+    this.fileHandler = new FileHandler(this.app.client);
+
     // Create thread response consumer
     this.threadResponseConsumer = new ThreadResponseConsumer(
       services.getQueue(),
@@ -198,6 +203,13 @@ export class SlackPlatform implements PlatformAdapter {
    */
   getInstructionProvider(): InstructionProvider {
     return new SlackInstructionProvider();
+  }
+
+  /**
+   * Get file handler for this platform
+   */
+  getFileHandler(): FileHandler | undefined {
+    return this.fileHandler;
   }
 
   /**

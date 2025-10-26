@@ -12,6 +12,8 @@ import type {
 import { ClaudeCoreInstructionProvider } from "./instructions";
 import { ProgressProcessor } from "./processor";
 import { type ClaudeExecutionOptions, runClaudeWithSDK } from "./sdk-adapter";
+import * as fs from "fs/promises";
+import * as path from "path";
 
 const logger = createLogger("claude-worker");
 
@@ -62,22 +64,45 @@ export class ClaudeWorker extends BaseWorker {
         this.config.agentOptions
       );
 
+      // Check if Claude session exists in workspace
+      const workspaceDir = this.getWorkingDirectory();
+      const sessionExists = await this.checkClaudeSessionExists(workspaceDir);
+
+      // Decide whether to continue or start new session
+      const resumeSessionId = sessionExists ? "continue" : undefined;
+
+      logger.info(
+        sessionExists
+          ? `Continuing existing Claude session for thread ${this.config.threadId}`
+          : `Starting new Claude session for thread ${this.config.threadId}`
+      );
+
+      // Capture Claude session ID from progress callback
+      let capturedClaudeSessionId: string | undefined;
+
       // Execute Claude with SDK
       const result = await runClaudeWithSDK(
         userPrompt,
         {
           ...agentOptions,
           appendSystemPrompt: customInstructions,
-          ...(this.config.resumeSessionId
-            ? { resumeSessionId: this.config.resumeSessionId }
-            : this.config.sessionId
-              ? { sessionId: this.config.sessionId }
-              : {}),
+          ...(resumeSessionId ? { resumeSessionId } : {}),
         },
         async (update) => {
+          // Capture session ID from completion event
+          if (update.type === "completion" && update.data?.sessionId) {
+            capturedClaudeSessionId = update.data.sessionId;
+            logger.info(
+              `Captured Claude session ID: ${capturedClaudeSessionId}`
+            );
+          }
           await onProgress(update);
         },
-        this.getWorkingDirectory()
+        this.getWorkingDirectory(),
+        {
+          channelId: this.config.channelId,
+          threadId: this.config.threadId || "",
+        }
       );
 
       return {
@@ -85,6 +110,7 @@ export class ClaudeWorker extends BaseWorker {
         sessionKey: this.config.sessionKey,
         persisted: false,
         storagePath: `${this.config.platform || "platform"}://thread`,
+        claudeSessionId: capturedClaudeSessionId,
       };
     } catch (error) {
       logger.error(
@@ -159,5 +185,32 @@ export class ClaudeWorker extends BaseWorker {
 
   protected async cleanupSession(sessionKey: string): Promise<void> {
     logger.info(`Cleanup for ${sessionKey} (no-op in stateless mode)`);
+  }
+
+  /**
+   * Check if Claude CLI session exists
+   * With HOME=/workspace, Claude SDK stores sessions in /workspace/.claude/
+   */
+  private async checkClaudeSessionExists(
+    _workspaceDir: string
+  ): Promise<boolean> {
+    try {
+      // Claude SDK stores sessions in HOME directory
+      // Since HOME=/workspace, sessions are in /workspace/.claude/
+      const homeDir = process.env.HOME || "/workspace";
+      const claudeDir = path.join(homeDir, ".claude");
+      const stats = await fs.stat(claudeDir);
+
+      if (!stats.isDirectory()) {
+        return false;
+      }
+
+      // Check if there are any session files
+      const files = await fs.readdir(claudeDir);
+      return files.length > 0;
+    } catch {
+      // Directory doesn't exist or not accessible
+      return false;
+    }
   }
 }

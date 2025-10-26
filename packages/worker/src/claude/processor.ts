@@ -217,8 +217,10 @@ export class ProgressProcessor {
           } else {
             // Format and append non-TodoWrite tool execution
             const toolExecution = this.formatToolExecution(block);
-            this.chronologicalOutput += `${toolExecution}\n`;
-            hasUpdate = true;
+            if (toolExecution) {
+              this.chronologicalOutput += `${toolExecution}\n`;
+              hasUpdate = true;
+            }
           }
         }
       }
@@ -237,6 +239,11 @@ export class ProgressProcessor {
   private formatToolExecution(toolUse: ToolUseBlock): string {
     const toolName = toolUse.name;
     const params = toolUse.input || {};
+
+    // Hide system tools (mcp__peerbot__*)
+    if (toolName.startsWith("mcp__peerbot__")) {
+      return "";
+    }
 
     const config = TOOL_DISPLAY_CONFIG[toolName];
     if (!config) {

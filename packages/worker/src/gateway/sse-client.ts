@@ -21,7 +21,6 @@ export class GatewayClient {
   private deploymentName: string;
   private isRunning = false;
   private currentWorker: WorkerExecutor | null = null;
-  private hasStartedSession = false;
   private abortController?: AbortController;
   private currentJobId?: string;
   private reconnectAttempts = 0;
@@ -277,20 +276,7 @@ export class GatewayClient {
 
       const workerConfig = this.payloadToWorkerConfig(message.payload);
 
-      if (!this.hasStartedSession) {
-        const crypto = require("node:crypto");
-        workerConfig.sessionId = crypto.randomUUID();
-        logger.info(
-          `Creating new Claude session ${workerConfig.sessionId} for first message in thread ${message.payload.threadId}`
-        );
-        this.hasStartedSession = true;
-      } else {
-        workerConfig.resumeSessionId = "continue";
-        logger.info(
-          `Continuing existing Claude session for message in thread ${message.payload.threadId}`
-        );
-      }
-
+      // Worker will decide whether to continue session based on workspace state
       this.currentWorker = new ClaudeWorker(workerConfig);
 
       const gatewayIntegration = this.currentWorker.getGatewayIntegration();

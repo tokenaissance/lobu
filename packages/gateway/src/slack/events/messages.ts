@@ -34,7 +34,8 @@ export class MessageHandler {
   async handleUserRequest(
     context: SlackContext,
     userRequest: string,
-    client: WebClient
+    client: WebClient,
+    files?: any[]
   ): Promise<void> {
     const requestStartTime = Date.now();
     logger.info(
@@ -129,7 +130,10 @@ export class MessageHandler {
       );
 
       // Determine if this is a new conversation
-      const isNewConversation = !context.threadTs || !existingSession;
+      // A conversation is new only if this message is the ROOT of the thread (messageTs === threadTs)
+      // OR if there's no thread_ts at all (first message in a channel/DM)
+      const isNewConversation =
+        context.messageTs === normalizedThreadTs && !existingSession;
 
       if (isNewConversation) {
         const deploymentPayload: WorkerDeploymentPayload = {
@@ -148,6 +152,7 @@ export class MessageHandler {
             responseId: context.messageTs,
             originalMessageId: context.messageTs,
             botResponseId: threadSession.botResponseId,
+            files: files || [],
           },
           agentOptions: {
             allowedTools: this.config.agentOptions.allowedTools,
@@ -184,6 +189,7 @@ export class MessageHandler {
             responseId: context.messageTs,
             originalMessageId: context.messageTs,
             botResponseId: threadSession.botResponseId,
+            files: files || [],
           },
           agentOptions: {
             ...this.config.agentOptions,

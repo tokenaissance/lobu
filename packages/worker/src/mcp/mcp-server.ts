@@ -463,7 +463,7 @@ export async function startHTTPServer(
   });
 
   const httpServer = app.listen(port, () => {
-    logger.error(`[Process Manager MCP] HTTP server started on port ${port}`);
+    logger.info(`[Process Manager MCP] HTTP server started on port ${port}`);
   });
 
   return {

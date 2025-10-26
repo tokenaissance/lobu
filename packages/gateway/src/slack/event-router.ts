@@ -18,6 +18,7 @@ import { handleBlockkitFormSubmission } from "./events/forms";
 import { MessageHandler } from "./events/messages";
 import { ShortcutCommandHandler } from "./events/shortcuts";
 import { setupTeamJoinHandler } from "./events/welcome";
+import { setupAssistantHandlers } from "./events/assistant";
 import type { SlackContext, WebClient, SlackMessageEvent } from "./types";
 import { isSelfGeneratedEvent } from "./utils";
 
@@ -100,6 +101,49 @@ export class SlackEventHandlers {
       const fileEvent = event as FileDeletedEvent;
       logger.debug("File deleted", {
         fileId: fileEvent.file_id,
+      });
+    });
+
+    // Setup assistant thread event handlers
+    this.app.event("assistant_thread_started", async ({ event, client }) => {
+      const assistantEvent = event as {
+        assistant_thread: {
+          user_id: string;
+          channel_id: string;
+          thread_ts: string;
+          context: any;
+        };
+      };
+      logger.info("Assistant thread started", {
+        user: assistantEvent.assistant_thread.user_id,
+        channel: assistantEvent.assistant_thread.channel_id,
+        threadTs: assistantEvent.assistant_thread.thread_ts,
+      });
+
+      // Send a welcome message when assistant thread starts
+      try {
+        await client.chat.postMessage({
+          channel: assistantEvent.assistant_thread.channel_id,
+          thread_ts: assistantEvent.assistant_thread.thread_ts,
+          text: "👋 Hi! I'm Peerbot, your AI coding assistant. How can I help you today?",
+        });
+      } catch (error) {
+        logger.error("Failed to send assistant thread welcome message:", error);
+      }
+    });
+
+    this.app.event("assistant_thread_context_changed", async ({ event }) => {
+      const contextEvent = event as {
+        assistant_thread: {
+          user_id: string;
+          channel_id: string;
+          thread_ts: string;
+        };
+      };
+      logger.debug("Assistant thread context changed", {
+        user: contextEvent.assistant_thread.user_id,
+        channel: contextEvent.assistant_thread.channel_id,
+        threadTs: contextEvent.assistant_thread.thread_ts,
       });
     });
 
@@ -189,6 +233,9 @@ export class SlackEventHandlers {
     // Handle app home opened event
     this.setupAppHomeHandler();
 
+    // Setup Slack Assistant handlers for assistant threads
+    setupAssistantHandlers(this.app, this.messageHandler, this.config);
+
     logger.info("All Slack event handlers registered successfully");
   }
 
@@ -246,10 +293,28 @@ export class SlackEventHandlers {
       const context = this.messageHandler.extractSlackContext(
         event as unknown as SlackMessageEvent
       );
+
+      // Extract file metadata if any (app mentions can have files)
+      const eventWithFiles = event as any;
+      const files = eventWithFiles.files?.map((file: any) => ({
+        id: file.id,
+        name: file.name,
+        mimetype: file.mimetype,
+        size: file.size,
+        url_private: file.url_private,
+        url_private_download: file.url_private_download,
+        timestamp: file.timestamp,
+      }));
+
+      if (files && files.length > 0) {
+        logger.info(`App mention includes ${files.length} file(s)`);
+      }
+
       await this.messageHandler.handleUserRequest(
         context,
         userRequest,
-        client as WebClient
+        client as WebClient,
+        files
       );
     });
   }
@@ -261,7 +326,7 @@ export class SlackEventHandlers {
     logger.info("Registering direct message handler");
 
     this.app.message(async ({ message, client }) => {
-      const event = message as GenericMessageEvent;
+      const event = message as GenericMessageEvent & { files?: any[] };
 
       // Log all message events for debugging
       logger.info(
@@ -328,10 +393,26 @@ export class SlackEventHandlers {
           event.text || ""
         );
 
+        // Extract file metadata if files are attached
+        const files = event.files?.map((file) => ({
+          id: file.id,
+          name: file.name,
+          mimetype: file.mimetype,
+          size: file.size,
+          url_private: file.url_private,
+          url_private_download: file.url_private_download,
+          timestamp: file.timestamp,
+        }));
+
+        if (files && files.length > 0) {
+          logger.info(`Message includes ${files.length} file(s)`);
+        }
+
         await this.messageHandler.handleUserRequest(
           context,
           userRequest,
-          client as WebClient
+          client as WebClient,
+          files
         );
       }
     });

@@ -7,6 +7,10 @@ import { generateCustomInstructions } from "../instructions/builder";
 import { WorkspaceManager } from "./workspace";
 import { handleExecutionError } from "./error-handler";
 import { listAppDirectories } from "./project-scanner";
+import * as fs from "fs/promises";
+import * as path from "path";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import type {
   GatewayIntegrationInterface,
   WorkerExecutor,
@@ -43,10 +47,9 @@ export abstract class BaseWorker implements WorkerExecutor {
 
     // Determine session ID - only use actual IDs, not "continue"
     const sessionId =
-      config.sessionId ||
-      (config.resumeSessionId === "continue"
+      config.resumeSessionId === "continue"
         ? undefined
-        : config.resumeSessionId);
+        : config.resumeSessionId;
 
     this.gatewayIntegration = new GatewayIntegration(
       dispatcherUrl,
@@ -168,6 +171,12 @@ export abstract class BaseWorker implements WorkerExecutor {
         }
       );
 
+      // Setup I/O directories for file handling
+      await this.setupIODirectories();
+
+      // Download input files if any
+      await this.downloadInputFiles();
+
       // Generate custom instructions
       let customInstructions = await generateCustomInstructions(
         this.getCoreInstructionProvider(),
@@ -180,6 +189,9 @@ export abstract class BaseWorker implements WorkerExecutor {
           ),
         }
       );
+
+      // Add file I/O instructions
+      customInstructions += this.getFileIOInstructions();
 
       // Call module onSessionStart hooks to allow modules to modify system prompt
       try {
@@ -204,7 +216,7 @@ export abstract class BaseWorker implements WorkerExecutor {
       // Update status with loading messages
       const loadingMessages = this.getLoadingMessages(isResumedSession);
       await this.gatewayIntegration.updateStatus(
-        "🤔 thinking..",
+        "is running..",
         loadingMessages
       );
 
@@ -348,5 +360,109 @@ export abstract class BaseWorker implements WorkerExecutor {
    */
   protected getWorkingDirectory(): string {
     return this.workspaceManager.getCurrentWorkingDirectory();
+  }
+
+  /**
+   * Setup input/output directories for file handling
+   */
+  private async setupIODirectories(): Promise<void> {
+    const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    const inputDir = path.join(workspaceDir, "input");
+    const outputDir = path.join(workspaceDir, "output");
+    const tempDir = path.join(workspaceDir, "temp");
+
+    // Create directories
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.mkdir(outputDir, { recursive: true });
+    await fs.mkdir(tempDir, { recursive: true });
+
+    // Clear output directory for clean session
+    try {
+      const files = await fs.readdir(outputDir);
+      for (const file of files) {
+        await fs.unlink(path.join(outputDir, file)).catch(() => {});
+      }
+    } catch (error) {
+      logger.debug("Could not clear output directory:", error);
+    }
+
+    logger.info("I/O directories setup completed");
+  }
+
+  /**
+   * Download input files from Slack
+   */
+  private async downloadInputFiles(): Promise<void> {
+    const files = (this.config as any).platformMetadata?.files || [];
+    if (files.length === 0) {
+      return;
+    }
+
+    logger.info(`Downloading ${files.length} input files...`);
+    const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    const inputDir = path.join(workspaceDir, "input");
+    const dispatcherUrl = process.env.DISPATCHER_URL!;
+    const workerToken = process.env.WORKER_TOKEN!;
+
+    for (const file of files) {
+      try {
+        logger.info(`Downloading file: ${file.name} (${file.id})`);
+
+        const response = await fetch(
+          `${dispatcherUrl}/internal/files/download?fileId=${file.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${workerToken}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          logger.error(
+            `Failed to download file ${file.name}: ${response.statusText}`
+          );
+          continue;
+        }
+
+        const destPath = path.join(inputDir, file.name);
+        const fileStream = Readable.fromWeb(response.body as any);
+        const writeStream = (await import("fs")).createWriteStream(destPath);
+
+        await pipeline(fileStream, writeStream);
+        logger.info(`Downloaded: ${file.name} to input directory`);
+      } catch (error) {
+        logger.error(`Error downloading file ${file.name}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Get file I/O instructions for the AI agent
+   */
+  private getFileIOInstructions(): string {
+    const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    return `
+
+## File Generation & Output
+
+**When to Create Files:**
+Create and show files for any output that helps answer the user's request:
+- **Charts & visualizations**: pie charts, bar graphs, plots, diagrams
+- **Reports & documents**: analysis reports, summaries, PDFs  
+- **Data files**: CSV exports, JSON data, spreadsheets
+- **Code files**: scripts, configurations, examples
+- **Images**: generated images, processed photos, screenshots
+
+**Rule: Direct Execution = File Output**
+When user gives direct instructions ("create chart", "generate report", "build app"):
+1. Execute the task immediately with tools
+2. Create output file if applicable
+3. Use \`show_to_user\` tool to share the result
+
+### Reading User Files
+- Input files from the user: ${workspaceDir}/input/
+- Example: \`cat ${workspaceDir}/input/data.csv\`
+- Never show sensitive files (secrets, credentials, .env files)
+`;
   }
 }

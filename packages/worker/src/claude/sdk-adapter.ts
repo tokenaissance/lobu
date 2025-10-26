@@ -6,6 +6,7 @@ import { createLogger } from "@peerbot/core";
 import type { ProgressCallback } from "../core/types";
 import { ensureBaseUrl } from "../core/url-utils";
 import { getSessionContext } from "./session-manager";
+import { createCustomToolsServer } from "./custom-tools";
 
 const logger = createLogger("claude-sdk");
 
@@ -24,7 +25,6 @@ export interface ClaudeExecutionOptions {
   fallbackModel?: string;
   timeoutMinutes?: string | number;
   model?: string;
-  sessionId?: string;
   resumeSessionId?: string;
 }
 
@@ -55,6 +55,11 @@ interface ToolInput {
  * Map Claude Code tool names to friendly status messages with parameters
  */
 export function getToolStatus(toolName: string, toolInput?: ToolInput): string {
+  // Hide system tools (mcp__peerbot__*) from status display
+  if (toolName.startsWith("mcp__peerbot__")) {
+    return "";
+  }
+
   const truncate = (str: string, maxLen: number = 50): string => {
     if (!str) return "";
     if (str.length <= maxLen) return str;
@@ -166,7 +171,11 @@ export async function runClaudeWithSDK(
   userPrompt: string,
   options: ClaudeExecutionOptions,
   onProgress?: ProgressCallback,
-  workingDirectory?: string
+  workingDirectory?: string,
+  customToolsConfig?: {
+    channelId: string;
+    threadId: string;
+  }
 ): Promise<ClaudeExecutionResult> {
   logger.info("Starting Claude SDK execution");
 
@@ -232,12 +241,12 @@ export async function runClaudeWithSDK(
 
     // Add session management
     if (options.resumeSessionId === "continue") {
-      logger.info("Continuing previous session in workspace");
+      sdkOptions.continue = true;
+      logger.info("Continuing most recent Claude session");
     } else if (options.resumeSessionId) {
       sdkOptions.resume = options.resumeSessionId;
       logger.info(`Resuming session: ${options.resumeSessionId}`);
     }
-    // Note: SDK doesn't support explicit sessionId setting
 
     // Add system prompts
     // Merge gateway instructions (platform + MCP) with worker instructions
@@ -261,9 +270,26 @@ export async function runClaudeWithSDK(
       sdkOptions.systemPrompt = options.systemPrompt;
     }
 
-    // Add MCP servers
-    if (mcpServers) {
-      sdkOptions.mcpServers = mcpServers;
+    // Add MCP servers (merge gateway MCP servers with custom tools)
+    const allMcpServers = { ...mcpServers };
+
+    // Add custom tools server if config provided
+    if (customToolsConfig && dispatcherUrl && workerToken) {
+      const customTools = createCustomToolsServer(
+        dispatcherUrl,
+        workerToken,
+        customToolsConfig.channelId,
+        customToolsConfig.threadId
+      );
+      allMcpServers["peerbot"] = customTools;
+      logger.info("Added custom tools server: peerbot");
+    }
+
+    if (Object.keys(allMcpServers).length > 0) {
+      sdkOptions.mcpServers = allMcpServers;
+      logger.info(
+        `MCP servers configured: ${Object.keys(allMcpServers).join(", ")}`
+      );
     }
 
     // Add tool restrictions

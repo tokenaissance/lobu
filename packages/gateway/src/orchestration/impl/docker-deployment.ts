@@ -180,8 +180,21 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
             process.env.NODE_ENV === "development" && isRunningInDocker
               ? [
                   `${workspaceDir}:/workspace`,
+                  // Mount packages for hot reload
                   `${process.env.HOST_PROJECT_PATH}/packages:/app/packages`,
                   `${process.env.HOST_PROJECT_PATH}/scripts:/app/scripts`,
+                  // Additional dev mounts from environment (e.g., startup-builder)
+                  ...(process.env.WORKER_DEV_MOUNTS
+                    ? process.env.WORKER_DEV_MOUNTS.split(";").map((mount) => {
+                        // Replace ${HOST_PROJECT_PATH} and ${WORKSPACE_DIR} placeholders
+                        return mount
+                          .replace(
+                            "${HOST_PROJECT_PATH}",
+                            process.env.HOST_PROJECT_PATH!
+                          )
+                          .replace("${WORKSPACE_DIR}", workspaceDir);
+                      })
+                    : []),
                 ]
               : [`${workspaceDir}:/workspace`],
           RestartPolicy: {

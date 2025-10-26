@@ -6,13 +6,13 @@ import chalk from "chalk";
 import inquirer from "inquirer";
 import ora from "ora";
 import YAML from "yaml";
-import {
-  getRequiredEnvVars,
-  MCP_SERVERS,
-  type McpServerDefinition,
-} from "../mcp-servers.js";
 import { checkConfigExists } from "../utils/config.js";
 import { renderTemplate } from "../utils/template.js";
+import {
+  MCP_SERVERS,
+  getRequiredEnvVars,
+  type McpServerDefinition,
+} from "../mcp-servers.js";
 
 const DEFAULT_SLACK_MANIFEST = {
   display_information: {
