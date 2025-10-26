@@ -1,0 +1,54 @@
+name: Manual NPM Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 2.0.0)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "v${{ inputs.version }}"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build packages
+        run: |
+          # Build core first (dependency for both cli and worker)
+          cd packages/core && bun run build
+          cd ../cli && bun run build
+          cd ../worker && bun run build
+
+      - name: Authenticate to npm
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          npm whoami
+
+      - name: Publish create-peerbot to NPM
+        working-directory: packages/cli
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @peerbot/worker to NPM
+        working-directory: packages/worker
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
