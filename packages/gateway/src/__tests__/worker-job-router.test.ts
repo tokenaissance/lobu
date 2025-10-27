@@ -353,17 +353,18 @@ describe("WorkerJobRouter", () => {
 
       const job = TestHelpers.createMockJob();
 
-      // Start job but don't acknowledge
-      const routePromise = queue.addJob("thread_message_worker-1", job);
+      // Start job but don't acknowledge (fire-and-forget)
+      await queue.addJob("thread_message_worker-1", job);
+
+      // Wait for job to be processed and tracked
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(router.getPendingJobCount()).toBe(1);
 
       // Shutdown router
       router.shutdown();
 
-      // Job should be rejected
-      await expect(routePromise).rejects.toThrow("Job router shutting down");
-
+      // Pending jobs should be cleared
       expect(router.getPendingJobCount()).toBe(0);
     });
 
@@ -373,33 +374,24 @@ describe("WorkerJobRouter", () => {
 
       await router.registerWorker("worker-1");
 
-      // Start multiple jobs
-      const promises: Promise<void>[] = [];
+      // Start multiple jobs (fire-and-forget)
       for (let i = 0; i < 3; i++) {
         res.clearWrites();
-        const promise = queue.addJob(
+        await queue.addJob(
           "thread_message_worker-1",
           TestHelpers.createMockJob()
         );
-        promises.push(promise);
       }
+
+      // Wait for jobs to be processed and tracked
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(router.getPendingJobCount()).toBe(3);
 
       // Shutdown
       router.shutdown();
 
-      // All jobs should be rejected
-      const results = await Promise.allSettled(promises);
-
-      // Verify all were rejected
-      for (const result of results) {
-        expect(result.status).toBe("rejected");
-        if (result.status === "rejected") {
-          expect(result.reason.message).toContain("Job router shutting down");
-        }
-      }
-
+      // All pending jobs should be cleared
       expect(router.getPendingJobCount()).toBe(0);
     });
 
