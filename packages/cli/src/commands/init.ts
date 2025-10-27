@@ -272,6 +272,7 @@ export async function initCommand(
           type: "input",
           name: "publicGatewayUrl",
           message: "Public Gateway URL (required for OAuth MCP servers):",
+          default: "http://localhost:8080",
           validate: (input: string) => {
             if (!input) {
               return "Public URL is required when using OAuth-based MCP servers";
@@ -496,9 +497,9 @@ export async function initCommand(
       SLACK_SIGNING_SECRET: answers.slackSigningSecret,
       SLACK_BOT_TOKEN: answers.slackBotToken,
       SLACK_APP_TOKEN: answers.slackAppToken,
-      ANTHROPIC_API_KEY: answers.anthropicApiKey,
       ENCRYPTION_KEY: answers.encryptionKey,
-      PEERBOT_PUBLIC_GATEWAY_URL: answers.publicUrl || "",
+      ANTHROPIC_API_KEY: answers.anthropicApiKey || "",
+      PUBLIC_GATEWAY_URL: answers.publicUrl || "http://localhost:8080",
       GATEWAY_PORT: "8080",
     };
 
@@ -747,15 +748,12 @@ services:
     environment:
       DEPLOYMENT_MODE: docker
       WORKER_IMAGE: ${workerImage}
-      REDIS_URL: redis://redis:6379
       QUEUE_URL: redis://redis:6379/0
       SLACK_BOT_TOKEN: \${SLACK_BOT_TOKEN}
       SLACK_APP_TOKEN: \${SLACK_APP_TOKEN}
       SLACK_SIGNING_SECRET: \${SLACK_SIGNING_SECRET}
       ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY}
-      PEERBOT_PUBLIC_GATEWAY_URL: \${PEERBOT_PUBLIC_GATEWAY_URL:-}
-      HOST_PROJECT_PATH: \${PWD}
-      NODE_ENV: \${NODE_ENV:-development}${mcpEnvVars}
+      PUBLIC_GATEWAY_URL: \${PUBLIC_GATEWAY_URL:-}${mcpEnvVars}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspaces:/app/workspaces

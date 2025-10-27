@@ -26,6 +26,7 @@ export class SlackPlatform implements PlatformAdapter {
   readonly name = "slack";
 
   private app!: App;
+  private receiver?: ExpressReceiver;
   private threadResponseConsumer?: ThreadResponseConsumer;
   private socketHealthMonitor?: SocketHealthMonitor;
   private services!: CoreServices;
@@ -46,7 +47,7 @@ export class SlackPlatform implements PlatformAdapter {
   private initializeSlackApp(): void {
     if (this.config.slack.socketMode === false) {
       // HTTP mode
-      const receiver = new ExpressReceiver({
+      this.receiver = new ExpressReceiver({
         signingSecret: this.config.slack.signingSecret!,
         endpoints: { events: "/slack/events" },
         processBeforeResponse: true,
@@ -54,7 +55,7 @@ export class SlackPlatform implements PlatformAdapter {
       });
 
       // URL verification challenge handler
-      receiver.router.use("/slack/events", (req, res, next) => {
+      this.receiver.router.use("/slack/events", (req, res, next) => {
         if (req.body && req.body.type === "url_verification") {
           logger.info("Handling Slack URL verification challenge");
           return res.status(200).json({ challenge: req.body.challenge });
@@ -64,7 +65,7 @@ export class SlackPlatform implements PlatformAdapter {
 
       this.app = new App({
         token: this.config.slack.token,
-        receiver,
+        receiver: this.receiver,
         logLevel: this.config.logLevel || LogLevel.DEBUG,
         ignoreSelf: false,
       });
@@ -280,8 +281,10 @@ export class SlackPlatform implements PlatformAdapter {
   private async initializeHttpMode(): Promise<void> {
     await this.app.start(this.config.slack.port || 3000);
 
-    const receiver = this.app.receiver as ExpressReceiver;
-    const expressApp = receiver.app;
+    if (!this.receiver) {
+      throw new Error("Receiver not initialized for HTTP mode");
+    }
+    const expressApp = this.receiver.app;
 
     // Add request logging middleware
     expressApp.use((req: Request, _res: Response, next: NextFunction) => {
@@ -298,10 +301,15 @@ export class SlackPlatform implements PlatformAdapter {
    * Initialize Socket Mode
    */
   private async initializeSocketMode(): Promise<void> {
-    const receiver = this.app.receiver as { client?: unknown };
+    const receiver = (this.app as any).receiver;
     const socketModeClient = receiver?.client as
       | {
           on: (event: string, handler: (...args: unknown[]) => void) => void;
+          removeListener: (
+            event: string,
+            handler: (...args: unknown[]) => void
+          ) => void;
+          once: (event: string, handler: (...args: unknown[]) => void) => void;
           isConnected?: () => boolean;
           stateMachine?: { getCurrentState?: () => string };
         }
@@ -353,8 +361,8 @@ export class SlackPlatform implements PlatformAdapter {
       logger.warn("Socket Mode disconnected, will auto-reconnect");
     });
 
-    socketModeClient.on("error", (error: Error) => {
-      logger.error("Socket Mode error:", error);
+    socketModeClient.on("error", (error: unknown) => {
+      logger.error("Socket Mode error:", error as Error);
     });
 
     socketModeClient.on("ready", () => {

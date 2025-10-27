@@ -389,7 +389,9 @@ export class SlackEventHandlers {
         }
 
         // Normal message processing
-        const context = this.messageHandler.extractSlackContext(event);
+        const context = this.messageHandler.extractSlackContext(
+          event as SlackMessageEvent
+        );
         const userRequest = this.messageHandler.extractUserRequest(
           event.text || ""
         );
@@ -402,7 +404,6 @@ export class SlackEventHandlers {
           size: file.size,
           url_private: file.url_private,
           url_private_download: file.url_private_download,
-          timestamp: file.timestamp,
         }));
 
         if (files && files.length > 0) {

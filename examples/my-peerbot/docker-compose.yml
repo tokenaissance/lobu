@@ -26,14 +26,11 @@ services:
     environment:
       DEPLOYMENT_MODE: docker
       WORKER_IMAGE: my-peerbot-worker:latest
-      REDIS_URL: redis://redis:6379
       QUEUE_URL: redis://redis:6379/0
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      PEERBOT_PUBLIC_GATEWAY_URL: ${PEERBOT_PUBLIC_GATEWAY_URL:-}
-      HOST_PROJECT_PATH: ${PWD}
+      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-}
       NODE_ENV: ${NODE_ENV:-development}
       MCP_CONFIG_URL: file:///app/.peerbot/mcp.config.json
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}

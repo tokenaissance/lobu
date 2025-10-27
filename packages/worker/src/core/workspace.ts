@@ -51,15 +51,10 @@ export function setupWorkspaceEnv(deploymentName: string | undefined): void {
 
 /**
  * Get thread identifier from various sources
- * Priority: SLACK_THREAD_TS > SLACK_RESPONSE_TS > sessionKey > username
+ * Priority: THREAD_ID > sessionKey > username
  */
 function getThreadIdentifier(sessionKey?: string, username?: string): string {
-  const threadId =
-    process.env.SLACK_THREAD_TS ||
-    process.env.SLACK_RESPONSE_TS ||
-    sessionKey ||
-    username ||
-    "default";
+  const threadId = process.env.THREAD_ID || sessionKey || username || "default";
 
   return threadId;
 }

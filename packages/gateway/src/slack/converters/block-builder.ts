@@ -2,17 +2,13 @@
 
 import { createLogger } from "@peerbot/core";
 import { SLACK } from "../config";
-import type { SlackBlock, SlackBlockElement } from "../types";
+import type { ActionsBlockElement, SlackBlock } from "../types";
 import { convertMarkdownToSlack } from "./markdown";
+import type { ModuleButton } from "./types";
+
+export type { ModuleButton };
 
 const logger = createLogger("slack-block-builder");
-
-export interface ModuleButton {
-  text: string;
-  action_id: string;
-  style?: "primary" | "danger";
-  value?: string;
-}
 
 export interface BlockBuilderOptions {
   includeActionButtons?: boolean;
@@ -166,7 +162,7 @@ export class SlackBlockBuilder {
     }
 
     // Convert to Slack block elements
-    const elements: SlackBlockElement[] = validButtons.map((btn) => ({
+    const elements: ActionsBlockElement[] = validButtons.map((btn) => ({
       type: "button",
       text: { type: "plain_text", text: btn.text },
       action_id: btn.action_id,

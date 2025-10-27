@@ -30,7 +30,7 @@ services:
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
       QUEUE_URL: redis://redis:6379
       PEERBOT_MCP_SERVERS_URL: ${PEERBOT_MCP_SERVERS_URL:-examples/mcp/oauth.json}
-      PEERBOT_PUBLIC_GATEWAY_URL: ${PEERBOT_PUBLIC_GATEWAY_URL}
+      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL}
     volumes:
       # Mount Docker socket
       - /var/run/docker.sock:/var/run/docker.sock

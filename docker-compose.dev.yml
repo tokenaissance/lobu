@@ -30,13 +30,13 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      HOST_PROJECT_PATH: ${PWD}
+      PEERBOT_DEV_PROJECT_PATH: ${PWD}
       PEERBOT_MCP_SERVERS_URL: ${PEERBOT_MCP_SERVERS_URL:-examples/mcp/oauth.json}
-      PEERBOT_PUBLIC_GATEWAY_URL: ${PEERBOT_PUBLIC_GATEWAY_URL}
+      PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       # Additional mounts for worker containers (semicolon-separated, supports placeholders)
-      # Example: ${HOST_PROJECT_PATH}/examples/startup-builder:/workspace/startup-builder:ro
-      WORKER_DEV_MOUNTS: "${PWD}/examples/startup-builder:/workspace/startup-builder:ro"
+      # Example: ${PEERBOT_DEV_PROJECT_PATH}/examples/startup-builder:/workspace/startup-builder:ro
+      WORKER_VOLUME_MOUNTS: "${PWD}/examples/startup-builder:/workspace/startup-builder:ro"
     volumes:
       # Mount Docker socket for Docker mode
       - /var/run/docker.sock:/var/run/docker.sock

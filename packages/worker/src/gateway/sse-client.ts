@@ -369,7 +369,7 @@ export class GatewayClient {
       teamId: platformMetadata.teamId
         ? String(platformMetadata.teamId)
         : undefined,
-      platform: payload.platform || "slack",
+      platform: payload.platform,
       agentOptions: JSON.stringify(agentOptions),
       workspace: {
         baseDirectory: "/workspace",

@@ -186,7 +186,7 @@ export abstract class BaseWorker implements WorkerExecutor {
       try {
         const { onSessionStart } = await import("../modules/lifecycle");
         const moduleContext = await onSessionStart({
-          platform: this.config.platform || "slack",
+          platform: this.config.platform,
           channelId: this.config.channelId,
           userId: this.config.userId,
           threadId: this.config.threadId,
@@ -381,7 +381,7 @@ export abstract class BaseWorker implements WorkerExecutor {
   }
 
   /**
-   * Download input files from Slack
+   * Download input files from the dispatcher
    */
   private async downloadInputFiles(): Promise<void> {
     const files = (this.config as any).platformMetadata?.files || [];

@@ -110,4 +110,5 @@ export interface ThreadResponsePayload {
     [key: string]: unknown;
   };
   seq?: number;
+  ephemeral?: boolean;
 }

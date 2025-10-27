@@ -48,6 +48,10 @@ export interface OrchestratorConfig {
     idleCleanupMinutes: number;
     maxDeployments: number;
     env?: Record<string, string | number | boolean>;
+    persistence?: {
+      size?: string;
+      storageClass?: string;
+    };
   };
   kubernetes: {
     namespace: string;
@@ -231,9 +235,7 @@ export abstract class BaseDeploymentManager {
         "",
       LOG_LEVEL: "info",
       WORKSPACE_DIR: "/workspace",
-      SLACK_TEAM_ID: messageData?.platformMetadata?.teamId || "",
-      SLACK_CHANNEL_ID: messageData?.channelId || "",
-      SLACK_THREAD_TS: threadId,
+      THREAD_ID: threadId,
       // Worker authentication and communication
       WORKER_TOKEN: workerToken,
       DISPATCHER_URL: this.getDispatcherUrl(),

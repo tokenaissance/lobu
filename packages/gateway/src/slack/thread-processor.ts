@@ -7,6 +7,7 @@ import { WebClient } from "@slack/web-api";
 import type Redis from "ioredis";
 import type {
   IMessageQueue,
+  QueueJob,
   ThreadResponsePayload,
 } from "../infrastructure/queue";
 import {
@@ -25,15 +26,6 @@ const logger = createLogger("dispatcher");
 interface ChatStream {
   append(data: { markdown_text: string }): Promise<void>;
   stop(): Promise<void>;
-}
-
-/**
- * Type for queue job structure
- */
-interface QueueJob<T = unknown> {
-  id: string;
-  data: T;
-  [key: string]: unknown;
 }
 
 /**
@@ -97,7 +89,9 @@ class StreamSession {
       logger.info(
         `➕ APPENDING TO STREAM: channel=${this.channelId}, thread=${this.threadTs}, deltaLength=${delta.length}`
       );
-      await this.stream.append({ markdown_text: delta });
+      if (this.stream) {
+        await this.stream.append({ markdown_text: delta });
+      }
       logger.info(`✅ Appended ${delta.length} chars to existing stream`);
     }
   }
@@ -255,45 +249,17 @@ export class ThreadResponseConsumer {
   /**
    * Parse thread response job data from queue format
    */
-  private parseThreadResponseJob(job: unknown): ThreadResponsePayload {
-    let data: ThreadResponsePayload;
-
-    // Handle serialized format from queue (similar to worker queue consumer)
-    if (typeof job === "object" && job !== null) {
-      const keys = Object.keys(job);
-      const numericKeys = keys.filter((key) => !Number.isNaN(Number(key)));
-
-      if (numericKeys.length > 0) {
-        // Queue passes jobs as an array, get the first element
-        const firstKey = numericKeys[0];
-        const firstJob = firstKey ? job[firstKey] : null;
-
-        if (
-          typeof firstJob === "object" &&
-          firstJob !== null &&
-          firstJob.data
-        ) {
-          // This is the actual job object from the queue
-          data = firstJob.data;
-          logger.info(
-            `📤 AGENT RESPONSE: Processing agent response for user ${data.userId}, thread ${data.threadId || "unknown"}, jobId: ${firstJob.id}`
-          );
-        } else {
-          throw new Error(
-            "Invalid job format: expected job object with data field"
-          );
-        }
-      } else {
-        // Fallback - might be normal job format
-        data = job.data || job;
-      }
-    } else {
-      data = job;
-    }
+  private parseThreadResponseJob(
+    job: QueueJob<ThreadResponsePayload>
+  ): ThreadResponsePayload {
+    const data = job.data;
 
     if (!data || !data.messageId) {
       throw new Error(`Invalid thread response data: ${JSON.stringify(data)}`);
     }
+    logger.info(
+      `📤 AGENT RESPONSE: Processing agent response for user ${data.userId}, thread ${data.threadId || "unknown"}, jobId: ${job.id}`
+    );
 
     return data;
   }
@@ -380,7 +346,9 @@ export class ThreadResponseConsumer {
   /**
    * Handle thread response message jobs
    */
-  private async handleThreadResponse(job: unknown): Promise<void> {
+  private async handleThreadResponse(
+    job: QueueJob<ThreadResponsePayload>
+  ): Promise<void> {
     let data: ThreadResponsePayload | undefined;
 
     try {
@@ -470,40 +438,42 @@ export class ThreadResponseConsumer {
       }
     } catch (error: unknown) {
       // Check if it's a validation error that shouldn't be retried
-      const err = error as {
-        data?: { error?: string };
-        code?: string;
-        message?: string;
-      };
-      if (
-        err?.data?.error === "invalid_blocks" ||
-        err?.data?.error === "msg_too_long" ||
-        err?.code === "slack_webapi_platform_error"
-      ) {
-        logger.error(
-          `Slack validation error: ${err?.data?.error || err.message}`
-        );
+      if (typeof error === "object" && error !== null) {
+        const err = error as {
+          data?: { error?: string };
+          code?: string;
+          message?: string;
+        };
+        if (
+          err.data?.error === "invalid_blocks" ||
+          err.data?.error === "msg_too_long" ||
+          err.code === "slack_webapi_platform_error"
+        ) {
+          logger.error(
+            `Slack validation error: ${err.data?.error || err.message}`
+          );
 
-        // Try to inform the user about the validation error
-        if (data?.channelId && data.messageId) {
-          try {
-            await this.slackClient.chat.update({
-              channel: data.channelId,
-              ts: data.messageId,
-              text: `❌ **Message update failed**\n\n**Error:** ${error?.data?.error || error.message}\n\nThe response may contain invalid formatting or be too long for Slack.`,
-            });
-            logger.info(
-              `Notified user about validation error in job ${job.id}`
-            );
-          } catch (notifyError) {
-            logger.error(
-              `Failed to notify user about validation error: ${notifyError}`
-            );
+          // Try to inform the user about the validation error
+          if (data?.channelId && data.messageId) {
+            try {
+              await this.slackClient.chat.update({
+                channel: data.channelId,
+                ts: data.messageId,
+                text: `❌ **Message update failed**\n\n**Error:** ${err.data?.error || err.message}\n\nThe response may contain invalid formatting or be too long for Slack.`,
+              });
+              logger.info(
+                `Notified user about validation error in job ${job.id}`
+              );
+            } catch (notifyError) {
+              logger.error(
+                `Failed to notify user about validation error: ${notifyError}`
+              );
+            }
           }
-        }
 
-        // Don't throw - mark job as complete to prevent retry loops
-        return;
+          // Don't throw - mark job as complete to prevent retry loops
+          return;
+        }
       }
 
       logger.error(`Failed to process thread response job ${job.id}:`, error);
@@ -540,8 +510,11 @@ export class ThreadResponseConsumer {
 
       logger.info(`Ephemeral message sent successfully to user ${userId}`);
     } catch (error: unknown) {
-      const err = error as { message?: string };
-      logger.error(`Failed to send ephemeral message: ${err.message || error}`);
+      if (error instanceof Error) {
+        logger.error(`Failed to send ephemeral message: ${error.message}`);
+      } else {
+        logger.error(`Failed to send ephemeral message: ${error}`);
+      }
       throw error;
     }
   }
@@ -731,46 +704,59 @@ export class ThreadResponseConsumer {
       );
     } catch (error: unknown) {
       // Handle specific Slack errors
-      const err = error as { code?: string; data?: { error?: string } };
-      if (err.code === "message_not_found") {
-        logger.error("Slack message not found - it may have been deleted");
-      } else if (err.code === "channel_not_found") {
-        logger.error("Slack channel not found - bot may not have access");
-      } else if (err.code === "not_in_channel") {
-        logger.error("Bot is not in the channel");
-      } else if (
-        err.data?.error === "invalid_blocks" ||
-        err.data?.error === "msg_too_long"
-      ) {
-        // These are Slack validation errors - retrying won't help
-        logger.error(`Slack validation error: ${JSON.stringify(error)}`);
+      if (typeof error === "object" && error !== null) {
+        const err = error as {
+          code?: string;
+          data?: { error?: string };
+          message?: string;
+        };
+        if (err.code === "message_not_found") {
+          logger.error("Slack message not found - it may have been deleted");
+        } else if (err.code === "channel_not_found") {
+          logger.error("Slack channel not found - bot may not have access");
+        } else if (err.code === "not_in_channel") {
+          logger.error("Bot is not in the channel");
+        } else if (
+          err.data?.error === "invalid_blocks" ||
+          err.data?.error === "msg_too_long"
+        ) {
+          // These are Slack validation errors - retrying won't help
+          logger.error(`Slack validation error: ${JSON.stringify(error)}`);
 
-        // Try to send a simple error message with raw content for recovery
-        try {
-          // Truncate content to fit in code block
-          const maxContentLength = 2500;
-          const truncatedContent =
-            content.length > maxContentLength
-              ? `${content.substring(0, maxContentLength)}\n...[truncated]`
-              : content;
+          // Try to send a simple error message with raw content for recovery
+          try {
+            // Truncate content to fit in code block
+            const maxContentLength = 2500;
+            const truncatedContent =
+              content.length > maxContentLength
+                ? `${content.substring(0, maxContentLength)}\n...[truncated]`
+                : content;
 
-          const errorMessage = `❌ *Error occurred while updating message*\n\n*Error:* ${error.data?.error || ""}${error.message || ""}\n\nThe response may be too long or contain invalid formatting.\n\n*Raw Content:*\n\`\`\`\n${truncatedContent}\n\`\`\``;
+            const errorMessage = `❌ *Error occurred while updating message*\n\n*Error:* ${err.data?.error || ""}${err.message || ""}\n\nThe response may be too long or contain invalid formatting.\n\n*Raw Content:*\n\`\`\`\n${truncatedContent}\n\`\`\``;
 
-          await this.slackClient.chat.update({
-            channel: channelId,
-            ts: threadId,
-            text: errorMessage,
-          });
-          logger.info(
-            `Sent fallback error message with raw content for validation error: ${error.data?.error}`
-          );
-        } catch (fallbackError) {
-          logger.error("Failed to send fallback error message:", fallbackError);
+            await this.slackClient.chat.update({
+              channel: channelId,
+              ts: threadId,
+              text: errorMessage,
+            });
+            logger.info(
+              `Sent fallback error message with raw content for validation error: ${err.data?.error}`
+            );
+          } catch (fallbackError) {
+            logger.error(
+              "Failed to send fallback error message:",
+              fallbackError
+            );
+          }
+          // Don't throw - this prevents retry loops for validation errors
+        } else {
+          if (error instanceof Error) {
+            logger.error(`Failed to update Slack message: ${error.message}`);
+          } else {
+            logger.error(`Failed to update Slack message: ${error}`);
+          }
+          throw error;
         }
-        // Don't throw - this prevents retry loops for validation errors
-      } else {
-        logger.error(`Failed to update Slack message: ${error.message}`);
-        throw error;
       }
     }
   }

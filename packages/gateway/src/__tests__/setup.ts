@@ -205,7 +205,7 @@ export class TestHelpers {
  */
 export const mockEnvVars = {
   WORKER_STALE_TIMEOUT_MINUTES: "10",
-  PEERBOT_PUBLIC_GATEWAY_URL: "https://test-gateway.example.com",
+  PUBLIC_GATEWAY_URL: "https://test-gateway.example.com",
 };
 
 // Global test lifecycle helpers

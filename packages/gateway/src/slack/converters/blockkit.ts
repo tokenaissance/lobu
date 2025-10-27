@@ -2,11 +2,11 @@
 
 import { createHash } from "node:crypto";
 import { createLogger } from "@peerbot/core";
-import type { Button } from "@slack/types";
 import {
   parseCodeBlockMetadata,
   processCodeBlockWithAction,
 } from "./code-block";
+import type { ModuleButton } from "./types";
 
 const logger = createLogger("dispatcher");
 
@@ -28,11 +28,11 @@ export function generateDeterministicActionId(
  */
 export function extractCodeBlockActions(content: string): {
   processedContent: string;
-  actionButtons: Button[];
+  actionButtons: ModuleButton[];
 } {
   const codeBlockRegex = /```(\w+)\s*\{([^}]+)\}\s*\n?([\s\S]*?)\n?```/g;
   let processedContent = content;
-  const actionButtons: Button[] = [];
+  const actionButtons: ModuleButton[] = [];
   let blockIndex = 0;
 
   let match;

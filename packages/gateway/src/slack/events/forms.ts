@@ -49,7 +49,8 @@ export async function handleBlockkitFormSubmission(
 
   // Form processing
   // Extract input fields from state values
-  const inputFieldsData = extractViewInputs(modalView.state?.values || {});
+  const modalWithState = modalView as any; // Slack types don't properly define state
+  const inputFieldsData = extractViewInputs(modalWithState.state?.values || {});
 
   // Extract action selections from view blocks (for button-based forms)
   const actionSelections = extractActionSelections(modalView);

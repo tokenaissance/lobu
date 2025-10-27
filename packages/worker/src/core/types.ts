@@ -64,7 +64,7 @@ export interface WorkerConfig {
   botResponseId?: string; // Bot's response message ID for updates
   agentOptions: string; // JSON string
   teamId?: string; // Platform team/workspace ID (e.g., Slack team ID)
-  platform?: string; // Platform identifier (e.g., "slack", "discord")
+  platform: string; // Platform identifier (e.g., "slack", "discord")
   workspace: {
     baseDirectory: string;
   };

@@ -24,7 +24,7 @@ Edit `.env` to configure:
 - `SLACK_APP_TOKEN` - Your Slack app token
 - `SLACK_SIGNING_SECRET` - Your Slack signing secret
 - `ANTHROPIC_API_KEY` - Your Anthropic API key (optional if users provide their own)
-- `PEERBOT_PUBLIC_GATEWAY_URL` - Public URL for OAuth callbacks
+- `PUBLIC_GATEWAY_URL` - Public URL for OAuth callbacks
 
 ### Worker Customization
 

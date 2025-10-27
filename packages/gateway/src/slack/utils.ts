@@ -35,7 +35,7 @@ export function isSelfGeneratedEvent(
     (botId && event.bot_id && event.bot_id === botId) ||
     (botUserId && event.user === botUserId);
 
-  return isSelf;
+  return !!isSelf;
 }
 
 // ============================================================================
@@ -78,7 +78,7 @@ export async function setThreadStatus(
       payload.loading_messages = loadingMessages;
     }
 
-    await client.apiCall("assistant.threads.setStatus", payload);
+    await client.apiCall("assistant.threads.setStatus", { ...payload });
   } catch (error) {
     logger.warn(
       `Failed to set status '${status || "<clear>"}' for thread ${threadTs}:`,

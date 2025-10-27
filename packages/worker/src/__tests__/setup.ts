@@ -9,14 +9,13 @@ import type { WorkerConfig } from "../types";
 export const mockEnvVars = {
   DISPATCHER_URL: "https://test-dispatcher.example.com",
   WORKER_TOKEN: "test-worker-token-123",
-  SLACK_THREAD_TS: "1234567890.123456",
-  SLACK_RESPONSE_TS: "1234567890.123457",
+  THREAD_ID: "1234567890.123456",
   WORKER_SESSION_KEY: "test-session-key",
   WORKER_USER_ID: "U1234567890",
   WORKER_CHANNEL_ID: "C1234567890",
   WORKER_USER_PROMPT: Buffer.from("Test user prompt").toString("base64"),
-  WORKER_SLACK_RESPONSE_CHANNEL: "C1234567890",
-  WORKER_SLACK_RESPONSE_TS: "1234567890.123457",
+  WORKER_RESPONSE_CHANNEL: "C1234567890",
+  WORKER_RESPONSE_TS: "1234567890.123457",
   WORKER_CLAUDE_OPTIONS: JSON.stringify({
     model: "claude-3-5-sonnet-20241022",
     max_tokens: 8192,

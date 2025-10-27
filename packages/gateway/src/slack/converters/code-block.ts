@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import type { Button } from "@slack/types";
+import type { ModuleButton } from "./types";
 
 /**
  * Metadata structure parsed from code blocks
@@ -43,7 +43,7 @@ export function processCodeBlockWithAction(
 ): {
   shouldHideBlock: boolean;
   shouldSkipButton: boolean;
-  button?: Button;
+  button?: ModuleButton;
   debugMessage?: string;
 } {
   if (language === "blockkit") {
@@ -70,9 +70,8 @@ export function processCodeBlockWithAction(
       codeContent + metadata.action + blockIndex,
       "blockkit_form"
     );
-    const button: Button = {
-      type: "button" as const,
-      text: { type: "plain_text" as const, text: metadata.action || "Submit" },
+    const button: ModuleButton = {
+      text: metadata.action || "Submit",
       action_id: actionId,
       value: buttonValue,
     };
@@ -111,9 +110,8 @@ export function processCodeBlockWithAction(
         codeContent + metadata.action + blockIndex,
         language
       );
-      const button: Button = {
-        type: "button" as const,
-        text: { type: "plain_text" as const, text: metadata.action || "Run" },
+      const button: ModuleButton = {
+        text: metadata.action || "Run",
         action_id: `${language}_${actionId}`,
         value: codeContent,
       };

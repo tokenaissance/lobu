@@ -1,6 +1,6 @@
 import { createLogger } from "@peerbot/core";
 import type { App } from "@slack/bolt";
-import type { AnyBlock, View, WebClient } from "../types";
+import type { AnyBlock, ModalViewWithState, WebClient } from "../types";
 import { sendSlackMessage } from "./message-utils";
 
 const logger = createLogger("dispatcher");
@@ -197,7 +197,11 @@ export class ShortcutCommandHandler {
       const userId = body.user.id;
 
       try {
-        await this.handleSetEnvironment(userId, view, client);
+        await this.handleSetEnvironment(
+          userId,
+          view as ModalViewWithState,
+          client
+        );
         await ack();
       } catch (error) {
         logger.error("Error setting environment:", error);
@@ -214,7 +218,7 @@ export class ShortcutCommandHandler {
    */
   private async handleSetEnvironment(
     userId: string,
-    view: View,
+    view: ModalViewWithState,
     client: WebClient
   ): Promise<void> {
     try {
@@ -252,8 +256,12 @@ export class ShortcutCommandHandler {
 
     for (const blockId of Object.keys(stateValues)) {
       const block = stateValues[blockId];
+      if (!block) continue;
+
       for (const actionId of Object.keys(block)) {
         const action = block[actionId];
+        if (!action) continue;
+
         if (action.value) {
           inputs.push(action.value);
         }

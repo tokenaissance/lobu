@@ -226,7 +226,7 @@ All OAuth flows redirect back to the gateway's callback endpoint.
 
 **Format:**
 ```
-{PEERBOT_PUBLIC_GATEWAY_URL}/mcp/oauth/callback
+{PUBLIC_GATEWAY_URL}/mcp/oauth/callback
 ```
 
 ---
@@ -337,7 +337,7 @@ All OAuth flows redirect back to the gateway's callback endpoint.
 
 4. **Use HTTPS in production:**
    ```bash
-   PEERBOT_PUBLIC_GATEWAY_URL=https://your-domain.com
+   PUBLIC_GATEWAY_URL=https://your-domain.com
    ```
 
 5. **Limit OAuth scopes:**

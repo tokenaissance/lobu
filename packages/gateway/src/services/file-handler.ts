@@ -107,14 +107,22 @@ export class FileHandler {
       );
 
       // Use files.uploadV2 for better performance
-      const result = await this.slackClient.files.uploadV2({
+      const uploadParams: any = {
         channel_id: options.channelId,
-        thread_ts: options.threadTs,
         filename: options.filename,
         file: fileBuffer,
         title: options.title || options.filename,
-        initial_comment: options.initialComment,
-      });
+      };
+
+      if (options.threadTs) {
+        uploadParams.thread_ts = options.threadTs;
+      }
+
+      if (options.initialComment) {
+        uploadParams.initial_comment = options.initialComment;
+      }
+
+      const result = await this.slackClient.files.uploadV2(uploadParams);
 
       if (!result.ok) {
         throw new Error(`Failed to upload file: ${result.error}`);

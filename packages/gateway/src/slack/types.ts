@@ -18,7 +18,6 @@ import type {
   AppHomeOpenedEvent,
   AppMentionEvent,
   Block,
-  BlockElement,
   Button,
   FileSharedEvent,
   GenericMessageEvent,
@@ -31,7 +30,6 @@ import type { WebClient } from "@slack/web-api";
 
 // Type aliases for convenience
 export type SlackBlock = Block;
-export type SlackBlockElement = BlockElement;
 export type SlackWebClient = WebClient;
 
 // Re-export SDK types for convenience
@@ -71,19 +69,27 @@ export interface SlackContext {
 }
 
 // Helper type for message events (combining GenericMessageEvent with common properties)
-export interface SlackMessageEvent extends GenericMessageEvent {
+export interface SlackMessageEvent
+  extends Omit<GenericMessageEvent, "channel_type"> {
   channel: string;
   user: string;
   text: string;
   ts: string;
   thread_ts?: string;
   bot_id?: string;
-  channel_type?: string;
+  channel_type: string;
   team?: string;
 }
 
 // Helper type for action body (from middleware args)
 export type SlackActionBody = SlackActionMiddlewareArgs<BlockAction>["body"];
+
+// ModalView with state property (Slack SDK types don't include this properly)
+export interface ModalViewWithState extends ModalView {
+  state: {
+    values: Record<string, Record<string, { value?: string }>>;
+  };
+}
 
 // Module action context (app-specific)
 export interface ModuleActionContext {

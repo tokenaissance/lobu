@@ -95,7 +95,7 @@ export class ProgressProcessor {
   private lastSentContent: string = "";
 
   /**
-   * Process streaming update and return formatted content for Slack
+   * Process streaming update and return formatted content
    * Always returns { text: string, isFinal: boolean } or null
    * Now handles SDK message format directly
    */

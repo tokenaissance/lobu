@@ -5,9 +5,9 @@ import path from "node:path";
 import type { ClaudeExecutionOptions, LogLevel } from "@peerbot/core";
 import { createLogger, TIME } from "@peerbot/core";
 import { config as dotenvConfig } from "dotenv";
-import { DEFAULTS } from "../config";
+import { DEFAULTS } from "../config/constants";
 import type { OrchestratorConfig } from "../orchestration/base-deployment-manager";
-import type { SlackConfig } from "../slack";
+import type { SlackConfig } from "../slack/config";
 
 const logger = createLogger("cli-config");
 
@@ -323,7 +323,7 @@ export function displayConfig(
   config: GatewayConfig,
   slackConfig: SlackConfig
 ): void {
-  const { DISPLAY } = require("../constants");
+  const { DISPLAY } = require("../config/constants");
   const separator = "=".repeat(DISPLAY.SEPARATOR_LENGTH);
 
   console.log("Gateway Configuration:");

@@ -45,7 +45,7 @@ export const GATEWAY_DEFAULTS = {
   SOCKET_STALE_THRESHOLD_MS: 15 * TIME.MINUTE_MS, // 15 minutes
   SOCKET_PROTECT_ACTIVE_WORKERS: true,
   /** Default deployment settings */
-  HOST_PROJECT_PATH: "/app",
+  PEERBOT_DEV_PROJECT_PATH: "/app",
   COMPOSE_PROJECT_NAME: "peerbot",
   DISPATCHER_SERVICE_NAME: "peerbot-dispatcher",
   /** Default log level */

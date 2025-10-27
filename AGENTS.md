@@ -88,7 +88,7 @@ MCP (Model Context Protocol) servers can be authenticated via OAuth. Users authe
 
 1. **Set public gateway URL** (required for OAuth callbacks):
 ```bash
-PEERBOT_PUBLIC_GATEWAY_URL=https://your-domain.com
+PUBLIC_GATEWAY_URL=https://your-domain.com
 ```
 
 2. **Configure OAuth callback URL** in your OAuth provider:

@@ -121,7 +121,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       // The orchestrator is running inside Docker but needs to mount host directories
       const isRunningInDocker = process.env.DEPLOYMENT_MODE === "docker";
       const projectRoot = isRunningInDocker
-        ? process.env.HOST_PROJECT_PATH || "/app" // Use env var or fallback
+        ? process.env.PEERBOT_DEV_PROJECT_PATH || "/app" // Use env var or fallback
         : path.join(process.cwd(), "..", "..");
 
       const workspaceDir = `${projectRoot}/workspaces/${threadId}`;
@@ -181,19 +181,19 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
               ? [
                   `${workspaceDir}:/workspace`,
                   // Mount packages for hot reload
-                  `${process.env.HOST_PROJECT_PATH}/packages:/app/packages`,
-                  `${process.env.HOST_PROJECT_PATH}/scripts:/app/scripts`,
-                  // Additional dev mounts from environment (e.g., startup-builder)
-                  ...(process.env.WORKER_DEV_MOUNTS
-                    ? process.env.WORKER_DEV_MOUNTS.split(";").map((mount) => {
-                        // Replace ${HOST_PROJECT_PATH} and ${WORKSPACE_DIR} placeholders
-                        return mount
-                          .replace(
-                            "${HOST_PROJECT_PATH}",
-                            process.env.HOST_PROJECT_PATH!
-                          )
-                          .replace("${WORKSPACE_DIR}", workspaceDir);
-                      })
+                  `${process.env.PEERBOT_DEV_PROJECT_PATH}/packages:/app/packages`,
+                  `${process.env.PEERBOT_DEV_PROJECT_PATH}/scripts:/app/scripts`,
+                  ...(process.env.WORKER_VOLUME_MOUNTS
+                    ? process.env.WORKER_VOLUME_MOUNTS.split(";").map(
+                        (mount) => {
+                          return mount
+                            .replace(
+                              "${PEERBOT_DEV_PROJECT_PATH}",
+                              process.env.PEERBOT_DEV_PROJECT_PATH!
+                            )
+                            .replace("${WORKSPACE_DIR}", workspaceDir);
+                        }
+                      )
                     : []),
                 ]
               : [`${workspaceDir}:/workspace`],
