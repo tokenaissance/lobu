@@ -22,7 +22,8 @@ jobs:
   build-and-push:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 20
+
     outputs:
       gateway-image: ${{ steps.meta-gateway.outputs.tags }}
       worker-image: ${{ steps.meta-worker.outputs.tags }}
