@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { WorkerConnectionManager } from "../gateway/connection-manager";
 import { WorkerJobRouter } from "../gateway/job-router";
+import type { ISessionManager } from "../session";
 import {
   cleanupTestEnv,
   MockMessageQueue,
@@ -18,12 +19,36 @@ describe("WorkerJobRouter", () => {
   let queue: MockMessageQueue;
   let connectionManager: WorkerConnectionManager;
   let router: WorkerJobRouter;
+  let mockSessionManager: ISessionManager;
 
   beforeEach(() => {
     setupTestEnv();
     queue = new MockMessageQueue();
     connectionManager = new WorkerConnectionManager();
-    router = new WorkerJobRouter(queue as any, connectionManager);
+
+    // Create mock session manager
+    mockSessionManager = {
+      findSessionByThread: async () => null,
+      updateSession: async () => {
+        /* noop */
+      },
+      createSession: async () => ({}) as any,
+      getSession: async () => null,
+      setSession: async () => {
+        /* noop */
+      },
+      deleteSession: async () => {
+        /* noop */
+      },
+      validateThreadOwnership: async () => ({ allowed: true }),
+      cleanupExpired: async () => 0,
+    };
+
+    router = new WorkerJobRouter(
+      queue as any,
+      connectionManager,
+      mockSessionManager
+    );
   });
 
   afterEach(() => {

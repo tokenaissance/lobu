@@ -34,7 +34,7 @@
     "bun": ">=1.0.0"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.25",
+    "@anthropic-ai/claude-agent-sdk": "^0.1.28",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "@peerbot/core": "workspace:*",
     "@types/chokidar": "^2.1.7",

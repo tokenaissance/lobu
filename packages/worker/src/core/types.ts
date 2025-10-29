@@ -37,7 +37,6 @@ export interface WorkerExecutor {
 export interface GatewayIntegrationInterface {
   setJobId(jobId: string): void;
   setModuleData(moduleData: Record<string, unknown>): void;
-  updateStatus(status: string, loadingMessages?: string[]): Promise<void>;
   sendContent(content: string): Promise<void>;
   sendStreamDelta(
     delta: string,
@@ -105,11 +104,6 @@ export type ProgressUpdate =
   | {
       type: "error";
       data: Error | { message?: string; stack?: string; error?: string };
-      timestamp: number;
-    }
-  | {
-      type: "status";
-      data: { status: string; details?: string };
       timestamp: number;
     };
 

@@ -21,13 +21,6 @@ export interface ThreadSession {
   threadCreator?: string; // Track the original thread creator
   jobName?: string;
   lastActivity: number;
-  status:
-    | "pending"
-    | "starting"
-    | "running"
-    | "completed"
-    | "error"
-    | "timeout";
   createdAt: number;
   botResponseId?: string; // Bot's response message ID for updates
 }

@@ -68,11 +68,6 @@ export abstract class BaseWorker implements WorkerExecutor {
   protected abstract getCoreInstructionProvider(): InstructionProvider;
 
   /**
-   * Get initial loading messages for status display
-   */
-  protected abstract getLoadingMessages(isResumedSession: boolean): string[];
-
-  /**
    * Execute the AI session with agent-specific logic
    * This is the main method that subclasses must implement
    */
@@ -202,13 +197,6 @@ export abstract class BaseWorker implements WorkerExecutor {
         logger.error("Failed to call onSessionStart hooks:", error);
       }
 
-      // Update status with loading messages
-      const loadingMessages = this.getLoadingMessages(false);
-      await this.gatewayIntegration.updateStatus(
-        "is running..",
-        loadingMessages
-      );
-
       // Execute AI session
       logger.info(
         `[TIMING] Starting ${this.getAgentName()} session at: ${new Date().toISOString()}`
@@ -241,14 +229,6 @@ export abstract class BaseWorker implements WorkerExecutor {
                   `[TIMING] First ${this.getAgentName()} output at: ${new Date().toISOString()} (${Date.now() - aiStartTime}ms after start)`
                 );
                 firstOutputLogged = true;
-              }
-
-              // Handle status updates
-              if (update.type === "status" && update.data?.status) {
-                await this.gatewayIntegration.updateStatus(
-                  update.data.status as string
-                );
-                return;
               }
 
               // Process progress updates (agent-specific)

@@ -41,16 +41,6 @@ export class ClaudeWorker extends BaseWorker {
     return new ClaudeCoreInstructionProvider();
   }
 
-  protected getLoadingMessages(isResumedSession: boolean): string[] {
-    return [
-      isResumedSession ? "⚙️ resuming workspace" : "⚙️ setting up workspace",
-      "⚙️ preparing Claude session",
-      "🚀 starting Claude Code",
-      "💭 thinking",
-      "🔥 burning tokens",
-    ];
-  }
-
   protected async runAISession(
     userPrompt: string,
     customInstructions: string,
@@ -143,18 +133,6 @@ export class ClaudeWorker extends BaseWorker {
         `📦 Stored final result (${processResult.text.length} chars) for deduplication`
       );
       return null;
-    }
-
-    // Show thinking content as status if present
-    const thinkingContent = this.progressProcessor.getCurrentThinking();
-    if (thinkingContent) {
-      const maxLength = 100;
-      const displayThinking =
-        thinkingContent.length > maxLength
-          ? `${thinkingContent.substring(0, maxLength)}...`
-          : thinkingContent;
-      logger.info(`💭 Sending thinking status update: ${displayThinking}`);
-      await this.gatewayIntegration.updateStatus(displayThinking);
     }
 
     // Get delta and return

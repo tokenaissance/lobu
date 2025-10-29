@@ -2,6 +2,7 @@
 
 import { createLogger } from "@peerbot/core";
 import type { IMessageQueue } from "../infrastructure/queue";
+import type { ISessionManager } from "../session";
 import type { WorkerConnectionManager } from "./connection-manager";
 
 const logger = createLogger("worker-job-router");
@@ -22,7 +23,8 @@ export class WorkerJobRouter {
 
   constructor(
     private queue: IMessageQueue,
-    private connectionManager: WorkerConnectionManager
+    private connectionManager: WorkerConnectionManager,
+    _sessionManager: ISessionManager
   ) {}
 
   /**
@@ -97,8 +99,8 @@ export class WorkerJobRouter {
           this.pendingJobs.delete(jobId);
         }
       },
-      5 * 60 * 1000
-    ); // 5 minute timeout for monitoring
+      1 * 60 * 1000
+    ); // 1 minute timeout for monitoring
 
     this.pendingJobs.set(jobId, {
       resolve: () => {

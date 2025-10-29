@@ -47,7 +47,7 @@ export const mockWorkerConfig: WorkerConfig = {
 // Test utility functions
 export class TestHelpers {
   static createMockProgressUpdate(
-    type: "output" | "completion" | "error" | "status",
+    type: "output" | "completion" | "error",
     data: any
   ) {
     return {

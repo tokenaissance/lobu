@@ -138,9 +138,6 @@ export function setupAssistantHandlers(
           client as WebClient,
           files
         );
-
-        // Clear status after processing
-        await setStatus("");
       } catch (error) {
         logger.error("Failed to process assistant message:", error);
 

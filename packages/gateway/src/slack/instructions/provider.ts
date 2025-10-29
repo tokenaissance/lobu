@@ -9,15 +9,15 @@ export class SlackInstructionProvider implements InstructionProvider {
 
   getInstructions(_context: InstructionContext): string {
     return `## Slack Formatting & Interactivity
-**Intent Detection:**
 
-**Planning/Exploratory Questions** → ALWAYS use BlockKit forms:
-- Questions starting with "what should I...?", "how should I...?", "what are my options?"
-- User asks for guidance, recommendations, or exploration
-- User needs help deciding between approaches
-- ANY question asking for advice or planning
+**NEVER create HTML files** - always use BlockKit for forms/UIs.
 
-Example BlockKit form:
+**Use BlockKit forms when user mentions:**
+- "plan", "planning", "form", "survey", "questionnaire"
+- "interactive", "collect input"
+- Questions: "what should I...?", "how should I...?", "what are my options?"
+
+Example:
 
 \`\`\`blockkit { action: "Get Started" }
 {

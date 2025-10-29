@@ -21,6 +21,7 @@ export class MessageBatcher {
   private batchTimer: NodeJS.Timeout | null = null;
   private readonly batchWindowMs: number;
   private readonly onBatchReady?: (messages: QueuedMessage[]) => Promise<void>;
+  private hasProcessedInitialBatch = false;
 
   constructor(config: BatcherConfig = {}) {
     this.batchWindowMs = config.batchWindowMs ?? 2000; // 2 second window by default
@@ -40,6 +41,15 @@ export class MessageBatcher {
 
     // If no batch timer running, start one
     if (!this.batchTimer) {
+      if (!this.hasProcessedInitialBatch) {
+        this.hasProcessedInitialBatch = true;
+        logger.info(
+          `Processing first message immediately (skipping ${this.batchWindowMs}ms batch window)`
+        );
+        await this.processBatch();
+        return;
+      }
+
       logger.info(
         `Starting ${this.batchWindowMs}ms batch window (${this.messageQueue.length} message(s))`
       );

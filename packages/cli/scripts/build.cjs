@@ -1,4 +1,4 @@
-const fs = require("fs");
+const fs = require("node:fs");
 
 // Copy templates
 const src = "src/templates";

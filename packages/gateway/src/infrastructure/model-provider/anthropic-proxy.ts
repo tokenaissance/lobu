@@ -313,6 +313,71 @@ export class AnthropicProxy {
         body: body,
       });
 
+      // Temporary rate-limit bypass for local testing
+      if (response.status === 429) {
+        logger.warn(
+          "Anthropic rate limited the request – surfacing error to user as assistant message"
+        );
+
+        const rawBody =
+          typeof body === "string"
+            ? body
+            : body
+              ? JSON.stringify(body)
+              : undefined;
+        let requestedModel: string | undefined;
+        if (rawBody) {
+          try {
+            requestedModel = JSON.parse(rawBody)?.model;
+          } catch {
+            requestedModel = undefined;
+          }
+        }
+
+        const errorPayloadText = await response.text();
+        let anthropicMessage =
+          "The model provider returned a rate limit error. Please try again shortly.";
+        try {
+          const parsedError = JSON.parse(errorPayloadText);
+          anthropicMessage =
+            parsedError?.error?.message ||
+            parsedError?.message ||
+            anthropicMessage;
+        } catch {
+          if (errorPayloadText) {
+            anthropicMessage = errorPayloadText;
+          }
+        }
+
+        const userFacingText = `⚠️ *Rate limit*\n\n${anthropicMessage}`;
+
+        const rateLimitResponse = {
+          id: `msg_rate_limit_${Date.now()}`,
+          type: "message",
+          role: "assistant" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: userFacingText,
+            },
+          ],
+          model: requestedModel ?? "claude-3-5-sonnet-20241022",
+          stop_reason: "end_turn",
+          stop_sequence: null,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+          },
+          rate_limited: true,
+        };
+
+        res
+          .status(200)
+          .setHeader("Content-Type", "application/json")
+          .json(rateLimitResponse);
+        return;
+      }
+
       // Forward status code
       res.status(response.status);
 

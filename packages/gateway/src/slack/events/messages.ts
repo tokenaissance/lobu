@@ -8,7 +8,6 @@ import type { ISessionManager, ThreadSession } from "../../session";
 import { generateSessionKey } from "../../session";
 import type { MessageHandlerConfig } from "../config";
 import type { SlackContext, SlackMessageEvent, WebClient } from "../types";
-import { setThreadStatus } from "../utils";
 
 const logger = createLogger("dispatcher");
 
@@ -18,7 +17,8 @@ export class MessageHandler {
   constructor(
     private queueProducer: QueueProducer,
     private config: MessageHandlerConfig,
-    private sessionManager: ISessionManager
+    private sessionManager: ISessionManager,
+    private slackClient: WebClient
   ) {}
 
   /**
@@ -26,6 +26,30 @@ export class MessageHandler {
    */
   private getBotId(): string {
     return this.config.slack.botId || "default-slack-bot";
+  }
+
+  /**
+   * Set thread status indicator
+   */
+  private async setThreadStatus(
+    channelId: string,
+    threadTs: string,
+    status: string
+  ): Promise<void> {
+    try {
+      logger.info(
+        `Setting thread status "${status}" for channel ${channelId}, thread ${threadTs}`
+      );
+      await this.slackClient.apiCall("assistant.threads.setStatus", {
+        channel_id: channelId,
+        thread_ts: threadTs,
+        status,
+      });
+      logger.info(`Successfully set thread status "${status}"`);
+    } catch (error) {
+      // Non-critical - just log
+      logger.warn(`Failed to set thread status: ${error}`);
+    }
   }
 
   /**
@@ -100,10 +124,6 @@ export class MessageHandler {
       `Handling request for session: ${sessionKey} (threadTs: ${normalizedThreadTs})`
     );
 
-    logger.info(
-      `Existing session status for ${sessionKey}: ${existingSession?.status || "none"}`
-    );
-
     try {
       const threadTs = normalizedThreadTs;
 
@@ -115,19 +135,10 @@ export class MessageHandler {
         userId: context.userId,
         threadCreator: context.userId, // Store the thread creator
         lastActivity: Date.now(),
-        status: "pending",
         createdAt: Date.now(),
       };
 
       await this.sessionManager.setSession(threadSession);
-
-      // Show immediate typing indicator
-      await setThreadStatus(
-        client,
-        context.channelId,
-        normalizedThreadTs,
-        "is thinking..."
-      );
 
       // Determine if this is a new conversation
       // A conversation is new only if this message is the ROOT of the thread (messageTs === threadTs)
@@ -136,6 +147,8 @@ export class MessageHandler {
         context.messageTs === normalizedThreadTs && !existingSession;
 
       if (isNewConversation) {
+        await this.sessionManager.setSession(threadSession);
+
         const deploymentPayload: WorkerDeploymentPayload = {
           userId: context.userId,
           botId: this.getBotId(),
@@ -168,11 +181,19 @@ export class MessageHandler {
         const jobId =
           await this.queueProducer.enqueueMessage(deploymentPayload);
 
+        // Set status indicator
+        await this.setThreadStatus(
+          context.channelId,
+          threadTs,
+          "is thinking..."
+        );
+
         logger.info(
           `Enqueued direct message job ${jobId} for session ${sessionKey}`
         );
-        threadSession.status = "pending";
       } else {
+        await this.sessionManager.setSession(threadSession);
+
         // Enqueue to user-specific queue
         const threadPayload: ThreadMessagePayload = {
           botId: this.getBotId(),
@@ -203,10 +224,16 @@ export class MessageHandler {
 
         const jobId = await this.queueProducer.enqueueMessage(threadPayload);
 
+        // Set status indicator
+        await this.setThreadStatus(
+          context.channelId,
+          threadTs,
+          "is thinking..."
+        );
+
         logger.info(
           `Enqueued thread message job ${jobId} for thread ${threadTs}`
         );
-        threadSession.status = "running";
       }
     } catch (error) {
       logger.error(
@@ -215,17 +242,6 @@ export class MessageHandler {
       );
 
       // Handle all errors the same way - let the worker decide what to show
-      try {
-        await setThreadStatus(
-          client,
-          context.channelId,
-          normalizedThreadTs,
-          "encountered an error"
-        );
-      } catch (statusError) {
-        logger.error("Failed to update error status:", statusError);
-      }
-
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorMsg = `❌ *Error:* ${errorMessage || "Unknown error occurred"}`;

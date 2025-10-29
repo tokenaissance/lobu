@@ -104,6 +104,32 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
     }
   }
 
+  /**
+   * Ensures a Docker volume exists for the given thread ID.
+   * Uses named volumes for better isolation and security.
+   */
+  private async ensureVolume(threadId: string): Promise<string> {
+    const volumeName = `peerbot-workspace-${threadId}`;
+
+    try {
+      // Check if volume already exists
+      await this.docker.getVolume(volumeName).inspect();
+      logger.info(`✅ Volume ${volumeName} already exists`);
+    } catch (error) {
+      // Volume doesn't exist, create it
+      await this.docker.createVolume({
+        Name: volumeName,
+        Labels: {
+          "peerbot.io/thread-id": threadId,
+          "peerbot.io/created": new Date().toISOString(),
+        },
+      });
+      logger.info(`✅ Created volume: ${volumeName}`);
+    }
+
+    return volumeName;
+  }
+
   async createDeployment(
     ...args: Parameters<BaseDeploymentManager["createDeployment"]>
   ): Promise<void> {
@@ -117,14 +143,16 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       // Extract thread ID from deployment name for per-thread workspace isolation
       const threadId = deploymentName.replace("peerbot-worker-", "");
 
-      // For Docker mode, we need to use host paths for volume mounts
-      // The orchestrator is running inside Docker but needs to mount host directories
+      // Determine if running in Docker and resolve project paths
       const isRunningInDocker = process.env.DEPLOYMENT_MODE === "docker";
       const projectRoot = isRunningInDocker
-        ? process.env.PEERBOT_DEV_PROJECT_PATH || "/app" // Use env var or fallback
+        ? process.env.PEERBOT_DEV_PROJECT_PATH || "/app"
         : path.join(process.cwd(), "..", "..");
 
       const workspaceDir = `${projectRoot}/workspaces/${threadId}`;
+
+      // Ensure volume exists for production mode
+      const volumeName = await this.ensureVolume(threadId);
 
       // Get common environment variables from base class
       const commonEnvVars = await this.generateEnvironmentVariables(
@@ -176,27 +204,38 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
           ...resolvePlatformDeploymentMetadata(messageData),
         },
         HostConfig: {
-          Binds:
-            process.env.NODE_ENV === "development" && isRunningInDocker
-              ? [
+          // Use named volumes in production for better isolation
+          // Use bind mounts in development for hot reload
+          ...(process.env.NODE_ENV === "development" && isRunningInDocker
+            ? {
+                Binds: [
                   `${workspaceDir}:/workspace`,
-                  // Mount packages for hot reload
-                  `${process.env.PEERBOT_DEV_PROJECT_PATH}/packages:/app/packages`,
-                  `${process.env.PEERBOT_DEV_PROJECT_PATH}/scripts:/app/scripts`,
+                  // Mount packages and scripts for hot reload
+                  `${projectRoot}/packages:/app/packages`,
+                  `${projectRoot}/scripts:/app/scripts`,
+                  // Additional custom mounts (optional)
                   ...(process.env.WORKER_VOLUME_MOUNTS
-                    ? process.env.WORKER_VOLUME_MOUNTS.split(";").map(
-                        (mount) => {
-                          return mount
-                            .replace(
-                              "${PEERBOT_DEV_PROJECT_PATH}",
-                              process.env.PEERBOT_DEV_PROJECT_PATH!
-                            )
-                            .replace("${WORKSPACE_DIR}", workspaceDir);
-                        }
-                      )
+                    ? process.env.WORKER_VOLUME_MOUNTS.split(";")
+                        .filter((mount) => mount.trim())
+                        .map((mount) =>
+                          mount
+                            .replace("${PWD}", projectRoot)
+                            .replace("${WORKSPACE_DIR}", workspaceDir)
+                        )
                     : []),
-                ]
-              : [`${workspaceDir}:/workspace`],
+                ],
+              }
+            : {
+                // Production: use named volumes for better isolation
+                Mounts: [
+                  {
+                    Type: "volume",
+                    Source: volumeName,
+                    Target: "/workspace",
+                    ReadOnly: false,
+                  },
+                ],
+              }),
           RestartPolicy: {
             Name: "unless-stopped",
           },
@@ -209,6 +248,36 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
           ),
           // Connect to the Docker Compose network
           NetworkMode: `${composeProjectName}_peerbot-network`,
+          // Security: Drop all capabilities and only add what's needed
+          CapDrop: ["ALL"],
+          CapAdd: process.env.WORKER_CAPABILITIES
+            ? process.env.WORKER_CAPABILITIES.split(",")
+            : [],
+          // Security: Prevent privilege escalation
+          SecurityOpt: [
+            "no-new-privileges:true",
+            // Custom seccomp profile (default Docker seccomp is applied automatically)
+            ...(process.env.WORKER_SECCOMP_PROFILE
+              ? [`seccomp=${process.env.WORKER_SECCOMP_PROFILE}`]
+              : []),
+            // AppArmor profile if specified
+            ...(process.env.WORKER_APPARMOR_PROFILE
+              ? [`apparmor=${process.env.WORKER_APPARMOR_PROFILE}`]
+              : []),
+          ],
+          // User namespace remapping (if Docker daemon is configured for it)
+          // This makes the root user inside container map to non-root on host
+          UsernsMode: process.env.WORKER_USERNS_MODE || "",
+          // Read-only root filesystem (worker can write to /workspace and /tmp)
+          // Enabled by default for security, set WORKER_READONLY_ROOTFS=false to disable
+          ReadonlyRootfs: process.env.WORKER_READONLY_ROOTFS !== "false",
+          // Temporary filesystem for /tmp (writable, in-memory)
+          ...(process.env.WORKER_READONLY_ROOTFS !== "false" && {
+            Tmpfs: {
+              "/tmp": "rw,noexec,nosuid,size=100m",
+              "/home/bun/.cache": "rw,noexec,nosuid,size=200m",
+            },
+          }),
           // Use gVisor runtime if available for enhanced isolation
           ...(this.gvisorAvailable && {
             Runtime: "runsc",
@@ -262,6 +331,10 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       ? deploymentId
       : `peerbot-worker-${deploymentId}`;
 
+    // Extract thread ID for volume cleanup
+    const threadId = deploymentName.replace("peerbot-worker-", "");
+    const volumeName = `peerbot-workspace-${threadId}`;
+
     try {
       const container = this.docker.getContainer(deploymentName);
 
@@ -285,6 +358,25 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
         );
       } else {
         throw error;
+      }
+    }
+
+    // Clean up volume (only in production mode with named volumes)
+    if (process.env.NODE_ENV !== "development") {
+      try {
+        const volume = this.docker.getVolume(volumeName);
+        await volume.remove();
+        logger.info(`✅ Removed volume: ${volumeName}`);
+      } catch (error) {
+        const dockerError = error as { statusCode?: number };
+        if (dockerError.statusCode === 404) {
+          logger.warn(`⚠️  Volume ${volumeName} not found (already deleted)`);
+        } else {
+          logger.warn(
+            `⚠️  Failed to remove volume ${volumeName}: ${error instanceof Error ? error.message : String(error)}`
+          );
+          // Don't throw - volume cleanup is best-effort
+        }
       }
     }
   }

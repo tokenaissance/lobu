@@ -17,10 +17,10 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - my-peerbot-network
+      - peerbot-network
 
   gateway:
-    image: buremba/peerbot-gateway:2.0.0
+    image: buremba/peerbot-gateway:latest
     ports:
       - "8080:8080"
     environment:
@@ -31,16 +31,17 @@ services:
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
       PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-}
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: production
       MCP_CONFIG_URL: file:///app/.peerbot/mcp.config.json
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      COMPOSE_PROJECT_NAME: my-peerbot
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./workspaces:/app/workspaces
+      - ./.peerbot/mcp.config.json:/app/.peerbot/mcp.config.json:ro
       - env_storage:/app/.peerbot/env
-      - ./.peerbot:/app/.peerbot:ro
     networks:
-      - my-peerbot-network
+      - peerbot-network
     depends_on:
       redis:
         condition: service_healthy
@@ -51,7 +52,7 @@ services:
       context: .
       dockerfile: ./Dockerfile.worker
       args:
-        BASE_VERSION: 2.0.0
+        BASE_VERSION: latest
         NODE_ENV: ${NODE_ENV:-development}
     image: my-peerbot-worker:latest
     command: echo "Worker image built successfully"
@@ -59,7 +60,7 @@ services:
       - build-only
 
 networks:
-  my-peerbot-network:
+  peerbot-network:
     driver: bridge
 
 volumes:

@@ -48,7 +48,8 @@ export class SlackEventHandlers {
     this.messageHandler = new MessageHandler(
       queueProducer,
       config,
-      this.sessionManager
+      this.sessionManager,
+      app.client
     );
     this.actionHandler = new ActionHandler(
       this.messageHandler,

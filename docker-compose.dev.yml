@@ -30,13 +30,17 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      PEERBOT_DEV_PROJECT_PATH: ${PWD}
       PEERBOT_MCP_SERVERS_URL: ${PEERBOT_MCP_SERVERS_URL:-examples/mcp/oauth.json}
       PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      # Additional mounts for worker containers (semicolon-separated, supports placeholders)
-      # Example: ${PEERBOT_DEV_PROJECT_PATH}/examples/startup-builder:/workspace/startup-builder:ro
+      # Development mode: Host project path for mounting into worker containers
+      PEERBOT_DEV_PROJECT_PATH: ${PWD}
+      # Optional: Additional volume mounts for worker containers (semicolon-separated)
+      # Supports placeholders: ${PWD} (project root), ${WORKSPACE_DIR} (thread workspace)
+      # Example: ${PWD}/examples/startup-builder:/workspace/startup-builder:ro
       WORKER_VOLUME_MOUNTS: "${PWD}/examples/startup-builder:/workspace/startup-builder:ro"
+      # Security: Disable read-only rootfs for development (enabled by default in production)
+      WORKER_READONLY_ROOTFS: "false"
     volumes:
       # Mount Docker socket for Docker mode
       - /var/run/docker.sock:/var/run/docker.sock

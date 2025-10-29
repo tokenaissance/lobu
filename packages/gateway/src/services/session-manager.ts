@@ -161,7 +161,6 @@ export class SessionManager implements ISessionManager {
       userId,
       threadCreator: threadCreator || userId,
       lastActivity: Date.now(),
-      status: "pending",
       createdAt: Date.now(),
     };
     await this.store.set(sessionKey, session);

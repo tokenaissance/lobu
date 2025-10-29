@@ -25,11 +25,8 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
   private teamId?: string;
   private usedStreaming: boolean = false;
   private finalContent?: string;
-  private lastStatus?: string;
   private accumulatedStreamContent: string = "";
   private lastStreamDelta: string = "";
-  private recentActivities: string[] = [];
-  private readonly maxActivities = 5;
 
   constructor(
     dispatcherUrl: string,
@@ -59,49 +56,6 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
 
   setModuleData(moduleData: Record<string, unknown>): void {
     this.moduleData = moduleData;
-  }
-
-  async updateStatus(
-    status: string,
-    loadingMessages?: string[]
-  ): Promise<void> {
-    // Skip duplicate status updates
-    if (status === this.lastStatus && status !== "") {
-      return;
-    }
-
-    this.lastStatus = status || undefined;
-
-    // Add status to recent activities if non-empty
-    if (status && status.trim() !== "") {
-      this.recentActivities.push(status);
-
-      // Keep only last N activities
-      if (this.recentActivities.length > this.maxActivities) {
-        this.recentActivities.shift();
-      }
-    }
-
-    const statusPayload: NonNullable<
-      import("@peerbot/core").ThreadResponsePayload["statusUpdate"]
-    > = { status };
-    // Use provided loadingMessages or fall back to tracked activities
-    if (loadingMessages && loadingMessages.length > 0) {
-      statusPayload.loadingMessages = loadingMessages;
-    } else if (this.recentActivities.length > 0) {
-      statusPayload.loadingMessages = [...this.recentActivities];
-    }
-
-    await this.sendResponse({
-      messageId: this.originalMessageTs,
-      channelId: this.channelId,
-      threadId: this.threadId,
-      userId: this.userId,
-      timestamp: Date.now(),
-      originalMessageId: this.originalMessageTs,
-      botResponseId: this.botResponseTs,
-      statusUpdate: statusPayload,
-    });
   }
 
   async signalDone(finalDelta?: string, fullContent?: string): Promise<void> {

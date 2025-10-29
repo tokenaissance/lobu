@@ -16,23 +16,14 @@ import {
 } from "./converters/block-builder";
 import { extractCodeBlockActions } from "./converters/blockkit";
 import { convertMarkdownToSlack } from "./converters/markdown";
-import { setThreadStatus } from "./utils";
-
 const logger = createLogger("dispatcher");
-
-/**
- * Type for Slack chat stream (undocumented API)
- */
-interface ChatStream {
-  append(data: { markdown_text: string }): Promise<void>;
-  stop(): Promise<void>;
-}
 
 /**
  * Represents a single Slack chatStream session
  */
 class StreamSession {
-  private stream: ChatStream | null = null;
+  private streamTs: string | null = null;
+  private messageTs: string | null = null;
   private started: boolean = false;
   private slackClient: WebClient;
   private channelId: string;
@@ -57,15 +48,15 @@ class StreamSession {
   async appendDelta(
     delta: string,
     isFullReplacement: boolean = false
-  ): Promise<void> {
+  ): Promise<string | null> {
     // If this is a full replacement and we have an active stream, stop it first
-    if (isFullReplacement && this.started && this.stream) {
+    if (isFullReplacement && this.started && this.streamTs) {
       logger.info(
         `🔄 REPLACING STREAM CONTENT: channel=${this.channelId}, thread=${this.threadTs}`
       );
-      await this.stream.stop();
+      await this.stop();
       this.started = false;
-      this.stream = null;
+      this.streamTs = null;
     }
 
     if (!this.started) {
@@ -73,34 +64,115 @@ class StreamSession {
       logger.info(
         `🚀 STARTING NEW STREAM: channel=${this.channelId}, thread=${this.threadTs}, deltaLength=${delta.length}`
       );
-      this.stream = (this.slackClient as any).chatStream({
+      const response = (await this.slackClient.apiCall("chat.startStream", {
         channel: this.channelId,
         thread_ts: this.threadTs,
-        buffer_size: 10,
-        recipient_user_id: this.userId,
         markdown_text: delta,
+        recipient_user_id: this.userId,
         ...(this.teamId ? { recipient_team_id: this.teamId } : {}),
-      });
+      })) as {
+        ok?: boolean;
+        stream_ts?: string;
+        ts?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        const error = response.error || "unknown_error";
+        logger.error(
+          `Failed to start Slack stream for channel ${this.channelId}, thread ${this.threadTs}: ${error}`
+        );
+        throw new Error(`chat.startStream failed: ${error}`);
+      }
+
+      const streamTs = response.stream_ts || response.ts;
+      const messageTs = response.ts || response.stream_ts;
+
+      if (!streamTs) {
+        logger.error(
+          `chat.startStream response missing stream_ts for channel ${this.channelId}, thread ${this.threadTs}`
+        );
+        throw new Error("chat.startStream response missing stream_ts");
+      }
+
+      this.streamTs = streamTs;
+      this.messageTs = messageTs ?? streamTs;
       this.started = true;
       logger.info(
-        `✅ Stream started with initial content (${delta.length} chars)`
+        `✅ Stream started with initial content (${delta.length} chars) streamTs=${streamTs}, messageTs=${this.messageTs}`
       );
+
+      return this.messageTs ?? this.streamTs;
     } else {
       // Append to existing stream
       logger.info(
-        `➕ APPENDING TO STREAM: channel=${this.channelId}, thread=${this.threadTs}, deltaLength=${delta.length}`
+        `➕ APPENDING TO STREAM: channel=${this.channelId}, thread=${this.threadTs}, deltaLength=${delta.length}, streamTs=${this.streamTs}, messageTs=${this.messageTs}`
       );
-      if (this.stream) {
-        await this.stream.append({ markdown_text: delta });
+      if (this.streamTs && this.messageTs) {
+        try {
+          const appendParams = {
+            channel: this.channelId,
+            stream_ts: this.streamTs,
+            ts: this.messageTs,
+            markdown_text: delta,
+          };
+          logger.info(
+            `chat.appendStream params: channel=${this.channelId}, stream_ts=${this.streamTs}, ts=${this.messageTs}, delta_length=${delta.length}`
+          );
+
+          const response = (await this.slackClient.apiCall(
+            "chat.appendStream",
+            appendParams
+          )) as { ok?: boolean; error?: string };
+
+          if (!response.ok) {
+            const error = response.error || "unknown_error";
+            logger.error(
+              `Failed to append to Slack stream ${this.streamTs} in channel ${this.channelId}: ${error}`
+            );
+            throw new Error(`chat.appendStream failed: ${error}`);
+          }
+        } catch (error) {
+          logger.error(`Exception during chat.appendStream: ${error}`, {
+            streamTs: this.streamTs,
+            messageTs: this.messageTs,
+            channel: this.channelId,
+            error,
+          });
+          throw error;
+        }
       }
       logger.info(`✅ Appended ${delta.length} chars to existing stream`);
     }
+
+    return this.messageTs ?? this.streamTs;
   }
 
   async stop(): Promise<void> {
-    if (this.started && this.stream) {
-      await this.stream.stop();
-      this.stream = null;
+    if (this.started && this.streamTs) {
+      if (!this.messageTs) {
+        logger.error(
+          `Cannot stop stream ${this.streamTs} - missing message timestamp`
+        );
+        throw new Error("Cannot stop stream without message timestamp");
+      }
+
+      const response = (await this.slackClient.apiCall("chat.stopStream", {
+        channel: this.channelId,
+        stream_ts: this.streamTs,
+        ts: this.messageTs,
+      })) as { ok?: boolean; error?: string };
+
+      if (!response.ok) {
+        const error = response.error || "unknown_error";
+        logger.error(
+          `Failed to stop Slack stream ${this.streamTs} in channel ${this.channelId}: ${error}`
+        );
+        throw new Error(`chat.stopStream failed: ${error}`);
+      }
+      this.streamTs = null;
+      this.messageTs = null;
+      this.started = false;
       logger.info(
         `Stopped Slack stream for channel ${this.channelId}, thread ${this.threadTs}`
       );
@@ -109,6 +181,10 @@ class StreamSession {
 
   isStarted(): boolean {
     return this.started;
+  }
+
+  getMessageTs(): string | null {
+    return this.messageTs ?? this.streamTs;
   }
 }
 
@@ -131,7 +207,7 @@ class StreamSessionManager {
     delta: string,
     isFullReplacement: boolean = false,
     teamId?: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     let session = this.sessions.get(sessionId);
 
     if (!session) {
@@ -146,7 +222,8 @@ class StreamSessionManager {
       this.sessions.set(sessionId, session);
     }
 
-    await session.appendDelta(delta, isFullReplacement);
+    const streamTs = await session.appendDelta(delta, isFullReplacement);
+    return streamTs ?? session.getMessageTs();
   }
 
   async completeSession(sessionId: string): Promise<void> {
@@ -188,6 +265,29 @@ export class ThreadResponseConsumer {
     this.streamSessionManager = new StreamSessionManager(this.slackClient);
     // Get Redis client from queue connection pool (queue must be started)
     this.redis = this.queue.getRedisClient();
+  }
+
+  /**
+   * Clear thread status indicator
+   */
+  private async clearThreadStatus(
+    channelId: string,
+    threadId: string
+  ): Promise<void> {
+    try {
+      logger.info(
+        `Clearing thread status for channel ${channelId}, thread ${threadId}`
+      );
+      await this.slackClient.apiCall("assistant.threads.setStatus", {
+        channel_id: channelId,
+        thread_ts: threadId,
+        status: "",
+      });
+      logger.info(`Successfully cleared thread status`);
+    } catch (error) {
+      // Non-critical - just log
+      logger.warn(`Failed to clear thread status: ${error}`);
+    }
   }
 
   /**
@@ -271,16 +371,16 @@ export class ThreadResponseConsumer {
   private async processStreamDelta(
     data: ThreadResponsePayload,
     sessionKey: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     if (!data.isStreamDelta || !data.delta) {
-      return;
+      return null;
     }
 
     logger.info(
       `Processing stream delta length=${data.delta.length} for session ${sessionKey}, isFullReplacement=${data.isFullReplacement || false}`
     );
 
-    await this.streamSessionManager.handleDelta(
+    return await this.streamSessionManager.handleDelta(
       sessionKey,
       data.channelId,
       data.threadId,
@@ -305,22 +405,7 @@ export class ThreadResponseConsumer {
     if (hasActiveStream) {
       logger.info(`Completing active stream for session ${sessionKey}`);
       await this.streamSessionManager.completeSession(sessionKey);
-      // Clear status after stream completes
-      await setThreadStatus(
-        this.slackClient,
-        data.channelId,
-        data.threadId,
-        ""
-      );
     } else {
-      // Clear status for non-streaming completion
-      await setThreadStatus(
-        this.slackClient,
-        data.channelId,
-        data.threadId,
-        ""
-      );
-
       if (data.finalContent) {
         // No streaming or stream wasn't active - post content directly
         logger.info(
@@ -375,24 +460,19 @@ export class ThreadResponseConsumer {
 
       // Check if we have a bot message for this Claude session
       const redisBotMessageTs = await this.getBotMessageTs(sessionKey);
-      const existingBotMessageTs = data.botResponseId || redisBotMessageTs;
-      const isFirstResponse = !existingBotMessageTs;
+      let existingBotMessageTs = data.botResponseId || redisBotMessageTs;
+      let isFirstResponse = !existingBotMessageTs;
 
       // Handle streaming delta
-      await this.processStreamDelta(data, sessionKey);
-
-      // Apply status update if provided (works alongside streaming)
-      if (data.statusUpdate) {
-        logger.info(
-          `Setting thread status to: "${data.statusUpdate.status}" for thread ${data.threadId}`
-        );
-        await setThreadStatus(
-          this.slackClient,
-          data.channelId,
-          data.threadId,
-          data.statusUpdate.status,
-          data.statusUpdate.loadingMessages
-        );
+      const streamTs = await this.processStreamDelta(data, sessionKey);
+      if (streamTs) {
+        const storedTsChanged =
+          !redisBotMessageTs || redisBotMessageTs !== streamTs;
+        existingBotMessageTs = streamTs;
+        if (storedTsChanged) {
+          await this.storeBotMessageTimestamp(sessionKey, streamTs, data);
+        }
+        isFirstResponse = false;
       }
 
       // Early return after stream delta if no other content to process
@@ -401,7 +481,11 @@ export class ThreadResponseConsumer {
       }
 
       // Handle message content
-      if (data.content) {
+      // IMPORTANT: Don't process content with chat.update if streaming is active
+      // Streaming should be the exclusive mechanism for sending content when usedStreaming=true
+      const hasActiveStream = this.streamSessionManager.hasSession(sessionKey);
+
+      if (data.content && !hasActiveStream) {
         const botMessageTs = existingBotMessageTs || data.botResponseId;
 
         // Check if message should be ephemeral
@@ -423,9 +507,15 @@ export class ThreadResponseConsumer {
             );
           }
         }
+      } else if (data.content && hasActiveStream) {
+        logger.debug(
+          `Skipping content update for session ${sessionKey} - streaming is active`
+        );
       } else if (data.error) {
         const botMessageTs = existingBotMessageTs || data.botResponseId;
         await this.handleError(data, isFirstResponse, botMessageTs);
+        // Clear status indicator on error
+        await this.clearThreadStatus(data.channelId, data.threadId);
       }
 
       // Handle completion
@@ -442,48 +532,55 @@ export class ThreadResponseConsumer {
           existingBotMessageTs,
           isFirstResponse
         );
+        // Clear status indicator
+        await this.clearThreadStatus(data.channelId, data.threadId);
       }
     } catch (error: unknown) {
-      // Check if it's a validation error that shouldn't be retried
+      // Log the error details
       if (typeof error === "object" && error !== null) {
         const err = error as {
           data?: { error?: string };
           code?: string;
           message?: string;
         };
+
+        // Check if it's a validation error that shouldn't be retried
         if (
           err.data?.error === "invalid_blocks" ||
           err.data?.error === "msg_too_long" ||
           err.code === "slack_webapi_platform_error"
         ) {
           logger.error(
-            `Slack validation error: ${err.data?.error || err.message}`
+            `Slack validation error (not retrying): ${err.data?.error || err.message}`,
+            {
+              jobId: job.id,
+              messageId: data?.messageId,
+              threadId: data?.threadId,
+              error: err.data?.error || err.message,
+            }
           );
 
-          // Try to inform the user about the validation error
-          if (data?.channelId && data.messageId) {
-            try {
-              await this.slackClient.chat.update({
-                channel: data.channelId,
-                ts: data.messageId,
-                text: `❌ **Message update failed**\n\n**Error:** ${err.data?.error || err.message}\n\nThe response may contain invalid formatting or be too long for Slack.`,
-              });
-              logger.info(
-                `Notified user about validation error in job ${job.id}`
-              );
-            } catch (notifyError) {
-              logger.error(
-                `Failed to notify user about validation error: ${notifyError}`
-              );
-            }
-          }
-
           // Don't throw - mark job as complete to prevent retry loops
+          // Note: We don't try to update the message here because:
+          // 1. If streaming is active, chat.update would conflict with the stream
+          // 2. The content has validation issues that would likely fail again
+          // 3. The worker should handle showing errors in its own stream content
+
+          // Clear status indicator on validation error
+          if (data?.channelId && data?.threadId) {
+            await this.clearThreadStatus(data.channelId, data.threadId);
+          }
           return;
         }
       }
 
       logger.error(`Failed to process thread response job ${job.id}:`, error);
+
+      // Clear status indicator on error
+      if (data?.channelId && data?.threadId) {
+        await this.clearThreadStatus(data.channelId, data.threadId);
+      }
+
       throw error; // Let the queue handle retry logic for other errors
     }
   }
@@ -666,12 +763,20 @@ export class ThreadResponseConsumer {
       return returnedTs;
     } else {
       // Update existing message
-      const botTs = botMessageTs || threadTs;
-      logger.info(`Updating bot message in channel ${channelId}, ts ${botTs}`);
+      if (!botMessageTs) {
+        logger.error(
+          `Cannot update message - no bot message timestamp provided for channel ${channelId}, thread ${threadTs}`
+        );
+        throw new Error("Cannot update message without bot message timestamp");
+      }
+
+      logger.info(
+        `Updating bot message in channel ${channelId}, ts ${botMessageTs}`
+      );
 
       const updateResult = await this.slackClient.chat.update({
         channel: channelId,
-        ts: botTs,
+        ts: botMessageTs,
         text: text,
         blocks: blocks,
       });

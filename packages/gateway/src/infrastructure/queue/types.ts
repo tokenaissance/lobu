@@ -104,11 +104,6 @@ export interface ThreadResponsePayload {
   originalMessageId?: string;
   moduleData?: Record<string, unknown>;
   botResponseId?: string;
-  statusUpdate?: {
-    status?: string;
-    loadingMessages?: string[];
-    [key: string]: unknown;
-  };
   seq?: number;
   ephemeral?: boolean;
 }

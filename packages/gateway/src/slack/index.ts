@@ -50,4 +50,4 @@ export type {
   WebClient,
 } from "./types";
 // Utilities
-export { isSelfGeneratedEvent, setThreadStatus } from "./utils";
+export { isSelfGeneratedEvent } from "./utils";

@@ -5,6 +5,7 @@ import { createLogger, verifyWorkerToken } from "@peerbot/core";
 import type { Request, Response } from "express";
 import type { McpConfigService } from "../auth/mcp/config-service";
 import type { IMessageQueue } from "../infrastructure/queue";
+import type { ISessionManager } from "../session";
 import type { InstructionService } from "../services/instruction-service";
 import { WorkerConnectionManager } from "./connection-manager";
 import { WorkerJobRouter } from "./job-router";
@@ -27,13 +28,18 @@ export class WorkerGateway {
   constructor(
     queue: IMessageQueue,
     publicGatewayUrl: string,
+    sessionManager: ISessionManager,
     mcpConfigService?: McpConfigService,
     instructionService?: InstructionService
   ) {
     this.queue = queue;
     this.publicGatewayUrl = publicGatewayUrl;
     this.connectionManager = new WorkerConnectionManager();
-    this.jobRouter = new WorkerJobRouter(queue, this.connectionManager);
+    this.jobRouter = new WorkerJobRouter(
+      queue,
+      this.connectionManager,
+      sessionManager
+    );
     this.mcpConfigService = mcpConfigService;
     this.instructionService = instructionService;
   }
