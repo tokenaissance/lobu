@@ -1,6 +1,6 @@
 {
   "name": "create-peerbot",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "workspaces": [
     "packages/cli",
     "packages/gateway",

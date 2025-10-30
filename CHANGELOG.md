@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.3.0](https://github.com/buremba/peerbot/compare/v2.2.1...v2.3.0) (2025-10-30)
+
+
+### Features
+
+* enhance Docker security and simplify session management ([3f68c50](https://github.com/buremba/peerbot/commit/3f68c50376731470cd8a6912403ef631430e39ad))
+* enhance MCP OAuth integration and worker session management ([abfdeb4](https://github.com/buremba/peerbot/commit/abfdeb469aadd51923ecceab5159e561d917499c))
+* improve status indicators and error handling ([7a7684a](https://github.com/buremba/peerbot/commit/7a7684a076a542098d3d250bb56cc3072a6b057f))
+
+
+### Bug Fixes
+
+* add production environment to Docker publish workflow and clean up outputs ([9fe8120](https://github.com/buremba/peerbot/commit/9fe812050fa603c62764108f734b76284080b76c))
+* apply code formatting fixes ([0e17f0c](https://github.com/buremba/peerbot/commit/0e17f0c38f5fd08b616cf7648a89b4f49b4bea98))
+* build core package before running tests in CI ([1752131](https://github.com/buremba/peerbot/commit/175213174d40d3b2dfe17af179dacb6490b248be))
+* improve error handling for streaming validation errors ([ea72817](https://github.com/buremba/peerbot/commit/ea72817918823efbac688b9ae84e73289399c648))
+* resolve CI workflow syntax errors ([a312b9f](https://github.com/buremba/peerbot/commit/a312b9f909c7b5c96896add46d4bb5ffc488267e))
+* simplify Docker multi-arch support and improve MCP configuration ([5f4e2d8](https://github.com/buremba/peerbot/commit/5f4e2d8d0f7d475663b0458d2075d878a263d646))
+
 ## [2.2.1](https://github.com/buremba/peerbot/compare/v2.2.0...v2.2.1) (2025-10-27)
 
 
