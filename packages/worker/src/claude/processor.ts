@@ -148,6 +148,10 @@ export class ProgressProcessor {
         case "user":
           // Skip user messages
           return null;
+
+        default:
+          // Unknown message type - skip
+          return null;
       }
     } catch (error) {
       logger.error("Failed to process progress update:", error);

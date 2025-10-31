@@ -178,12 +178,39 @@ class StreamSession {
 
           if (!response.ok) {
             const error = response.error || "unknown_error";
+
+            // Check if this is a streaming state error - restart stream with new message
+            if (error === "message_not_in_streaming_state") {
+              logger.warn(
+                `⚠️ Streaming state lost for ${this.streamTs}, restarting stream with new message`
+              );
+              // Reset stream state
+              this.streamTs = null;
+              this.started = false;
+              // Start a fresh stream with the current delta
+              return this.appendDelta(delta, false);
+            }
+
             logger.error(
               `Failed to append to Slack stream ${this.streamTs} in channel ${this.channelId}: ${error}`
             );
             throw new Error(`chat.appendStream failed: ${error}`);
           }
         } catch (error) {
+          // Check if the error is about streaming state
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes("message_not_in_streaming_state")) {
+            logger.warn(
+              `⚠️ Streaming state lost (exception), restarting stream with new message`
+            );
+            // Reset stream state
+            this.streamTs = null;
+            this.started = false;
+            // Start a fresh stream with the current delta
+            return this.appendDelta(delta, false);
+          }
+
           logger.error(`Exception during chat.appendStream: ${error}`, {
             streamTs: this.streamTs,
             messageTs: this.messageTs,
