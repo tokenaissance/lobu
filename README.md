@@ -98,8 +98,11 @@ bun run build
 # Run locally
 make dev
 
-# Run tests
-./scripts/slack-qa-bot.js "test prompt"
+# Test bot
+curl -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"slack","channel":"test-channel","message":"@me test prompt"}'
 ```
 
 ## Published Packages

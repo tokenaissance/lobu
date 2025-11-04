@@ -8,7 +8,9 @@ import {
   type UserSuggestion,
 } from "@peerbot/core";
 import { App, type AppOptions, ExpressReceiver, LogLevel } from "@slack/bolt";
+import { WebClient } from "@slack/web-api";
 import type { NextFunction, Request, Response } from "express";
+import type { WorkerDeploymentPayload } from "../infrastructure/queue/queue-producer";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import { FileHandler } from "../services/file-handler";
 import type { AgentOptions, SlackPlatformConfig } from "./config";
@@ -304,6 +306,366 @@ export class SlackPlatform implements PlatformAdapter {
         status
       );
     }
+  }
+
+  /**
+   * Check if token matches this platform's configured bot token
+   */
+  isOwnBotToken(token: string): boolean {
+    return token === this.config.slack.token;
+  }
+
+  /**
+   * Send a test message using external bot token
+   * Supports channel name resolution, multiple file uploads, and @me placeholder
+   */
+  async sendMessage(
+    token: string,
+    channel: string,
+    message: string,
+    options?: {
+      threadId?: string;
+      files?: Array<{ buffer: Buffer; filename: string }>;
+    }
+  ): Promise<{
+    channel: string;
+    messageId: string;
+    threadId: string;
+    threadUrl?: string;
+    queued?: boolean;
+  }> {
+    const client = new WebClient(token);
+
+    // Get bot user ID and team ID (single auth.test call)
+    let botUserId: string | undefined;
+    let teamId: string | undefined;
+    try {
+      const authResponse = await client.auth.test();
+      if (authResponse.ok) {
+        botUserId = authResponse.user_id;
+        teamId = authResponse.team_id;
+      }
+    } catch (error) {
+      logger.warn("Could not get bot info:", error);
+    }
+
+    // Replace @me placeholder with actual bot mention
+    let processedMessage = message;
+    if (botUserId && message.includes("@me")) {
+      processedMessage = message.replace(/@me\b/g, `<@${botUserId}>`);
+    }
+
+    // Resolve channel name to ID if needed
+    let channelId = channel;
+    if (!channel.match(/^[CDG][A-Z0-9]+$/)) {
+      logger.info(`Resolving channel name "${channel}" to ID...`);
+      channelId = await this.resolveChannelName(client, channel);
+      logger.info(`Resolved channel "${channel}" to ID: ${channelId}`);
+    }
+
+    // Detect self-messaging: any message sent with bot's own token needs manual queueing
+    // because Slack will mark it as from the bot user and our event handler filters those out
+    const isSelfMessage = this.isOwnBotToken(token);
+
+    // Handle file uploads
+    if (options?.files && options.files.length > 0) {
+      return await this.sendMessageWithFiles(
+        client,
+        channelId,
+        processedMessage,
+        options.files,
+        options.threadId,
+        teamId,
+        isSelfMessage
+      );
+    }
+
+    // Send regular message
+    const response = await client.chat.postMessage({
+      channel: channelId,
+      text: processedMessage,
+      thread_ts: options?.threadId,
+    });
+
+    if (!response.ok || !response.ts) {
+      throw new Error(`Failed to send message: ${response.error || "unknown"}`);
+    }
+
+    const messageId = response.ts;
+    const threadId = options?.threadId || messageId;
+
+    // Build thread URL if we have team ID
+    let threadUrl: string | undefined;
+    if (teamId) {
+      threadUrl = `https://app.slack.com/client/${teamId}/${channelId}/thread/${threadId}`;
+    }
+
+    // If self-messaging, manually queue since Slack won't send webhook
+    let queued = false;
+    if (isSelfMessage && botUserId) {
+      logger.info(
+        `Self-messaging detected - manually queuing message ${messageId}`
+      );
+      await this.queueSelfMessage(
+        channelId,
+        messageId,
+        threadId,
+        processedMessage,
+        botUserId,
+        teamId
+      );
+      queued = true;
+    }
+
+    return {
+      channel: channelId,
+      messageId,
+      threadId,
+      threadUrl,
+      queued,
+    };
+  }
+
+  /**
+   * Resolve channel name to channel ID
+   */
+  private async resolveChannelName(
+    client: WebClient,
+    channelName: string
+  ): Promise<string> {
+    // Remove # prefix if present
+    const cleanName = channelName.replace(/^#/, "");
+
+    let cursor: string | undefined;
+    do {
+      const response = await client.conversations.list({
+        exclude_archived: true,
+        limit: 1000,
+        cursor,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to list channels: ${response.error || "unknown"}`
+        );
+      }
+
+      const channels = response.channels || [];
+      const match = channels.find((ch: any) => ch.name === cleanName);
+
+      if (match?.id) {
+        return match.id;
+      }
+
+      cursor = response.response_metadata?.next_cursor;
+    } while (cursor);
+
+    throw new Error(`Channel "${channelName}" not found`);
+  }
+
+  /**
+   * Send message with multiple file uploads (Slack v2 file upload)
+   */
+  private async sendMessageWithFiles(
+    client: WebClient,
+    channelId: string,
+    message: string,
+    files: Array<{ buffer: Buffer; filename: string }>,
+    threadId?: string,
+    teamId?: string,
+    isSelfMessage?: boolean
+  ): Promise<{
+    channel: string;
+    messageId: string;
+    threadId: string;
+    threadUrl?: string;
+    queued?: boolean;
+  }> {
+    // Step 1: Upload all files and get their IDs
+    const fileIds: Array<{ id: string; title: string }> = [];
+
+    for (const file of files) {
+      // Get upload URL for this file
+      const uploadUrlResponse = (await client.apiCall(
+        "files.getUploadURLExternal",
+        {
+          filename: file.filename,
+          length: file.buffer.length,
+        }
+      )) as {
+        ok?: boolean;
+        upload_url?: string;
+        file_id?: string;
+        error?: string;
+      };
+
+      if (
+        !uploadUrlResponse.ok ||
+        !uploadUrlResponse.upload_url ||
+        !uploadUrlResponse.file_id
+      ) {
+        throw new Error(
+          `Failed to get upload URL for ${file.filename}: ${uploadUrlResponse.error || "unknown"}`
+        );
+      }
+
+      // Upload file to URL
+      const uploadResponse = await fetch(uploadUrlResponse.upload_url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Length": file.buffer.length.toString(),
+        },
+        body: file.buffer,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(
+          `File upload failed for ${file.filename}: ${uploadResponse.status} ${await uploadResponse.text()}`
+        );
+      }
+
+      fileIds.push({
+        id: uploadUrlResponse.file_id,
+        title: file.filename,
+      });
+    }
+
+    // Step 2: Complete upload and share all files to channel
+    const completeBody: any = {
+      files: fileIds,
+      channel_id: channelId,
+      initial_comment: message,
+    };
+
+    if (threadId) {
+      completeBody.thread_ts = threadId;
+    }
+
+    const completeResponse = (await client.apiCall(
+      "files.completeUploadExternal",
+      completeBody
+    )) as {
+      ok?: boolean;
+      files?: any[];
+      error?: string;
+    };
+
+    if (!completeResponse.ok) {
+      throw new Error(
+        `Failed to complete upload: ${completeResponse.error || "unknown"}`
+      );
+    }
+
+    // Step 3: Fetch message timestamp from history
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const historyResponse = await client.conversations.history({
+      channel: channelId,
+      limit: 1,
+    });
+
+    if (!historyResponse.ok || !historyResponse.messages?.[0]?.ts) {
+      throw new Error("Could not fetch message timestamp after file upload");
+    }
+
+    const messageId = historyResponse.messages[0].ts;
+    const finalThreadId = threadId || messageId;
+
+    // Build thread URL if we have team ID
+    let threadUrl: string | undefined;
+    if (teamId) {
+      threadUrl = `https://app.slack.com/client/${teamId}/${channelId}/thread/${finalThreadId}`;
+    }
+
+    // If self-messaging, manually queue since Slack won't send webhook
+    let queued = false;
+    if (isSelfMessage) {
+      logger.info(
+        `Self-messaging with files - manually queuing message ${messageId}`
+      );
+      const botUserId = await this.getBotUserId(client);
+      if (botUserId) {
+        await this.queueSelfMessage(
+          channelId,
+          messageId,
+          finalThreadId,
+          message,
+          botUserId,
+          teamId
+        );
+        queued = true;
+      }
+    }
+
+    return {
+      channel: channelId,
+      messageId,
+      threadId: finalThreadId,
+      threadUrl,
+      queued,
+    };
+  }
+
+  /**
+   * Get bot user ID from client
+   */
+  private async getBotUserId(client: WebClient): Promise<string | undefined> {
+    try {
+      const authResponse = await client.auth.test();
+      return authResponse.ok ? authResponse.user_id : undefined;
+    } catch (error) {
+      logger.warn("Could not get bot user ID:", error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Queue self-generated message directly (bypasses Slack webhook filtering)
+   * Uses TEST_USER_ID env var for testing, or falls back to the first allowed user
+   */
+  private async queueSelfMessage(
+    channelId: string,
+    messageId: string,
+    threadId: string,
+    message: string,
+    botUserId: string,
+    teamId?: string
+  ): Promise<void> {
+    const queueProducer = this.services.getQueueProducer();
+
+    // Use TEST_USER_ID for testing, or fall back to SLACK_ADMIN_USER_ID, or bot's user
+    const testUserId =
+      process.env.TEST_USER_ID || process.env.SLACK_ADMIN_USER_ID || botUserId;
+
+    // Build payload matching WorkerDeploymentPayload structure
+    const payload: WorkerDeploymentPayload = {
+      platform: "slack",
+      userId: testUserId,
+      botId: this.config.slack.botId || "",
+      threadId,
+      messageId,
+      messageText: message,
+      channelId,
+      platformUserId: testUserId,
+      platformMetadata: {
+        teamId: teamId || "",
+        userDisplayName: "Test User",
+        responseChannel: channelId,
+        responseId: messageId,
+        originalMessageId: messageId,
+        files: [],
+      },
+      agentOptions: {
+        ...this.agentOptions,
+        timeoutMinutes: this.sessionTimeoutMinutes.toString(),
+      },
+    };
+
+    await queueProducer.enqueueMessage(payload);
+    logger.info(
+      `Queued self-generated message ${messageId} (as user ${testUserId}) to messages queue`
+    );
   }
 
   /**

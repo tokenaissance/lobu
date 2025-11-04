@@ -534,6 +534,20 @@ export async function initCommand(
       join(projectDir, "README.md")
     );
 
+    // Create AGENTS.md
+    await renderTemplate(
+      "AGENTS.md.tmpl",
+      variables,
+      join(projectDir, "AGENTS.md")
+    );
+
+    // Create TESTING.md
+    await renderTemplate(
+      "TESTING.md.tmpl",
+      variables,
+      join(projectDir, "TESTING.md")
+    );
+
     // Create Dockerfile.worker based on mode
     if (workerMode === "base-image") {
       await renderTemplate(

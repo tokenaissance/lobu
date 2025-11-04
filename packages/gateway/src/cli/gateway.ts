@@ -19,7 +19,8 @@ function setupHealthEndpoints(
   mcpProxy: any,
   fileHandler?: any,
   sessionManager?: any,
-  interactionService?: any
+  interactionService?: any,
+  platformRegistry?: any
 ) {
   if (healthServer) return;
 
@@ -105,6 +106,16 @@ function setupHealthEndpoints(
     );
   }
 
+  // Setup messaging routes
+  if (platformRegistry) {
+    const { Router } = require("express");
+    const messagingRouter = Router();
+    const { registerMessagingRoutes } = require("../routes/messaging");
+    registerMessagingRoutes(messagingRouter, platformRegistry);
+    proxyApp.use(messagingRouter);
+    logger.info("✅ Messaging routes enabled at :8080/api/messaging/send");
+  }
+
   // Create HTTP server with Express app
   healthServer = http.createServer(proxyApp);
 
@@ -185,7 +196,8 @@ export async function startGateway(
     coreServices.getMcpProxy(),
     fileHandler,
     sessionManager,
-    coreServices.getInteractionService()
+    coreServices.getInteractionService(),
+    gateway.getPlatformRegistry()
   );
 
   logger.info("✅ Peerbot Gateway is running!");

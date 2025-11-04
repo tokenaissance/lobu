@@ -1,7 +1,7 @@
 import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
-  entry: ["packages/*/src/**/*.{ts,tsx,js,jsx,cjs,mjs}", "slack-qa-bot.js"],
+  entry: ["packages/*/src/**/*.{ts,tsx,js,jsx,cjs,mjs}"],
   ignore: [
     "**/dist/**",
     "charts/**",

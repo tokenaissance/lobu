@@ -28,13 +28,19 @@ TypeScript packages must be compiled from `src/` → `dist/`. If you modify any 
 - You MUST only do what has been asked; nothing more, nothing less.
 - When the user types a Slack message link (slack.com/archives/x/x/?thread_ts=) you MUST call ./scripts/slack-thread-viewer.js "link" to gather context
 - When you are in planning mode and you're not fully sure, you need to ask 'codex exec "YOUR_QUESTION" --config model_reasoning_effort="high"'
-- For comprehensive QA and E2E testing, see `.claude/commands/qa.md` for detailed testing procedures and examples.
 - When you make changes to worker code (`packages/worker/*`), run `make clean-workers` to ensure new workers use the updated code.
 - The "is running" thread status indicator (with rotating messages) provides user feedback during processing; visible "Still processing" heartbeat messages are not sent to avoid clutter.
 - Anytime you make changes in the code, you MUST:
 
 1. Have the bot running via `make dev` running in the background for development. This uses Docker Compose with hot reload enabled when NODE_ENV=development.
-2. You MUST run ./scripts/slack-qa-bot.js "Relevant prompt" --timeout [based on complexity change by default 10] and make sure it works properly. If the script fails (including getting stuck at "Starting environment setup"), you MUST fix it.
+2. Test the bot using curl with the messaging API endpoint:
+```bash
+curl -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"slack","channel":"$TEST_CHANNEL","message":"@me test prompt"}'
+```
+Wait 10-30 seconds and check logs to verify the bot processes the message.
 3. Check logs using `docker compose logs` or `make logs` to verify the bot works properly.
 
 - If you create ephemeral files, you MUST delete them when you're done with them.
@@ -166,22 +172,82 @@ export GOOGLE_CLIENT_SECRET=your_google_client_secret
 - Contains: accessToken, tokenType, expiresAt, refreshToken, metadata
 - OAuth state stored temporarily (5 min TTL) for CSRF protection
 
-## Testing with slack-qa-bot.js
+## Testing Bot Deployments
 
-**See `.claude/commands/qa.md` for comprehensive testing documentation with examples.**
+Use the messaging API endpoint to test your bot with simple curl commands. No special QA environment variables needed.
 
-Basic usage:
+### Basic Test
+```bash
+curl -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"slack","channel":"test-channel","message":"@me hello"}'
+```
+
+### Complete E2E Testing Example
 
 ```bash
-# Simple test
-./scripts/slack-qa-bot.js "Hello bot"
+# 1. Send initial message and capture thread ID
+RESPONSE=$(curl -s -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"slack","channel":"test-channel","message":"@me what is 5+5?"}')
 
-# JSON output for automation
-./scripts/slack-qa-bot.js --json "Create a function" | jq -r .thread_ts
+echo "Response: $RESPONSE"
+THREAD_ID=$(echo $RESPONSE | jq -r '.threadId')
+echo "Thread ID: $THREAD_ID"
 
-# Test thread continuity
-./scripts/slack-qa-bot.js "2+3" --timeout 20 --json | jq -r '.thread_ts' | xargs -I {} ./slack-qa-bot.js "add 1 to that number, only answer the number" --thread-ts {} --timeout 25
+# 2. Wait for bot to respond (check logs or Slack UI)
+sleep 10
 
-# Comprehensive E2E testing
-./scripts/slack-qa-bot.js
+# 3. Send follow-up in same thread
+curl -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"platform\":\"slack\",\"channel\":\"test-channel\",\"message\":\"now multiply that by 3\",\"threadId\":\"$THREAD_ID\"}"
+
+# 4. Test with file upload
+curl -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -F "platform=slack" \
+  -F "channel=test-channel" \
+  -F "message=@me analyze these files" \
+  -F "files=@data.csv" \
+  -F "files=@document.pdf"
+
+# 5. Check logs to verify processing
+docker compose -f docker-compose.dev.yml logs gateway --tail 50
 ```
+
+See generated `TESTING.md` for comprehensive API documentation including interaction testing.
+
+## Messaging API for AI Agents
+
+Developers can test their bots using the messaging API endpoint. For generated projects, see `AGENTS.md` and `TESTING.md` in the project directory for comprehensive documentation.
+
+### Endpoint
+```
+POST http://localhost:8080/api/messaging/send
+```
+
+### Quick Example
+```bash
+curl -X POST http://localhost:8080/api/messaging/send \
+  -H "Authorization: Bearer xoxb-your-bot-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "slack",
+    "channel": "general",
+    "message": "@me hello"
+  }'
+```
+
+**Key Features:**
+- **Bearer Token Auth**: Token in `Authorization` header (not body)
+- **@me Placeholder**: Use `@me` to mention the bot (platform-agnostic)
+- **File uploads**: Support multipart/form-data for attachments
+- **Thread continuity**: Use `threadId` parameter for conversation context
+- **Channel resolution**: Accept channel names or IDs
+- **Platform-agnostic**: Same API works for Slack, Discord, Telegram (future)
+
+This endpoint allows AI agents to test bot connectivity during docker-compose development and automate E2E conversation testing.

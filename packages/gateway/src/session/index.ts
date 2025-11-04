@@ -23,6 +23,7 @@ export interface ThreadSession {
   lastActivity: number;
   createdAt: number;
   botResponseId?: string; // Bot's response message ID for updates
+  turnCount?: number; // Track conversation turns to prevent infinite loops
 }
 
 /**

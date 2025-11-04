@@ -33,6 +33,7 @@ services:
       PEERBOT_MCP_SERVERS_URL: ${PEERBOT_MCP_SERVERS_URL:-examples/mcp/oauth.json}
       PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      TEST_USER_ID: ${TEST_USER_ID}
       # Development mode: Host project path for mounting into worker containers
       PEERBOT_DEV_PROJECT_PATH: ${PWD}
       # Optional: Additional volume mounts for worker containers (semicolon-separated)

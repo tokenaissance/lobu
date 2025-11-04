@@ -26,7 +26,10 @@ All changes must go through pull requests. Direct pushes to main are disabled.
    bun run lint
    
    # Test bot functionality
-   ./slack-qa-bot.js "Your test prompt"
+   curl -X POST http://localhost:8080/api/messaging/send \
+     -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"platform":"slack","channel":"test-channel","message":"@me test prompt"}'
    
    # Verify in Docker Compose
    make dev

@@ -131,6 +131,44 @@ export interface PlatformAdapter {
     threadId: string,
     status: string | null
   ): Promise<void>;
+
+  /**
+   * Check if the provided token matches the platform's configured bot token
+   * Used to detect self-messaging for direct queueing
+   *
+   * @param token - Token to check
+   * @returns True if this is the platform's own bot token
+   */
+  isOwnBotToken?(token: string): boolean;
+
+  /**
+   * Send a message to a channel or thread for testing/automation
+   * Uses an external bot token (not the configured platform token)
+   * Supports multiple file uploads, thread replies, and @me placeholder for bot mentions
+   *
+   * @param token - Bot token (e.g., xoxb- for Slack)
+   * @param channel - Channel ID or name
+   * @param message - Message text to send (use @me to mention the bot)
+   * @param options - Optional parameters
+   * @param options.threadId - Thread ID to reply to (platform-agnostic)
+   * @param options.files - Files to upload with the message (up to 10)
+   * @returns Message metadata including IDs and URL, plus queued flag
+   */
+  sendMessage?(
+    token: string,
+    channel: string,
+    message: string,
+    options?: {
+      threadId?: string;
+      files?: Array<{ buffer: Buffer; filename: string }>;
+    }
+  ): Promise<{
+    channel: string;
+    messageId: string;
+    threadId: string;
+    threadUrl?: string;
+    queued?: boolean;
+  }>;
 }
 
 // ============================================================================

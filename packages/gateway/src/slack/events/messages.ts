@@ -145,6 +145,26 @@ export class MessageHandler {
       `Handling request for session: ${sessionKey} (threadTs: ${normalizedThreadTs})`
     );
 
+    // Check turn count to prevent infinite loops
+    const maxTurns = process.env.MAX_TURNS
+      ? parseInt(process.env.MAX_TURNS, 10)
+      : 50;
+    const currentTurnCount = (existingSession?.turnCount || 0) + 1;
+
+    if (currentTurnCount > maxTurns) {
+      logger.warn(
+        `Thread ${normalizedThreadTs} exceeded MAX_TURNS (${maxTurns}). Preventing infinite loop.`
+      );
+      await client.chat.postMessage({
+        channel: context.channelId,
+        thread_ts: normalizedThreadTs,
+        text: `⚠️ This conversation has exceeded the maximum turn limit (${maxTurns} turns). Please start a new thread to continue.`,
+      });
+      return;
+    }
+
+    logger.info(`Turn count: ${currentTurnCount}/${maxTurns}`);
+
     try {
       const threadTs = normalizedThreadTs;
 
@@ -172,7 +192,7 @@ export class MessageHandler {
         }
       }
 
-      // Create thread session
+      // Create thread session with turn count
       const threadSession: ThreadSession = {
         sessionKey,
         threadId: threadTs,
@@ -181,6 +201,7 @@ export class MessageHandler {
         threadCreator: context.userId, // Store the thread creator
         lastActivity: Date.now(),
         createdAt: Date.now(),
+        turnCount: currentTurnCount,
       };
 
       await this.sessionManager.setSession(threadSession);

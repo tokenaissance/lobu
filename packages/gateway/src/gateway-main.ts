@@ -144,4 +144,11 @@ export class Gateway {
   getCoreServices(): CoreServices {
     return this.coreServices;
   }
+
+  /**
+   * Get platform registry (for routes that need to access platform adapters)
+   */
+  getPlatformRegistry() {
+    return platformRegistry;
+  }
 }

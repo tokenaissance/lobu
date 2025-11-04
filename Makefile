@@ -82,8 +82,7 @@ dev-d dev-detached:
 
 # Run test bot
 test:
-	@echo "🧪 Running test bot..."
-	@source .env && node ./scripts/slack-qa-bot.js --qa
+	@./scripts/test-bot.sh "@me test from make command"
 # Deploy to Kubernetes
 # Usage: make deploy [--target=environment]
 deploy:
