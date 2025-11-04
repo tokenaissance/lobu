@@ -1,14 +1,10 @@
 #!/usr/bin/env bun
 
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger } from "@peerbot/core";
+import { createLogger, type PendingInteraction } from "@peerbot/core";
 import { ensureBaseUrl } from "../core/url-utils";
 
 const logger = createLogger("claude-session");
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface MCPServerConfig {
   type?: "sse" | "stdio";
@@ -43,11 +39,8 @@ interface SessionContextResponse {
   mcpConfig?: MCPConfigResponse;
   platformInstructions: string;
   mcpStatus: McpStatus[];
+  unansweredInteractions: PendingInteraction[];
 }
-
-// ============================================================================
-// MCP INSTRUCTIONS
-// ============================================================================
 
 /**
  * Build MCP instructions from status data
@@ -82,31 +75,28 @@ function buildMcpInstructions(mcpStatus: McpStatus[]): string {
     }
 
     lines.push(
-      `- ⚠️ **${mcp.name}**: Requires ${reasons.join(" and ")} - visit Home tab to set up`
+      `- ⚠️ **${mcp.name}**: Requires ${reasons.join(" and ")} - visit homepage to set up`
     );
   }
 
   return lines.join("\n");
 }
 
-// ============================================================================
-// SESSION CONTEXT
-// ============================================================================
-
 /**
  * Fetch session context from gateway (unified endpoint)
- * Returns MCP config, platform instructions, and MCP status data
+ * Returns MCP config, platform instructions, MCP status data, and unanswered interactions
  */
 export async function getSessionContext(): Promise<{
   mcpServers?: Record<string, McpServerConfig>;
   gatewayInstructions: string;
+  unansweredInteractions: PendingInteraction[];
 }> {
   const dispatcherUrl = process.env.DISPATCHER_URL;
   const workerToken = process.env.WORKER_TOKEN;
 
   if (!dispatcherUrl || !workerToken) {
     logger.warn("Missing dispatcher URL or worker token for session context");
-    return { gatewayInstructions: "" };
+    return { gatewayInstructions: "", unansweredInteractions: [] };
   }
 
   try {
@@ -124,7 +114,7 @@ export async function getSessionContext(): Promise<{
       logger.warn("Gateway returned non-success status for session context", {
         status: response.status,
       });
-      return { gatewayInstructions: "" };
+      return { gatewayInstructions: "", unansweredInteractions: [] };
     }
 
     const data = (await response.json()) as SessionContextResponse;
@@ -199,9 +189,10 @@ export async function getSessionContext(): Promise<{
     return {
       mcpServers: Object.keys(sdkServers).length > 0 ? sdkServers : undefined,
       gatewayInstructions,
+      unansweredInteractions: data.unansweredInteractions || [],
     };
   } catch (error) {
     logger.error("Failed to fetch session context from gateway", { error });
-    return { gatewayInstructions: "" };
+    return { gatewayInstructions: "", unansweredInteractions: [] };
   }
 }

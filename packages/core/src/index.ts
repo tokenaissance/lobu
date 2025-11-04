@@ -20,14 +20,14 @@ export { initSentry } from "./sentry";
 // Export core types
 export type {
   AgentOptions,
-  ClaudeExecutionOptions,
   ConversationMessage,
   FieldSchema,
-  FormOption,
   InstructionContext,
   InstructionProvider,
   InteractionOptions,
+  InteractionType,
   LogLevel,
+  PendingInteraction,
   SessionContext,
   SuggestedPrompt,
   ThreadResponsePayload,
@@ -35,7 +35,14 @@ export type {
   UserInteractionResponse,
   UserSuggestion,
 } from "./types";
+// Export transport interfaces
+export type {
+  WorkerTransport,
+  WorkerTransportConfig,
+} from "./worker/transport";
 // Export encryption utilities
 export * from "./utils/encryption";
+// Export error handling utilities
+export * from "./utils/error-handler";
 // Export worker authentication
-export * from "./utils/worker-auth";
+export * from "./worker/auth";

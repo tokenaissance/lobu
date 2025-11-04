@@ -23,6 +23,7 @@ export class WorkerGateway {
   private connectionManager: WorkerConnectionManager;
   private jobRouter: WorkerJobRouter;
   private queue: IMessageQueue;
+  // TODO: why are they all optional? If possible we should use required fields everywhere. Remember that in AGENTS.md as well.
   private mcpConfigService?: McpConfigService;
   private instructionService?: InstructionService;
   private interactionService?: InteractionService;
@@ -51,7 +52,9 @@ export class WorkerGateway {
     // Listen for interaction responses and forward to workers via SSE
     if (this.interactionService) {
       this.interactionService.on("interaction:responded", (interaction) => {
-        this.handleInteractionResponse(interaction);
+        this.handleInteractionResponse(interaction).catch((error) => {
+          logger.error("Error handling interaction response:", error);
+        });
       });
     }
   }
@@ -107,6 +110,9 @@ export class WorkerGateway {
 
     // Register job router for this worker (idempotent - safe to call multiple times)
     await this.jobRouter.registerWorker(deploymentName);
+
+    // Send any pending interaction responses (for reconnection recovery)
+    await this.sendPendingInteractionResponses(threadId, deploymentName);
 
     // Handle client disconnect
     req.on("close", () => {
@@ -174,7 +180,7 @@ export class WorkerGateway {
     }
 
     try {
-      const { userId, platform, sessionKey } = auth.tokenData;
+      const { userId, platform, sessionKey, threadId } = auth.tokenData;
       const baseUrl = this.getRequestBaseUrl(req);
 
       // Build instruction context
@@ -185,26 +191,30 @@ export class WorkerGateway {
         availableProjects: [],
       };
 
-      // Fetch MCP config and session context data in parallel
-      const [mcpConfig, contextData] = await Promise.all([
-        this.mcpConfigService.getWorkerConfig({
-          baseUrl,
-          workerToken: auth.token,
-        }),
-        this.instructionService.getSessionContext(
-          platform || "unknown",
-          instructionContext
-        ),
-      ]);
+      // Fetch MCP config, session context, and pending interactions in parallel
+      const [mcpConfig, contextData, unansweredInteractions] =
+        await Promise.all([
+          this.mcpConfigService.getWorkerConfig({
+            baseUrl,
+            workerToken: auth.token,
+          }),
+          this.instructionService.getSessionContext(
+            platform || "unknown",
+            instructionContext
+          ),
+          this.interactionService?.getPendingUnansweredInteractions(threadId) ||
+            Promise.resolve([]),
+        ]);
 
       logger.info(
-        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.mcpStatus.length} MCP status entries`
+        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.mcpStatus.length} MCP status entries, ${unansweredInteractions.length} unanswered interactions`
       );
 
       res.json({
         mcpConfig,
         platformInstructions: contextData.platformInstructions,
         mcpStatus: contextData.mcpStatus,
+        unansweredInteractions,
       });
     } catch (error) {
       logger.error("Failed to generate session context", { error });
@@ -259,8 +269,9 @@ export class WorkerGateway {
 
   /**
    * Handle interaction response and send to worker via SSE
+   * If worker is not connected, store response in Redis for later retrieval
    */
-  private handleInteractionResponse(interaction: any): void {
+  private async handleInteractionResponse(interaction: any): Promise<void> {
     // Find the worker connection for this thread
     // Use the same deployment name generation as orchestrator
     const deploymentName = generateDeploymentName(
@@ -271,8 +282,9 @@ export class WorkerGateway {
 
     if (!connection) {
       logger.warn(
-        `No worker connection found for interaction ${interaction.id} (deployment: ${deploymentName})`
+        `No worker connection found for interaction ${interaction.id} (deployment: ${deploymentName}), storing in Redis`
       );
+      await this.storeInteractionResponse(interaction);
       return;
     }
 
@@ -282,6 +294,7 @@ export class WorkerGateway {
       "interaction",
       {
         interactionId: interaction.id,
+        interactionType: interaction.interactionType,
         response: interaction.response,
       }
     );
@@ -292,8 +305,88 @@ export class WorkerGateway {
       );
     } else {
       logger.error(
-        `❌ Failed to send interaction response ${interaction.id} to worker ${deploymentName} - SSE buffer full or connection closed`
+        `❌ Failed to send interaction response ${interaction.id} to worker ${deploymentName} - storing in Redis`
       );
+      await this.storeInteractionResponse(interaction);
+    }
+  }
+
+  /**
+   * Store interaction response in Redis for later retrieval
+   */
+  private async storeInteractionResponse(interaction: any): Promise<void> {
+    if (!this.interactionService) return;
+
+    const key = `interaction:response:${interaction.threadId}:${interaction.id}`;
+    const response = {
+      interactionId: interaction.id,
+      response: interaction.response,
+    };
+
+    // Store with 1 hour TTL
+    const redis = (this.interactionService as any).redis;
+    await redis.set(key, JSON.stringify(response), "EX", 3600);
+
+    logger.info(
+      `Stored interaction response ${interaction.id} in Redis for later delivery`
+    );
+  }
+
+  /**
+   * Send any pending interaction responses on reconnect
+   */
+  private async sendPendingInteractionResponses(
+    threadId: string,
+    deploymentName: string
+  ): Promise<void> {
+    if (!this.interactionService) return;
+
+    const redis = (this.interactionService as any).redis;
+    const pattern = `interaction:response:${threadId}:*`;
+    const keys = await redis.keys(pattern);
+
+    if (keys.length === 0) return;
+
+    logger.info(
+      `Found ${keys.length} pending interaction responses for thread ${threadId}`
+    );
+
+    const connection = this.connectionManager.getConnection(deploymentName);
+    if (!connection) {
+      logger.warn(
+        `No connection found for ${deploymentName} to send pending responses`
+      );
+      return;
+    }
+
+    for (const key of keys) {
+      const data = await redis.get(key);
+      if (!data) continue;
+
+      try {
+        const responseData = JSON.parse(data);
+
+        // Send via SSE
+        const success = this.connectionManager.sendSSE(
+          connection.res,
+          "interaction",
+          responseData
+        );
+
+        if (success) {
+          logger.info(
+            `✅ Sent pending interaction response ${responseData.interactionId}`
+          );
+          // Delete after successful delivery
+          await redis.del(key);
+        } else {
+          logger.warn(
+            `Failed to send pending response ${responseData.interactionId}, will retry on next reconnect`
+          );
+        }
+      } catch (error) {
+        logger.error(`Error sending pending interaction response:`, error);
+      }
     }
   }
 

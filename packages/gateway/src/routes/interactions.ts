@@ -26,9 +26,15 @@ export function registerInteractionRoutes(
     async (req: any, res: any) => {
       try {
         const { userId, threadId, channelId, teamId } = req.worker;
-        const { question, options, metadata } = req.body;
+        const { interactionType, question, options, metadata } = req.body;
 
-        logger.info(`Creating interaction for thread ${threadId}`);
+        if (!interactionType) {
+          return res.status(400).json({ error: "interactionType is required" });
+        }
+
+        logger.info(
+          `Creating ${interactionType} interaction for thread ${threadId}`
+        );
 
         const interaction = await interactionService.createInteraction(
           userId,
@@ -36,6 +42,7 @@ export function registerInteractionRoutes(
           channelId,
           teamId,
           {
+            interactionType,
             question,
             options,
             metadata,

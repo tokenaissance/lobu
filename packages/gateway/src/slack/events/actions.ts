@@ -228,6 +228,16 @@ export class ActionHandler {
   ): Promise<void> {
     logger.info(`Handling block action: ${actionId}`);
 
+    // Interaction handlers (radio_, submit_, section_, next_) are registered
+    // via Slack Bolt app.action() in interactions.ts
+    // Don't handle them here - let them pass through to Bolt handlers
+    if (actionId.match(/^(radio|submit|section|next)_/)) {
+      logger.debug(
+        `Skipping ${actionId} - handled by Bolt interaction handlers`
+      );
+      return;
+    }
+
     // Try to handle action through modules first
     let handled = false;
     const dispatcherModules = this.moduleRegistry.getDispatcherModules();
@@ -278,6 +288,14 @@ export class ActionHandler {
                   userRequest,
                   client
                 )
+            );
+          }
+          // Interaction handlers (radio_, submit_, section_, next_) are registered
+          // via Slack Bolt app.action() in interactions.ts
+          else if (actionId.match(/^(radio|submit|section|next)_/)) {
+            // These are handled by Bolt handlers, don't log as unsupported
+            logger.debug(
+              `Interaction action ${actionId} handled by Bolt handler`
             );
           } else {
             logger.info(

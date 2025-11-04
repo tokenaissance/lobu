@@ -227,7 +227,7 @@ class StreamSession {
     return this.messageTs ?? this.streamTs;
   }
 
-  async stop(): Promise<void> {
+  async stop(deleteMessage: boolean = false): Promise<void> {
     if (this.started && this.streamTs) {
       if (!this.messageTs) {
         logger.error(
@@ -249,6 +249,26 @@ class StreamSession {
         );
         throw new Error(`chat.stopStream failed: ${error}`);
       }
+
+      // Delete the message if requested (e.g., when stopping for interaction)
+      if (deleteMessage && this.messageTs) {
+        logger.info(
+          `Deleting streaming message ${this.messageTs} from channel ${this.channelId}`
+        );
+        try {
+          await this.slackClient.chat.delete({
+            channel: this.channelId,
+            ts: this.messageTs,
+          });
+          logger.info(`✅ Deleted streaming message ${this.messageTs}`);
+        } catch (error) {
+          logger.warn(
+            `Failed to delete streaming message ${this.messageTs}: ${error}`
+          );
+          // Non-critical - continue anyway
+        }
+      }
+
       this.streamTs = null;
       this.messageTs = null;
       this.started = false;
@@ -308,16 +328,42 @@ class StreamSessionManager {
     return streamTs ?? session.getMessageTs();
   }
 
-  async completeSession(sessionId: string): Promise<void> {
+  async completeSession(
+    sessionId: string,
+    deleteMessage: boolean = false
+  ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
-      await session.stop();
+      await session.stop(deleteMessage);
       this.sessions.delete(sessionId);
     }
   }
 
   hasSession(sessionId: string): boolean {
     return this.sessions.has(sessionId);
+  }
+
+  async completeAllSessionsForThread(
+    threadTs: string,
+    deleteMessage: boolean = false
+  ): Promise<number> {
+    let stoppedCount = 0;
+    const sessionsToStop: string[] = [];
+
+    // Find all sessions for this thread
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if ((session as any).threadTs === threadTs) {
+        sessionsToStop.push(sessionId);
+      }
+    }
+
+    // Stop all matching sessions
+    for (const sessionId of sessionsToStop) {
+      await this.completeSession(sessionId, deleteMessage);
+      stoppedCount++;
+    }
+
+    return stoppedCount;
   }
 }
 
@@ -353,17 +399,23 @@ export class ThreadResponseConsumer {
    * Stop stream for a specific thread
    * Called when an interaction is created to prevent messages appearing after the interaction
    */
-  async stopStreamForThread(userId: string, threadId: string): Promise<void> {
-    // Session key format: userId:messageId (where messageId == threadId for main thread)
-    const sessionKey = `${userId}:${threadId}`;
-
-    if (this.streamSessionManager.hasSession(sessionKey)) {
-      logger.info(
-        `Stopping stream for thread ${threadId} (session ${sessionKey}) due to interaction creation`
+  async stopStreamForThread(_userId: string, threadId: string): Promise<void> {
+    logger.info(
+      `Stopping all streams for thread ${threadId} due to interaction creation - deleting messages`
+    );
+    // Stop all sessions for this thread (session keys use messageId, not threadId)
+    const stoppedCount =
+      await this.streamSessionManager.completeAllSessionsForThread(
+        threadId,
+        true
       );
-      await this.streamSessionManager.completeSession(sessionKey);
+
+    if (stoppedCount > 0) {
+      logger.info(
+        `✅ Stopped and deleted ${stoppedCount} stream(s) for thread ${threadId}`
+      );
     } else {
-      logger.debug(`No active stream found for session ${sessionKey}`);
+      logger.debug(`No active streams found for thread ${threadId}`);
     }
   }
 
@@ -440,6 +492,49 @@ export class ThreadResponseConsumer {
     );
 
     return data;
+  }
+
+  /**
+   * Update thread status indicator with elapsed time
+   */
+  private async updateThreadStatus(
+    channelId: string,
+    threadId: string,
+    elapsedSeconds: number,
+    state: string
+  ): Promise<void> {
+    try {
+      // Don't update status if there's an active interaction for this thread
+      const activeInteractionKey = `interaction:active:${threadId}`;
+      const activeInteractionId = await this.redis.get(activeInteractionKey);
+
+      if (activeInteractionId) {
+        logger.debug(
+          `Skipping status update for thread ${threadId} - active interaction ${activeInteractionId}`
+        );
+        return;
+      }
+
+      const statusText = `is ${state}...`;
+      const loadingMessages = [
+        `still ${state}... (${elapsedSeconds}s)`,
+        `working on it... (${elapsedSeconds}s)`,
+        `${state} your request... (${elapsedSeconds}s)`,
+      ];
+
+      await this.slackClient.apiCall("assistant.threads.setStatus", {
+        channel_id: channelId,
+        thread_ts: threadId,
+        status: statusText,
+        loading_messages: loadingMessages,
+      });
+
+      logger.debug(
+        `Updated status for thread ${threadId}: ${state} (${elapsedSeconds}s)`
+      );
+    } catch (error) {
+      logger.warn(`Failed to update thread status: ${error}`);
+    }
   }
 
   /**
@@ -556,6 +651,17 @@ export class ThreadResponseConsumer {
       if (data.ephemeral && data.content) {
         await this.handleEphemeralMessage(data);
         return;
+      }
+
+      // Handle status updates (heartbeat with elapsed time)
+      if (data.statusUpdate) {
+        await this.updateThreadStatus(
+          data.channelId,
+          data.threadId,
+          data.statusUpdate.elapsedSeconds,
+          data.statusUpdate.state
+        );
+        return; // Early return - status updates don't need further processing
       }
 
       // Handle streaming delta

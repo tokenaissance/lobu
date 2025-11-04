@@ -30,6 +30,7 @@ TypeScript packages must be compiled from `src/` → `dist/`. If you modify any 
 - When you are in planning mode and you're not fully sure, you need to ask 'codex exec "YOUR_QUESTION" --config model_reasoning_effort="high"'
 - For comprehensive QA and E2E testing, see `.claude/commands/qa.md` for detailed testing procedures and examples.
 - When you make changes to worker code (`packages/worker/*`), run `make clean-workers` to ensure new workers use the updated code.
+- The "is running" thread status indicator (with rotating messages) provides user feedback during processing; visible "Still processing" heartbeat messages are not sent to avoid clutter.
 - Anytime you make changes in the code, you MUST:
 
 1. Have the bot running via `make dev` running in the background for development. This uses Docker Compose with hot reload enabled when NODE_ENV=development.
@@ -41,6 +42,10 @@ TypeScript packages must be compiled from `src/` → `dist/`. If you modify any 
 - NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User. If you need to remember something, add it to CLAUDE.md as a a single sentence.
 - ALWAYS ignore `/dist/` directories when analyzing code - these contain compiled artifacts, not source
 - If you're referencing Slack threads or users in your response, add their direct links as well.
+
+## File Upload Support
+
+File attachments are fully supported in all message contexts (DM, app mentions, assistant threads). Gateway fetches complete message details via Slack API to ensure file metadata is captured, downloads files to worker's input directory, and Claude is instructed about file locations.
 
 ## Development Mode
 

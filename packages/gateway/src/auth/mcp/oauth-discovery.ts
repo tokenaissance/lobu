@@ -95,7 +95,7 @@ export class McpOAuthDiscoveryService {
   private readonly cacheStore?: McpOAuthDiscoveryServiceOptions["cacheStore"];
   private readonly callbackUrl: string;
 
-  // Well-known OAuth providers with hardcoded endpoints
+  // TODO: why do we have this harcoded, doesn't Github support discoverying of Oauth endpoints when used?
   private readonly knownProviders: Map<string, OAuthServerMetadata> = new Map([
     [
       "https://github.com/login/oauth",

@@ -57,9 +57,18 @@ class SlackRenderer extends marked.Renderer {
   }
 
   blockquote(quote: string): string {
-    // Convert blockquote to italic with quote prefix
-    const lines = quote.trim().split("\n");
-    return `${lines.map((line) => `_> ${line.trim()}_`).join("\n")}\n\n`;
+    // For tool/task lines (single line blockquotes), keep original formatting
+    // For actual blockquotes (multiple lines), add italic styling
+    const trimmed = quote.trim();
+    const lines = trimmed.split("\n");
+
+    if (lines.length === 1) {
+      // Single line - likely a tool/task line, preserve formatting
+      return `> ${trimmed}\n\n`;
+    } else {
+      // Multi-line - actual blockquote, add italic styling
+      return `${lines.map((line) => `_> ${line.trim()}_`).join("\n")}\n\n`;
+    }
   }
 
   list(body: string, _ordered: boolean, _start: number | ""): string {
@@ -98,6 +107,10 @@ export function convertMarkdownToSlack(content: string): string {
     content =
       typeof content === "object" ? JSON.stringify(content) : String(content);
   }
+
+  // Pre-process tool/task lines (starting with └) to use double newlines for line breaks
+  // This ensures each tool execution appears on its own line in Slack streaming
+  content = content.replace(/^└\s+(.+)$/gm, "\n\n└ $1\n");
 
   const renderer = new SlackRenderer();
 

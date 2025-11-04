@@ -148,6 +148,7 @@ export async function startGateway(
 
   const agentOptions = {
     allowedTools: config.claude.allowedTools,
+    disallowedTools: config.claude.disallowedTools,
     model: config.claude.model,
     timeoutMinutes: config.claude.timeoutMinutes,
   };

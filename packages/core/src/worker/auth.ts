@@ -1,5 +1,5 @@
 import { createLogger } from "../logger";
-import { decrypt, encrypt } from "./encryption";
+import { decrypt, encrypt } from "../utils/encryption";
 
 const logger = createLogger("worker-auth");
 

@@ -3,6 +3,7 @@
 import {
   createLogger,
   type InteractionOptions,
+  type InteractionType,
   TIME,
   type UserInteractionResponse,
 } from "@peerbot/core";
@@ -63,11 +64,14 @@ export class InteractionClient {
    * Returns the user's response
    */
   async askUser(args: {
+    interactionType: InteractionType;
     question: string;
     options: InteractionOptions;
     metadata?: any;
   }): Promise<UserInteractionResponse> {
-    logger.info(`Asking user: ${args.question.substring(0, 50)}...`);
+    logger.info(
+      `Asking user (${args.interactionType}): ${args.question.substring(0, 50)}...`
+    );
 
     // Debug: log token format
     logger.debug(
@@ -85,6 +89,7 @@ export class InteractionClient {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            interactionType: args.interactionType,
             question: args.question,
             options: args.options,
             metadata: args.metadata,
@@ -242,17 +247,14 @@ export class InteractionClient {
         `[INTERACTION-CLIENT] ✅ Successfully handled interaction ${interactionId}, remaining: ${this.pendingInteractions.size}`
       );
     } else {
-      logger.error(
-        `[INTERACTION-CLIENT] ❌ Received response for unknown interaction: ${interactionId}`
-      );
-      logger.error(
-        `[INTERACTION-CLIENT] This suggests the interaction was never created, already handled, or timed out`
+      logger.warn(
+        `[INTERACTION-CLIENT] ⚠️ Received response for unknown interaction: ${interactionId} (likely restarted while waiting)`
       );
     }
   }
 
   /**
-   * Get list of pending interaction IDs (for restart recovery)
+   * Get list of pending interaction IDs (for debugging)
    */
   getPendingInteractionIds(): string[] {
     return Array.from(this.pendingInteractions.keys());

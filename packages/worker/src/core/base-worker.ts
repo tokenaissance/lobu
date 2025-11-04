@@ -4,14 +4,17 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { createLogger, type InstructionProvider } from "@peerbot/core";
+import {
+  createLogger,
+  type InstructionProvider,
+  type WorkerTransport,
+} from "@peerbot/core";
 import * as Sentry from "@sentry/node";
-import { GatewayIntegration } from "../gateway/gateway-integration";
+import { HttpWorkerTransport } from "../gateway/gateway-integration";
 import { generateCustomInstructions } from "../instructions/builder";
 import { handleExecutionError } from "./error-handler";
 import { listAppDirectories } from "./project-scanner";
 import type {
-  GatewayIntegrationInterface,
   ProgressUpdate,
   SessionExecutionResult,
   WorkerConfig,
@@ -28,7 +31,7 @@ const logger = createLogger("base-worker");
  */
 export abstract class BaseWorker implements WorkerExecutor {
   protected workspaceManager: WorkspaceManager;
-  public gatewayIntegration: GatewayIntegration;
+  public workerTransport: WorkerTransport;
   protected config: WorkerConfig;
 
   constructor(config: WorkerConfig) {
@@ -36,25 +39,25 @@ export abstract class BaseWorker implements WorkerExecutor {
     this.workspaceManager = new WorkspaceManager(config.workspace);
 
     // Verify required environment variables
-    const dispatcherUrl = process.env.DISPATCHER_URL;
+    const gatewayUrl = process.env.DISPATCHER_URL;
     const workerToken = process.env.WORKER_TOKEN;
 
-    if (!dispatcherUrl || !workerToken) {
+    if (!gatewayUrl || !workerToken) {
       throw new Error(
         "DISPATCHER_URL and WORKER_TOKEN environment variables are required"
       );
     }
 
-    this.gatewayIntegration = new GatewayIntegration(
-      dispatcherUrl,
+    this.workerTransport = new HttpWorkerTransport({
+      gatewayUrl,
       workerToken,
-      config.userId,
-      config.channelId,
-      config.threadId || "",
-      config.responseId,
-      config.botResponseId,
-      config.teamId
-    );
+      userId: config.userId,
+      channelId: config.channelId,
+      threadId: config.threadId || "",
+      originalMessageTs: config.responseId,
+      botResponseTs: config.botResponseId,
+      teamId: config.teamId,
+    });
   }
 
   /**
@@ -174,9 +177,6 @@ export abstract class BaseWorker implements WorkerExecutor {
         }
       );
 
-      // Add file I/O instructions
-      customInstructions += this.getFileIOInstructions();
-
       // Call module onSessionStart hooks to allow modules to modify system prompt
       try {
         const { onSessionStart } = await import("../modules/lifecycle");
@@ -196,6 +196,9 @@ export abstract class BaseWorker implements WorkerExecutor {
       } catch (error) {
         logger.error("Failed to call onSessionStart hooks:", error);
       }
+
+      // Add file I/O instructions AFTER module hooks so they aren't overwritten
+      customInstructions += this.getFileIOInstructions();
 
       // Execute AI session
       logger.info(
@@ -235,8 +238,14 @@ export abstract class BaseWorker implements WorkerExecutor {
               if (update.type === "output" && update.data) {
                 const delta = await this.processProgressUpdate(update);
                 if (delta) {
-                  await this.gatewayIntegration.sendStreamDelta(delta, false);
+                  await this.workerTransport.sendStreamDelta(delta, false);
                 }
+              } else if (update.type === "status_update") {
+                // Send status update to gateway to update thread status indicator
+                await this.workerTransport.sendStatusUpdate(
+                  update.data.elapsedSeconds,
+                  update.data.state
+                );
               }
             }
           );
@@ -250,7 +259,7 @@ export abstract class BaseWorker implements WorkerExecutor {
         userId: this.config.userId,
         threadId: this.config.threadId || "",
       });
-      this.gatewayIntegration.setModuleData(moduleData);
+      this.workerTransport.setModuleData(moduleData);
 
       // Handle result
       if (result.success) {
@@ -260,7 +269,7 @@ export abstract class BaseWorker implements WorkerExecutor {
           logger.info(
             `📤 Sending final result (${finalResult.text.length} chars) with deduplication flag`
           );
-          await this.gatewayIntegration.sendStreamDelta(
+          await this.workerTransport.sendStreamDelta(
             finalResult.text,
             false,
             finalResult.isFinal
@@ -270,7 +279,7 @@ export abstract class BaseWorker implements WorkerExecutor {
             "Session completed successfully - all content already streamed"
           );
         }
-        await this.gatewayIntegration.signalDone();
+        await this.workerTransport.signalDone();
       } else {
         const errorMsg = result.error || "Unknown error";
 
@@ -287,12 +296,12 @@ export abstract class BaseWorker implements WorkerExecutor {
           throw new Error("SESSION_TIMEOUT");
         } else {
           // For non-timeout errors, show the error to the user
-          await this.gatewayIntegration.sendStreamDelta(
+          await this.workerTransport.sendStreamDelta(
             `❌ Session failed: ${errorMsg}`,
             true,
             true
           );
-          await this.gatewayIntegration.signalError(new Error(errorMsg));
+          await this.workerTransport.signalError(new Error(errorMsg));
         }
       }
 
@@ -300,7 +309,7 @@ export abstract class BaseWorker implements WorkerExecutor {
         `Worker completed with ${result.success ? "success" : "failure"}`
       );
     } catch (error) {
-      await handleExecutionError(error, this.gatewayIntegration);
+      await handleExecutionError(error, this.workerTransport);
     }
   }
 
@@ -318,11 +327,11 @@ export abstract class BaseWorker implements WorkerExecutor {
   }
 
   /**
-   * Get the gateway integration for sending updates
+   * Get the worker transport for sending updates to gateway
    * Implements WorkerExecutor interface
    */
-  getGatewayIntegration(): GatewayIntegrationInterface | null {
-    return this.gatewayIntegration;
+  getWorkerTransport(): WorkerTransport | null {
+    return this.workerTransport;
   }
 
   /**
@@ -416,22 +425,30 @@ export abstract class BaseWorker implements WorkerExecutor {
    */
   private getFileIOInstructions(): string {
     const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    const files = (this.config as any).platformMetadata?.files || [];
+
+    let userFilesSection = "";
+    if (files.length > 0) {
+      userFilesSection = `
+
+### User-Uploaded Files
+The user has uploaded ${files.length} file(s) for you to analyze:
+${files.map((f: any) => `- \`${workspaceDir}/input/${f.name}\` (${f.mimetype || "unknown type"})`).join("\n")}
+
+**Use these files to answer the user's request.** You can read them with standard commands like \`cat\`, \`less\`, or \`head\`.`;
+    }
+
     return `
 
 ## File Generation & Output
 
 **When to Create Files:**
-Create and show files for any output that helps answer the user's request by using \`show_to_user\` tool:
+Create and show files for any output that helps answer the user's request by using \`UploadUserFile\` tool:
 - **Charts & visualizations**: pie charts, bar graphs, plots, diagrams via \`matplotlib\`
 - **Reports & documents**: analysis reports, summaries, PDFs
 - **Data files**: CSV exports, JSON data, spreadsheets
 - **Code files**: scripts, configurations, examples
-- **Images**: generated images, processed photos, screenshots.
-
-### Reading User Files
-- Input files from the user: ${workspaceDir}/input/
-- Example: \`cat ${workspaceDir}/input/data.csv\`
-- Never show sensitive files (secrets, credentials, .env files)
+- **Images**: generated images, processed photos, screenshots.${userFilesSection}
 `;
   }
 }

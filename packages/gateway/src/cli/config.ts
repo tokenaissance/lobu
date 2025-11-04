@@ -2,7 +2,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { ClaudeExecutionOptions, LogLevel } from "@peerbot/core";
+import type { AgentOptions, LogLevel } from "@peerbot/core";
 import { createLogger, TIME } from "@peerbot/core";
 import { config as dotenvConfig } from "dotenv";
 import { DEFAULTS } from "../config/constants";
@@ -16,7 +16,8 @@ const logger = createLogger("cli-config");
  * Platform-specific configs (like Slack) are built separately
  */
 export interface GatewayConfig {
-  claude: Partial<ClaudeExecutionOptions>;
+  // TODO: can we use "agent" instead of "claude" here? Also why is this Partial investigate?
+  claude: Partial<AgentOptions>;
   sessionTimeoutMinutes: number;
   logLevel: LogLevel;
   queues: {
@@ -172,6 +173,7 @@ export function buildGatewayConfig(): GatewayConfig {
   const config: GatewayConfig = {
     claude: {
       allowedTools: process.env.ALLOWED_TOOLS?.split(","),
+      disallowedTools: process.env.DISALLOWED_TOOLS?.split(","),
       model: process.env.AGENT_DEFAULT_MODEL,
       timeoutMinutes: process.env.TIMEOUT_MINUTES
         ? Number(process.env.TIMEOUT_MINUTES)

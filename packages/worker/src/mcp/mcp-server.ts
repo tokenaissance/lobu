@@ -416,8 +416,6 @@ export function createMCPServer(manager: ProcessManager): McpServer {
 // HTTP SERVER
 // ============================================================================
 
-let processManagerInstance: ProcessManagerInstance | null = null;
-
 export async function startHTTPServer(
   server: McpServer
 ): Promise<ProcessManagerInstance> {
@@ -491,14 +489,4 @@ export async function startHTTPServer(
       });
     },
   };
-}
-
-export function getProcessManagerInstance(): ProcessManagerInstance | null {
-  return processManagerInstance;
-}
-
-export function setProcessManagerInstance(
-  instance: ProcessManagerInstance | null
-): void {
-  processManagerInstance = instance;
 }

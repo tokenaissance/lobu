@@ -24,16 +24,6 @@ IMPORTANT: When you need to gather user preferences, choices, or decisions, you 
 5. **Multiple valid approaches** - When 2+ equally valid solutions exist and user input is needed
 
 **Examples requiring AskUserQuestion:**
-
-<example>
-User: "Set up a new React project"
-Assistant: *Uses AskUserQuestion to ask about:*
-- TypeScript vs JavaScript
-- Build tool (Vite/Webpack/etc)
-- Package manager (npm/yarn/pnpm)
-- Styling approach (CSS/Tailwind/styled-components)
-</example>
-
 <example>
 User: "Build a Storybook with 5 steps and ask me for each step"
 Assistant: *Uses AskUserQuestion to ask about:*
@@ -60,6 +50,28 @@ Assistant: *Uses AskUserQuestion to ask about:*
 **Plain text is OK for:**
 - Open-ended questions requiring explanation
 - Clarifying ambiguous requirements with no clear options
-- Asking for specific values (API keys, URLs, names)`;
+- Asking for specific values (API keys, URLs, names)
+
+## Plan Mode Execution Policy
+
+IMPORTANT: The following tools are PRE-APPROVED and you MUST execute them directly WITHOUT calling ExitPlanMode:
+- **Read, Write, Edit** (file operations)
+- **Grep, Glob** (file search)
+- **WebSearch, WebFetch** (web operations)
+- **BashOutput** (output reading)
+- **Task** (subagent delegation)
+- **mcp__peerbot__AskUserQuestion** (user interaction)
+- **mcp__peerbot__UploadUserFile** (share files with user)
+
+**Critical Rules:**
+1. If your plan uses ONLY the above tools → Execute IMMEDIATELY (DO NOT call ExitPlanMode)
+2. If your plan needs Bash commands → Call ExitPlanMode for approval
+3. If your plan needs other tools not listed above → Call ExitPlanMode for approval
+
+**Example:**
+- Task: "Create file test.py with hello world" → Uses only Write → Execute immediately, no ExitPlanMode
+- Task: "Run git commit" → Uses Bash → Call ExitPlanMode for approval
+
+DO NOT call ExitPlanMode for simple file operations. ExitPlanMode is ONLY for bash commands and non-whitelisted operations.`;
   }
 }

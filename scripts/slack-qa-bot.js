@@ -78,7 +78,12 @@ async function makeSlackRequest(method, body) {
           if (result.ok) {
             resolve(result);
           } else {
-            reject(new Error(`Slack API error: ${result.error}`));
+            const errorDetails = result.response_metadata
+              ? ` (${JSON.stringify(result.response_metadata)})`
+              : "";
+            reject(
+              new Error(`Slack API error: ${result.error}${errorDetails}`)
+            );
           }
         } catch (e) {
           reject(e);
@@ -155,26 +160,37 @@ async function waitForBotResponse(
   return foundResponse;
 }
 
-async function uploadFile(filePath, channels, threadTs = null) {
+async function uploadFileV2(
+  filePath,
+  channels,
+  threadTs = null,
+  initialComment = null
+) {
   const fs = require("node:fs");
-  const FormData = require("form-data");
+  const path = require("node:path");
 
-  return new Promise((resolve, reject) => {
-    const form = new FormData();
-    form.append("channels", channels);
-    form.append("file", fs.createReadStream(filePath));
-    if (threadTs) {
-      form.append("thread_ts", threadTs);
-    }
+  // Read file to get size
+  const fileBuffer = fs.readFileSync(filePath);
+  const fileName = path.basename(filePath);
+  const fileSize = fileBuffer.length;
 
+  // Step 1: Get upload URL using URL-encoded form data
+  const getUrlBody = new URLSearchParams({
+    filename: fileName,
+    length: fileSize.toString(),
+  });
+
+  const uploadUrlResponse = await new Promise((resolve, reject) => {
+    const postData = getUrlBody.toString();
     const options = {
       hostname: "slack.com",
       port: 443,
-      path: "/api/files.upload",
+      path: "/api/files.getUploadURLExternal",
       method: "POST",
       headers: {
         Authorization: `Bearer ${QA_BOT_TOKEN}`,
-        ...form.getHeaders(),
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(postData),
       },
     };
 
@@ -189,7 +205,12 @@ async function uploadFile(filePath, channels, threadTs = null) {
           if (result.ok) {
             resolve(result);
           } else {
-            reject(new Error(`Slack API error: ${result.error}`));
+            const errorDetails = result.response_metadata
+              ? ` (${JSON.stringify(result.response_metadata)})`
+              : "";
+            reject(
+              new Error(`Slack API error: ${result.error}${errorDetails}`)
+            );
           }
         } catch (e) {
           reject(e);
@@ -198,8 +219,80 @@ async function uploadFile(filePath, channels, threadTs = null) {
     });
 
     req.on("error", reject);
-    form.pipe(req);
+    req.write(postData);
+    req.end();
   });
+
+  if (!uploadUrlResponse.upload_url || !uploadUrlResponse.file_id) {
+    throw new Error("Failed to get upload URL from Slack");
+  }
+
+  const uploadUrl = uploadUrlResponse.upload_url;
+  const fileId = uploadUrlResponse.file_id;
+
+  // Step 2: Upload file to the URL
+  await new Promise((resolve, reject) => {
+    const url = new URL(uploadUrl);
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname + url.search,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": fileSize,
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode === 200) {
+          resolve();
+        } else {
+          reject(
+            new Error(`Upload failed with status ${res.statusCode}: ${data}`)
+          );
+        }
+      });
+    });
+
+    req.on("error", reject);
+    req.write(fileBuffer);
+    req.end();
+  });
+
+  // Step 3: Complete upload and share to channel
+  const completeBody = {
+    files: [
+      {
+        id: fileId,
+        title: fileName,
+      },
+    ],
+    channel_id: channels,
+  };
+
+  if (threadTs) {
+    completeBody.thread_ts = threadTs;
+  }
+
+  if (initialComment) {
+    completeBody.initial_comment = initialComment;
+  }
+
+  const completeResponse = await makeSlackRequest(
+    "files.completeUploadExternal",
+    completeBody
+  );
+
+  return {
+    ok: true,
+    file: completeResponse.files[0],
+  };
 }
 
 async function simulateInteraction(
@@ -372,18 +465,30 @@ async function runTest(testMessage, timeout = 45000, options = {}) {
     let msg;
 
     if (filePath) {
-      // Upload file with message
-      const uploadResult = await uploadFile(filePath, targetChannel, threadTs);
+      // Upload file with message as initial_comment (sent as single event)
+      const uploadResult = await uploadFileV2(
+        filePath,
+        targetChannel,
+        threadTs,
+        message
+      );
 
-      // Send message in the same thread as the file
-      const requestBody = {
+      // The files.completeUploadExternal returns file info
+      // We need to get the message timestamp from the uploaded file
+      // Wait a moment for Slack to process the file share
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Get recent messages to find the file upload message
+      const history = await makeSlackRequest("conversations.history", {
         channel: targetChannel,
-        text: message,
-        thread_ts:
-          threadTs || uploadResult.file.shares.public[targetChannel][0].ts,
-      };
+        limit: 1,
+      });
 
-      msg = await makeSlackRequest("chat.postMessage", requestBody);
+      if (history.messages && history.messages.length > 0) {
+        msg = { ts: history.messages[0].ts };
+      } else {
+        throw new Error("Could not find file upload message");
+      }
     } else {
       // Regular message without file
       const requestBody = {

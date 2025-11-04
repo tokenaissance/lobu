@@ -5,7 +5,7 @@
 import { createLogger } from "@peerbot/core";
 import { InteractionClient } from "../common/interaction-client";
 import type { WorkerConfig, WorkerExecutor } from "../core/types";
-import { GatewayIntegration } from "./gateway-integration";
+import { HttpWorkerTransport } from "./gateway-integration";
 import { MessageBatcher } from "./message-batcher";
 import type { MessagePayload, QueuedMessage } from "./types";
 
@@ -340,14 +340,11 @@ export class GatewayClient {
         this.interactionClient
       );
 
-      const gatewayIntegration = this.currentWorker.getGatewayIntegration();
+      const workerTransport = this.currentWorker.getWorkerTransport();
 
-      if (
-        gatewayIntegration &&
-        gatewayIntegration instanceof GatewayIntegration
-      ) {
+      if (workerTransport && workerTransport instanceof HttpWorkerTransport) {
         if (this.currentJobId) {
-          gatewayIntegration.setJobId(this.currentJobId);
+          workerTransport.setJobId(this.currentJobId);
         }
 
         // Set processedMessageIds directly on the integration instance
@@ -358,7 +355,7 @@ export class GatewayClient {
               ? [message.payload.messageId]
               : [];
 
-        gatewayIntegration.processedMessageIds = messageIds;
+        workerTransport.processedMessageIds = messageIds;
       }
 
       await this.currentWorker.execute();
@@ -374,12 +371,12 @@ export class GatewayClient {
         error
       );
 
-      const gatewayIntegration = this.currentWorker?.getGatewayIntegration();
-      if (gatewayIntegration) {
+      const workerTransport = this.currentWorker?.getWorkerTransport();
+      if (workerTransport) {
         try {
           const enhancedError =
             error instanceof Error ? error : new Error(String(error));
-          await gatewayIntegration.signalError(enhancedError);
+          await workerTransport.signalError(enhancedError);
         } catch (errorSendError) {
           logger.error("Failed to send error to dispatcher:", errorSendError);
         }
@@ -431,6 +428,7 @@ export class GatewayClient {
         ? String(platformMetadata.teamId)
         : undefined,
       platform: payload.platform,
+      platformMetadata: platformMetadata, // Include full platformMetadata for files and other metadata
       agentOptions: JSON.stringify(agentOptions),
       workspace: {
         baseDirectory: "/workspace",

@@ -101,4 +101,8 @@ export interface ThreadResponsePayload {
   moduleData?: Record<string, unknown>;
   botResponseId?: string;
   ephemeral?: boolean;
+  statusUpdate?: {
+    elapsedSeconds: number;
+    state: string;
+  };
 }

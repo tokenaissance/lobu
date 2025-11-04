@@ -3,13 +3,6 @@
 import type { Options as SDKOptions } from "@anthropic-ai/claude-agent-sdk";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { createLogger } from "@peerbot/core";
-
-// Legacy approval intents (for plan/tool approvals - not fully functional with new interaction model)
-const APPROVE_PLAN_BYPASS = "approve_plan_bypass";
-const APPROVE_PLAN_APPROVE_EACH = "approve_plan_approve_each";
-const APPROVE_TOOL_ONCE = "approve_tool_once";
-const APPROVE_TOOL_REMEMBER = "approve_tool_remember";
-
 import type { InteractionClient } from "../common/interaction-client";
 import type { ProgressCallback } from "../core/types";
 import { ensureBaseUrl } from "../core/url-utils";
@@ -56,6 +49,35 @@ export interface ClaudeExecutionResult {
   output: string;
   error?: string;
 }
+
+const PLAN_APPROVAL_OPTIONS = [
+  "Yes, bypass permissions",
+  "Yes, approve each tool",
+  "No, keep planning",
+] as const;
+
+const TOOL_APPROVAL_OPTIONS = [
+  "Allow once",
+  "Always allow this call",
+  "Deny",
+] as const;
+
+// Auto-allow non-destructive tools and Task (for autonomous subagent delegation)
+// Also auto-allow AskUserQuestion since it's specifically for asking the user questions
+// File operations (Write, Edit) are safe in sandboxed environment
+const AUTO_ALLOW_TOOLS = [
+  "Read",
+  "Write",
+  "Edit",
+  "Grep",
+  "Glob",
+  "WebSearch",
+  "WebFetch",
+  "BashOutput",
+  "Task",
+  "mcp__peerbot__AskUserQuestion",
+  "mcp__peerbot__UploadUserFile",
+];
 
 // ============================================================================
 // SDK EXECUTION
@@ -129,7 +151,7 @@ export async function runClaudeWithSDK(
       strictMcpConfig: false, // Allow MCP failures without stopping execution
       env: {
         ...process.env,
-        DEBUG: "0",
+        DEBUG: "0", // Disable debug mode for Claude CLI (reduces noise in logs)
         // Use worker token as API key - SDK will send this in x-api-key header
         ANTHROPIC_API_KEY: workerToken,
         // Proxy all Anthropic API requests through gateway
@@ -159,17 +181,14 @@ export async function runClaudeWithSDK(
       .filter(Boolean)
       .join("\n\n");
 
-    if (options.systemPrompt && mergedInstructions) {
-      // Use custom instructions without Claude Code preset
-      // The preset was not appending our custom instructions correctly
+    if (mergedInstructions) {
+      // Always use merged instructions if available (gateway + worker custom instructions)
       sdkOptions.systemPrompt = mergedInstructions;
       logger.info(
         `Using merged instructions: gateway (${gatewayInstructions.length} chars) + worker (${options.appendSystemPrompt?.length || 0} chars)`
       );
-      console.log(
-        `\n========== FULL MERGED INSTRUCTIONS (${mergedInstructions.length} chars) ==========\n${mergedInstructions}\n========== END INSTRUCTIONS ==========\n`
-      );
     } else if (options.systemPrompt) {
+      // Fallback to options.systemPrompt if no merged instructions
       sdkOptions.systemPrompt = options.systemPrompt;
     }
 
@@ -210,6 +229,9 @@ export async function runClaudeWithSDK(
     ) {
       const client = interactionClient;
 
+      // Track if user approved plan with bypass permissions
+      let bypassToolApprovals = false;
+
       sdkOptions.canUseTool = async (toolName: string, input: any) => {
         logger.info(`Permission check for tool: ${toolName}`);
 
@@ -222,24 +244,26 @@ export async function runClaudeWithSDK(
           try {
             isWaitingForInteraction = true;
             const planResponse = await client.askUser({
+              interactionType: "plan_approval",
               question: `Claude has finished planning and wants to start executing. Would you like to proceed?\n\n${input?.plan || "Claude is ready to execute the plan."}`,
-              options: [
-                "Yes, bypass permissions",
-                "Yes, approve each tool",
-                "No, keep planning",
-              ] as any,
+              options: PLAN_APPROVAL_OPTIONS as any,
               metadata: {
-                interactionType: "plan_approval",
                 plan: input?.plan,
               },
             });
 
-            if (planResponse.answer === APPROVE_PLAN_BYPASS) {
-              logger.info("User approved plan with bypass permissions");
-              // Change permission mode to bypass
+            if (planResponse.answer === PLAN_APPROVAL_OPTIONS[0]) {
+              logger.info(
+                "✅ User approved plan with bypass permissions - exiting plan mode"
+              );
+              // Set flag to bypass all subsequent tool approvals
+              bypassToolApprovals = true;
+              // Change permission mode to default to exit plan mode
               if (hasSetPermissionMode(queryReference)) {
-                await queryReference.setPermissionMode("bypassPermissions");
-                logger.info("Permission mode changed to bypassPermissions");
+                await queryReference.setPermissionMode("default");
+                logger.info(
+                  "🔓 Exited plan mode - tools will execute without approval (bypass enabled)"
+                );
               } else {
                 logger.warn(
                   "Query reference does not support setPermissionMode"
@@ -249,12 +273,16 @@ export async function runClaudeWithSDK(
                 behavior: "allow" as const,
                 updatedInput: input,
               };
-            } else if (planResponse.answer === APPROVE_PLAN_APPROVE_EACH) {
-              logger.info("User approved plan with manual approvals");
+            } else if (planResponse.answer === PLAN_APPROVAL_OPTIONS[1]) {
+              logger.info(
+                "✅ User approved plan with manual approvals - exiting plan mode"
+              );
               // Change permission mode to default (will use canUseTool for each tool)
               if (hasSetPermissionMode(queryReference)) {
                 await queryReference.setPermissionMode("default");
-                logger.info("Permission mode changed to default");
+                logger.info(
+                  "🔐 Permission mode changed to default - will prompt for each tool"
+                );
               } else {
                 logger.warn(
                   "Query reference does not support setPermissionMode"
@@ -265,7 +293,7 @@ export async function runClaudeWithSDK(
                 updatedInput: input,
               };
             } else {
-              logger.info("User rejected plan - staying in plan mode");
+              logger.info("❌ User rejected plan - staying in plan mode");
               return {
                 behavior: "deny" as const,
                 message: "User chose to stay in plan mode",
@@ -284,19 +312,18 @@ export async function runClaudeWithSDK(
           }
         }
 
-        // Auto-allow non-destructive tools and Task (for autonomous subagent delegation)
-        // Also auto-allow AskUserQuestion since it's specifically for asking the user questions
-        const autoAllowTools = [
-          "Read",
-          "Grep",
-          "Glob",
-          "WebSearch",
-          "WebFetch",
-          "BashOutput",
-          "Task",
-          "mcp__peerbot__AskUserQuestion",
-        ];
-        if (autoAllowTools.includes(toolName)) {
+        // If user approved with bypass permissions, auto-allow all tools
+        if (bypassToolApprovals) {
+          logger.info(
+            `Auto-allowing tool ${toolName} (bypass permissions enabled)`
+          );
+          return {
+            behavior: "allow" as const,
+            updatedInput: input,
+          };
+        }
+
+        if (AUTO_ALLOW_TOOLS.includes(toolName)) {
           logger.info(`Auto-allowing non-destructive tool: ${toolName}`);
           return {
             behavior: "allow" as const,
@@ -310,18 +337,18 @@ export async function runClaudeWithSDK(
         try {
           isWaitingForInteraction = true;
           const toolResponse = await client.askUser({
+            interactionType: "tool_approval",
             question: `Claude wants to execute the \`${toolName}\` tool. Do you want to allow this?`,
-            options: ["Allow once", "Always allow this tool", "Deny"] as any,
+            options: TOOL_APPROVAL_OPTIONS as any,
             metadata: {
-              interactionType: "tool_approval",
               toolName,
               toolInput: input,
             },
           });
 
           const approved =
-            toolResponse.answer === APPROVE_TOOL_ONCE ||
-            toolResponse.answer === APPROVE_TOOL_REMEMBER;
+            toolResponse.answer === TOOL_APPROVAL_OPTIONS[0] ||
+            toolResponse.answer === TOOL_APPROVAL_OPTIONS[1];
 
           if (approved) {
             logger.info(`User approved ${toolName}`);
@@ -372,6 +399,12 @@ export async function runClaudeWithSDK(
 
     logger.info(`SDK options: ${JSON.stringify(sdkOptions, null, 2)}`);
 
+    // Log query start with key parameters for troubleshooting
+    const queryStartTime = Date.now();
+    logger.info(
+      `🚀 Starting Claude query - model: ${options.model}, permissionMode: ${sdkOptions.permissionMode}, promptLength: ${userPrompt.length} chars`
+    );
+
     // Execute query
     const queryResult = query({
       prompt: userPrompt,
@@ -387,6 +420,7 @@ export async function runClaudeWithSDK(
     let messageCount = 0;
     let lastMessageTime = Date.now();
     let hasSuccessfulResult = false;
+    let firstMessageTime: number | null = null;
 
     // Process streaming responses with timeout check
     const messageIterator = response[Symbol.asyncIterator]();
@@ -412,23 +446,17 @@ export async function runClaudeWithSDK(
 
         elapsedTime += HEARTBEAT_INTERVAL_MS;
         const seconds = Math.floor(elapsedTime / 1000);
-        logger.info(
-          `⏳ Sending heartbeat after ${seconds}s of waiting for API response`
+        logger.warn(
+          `⏳ Still is running after ${seconds}s - no response from Claude API yet (messageCount: ${messageCount}, lastType: ${messageCount > 0 ? "message" : "none"})`
         );
 
+        // Send status update to gateway to update the "is running" indicator with elapsed time
         if (onProgress) {
           await onProgress({
-            type: "output",
+            type: "status_update",
             data: {
-              type: "assistant",
-              message: {
-                content: [
-                  {
-                    type: "text",
-                    text: `⏳ Still processing... (${seconds}s)`,
-                  },
-                ],
-              },
+              elapsedSeconds: seconds,
+              state: "is running..",
             } as any,
             timestamp: Date.now(),
           });
@@ -467,6 +495,15 @@ export async function runClaudeWithSDK(
       const now = Date.now();
       const timeSinceLastMessage = now - lastMessageTime;
       lastMessageTime = now;
+
+      // Track first message timing to measure API response time
+      if (!firstMessageTime) {
+        firstMessageTime = now;
+        const timeToFirstMessage = now - queryStartTime;
+        logger.info(
+          `⚡ First message received after ${timeToFirstMessage}ms - type: ${message.type}`
+        );
+      }
 
       logger.info(
         `SDK message #${messageCount} (${timeSinceLastMessage}ms since last): ${message.type}`,

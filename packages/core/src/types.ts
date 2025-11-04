@@ -1,15 +1,3 @@
-export interface ClaudeExecutionOptions {
-  model?: string;
-  timeoutMinutes?: number;
-  allowedTools?: string[];
-  maxTokens?: number;
-  customInstructions?: string;
-  workingDirectory?: string;
-  sessionId?: string;
-  resume?: boolean;
-  permissionMode?: string;
-}
-
 export interface SessionContext {
   platform: string; // Platform identifier (e.g., "slack", "discord", "teams")
   channelId: string;
@@ -28,9 +16,9 @@ export interface ConversationMessage {
 }
 
 /**
- * Platform-provided execution hints passed through gateway → worker.
- * Extends ClaudeExecutionOptions with additional knobs and index signature
- * for forward compatibility.
+ * Platform-agnostic execution hints passed through gateway → worker.
+ * Flexible types (string | string[]) and index signature allow forward
+ * compatibility for different agent implementations.
  */
 export interface AgentOptions {
   model?: string;
@@ -104,6 +92,10 @@ export interface ThreadResponsePayload {
   moduleData?: Record<string, unknown>;
   botResponseId?: string;
   ephemeral?: boolean; // If true, message should be sent as ephemeral (only visible to user)
+  statusUpdate?: {
+    elapsedSeconds: number;
+    state: string; // e.g., "is running" or "is scheduling"
+  };
 }
 
 // ============================================================================
@@ -111,7 +103,7 @@ export interface ThreadResponsePayload {
 // ============================================================================
 
 /**
- * Form field schema for modal inputs
+ * Form field schema for inline inputs
  */
 export interface FieldSchema {
   type: "text" | "select" | "textarea" | "number" | "checkbox" | "multiselect";
@@ -123,36 +115,37 @@ export interface FieldSchema {
 }
 
 /**
- * Multi-form option (button that opens a modal)
- */
-export interface FormOption {
-  label: string;
-  fields: Record<string, FieldSchema>;
-}
-
-/**
- * Interaction options - determines UX pattern:
- * - string[] → Simple buttons (immediate response)
- * - Record<string, FieldSchema> → Single modal form
- * - FormOption[] → Multi-modal workflow (staged submission)
+ * Interaction options - determines UX pattern (all inline, no modals):
+ * - string[] → Simple radio buttons (inline, auto-submit on selection)
+ * - Record<string, FieldSchema> → Single inline form with submit button
+ * - Record<string, Record<string, FieldSchema>> → Multi-section form (inline section buttons + forms)
  */
 export type InteractionOptions =
   | string[]
   | Record<string, FieldSchema>
-  | FormOption[];
+  | Record<string, Record<string, FieldSchema>>;
 
 /**
  * User response to an interaction
  * Format depends on interaction type:
- * - Simple buttons: { answer: string }
+ * - Simple radio: { answer: string }
  * - Single form: { formData: Record<string, any> }
- * - Multi-form: { formData: Record<string, Record<string, any>> }
+ * - Multi-section form: { formData: Record<sectionName, Record<fieldName, value>> }
  */
 export interface UserInteractionResponse {
-  answer?: string; // For simple button responses
-  formData?: Record<string, any>; // For single form or multi-form (nested)
+  answer?: string; // For simple radio button responses
+  formData?: Record<string, any>; // For single form or multi-section form (nested by section)
   timestamp: number;
 }
+
+/**
+ * Interaction type classification
+ */
+export type InteractionType =
+  | "plan_approval"
+  | "tool_approval"
+  | "question"
+  | "form";
 
 /**
  * Blocking user interaction - agent waits for response
@@ -166,8 +159,10 @@ export interface UserInteraction {
 
   blocking: true; // Always true - distinguishes from suggestions
 
+  interactionType: InteractionType; // Type of interaction for recovery/context
+
   question: string; // The question or prompt to display
-  options: InteractionOptions; // Determines UX pattern (buttons/form/multi-form)
+  options: InteractionOptions; // Determines UX pattern (radio/single-form/multi-section)
 
   metadata?: any; // Optional metadata for tracking/context
 
@@ -176,9 +171,23 @@ export interface UserInteraction {
   createdAt: number;
   expiresAt: number;
   respondedAt?: number;
+  respondedByUserId?: string; // Who actually clicked/submitted (may differ from userId)
 
-  // Partial form data (for multi-form workflows)
+  // Active section for multi-section forms
+  activeSection?: string;
+  // Partial data (for multi-section workflows before final submit)
   partialData?: Record<string, Record<string, any>>;
+}
+
+/**
+ * Pending interaction state for worker startup recovery
+ * Note: Only contains unanswered interactions (those still in pending set)
+ */
+export interface PendingInteraction {
+  id: string;
+  type: InteractionType;
+  question: string;
+  createdAt: number;
 }
 
 /**

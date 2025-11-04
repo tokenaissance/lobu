@@ -1,18 +1,23 @@
 /**
- * Gateway integration for sending worker responses to dispatcher via HTTP
+ * HTTP implementation of WorkerTransport
+ * Sends worker responses to gateway via HTTP POST requests
  */
 
-import { createLogger } from "@peerbot/core";
-import type { GatewayIntegrationInterface } from "../core/types";
+import {
+  createLogger,
+  type WorkerTransport,
+  type WorkerTransportConfig,
+} from "@peerbot/core";
 import type { ResponseData } from "./types";
 
-const logger = createLogger("gateway-integration");
+const logger = createLogger("http-worker-transport");
 
 /**
- * Gateway integration for sending worker responses to dispatcher via HTTP
+ * HTTP transport for worker-to-gateway communication
+ * Implements retry logic and deduplication for streaming responses
  */
-export class GatewayIntegration implements GatewayIntegrationInterface {
-  private dispatcherUrl: string;
+export class HttpWorkerTransport implements WorkerTransport {
+  private gatewayUrl: string;
   private workerToken: string;
   private userId: string;
   private channelId: string;
@@ -26,26 +31,16 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
   private accumulatedStreamContent: string = "";
   private lastStreamDelta: string = "";
 
-  constructor(
-    dispatcherUrl: string,
-    workerToken: string,
-    userId: string,
-    channelId: string,
-    threadId: string,
-    originalMessageTs: string,
-    botResponseTs: string | undefined = undefined,
-    teamId: string | undefined = undefined,
-    processedMessageIds: string[] = []
-  ) {
-    this.dispatcherUrl = dispatcherUrl;
-    this.workerToken = workerToken;
-    this.userId = userId;
-    this.channelId = channelId;
-    this.threadId = threadId;
-    this.originalMessageTs = originalMessageTs;
-    this.botResponseTs = botResponseTs;
-    this.teamId = teamId;
-    this.processedMessageIds = processedMessageIds;
+  constructor(config: WorkerTransportConfig) {
+    this.gatewayUrl = config.gatewayUrl;
+    this.workerToken = config.workerToken;
+    this.userId = config.userId;
+    this.channelId = config.channelId;
+    this.threadId = config.threadId;
+    this.originalMessageTs = config.originalMessageTs;
+    this.botResponseTs = config.botResponseTs;
+    this.teamId = config.teamId;
+    this.processedMessageIds = config.processedMessageIds || [];
   }
 
   setJobId(jobId: string): void {
@@ -177,13 +172,30 @@ export class GatewayIntegration implements GatewayIntegrationInterface {
     });
   }
 
+  async sendStatusUpdate(elapsedSeconds: number, state: string): Promise<void> {
+    await this.sendResponse({
+      messageId: this.originalMessageTs,
+      channelId: this.channelId,
+      threadId: this.threadId,
+      userId: this.userId,
+      teamId: this.teamId,
+      timestamp: Date.now(),
+      originalMessageId: this.originalMessageTs,
+      botResponseId: this.botResponseTs,
+      statusUpdate: {
+        elapsedSeconds,
+        state,
+      },
+    });
+  }
+
   private async sendResponse(data: ResponseData): Promise<void> {
     const maxRetries = 3;
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const responseUrl = `${this.dispatcherUrl}/worker/response`;
+        const responseUrl = `${this.gatewayUrl}/worker/response`;
         const payload = this.jobId ? { jobId: this.jobId, ...data } : data;
 
         // Log the payload for debugging

@@ -4,6 +4,7 @@ import type {
   ThreadMessagePayload,
   WorkerDeploymentPayload,
 } from "../../infrastructure/queue/queue-producer";
+import type { InteractionService } from "../../interactions";
 import type { ISessionManager, ThreadSession } from "../../session";
 import { generateSessionKey } from "../../session";
 import type { MessageHandlerConfig } from "../config";
@@ -18,7 +19,8 @@ export class MessageHandler {
     private queueProducer: QueueProducer,
     private config: MessageHandlerConfig,
     private sessionManager: ISessionManager,
-    private slackClient: WebClient
+    private slackClient: WebClient,
+    private interactionService: InteractionService
   ) {}
 
   /**
@@ -99,27 +101,36 @@ export class MessageHandler {
       messageId: context.messageTs,
     });
 
-    // Check thread ownership using session manager
-    const ownershipCheck = await this.sessionManager.validateThreadOwnership(
-      context.channelId,
-      normalizedThreadTs,
-      context.userId
-    );
+    // Check if this is a Direct Message channel (DMs start with 'D')
+    const isDirectMessage = context.channelId.startsWith("D");
 
-    if (!ownershipCheck.allowed && ownershipCheck.owner) {
-      logger.warn(
-        `User ${context.userId} tried to interact with thread owned by ${ownershipCheck.owner}`
+    // Only check thread ownership for non-DM channels
+    if (!isDirectMessage) {
+      const ownershipCheck = await this.sessionManager.validateThreadOwnership(
+        context.channelId,
+        normalizedThreadTs,
+        context.userId
       );
 
-      // Send ownership message
-      await client.chat.postMessage({
-        channel: context.channelId,
-        thread_ts: normalizedThreadTs,
-        text: `This thread is owned by <@${ownershipCheck.owner}>. Only the thread creator can interact with the bot in this conversation.`,
-        mrkdwn: true,
-      });
+      if (!ownershipCheck.allowed && ownershipCheck.owner) {
+        logger.warn(
+          `User ${context.userId} tried to interact with thread owned by ${ownershipCheck.owner}`
+        );
 
-      return;
+        // Send ownership message
+        await client.chat.postMessage({
+          channel: context.channelId,
+          thread_ts: normalizedThreadTs,
+          text: `This thread is owned by <@${ownershipCheck.owner}>. Only the thread creator can interact with the bot in this conversation.`,
+          mrkdwn: true,
+        });
+
+        return;
+      }
+    } else {
+      logger.info(
+        `Skipping thread ownership check for DM channel ${context.channelId}`
+      );
     }
 
     // Get existing session if any
@@ -136,6 +147,30 @@ export class MessageHandler {
 
     try {
       const threadTs = normalizedThreadTs;
+
+      // Cancel any pending interactions for this thread when a new message arrives
+      // This prevents the worker from being stuck waiting for interaction responses
+      const pendingInteractionIds =
+        await this.interactionService.getPendingInteractions(threadTs);
+      if (pendingInteractionIds.length > 0) {
+        logger.info(
+          `Cancelling ${pendingInteractionIds.length} pending interaction(s) for thread ${threadTs} due to new user message`
+        );
+
+        for (const interactionId of pendingInteractionIds) {
+          try {
+            // Auto-respond with a cancellation message
+            await this.interactionService.respond(
+              interactionId,
+              { answer: "[Cancelled - user sent a new message]" },
+              context.userId
+            );
+            logger.info(`Cancelled pending interaction ${interactionId}`);
+          } catch (err) {
+            logger.error(`Failed to cancel interaction ${interactionId}:`, err);
+          }
+        }
+      }
 
       // Create thread session
       const threadSession: ThreadSession = {
@@ -178,8 +213,7 @@ export class MessageHandler {
             files: files || [],
           },
           agentOptions: {
-            allowedTools: this.config.agentOptions.allowedTools,
-            model: this.config.agentOptions.model,
+            ...this.config.agentOptions,
             timeoutMinutes: this.config.sessionTimeoutMinutes.toString(),
           },
           routingMetadata: {

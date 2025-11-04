@@ -9,7 +9,7 @@ import {
 import type { McpConfigService } from "./config-service";
 import type { McpCredentialStore } from "./credential-store";
 import type { McpInputStore } from "./input-store";
-import type { OAuthStateStore } from "./oauth-state-store";
+import type { McpOAuthStateStore } from "./oauth-state-store";
 
 const logger = createLogger("mcp-oauth-module");
 
@@ -35,7 +35,7 @@ export class McpOAuthModule extends BaseModule {
   constructor(
     private configService: McpConfigService,
     private credentialStore: McpCredentialStore,
-    private stateStore: OAuthStateStore,
+    private stateStore: McpOAuthStateStore,
     private inputStore: McpInputStore,
     publicGatewayUrl: string,
     callbackUrl: string
@@ -375,7 +375,7 @@ export class McpOAuthModule extends BaseModule {
   }
 
   /**
-   * Render blocks for a single MCP status
+   * TODO: can we use Platform Abstraction to render the status in Slack? All Slack relevant logic needs to be implemented in the Platform Adapter's Slack implemetnation.
    */
   private renderMcpStatus(mcp: McpStatus, userId: string): any[] {
     const blocks: any[] = [];

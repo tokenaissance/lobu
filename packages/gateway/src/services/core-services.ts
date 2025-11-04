@@ -10,7 +10,7 @@ import { McpCredentialStore } from "../auth/mcp/credential-store";
 import { McpInputStore } from "../auth/mcp/input-store";
 import { McpOAuthDiscoveryService } from "../auth/mcp/oauth-discovery";
 import { McpOAuthModule } from "../auth/mcp/oauth-module";
-import { OAuthStateStore } from "../auth/mcp/oauth-state-store";
+import { McpOAuthStateStore } from "../auth/mcp/oauth-state-store";
 import { McpProxy } from "../auth/mcp/proxy";
 import type { GatewayConfig } from "../config";
 import { WorkerGateway } from "../gateway";
@@ -211,8 +211,8 @@ export class CoreServices {
     const redisClient = this.queue.getRedisClient();
 
     // Initialize MCP credential and state management
-    const mcpCredentialStore = new McpCredentialStore(this.queue);
-    const oauthStateStore = new OAuthStateStore(this.queue);
+    const mcpCredentialStore = new McpCredentialStore(redisClient);
+    const mcpOAuthStateStore = new McpOAuthStateStore(redisClient);
     const mcpInputStore = new McpInputStore(this.queue);
 
     // Initialize MCP OAuth discovery service
@@ -293,7 +293,7 @@ export class CoreServices {
     const mcpOAuthModule = new McpOAuthModule(
       this.mcpConfigService,
       mcpCredentialStore,
-      oauthStateStore,
+      mcpOAuthStateStore,
       mcpInputStore,
       this.config.mcp.publicGatewayUrl,
       this.config.mcp.callbackUrl

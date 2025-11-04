@@ -304,7 +304,26 @@ export class AnthropicProxy {
       }
     }
 
-    logger.info(`🔧 Forwarding to: ${finalUrl}`);
+    // Extract request metadata for logging
+    let requestModel = "unknown";
+    let requestMaxTokens = "unknown";
+    let messageCount = 0;
+    try {
+      const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
+      requestModel = parsedBody?.model || "unknown";
+      requestMaxTokens =
+        parsedBody?.max_tokens || parsedBody?.maxTokens || "default";
+      messageCount = Array.isArray(parsedBody?.messages)
+        ? parsedBody.messages.length
+        : 0;
+    } catch {
+      // Ignore parsing errors for metadata
+    }
+
+    logger.info(
+      `🔧 Forwarding to Anthropic API: ${finalUrl} - model: ${requestModel}, maxTokens: ${requestMaxTokens}, messages: ${messageCount}, tokenSource: ${tokenSource}`
+    );
+    const fetchStartTime = Date.now();
 
     try {
       const response = await fetch(finalUrl, {
@@ -312,6 +331,11 @@ export class AnthropicProxy {
         headers,
         body: body,
       });
+
+      const fetchDuration = Date.now() - fetchStartTime;
+      logger.info(
+        `✅ Anthropic API response received (${fetchDuration}ms) - status: ${response.status}, model: ${requestModel}, isStream: ${response.headers.get("content-type")?.includes("text/event-stream") ? "yes" : "no"}`
+      );
 
       // Temporary rate-limit bypass for local testing
       if (response.status === 429) {
@@ -402,12 +426,54 @@ export class AnthropicProxy {
         response.headers.get("content-type")?.includes("text/event-stream") ||
         response.headers.get("transfer-encoding") === "chunked"
       ) {
+        logger.info(
+          `📡 Starting stream pipe to client - model: ${requestModel}`
+        );
         // Set up streaming
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
 
-        // Pipe the response stream
-        response.body?.pipe(res);
+        // Pipe the response stream with error handling
+        if (response.body) {
+          let firstChunkReceived = false;
+          let chunkCount = 0;
+          const streamStartTime = Date.now();
+
+          response.body.on("data", (chunk: Buffer) => {
+            chunkCount++;
+
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              const timeToFirstChunk = Date.now() - streamStartTime;
+              logger.info(
+                `📨 First stream chunk received from Anthropic after ${timeToFirstChunk}ms - chunkSize: ${chunk.length} bytes, model: ${requestModel}`
+              );
+            }
+
+            // Log every 10th chunk to track stream progress without spam
+            if (chunkCount % 10 === 0) {
+              logger.debug(
+                `📊 Stream progress: ${chunkCount} chunks received, latest size: ${chunk.length} bytes`
+              );
+            }
+          });
+
+          response.body.on("error", (error: Error) => {
+            logger.error(`❌ Stream error from Anthropic:`, error);
+          });
+
+          response.body.on("end", () => {
+            const streamDuration = Date.now() - streamStartTime;
+            logger.info(
+              `✅ Stream completed from Anthropic - duration: ${streamDuration}ms, totalChunks: ${chunkCount}, model: ${requestModel}`
+            );
+          });
+
+          response.body.pipe(res);
+        } else {
+          logger.error(`❌ No response body to stream`);
+          res.status(502).json({ error: "No response body from Anthropic" });
+        }
       } else {
         // Handle regular responses
         const responseText = await response.text();

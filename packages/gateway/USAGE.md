@@ -263,12 +263,6 @@ This document describes all environment variables used by the Peerbot Gateway.
 **Format**: Comma-separated tool names
 **Used by**: Worker tool filtering
 
-### `CLAUDE_DISALLOWED_TOOLS`
-**Description**: Comma-separated list of disallowed Claude tools
-**Format**: Tool names separated by commas
-**Example**: `bash,exec`
-**Used by**: Worker tool filtering
-
 ### `CLAUDE_TIMEOUT_MINUTES`
 **Description**: Alternative to TIMEOUT_MINUTES (passed to worker)
 **Format**: Integer (minutes)

@@ -141,21 +141,20 @@ export class SlackPlatform implements PlatformAdapter {
     );
     logger.info("✅ Slack interaction renderer initialized");
 
-    // Listen for interaction:created events to stop streams
-    interactionService.on(
-      "interaction:created",
-      (interaction: UserInteraction) => {
+    // Register beforeCreate hook to stop streams BEFORE interaction is created
+    // This ensures interaction message appears after stream stops, not mixed in
+    interactionService.setBeforeCreateHook(
+      async (userId: string, threadId: string) => {
         logger.info(
-          `Stopping stream for thread ${interaction.threadId} due to interaction creation`
+          `Stopping stream for thread ${threadId} before creating interaction`
         );
-        this.threadResponseConsumer
-          ?.stopStreamForThread(interaction.userId, interaction.threadId)
-          .catch((error) => {
-            logger.error("Failed to stop stream for interaction:", error);
-          });
+        await this.threadResponseConsumer?.stopStreamForThread(
+          userId,
+          threadId
+        );
       }
     );
-    logger.info("✅ Stream stop handler registered for interactions");
+    logger.info("✅ Stream stop hook registered for interactions");
 
     // Register interaction button handlers
     const { registerInteractionHandlers } = await import("./interactions");
@@ -176,7 +175,8 @@ export class SlackPlatform implements PlatformAdapter {
         sessionTimeoutMinutes: this.sessionTimeoutMinutes,
       },
       moduleRegistry,
-      services.getSessionManager()
+      services.getSessionManager(),
+      interactionService
     );
 
     logger.info("✅ Slack platform initialized");

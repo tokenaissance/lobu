@@ -5,16 +5,27 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createLogger } from "@peerbot/core";
-import {
-  createMCPServer,
-  getProcessManagerInstance,
-  setProcessManagerInstance,
-  startHTTPServer,
-} from "./mcp-server";
+import { createMCPServer, startHTTPServer } from "./mcp-server";
 import { startTunnel } from "./tunnel-manager";
 import type { ProcessInfo, ProcessManagerInstance } from "./types";
 
 const logger = createLogger("worker");
+
+// ============================================================================
+// PROCESS MANAGER INSTANCE STATE
+// ============================================================================
+
+let processManagerInstance: ProcessManagerInstance | null = null;
+
+export function getProcessManagerInstance(): ProcessManagerInstance | null {
+  return processManagerInstance;
+}
+
+export function setProcessManagerInstance(
+  instance: ProcessManagerInstance | null
+): void {
+  processManagerInstance = instance;
+}
 
 // ============================================================================
 // PROCESS MANAGER
@@ -306,8 +317,3 @@ export async function stopProcessManager(): Promise<void> {
     setProcessManagerInstance(null);
   }
 }
-
-/**
- * Get the current process manager instance
- */
-export { getProcessManagerInstance };

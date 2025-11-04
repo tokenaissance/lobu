@@ -3,6 +3,8 @@
 import {
   createLogger,
   type InteractionOptions,
+  type InteractionType,
+  type PendingInteraction,
   TIME,
   type UserInteraction,
   type UserSuggestion,
@@ -18,8 +20,23 @@ const logger = createLogger("interactions");
  * Manages interaction state and emits events for platforms to handle
  */
 export class InteractionService extends EventEmitter {
+  private beforeCreateHook?: (
+    userId: string,
+    threadId: string
+  ) => Promise<void>;
+
   constructor(private redis: Redis) {
     super();
+  }
+
+  /**
+   * Set a hook to run before creating interactions
+   * Used by platforms to stop streams before interaction messages appear
+   */
+  setBeforeCreateHook(
+    hook: (userId: string, threadId: string) => Promise<void>
+  ): void {
+    this.beforeCreateHook = hook;
   }
 
   /**
@@ -32,11 +49,18 @@ export class InteractionService extends EventEmitter {
     channelId: string,
     teamId: string | undefined,
     data: {
+      interactionType: InteractionType;
       question: string;
       options: InteractionOptions;
       metadata?: any;
     }
   ): Promise<UserInteraction> {
+    // Call beforeCreate hook (e.g., stop streams) BEFORE creating interaction
+    if (this.beforeCreateHook) {
+      logger.info(`Running beforeCreate hook for thread ${threadId}`);
+      await this.beforeCreateHook(userId, threadId);
+    }
+
     const interaction: UserInteraction = {
       id: `ui_${randomUUID()}`,
       userId,
@@ -44,6 +68,7 @@ export class InteractionService extends EventEmitter {
       channelId,
       teamId,
       blocking: true,
+      interactionType: data.interactionType,
       status: "pending",
       createdAt: Date.now(),
       expiresAt: Date.now() + TIME.THREE_HOURS_MS,
@@ -77,7 +102,7 @@ export class InteractionService extends EventEmitter {
 
     logger.info(`Created interaction ${interaction.id} for thread ${threadId}`);
 
-    // Emit event for platform to render
+    // Emit event for platform to render (stream already stopped)
     this.emit("interaction:created", interaction);
 
     return interaction;
@@ -136,7 +161,8 @@ export class InteractionService extends EventEmitter {
     response: {
       answer?: string; // For simple button responses
       formData?: Record<string, any>; // For form responses
-    }
+    },
+    respondedByUserId?: string // Optional: who actually clicked/submitted
   ): Promise<void> {
     const key = `interaction:${id}`;
     const data = await this.redis.get(key);
@@ -156,6 +182,11 @@ export class InteractionService extends EventEmitter {
       timestamp: Date.now(),
     };
 
+    // Store who actually responded (might be different from who triggered the interaction)
+    if (respondedByUserId) {
+      interaction.respondedByUserId = respondedByUserId;
+    }
+
     await this.redis.set(
       key,
       JSON.stringify(interaction),
@@ -172,7 +203,9 @@ export class InteractionService extends EventEmitter {
     await this.redis.del(activeKey);
 
     const responseStr = response.answer || JSON.stringify(response.formData);
-    logger.info(`Interaction ${id} responded: ${responseStr}`);
+    logger.info(
+      `Interaction ${id} responded: ${responseStr} by user ${respondedByUserId || interaction.userId}`
+    );
 
     // Emit event
     this.emit("interaction:responded", interaction);
@@ -201,12 +234,57 @@ export class InteractionService extends EventEmitter {
   }
 
   /**
-   * Save partial form data for multi-form workflows
-   * Used when user fills one form but hasn't submitted all
+   * Get pending unanswered interactions for worker startup recovery
+   *
+   * Note: This only returns UNANSWERED interactions that are still in the pending set.
+   * Answered interactions (those with responses) are removed from the pending set and
+   * handled separately via SSE reconnection (see WorkerGateway.sendPendingInteractionResponses).
+   *
+   * Storage model:
+   * - interaction:pending:{threadId} - SET of unanswered interaction IDs
+   * - interaction:{id} - Full interaction objects (3h TTL)
+   * - interaction:response:{threadId}:{id} - Failed response deliveries (1h TTL, separate flow)
+   */
+  async getPendingUnansweredInteractions(
+    threadId: string
+  ): Promise<PendingInteraction[]> {
+    try {
+      const pendingIds = await this.getPendingInteractions(threadId);
+
+      if (pendingIds.length === 0) {
+        return [];
+      }
+
+      // Get full interaction objects for pending (unanswered) interactions
+      const interactions = await Promise.all(
+        pendingIds.map((id) => this.getInteraction(id))
+      );
+
+      // Map to pending interaction format (no response field - these are all unanswered)
+      return interactions
+        .filter((i): i is UserInteraction => i !== null)
+        .map((i) => ({
+          id: i.id,
+          type: i.interactionType,
+          question: i.question,
+          createdAt: i.createdAt,
+        }));
+    } catch (error) {
+      logger.error(
+        `Failed to get pending unanswered interactions for thread ${threadId}:`,
+        error
+      );
+      return []; // Graceful degradation - return empty array on error
+    }
+  }
+
+  /**
+   * Save partial form data for multi-section workflows
+   * Used when user fills one section but hasn't submitted all
    */
   async savePartialData(
     interactionId: string,
-    formLabel: string,
+    sectionName: string,
     formData: Record<string, any>
   ): Promise<void> {
     const key = `interaction:${interactionId}`;
@@ -226,8 +304,8 @@ export class InteractionService extends EventEmitter {
       interaction.partialData = {};
     }
 
-    // Save this form's data
-    interaction.partialData[formLabel] = formData;
+    // Save this section's data
+    interaction.partialData[sectionName] = formData;
 
     // Update in Redis
     await this.redis.set(
@@ -238,14 +316,50 @@ export class InteractionService extends EventEmitter {
     );
 
     logger.info(
-      `Saved partial data for form "${formLabel}" in interaction ${interactionId}`
+      `Saved partial data for section "${sectionName}" in interaction ${interactionId}`
+    );
+  }
+
+  /**
+   * Set active section for multi-section forms
+   */
+  async setActiveSection(
+    interactionId: string,
+    sectionName: string
+  ): Promise<void> {
+    const key = `interaction:${interactionId}`;
+    const data = await this.redis.get(key);
+
+    if (!data) {
+      logger.warn(
+        `Cannot set active section for interaction ${interactionId} - not found`
+      );
+      return;
+    }
+
+    const interaction: UserInteraction = JSON.parse(data);
+    interaction.activeSection = sectionName;
+
+    // Update in Redis
+    await this.redis.set(
+      key,
+      JSON.stringify(interaction),
+      "EX",
+      TIME.THREE_HOURS_SECONDS
+    );
+
+    logger.info(
+      `Set active section to "${sectionName}" for interaction ${interactionId}`
     );
   }
 
   /**
    * Submit all collected form data (multi-form workflow)
    */
-  async submitAllForms(interactionId: string): Promise<void> {
+  async submitAllForms(
+    interactionId: string,
+    respondedByUserId?: string
+  ): Promise<void> {
     const key = `interaction:${interactionId}`;
     const data = await this.redis.get(key);
 
@@ -267,8 +381,12 @@ export class InteractionService extends EventEmitter {
     }
 
     // Submit as final response with all form data
-    await this.respond(interactionId, {
-      formData: interaction.partialData,
-    });
+    await this.respond(
+      interactionId,
+      {
+        formData: interaction.partialData,
+      },
+      respondedByUserId
+    );
   }
 }

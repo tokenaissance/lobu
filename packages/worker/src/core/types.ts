@@ -5,6 +5,8 @@
  * Merged from: base/types.ts, types.ts, interfaces.ts
  */
 
+import type { WorkerTransport } from "@peerbot/core";
+
 // ============================================================================
 // WORKER INTERFACES
 // ============================================================================
@@ -25,26 +27,9 @@ export interface WorkerExecutor {
   cleanup(): Promise<void>;
 
   /**
-   * Get the gateway integration for sending updates
+   * Get the worker transport for sending updates to gateway
    */
-  getGatewayIntegration(): GatewayIntegrationInterface | null;
-}
-
-/**
- * Interface for gateway integration
- * Provides methods for communicating with the dispatcher
- */
-export interface GatewayIntegrationInterface {
-  setJobId(jobId: string): void;
-  setModuleData(moduleData: Record<string, unknown>): void;
-  sendStreamDelta(
-    delta: string,
-    isFullReplacement?: boolean,
-    isFinal?: boolean
-  ): Promise<void>;
-  signalDone(finalDelta?: string): Promise<void>;
-  signalCompletion(): Promise<void>;
-  signalError(error: Error): Promise<void>;
+  getWorkerTransport(): WorkerTransport | null;
 }
 
 // ============================================================================
@@ -63,6 +48,7 @@ export interface WorkerConfig {
   agentOptions: string; // JSON string
   teamId?: string; // Platform team/workspace ID (e.g., Slack team ID)
   platform: string; // Platform identifier (e.g., "slack", "discord")
+  platformMetadata?: any; // Platform-specific metadata (e.g., files, user info)
   workspace: {
     baseDirectory: string;
   };
@@ -103,6 +89,14 @@ export type ProgressUpdate =
   | {
       type: "error";
       data: Error | { message?: string; stack?: string; error?: string };
+      timestamp: number;
+    }
+  | {
+      type: "status_update";
+      data: {
+        elapsedSeconds: number;
+        state: string;
+      };
       timestamp: number;
     };
 

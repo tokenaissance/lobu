@@ -127,6 +127,7 @@ export class ClaudeOAuthModule extends BaseModule {
 
   /**
    * Render home tab with Claude authentication status and model selection
+   * TODO: We need to have Slack logic implemented by the Slack mode in a modular way. Think of a better way to do it via Platform Abstraction.
    */
   async renderHomeTab(userId: string): Promise<any[]> {
     const blocks: any[] = [];

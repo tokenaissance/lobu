@@ -1,5 +1,4 @@
-import { createLogger } from "@peerbot/core";
-import type { GatewayIntegrationInterface } from "./types";
+import { createLogger, type WorkerTransport } from "@peerbot/core";
 
 const logger = createLogger("base-worker");
 
@@ -32,14 +31,14 @@ export function formatErrorMessage(error: unknown): string {
  */
 export async function handleExecutionError(
   error: unknown,
-  gateway: GatewayIntegrationInterface
+  transport: WorkerTransport
 ): Promise<void> {
   logger.error("Worker execution failed:", error);
 
   try {
     const errorMsg = formatErrorMessage(error);
-    await gateway.sendStreamDelta(errorMsg, true, true);
-    await gateway.signalError(
+    await transport.sendStreamDelta(errorMsg, true, true);
+    await transport.signalError(
       error instanceof Error ? error : new Error(String(error))
     );
   } catch (gatewayError) {

@@ -20,7 +20,7 @@ export function createCustomToolsServer(
 ) {
   const tools: any[] = [
     tool(
-      "show_to_user",
+      "UploadUserFile",
       "Use this whenever you create a visualization, chart, image, document, report, or any file that helps answer the user's request. This is how you share your work with the user.",
       {
         file_path: z
@@ -238,6 +238,7 @@ export function createCustomToolsServer(
             logger.info(`AskUserQuestion: ${args.question}`);
 
             const response = await interactionClient.askUser({
+              interactionType: "question",
               question: args.question,
               options: args.options as any,
             });

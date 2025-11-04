@@ -1,7 +1,5 @@
-import { createLogger } from "@peerbot/core";
 import type Redis from "ioredis";
-
-const logger = createLogger("claude-credential-store");
+import { BaseCredentialStore } from "../credential-store";
 
 export interface ClaudeCredentials {
   accessToken: string;
@@ -15,8 +13,10 @@ export interface ClaudeCredentials {
  * Store and retrieve Claude OAuth credentials from Redis
  * Pattern: claude:credential:{userId}
  */
-export class ClaudeCredentialStore {
-  constructor(private redis: Redis) {}
+export class ClaudeCredentialStore extends BaseCredentialStore<ClaudeCredentials> {
+  constructor(redis: Redis) {
+    super(redis, "claude:credential", "claude-credential-store");
+  }
 
   /**
    * Store Claude credentials for a user
@@ -25,11 +25,10 @@ export class ClaudeCredentialStore {
     userId: string,
     credentials: ClaudeCredentials
   ): Promise<void> {
-    const key = this.getKey(userId);
+    const key = this.buildKey(userId);
+    await super.setCredentials(key, credentials);
 
-    await this.redis.set(key, JSON.stringify(credentials));
-
-    logger.info(`Stored Claude credentials for user ${userId}`, {
+    this.logger.info(`Stored Claude credentials for user ${userId}`, {
       expiresAt: new Date(credentials.expiresAt).toISOString(),
       scopes: credentials.scopes,
     });
@@ -40,52 +39,30 @@ export class ClaudeCredentialStore {
    * Returns null if not found or if credentials are missing required fields
    */
   async getCredentials(userId: string): Promise<ClaudeCredentials | null> {
-    const key = this.getKey(userId);
-    const data = await this.redis.get(key);
+    const key = this.buildKey(userId);
+    const credentials = await super.getCredentials(key);
 
-    if (!data) {
-      logger.debug(`No Claude credentials found for user ${userId}`);
-      return null;
+    if (!credentials) {
+      this.logger.debug(`No Claude credentials found for user ${userId}`);
     }
 
-    try {
-      const credentials = JSON.parse(data) as ClaudeCredentials;
-
-      // Validate required fields
-      if (!credentials.accessToken) {
-        logger.warn(
-          `Invalid credentials for user ${userId}: missing accessToken`
-        );
-        return null;
-      }
-
-      return credentials;
-    } catch (error) {
-      logger.error(`Failed to parse Claude credentials for user ${userId}`, {
-        error,
-      });
-      return null;
-    }
+    return credentials;
   }
 
   /**
    * Delete Claude credentials for a user
    */
   async deleteCredentials(userId: string): Promise<void> {
-    const key = this.getKey(userId);
-    await this.redis.del(key);
-    logger.info(`Deleted Claude credentials for user ${userId}`);
+    const key = this.buildKey(userId);
+    await super.deleteCredentials(key);
+    this.logger.info(`Deleted Claude credentials for user ${userId}`);
   }
 
   /**
    * Check if user has Claude credentials
    */
   async hasCredentials(userId: string): Promise<boolean> {
-    const credentials = await this.getCredentials(userId);
-    return credentials !== null;
-  }
-
-  private getKey(userId: string): string {
-    return `claude:credential:${userId}`;
+    const key = this.buildKey(userId);
+    return super.hasCredentials(key);
   }
 }

@@ -1,5 +1,5 @@
-import type { IMessageQueue } from "../../infrastructure/queue";
-import { BaseRedisStore } from "../../infrastructure/redis/store";
+import type Redis from "ioredis";
+import { BaseCredentialStore } from "../credential-store";
 
 export interface McpCredentialRecord {
   accessToken: string;
@@ -9,11 +9,23 @@ export interface McpCredentialRecord {
   metadata?: Record<string, unknown>;
 }
 
-export class McpCredentialStore extends BaseRedisStore<McpCredentialRecord> {
-  protected readonly keyPrefix = "mcp:credential";
+/**
+ * MCP credential store with multi-part keys (userId, mcpId)
+ * Uses composition rather than inheritance due to different API signature
+ */
+export class McpCredentialStore {
+  private store: BaseCredentialStore<McpCredentialRecord>;
 
-  constructor(queue: IMessageQueue) {
-    super(queue, "mcp-credentials");
+  constructor(redis: Redis) {
+    this.store = new BaseCredentialStore(
+      redis,
+      "mcp:credential",
+      "mcp-credentials"
+    );
+  }
+
+  private buildKey(userId: string, mcpId: string): string {
+    return `${userId}:${mcpId}`;
   }
 
   async getCredentials(
@@ -21,7 +33,7 @@ export class McpCredentialStore extends BaseRedisStore<McpCredentialRecord> {
     mcpId: string
   ): Promise<McpCredentialRecord | null> {
     const key = this.buildKey(userId, mcpId);
-    return this.get(key);
+    return this.store.getCredentials(key);
   }
 
   async setCredentials(
@@ -31,11 +43,11 @@ export class McpCredentialStore extends BaseRedisStore<McpCredentialRecord> {
     ttlSeconds?: number
   ): Promise<void> {
     const key = this.buildKey(userId, mcpId);
-    return this.set(key, record, ttlSeconds);
+    await this.store.setCredentials(key, record, ttlSeconds);
   }
 
   async deleteCredentials(userId: string, mcpId: string): Promise<void> {
     const key = this.buildKey(userId, mcpId);
-    return this.delete(key);
+    await this.store.deleteCredentials(key);
   }
 }

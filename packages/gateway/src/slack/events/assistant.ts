@@ -76,6 +76,7 @@ export function setupAssistantHandlers(
         threadTs: assistantMessage.thread_ts,
         user: assistantMessage.user,
         hasFiles: !!assistantMessage.files && assistantMessage.files.length > 0,
+        eventKeys: Object.keys(assistantMessage),
       });
 
       // Skip bot's own messages
