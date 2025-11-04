@@ -307,11 +307,18 @@ export class MessageHandler {
   /**
    * Extract Slack context from event
    */
-  extractSlackContext(event: SlackMessageEvent): SlackContext {
+  extractSlackContext(
+    event: SlackMessageEvent,
+    bodyTeamId?: string
+  ): SlackContext {
+    // TODO: this is hacky, the slackmessageevent must has the teamid
+    const eventWithTeamId = event as SlackMessageEvent & { team_id?: string };
+    const teamId = event.team || eventWithTeamId.team_id || bodyTeamId || "";
+
     return {
       channelId: event.channel,
       userId: event.user || "",
-      teamId: event.team || "",
+      teamId: teamId,
       threadTs: event.thread_ts,
       messageTs: event.ts,
       text: event.text || "",

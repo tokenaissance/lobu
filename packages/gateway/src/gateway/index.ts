@@ -130,7 +130,7 @@ export class WorkerGateway {
       return;
     }
 
-    const { deploymentName } = auth.tokenData;
+    const { deploymentName, teamId } = auth.tokenData;
 
     // Update connection activity
     this.connectionManager.touchConnection(deploymentName);
@@ -153,8 +153,12 @@ export class WorkerGateway {
         );
       }
 
+      //TODO: find a better reliable approach to have teamId here. It should be in the payload
+      // Add teamId from worker token to response data (required for streaming to private channels)
+      const enrichedResponseData = { ...responseData, teamId };
+
       // Send response to thread_response queue
-      await this.queue.send("thread_response", responseData);
+      await this.queue.send("thread_response", enrichedResponseData);
 
       res.json({ success: true });
     } catch (error) {
