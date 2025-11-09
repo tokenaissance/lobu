@@ -44,6 +44,17 @@ function setupHealthEndpoints(
     res.json({ ready: true });
   });
 
+  // Test endpoint for Sentry integration
+  proxyApp.get("/test/sentry-error", (_req, res) => {
+    logger.error("Test error for Sentry integration", {
+      error: new Error(
+        "This is a test error to verify Sentry is capturing errors"
+      ),
+      testData: { foo: "bar", timestamp: Date.now() },
+    });
+    res.json({ message: "Test error logged. Check Sentry dashboard." });
+  });
+
   // Add Anthropic proxy if provided
   if (anthropicProxy) {
     proxyApp.use("/api/anthropic", anthropicProxy.getRouter());

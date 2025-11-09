@@ -2,6 +2,8 @@ import { createLogger } from "./logger";
 
 const logger = createLogger("shared");
 
+let sentryInstance: typeof import("@sentry/node") | null = null;
+
 /**
  * Initialize Sentry with configuration from environment variables
  * Falls back to hardcoded DSN if SENTRY_DSN is not provided
@@ -10,6 +12,7 @@ const logger = createLogger("shared");
 export async function initSentry() {
   try {
     const Sentry = await import("@sentry/node");
+    sentryInstance = Sentry;
 
     const sentryDsn =
       process.env.SENTRY_DSN ||
@@ -33,4 +36,12 @@ export async function initSentry() {
       error
     );
   }
+}
+
+/**
+ * Get the initialized Sentry instance
+ * @returns Sentry instance or null if not initialized
+ */
+export function getSentry(): typeof import("@sentry/node") | null {
+  return sentryInstance;
 }

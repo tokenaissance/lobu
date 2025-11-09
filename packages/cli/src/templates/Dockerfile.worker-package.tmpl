@@ -24,7 +24,7 @@ RUN apk add --no-cache \
 RUN curl -L https://claude.ai/install.sh | sh
 
 # STEP 4: Install Peerbot worker package
-RUN npm install -g @peerbot/worker@^{{CLI_VERSION}}
+RUN npm install -g @peerbot/worker@latest
 
 # === CUSTOMIZE BELOW THIS LINE ===
 
