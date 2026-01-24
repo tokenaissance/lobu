@@ -75,19 +75,41 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
       
+      - name: Cleanup Stale Resources
+        run: |
+          echo "🧹 Cleaning up stale resources from old architecture..."
+
+          # Delete old orchestrator deployment (no longer in chart)
+          if kubectl get deployment $DEPLOYMENT_NAME-orchestrator -n $NAMESPACE 2>/dev/null; then
+            echo "🗑️ Deleting stale orchestrator deployment..."
+            kubectl delete deployment $DEPLOYMENT_NAME-orchestrator -n $NAMESPACE --ignore-not-found=true
+          fi
+
+          # Delete old dispatcher deployment (no longer in chart)
+          if kubectl get deployment $DEPLOYMENT_NAME-dispatcher -n $NAMESPACE 2>/dev/null; then
+            echo "🗑️ Deleting stale dispatcher deployment..."
+            kubectl delete deployment $DEPLOYMENT_NAME-dispatcher -n $NAMESPACE --ignore-not-found=true
+          fi
+
+          # Clean up any orphan pods from old deployments
+          kubectl delete pods -n $NAMESPACE -l app.kubernetes.io/component=orchestrator --ignore-not-found=true 2>/dev/null || true
+          kubectl delete pods -n $NAMESPACE -l app.kubernetes.io/component=dispatcher --ignore-not-found=true 2>/dev/null || true
+
+          echo "✅ Stale resources cleanup complete"
+
       - name: Check and Fix Helm Release State
         run: |
           echo "🔍 Checking Helm release state..."
-          
+
           # Check all releases including failed ones
           echo "📋 All Helm releases in namespace:"
           helm list -n $NAMESPACE --all
-          
+
           # Check if release exists (including pending/failed states)
           if helm list -n $NAMESPACE --all | grep -q $DEPLOYMENT_NAME; then
             RELEASE_STATUS=$(helm list -n $NAMESPACE --all -o json | jq -r ".[] | select(.name==\"$DEPLOYMENT_NAME\") | .status")
             echo "📊 Current release status: $RELEASE_STATUS"
-            
+
             # Handle different states
             case "$RELEASE_STATUS" in
               "pending-install"|"pending-upgrade"|"pending-rollback")
@@ -113,7 +135,7 @@ jobs:
           else
             echo "📝 No existing release found, will install fresh..."
           fi
-          
+
           echo "✅ Helm release check complete"
       
       - name: Deploy with make
@@ -168,7 +190,4 @@ jobs:
           echo ""
           echo "📝 Recent Logs from Gateway:"
           kubectl logs -n $NAMESPACE deployment/$DEPLOYMENT_NAME-gateway --tail=20 || true
-          echo ""
-          echo "📝 Recent Logs from Orchestrator:"
-          kubectl logs -n $NAMESPACE deployment/$DEPLOYMENT_NAME-orchestrator --tail=20 || true
       

@@ -75,10 +75,13 @@ ingress:
 
 # Slack configuration
 slack:
+  enabled: true  # Enable Slack platform
   port: 3000
   socketMode: false  # HTTP mode required for web access/ingress
   allowDirectMessages: true
   allowPrivateChannels: true
+  enableStatusReactions: true
+  enableProgressUpdates: true
 
 # Claude configuration
 claude:
