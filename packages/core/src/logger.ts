@@ -1,6 +1,8 @@
-// Detect if we're in an environment where Winston Console transport doesn't work
-// Must be declared before any imports to avoid circular dependency issues
-const USE_SIMPLE_LOGGER = process.env.USE_SIMPLE_LOGGER === "true";
+// Use simple console.log-based logger by default (unbuffered, 12-factor compliant)
+// Set USE_WINSTON_LOGGER=true only if you need Winston features (file rotation, multiple transports)
+const USE_WINSTON_LOGGER = process.env.USE_WINSTON_LOGGER === "true";
+// Use JSON format for structured logging (better for Loki parsing in production)
+const USE_JSON_FORMAT = process.env.LOG_FORMAT === "json";
 
 import winston from "winston";
 import { getSentry } from "./sentry";
@@ -151,58 +153,66 @@ class SentryTransport extends winston.transports.Stream {
  * Creates a logger instance for a specific service
  * Provides consistent logging format across all packages with level and timestamp
  * @param serviceName The name of the service using the logger
- * @returns A winston logger instance (or simple console logger if USE_SIMPLE_LOGGER=true)
+ * @returns A console logger by default, or Winston logger if USE_WINSTON_LOGGER=true
  */
 export function createLogger(serviceName: string): Logger {
-  // Use simple console logger if Winston doesn't work in this environment
-  if (USE_SIMPLE_LOGGER) {
+  // Use simple console.log logger by default (unbuffered, 12-factor compliant)
+  // Set USE_WINSTON_LOGGER=true for Winston features (file rotation, multiple transports)
+  if (!USE_WINSTON_LOGGER) {
     return createConsoleLogger(serviceName);
   }
 
   const isProduction = process.env.NODE_ENV === "production";
   const level = process.env.LOG_LEVEL || "info";
 
-  const transports: winston.transport[] = [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        ...(isProduction ? [] : [winston.format.colorize()]),
-        winston.format.printf(
-          ({ timestamp, level, message, service, ...meta }) => {
-            let metaStr = "";
-            if (Object.keys(meta).length) {
-              try {
-                metaStr = ` ${JSON.stringify(meta, null, 0)}`;
-              } catch (_err) {
-                // Handle circular structures with a safer approach
-                try {
-                  const seen = new WeakSet();
-                  metaStr = ` ${JSON.stringify(meta, (_key, value) => {
-                    if (typeof value === "object" && value !== null) {
-                      if (seen.has(value)) {
-                        return "[Circular Reference]";
-                      }
-                      seen.add(value);
+  // JSON format for structured logging (better for Loki/Grafana parsing)
+  const jsonFormat = winston.format.combine(
+    winston.format.timestamp({ format: "YYYY-MM-DDTHH:mm:ss.SSSZ" }),
+    winston.format.json()
+  );
 
-                      if (value instanceof Error) {
-                        return {
-                          name: value.name,
-                          message: value.message,
-                          stack: value.stack?.split("\n")[0], // Only first line of stack
-                        };
-                      }
-                    }
-                    return value;
-                  })}`;
-                } catch (_err2) {
-                  // Final fallback if even the circular handler fails
-                  metaStr = " [Object too complex to serialize]";
+  // Human-readable format for development
+  const humanFormat = winston.format.combine(
+    ...(isProduction ? [] : [winston.format.colorize()]),
+    winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
+      let metaStr = "";
+      if (Object.keys(meta).length) {
+        try {
+          metaStr = ` ${JSON.stringify(meta, null, 0)}`;
+        } catch (_err) {
+          // Handle circular structures with a safer approach
+          try {
+            const seen = new WeakSet();
+            metaStr = ` ${JSON.stringify(meta, (_key, value) => {
+              if (typeof value === "object" && value !== null) {
+                if (seen.has(value)) {
+                  return "[Circular Reference]";
+                }
+                seen.add(value);
+
+                if (value instanceof Error) {
+                  return {
+                    name: value.name,
+                    message: value.message,
+                    stack: value.stack?.split("\n")[0], // Only first line of stack
+                  };
                 }
               }
-            }
-            return `[${timestamp}] [${level}] [${service}] ${message}${metaStr}`;
+              return value;
+            })}`;
+          } catch (_err2) {
+            // Final fallback if even the circular handler fails
+            metaStr = " [Object too complex to serialize]";
           }
-        )
-      ),
+        }
+      }
+      return `[${timestamp}] [${level}] [${service}] ${message}${metaStr}`;
+    })
+  );
+
+  const transports: winston.transport[] = [
+    new winston.transports.Console({
+      format: USE_JSON_FORMAT ? jsonFormat : humanFormat,
     }),
   ];
 

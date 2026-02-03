@@ -1,5 +1,11 @@
 import * as k8s from "@kubernetes/client-node";
-import { createLogger, ErrorCode, OrchestratorError } from "@peerbot/core";
+import {
+  createChildSpan,
+  createLogger,
+  ErrorCode,
+  OrchestratorError,
+  SpanStatusCode,
+} from "@peerbot/core";
 import {
   BaseDeploymentManager,
   type DeploymentInfo,
@@ -339,7 +345,6 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       return (response.body?.items || []).map(
         (deployment: k8s.V1Deployment) => {
           const deploymentName = deployment.metadata?.name || "";
-          const deploymentId = deploymentName.replace("peerbot-worker-", "");
 
           // Get last activity from annotations or fallback to creation time
           const lastActivityStr =
@@ -353,7 +358,6 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
           const replicas = deployment.spec?.replicas || 0;
           return buildDeploymentInfoSummary({
             deploymentName,
-            deploymentId,
             lastActivity,
             now,
             idleThresholdMinutes,
@@ -376,7 +380,11 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
    * Create a PersistentVolumeClaim for a space.
    * Multiple threads in the same space share the same PVC.
    */
-  private async createPVC(pvcName: string, spaceId: string): Promise<void> {
+  private async createPVC(
+    pvcName: string,
+    agentId: string,
+    traceparent?: string
+  ): Promise<void> {
     const pvc = {
       apiVersion: "v1",
       kind: "PersistentVolumeClaim",
@@ -386,7 +394,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         labels: {
           ...BASE_WORKER_LABELS,
           "app.kubernetes.io/component": "worker-storage",
-          "peerbot.io/space-id": spaceId,
+          "peerbot.io/agent-id": agentId,
         },
       },
       spec: {
@@ -402,15 +410,23 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       },
     };
 
+    // Create child span for PVC setup (linked to parent via traceparent)
+    const span = createChildSpan("pvc_setup", traceparent, {
+      "peerbot.pvc_name": pvcName,
+      "peerbot.agent_id": agentId,
+      "peerbot.pvc_size": this.config.worker.persistence?.size || "1Gi",
+    });
+
+    logger.info({ traceparent, pvcName, agentId, size: "1Gi" }, "Creating PVC");
+
     try {
-      logger.debug(
-        `Creating PVC: ${pvcName} in namespace ${this.config.kubernetes.namespace}`
-      );
       await this.coreV1Api.createNamespacedPersistentVolumeClaim(
         this.config.kubernetes.namespace,
         pvc
       );
-      logger.info(`✅ Created PVC: ${pvcName}`);
+      span?.setStatus({ code: SpanStatusCode.OK });
+      span?.end();
+      logger.info({ pvcName }, "Created PVC");
     } catch (error) {
       const k8sError = error as {
         statusCode?: number;
@@ -423,8 +439,16 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         body: k8sError.body,
       });
       if (k8sError.statusCode === 409) {
+        span?.setAttribute("peerbot.pvc_exists", true);
+        span?.setStatus({ code: SpanStatusCode.OK });
+        span?.end();
         logger.info(`PVC ${pvcName} already exists (reusing)`);
       } else {
+        span?.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: k8sError.message || "PVC creation failed",
+        });
+        span?.end();
         throw error;
       }
     }
@@ -437,16 +461,20 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     messageData?: MessagePayload,
     userEnvVars: Record<string, string> = {}
   ): Promise<void> {
+    // Extract traceparent for distributed tracing
+    const traceparent = messageData?.platformMetadata?.traceparent as
+      | string
+      | undefined;
+
     logger.info(
-      `🚀 Creating K8s deployment: ${deploymentName} for user ${userId}`
+      { traceparent, deploymentName, userId },
+      "Creating K8s deployment"
     );
 
-    // Use spaceId for PVC naming (shared across threads in same space)
-    // Fall back to deployment name for backwards compatibility
-    const threadId = deploymentName.replace("peerbot-worker-", "");
-    const spaceId = messageData?.spaceId || threadId;
-    const pvcName = `peerbot-workspace-${spaceId}`;
-    await this.createPVC(pvcName, spaceId);
+    // Use agentId for PVC naming (shared across threads in same space)
+    const agentId = messageData?.agentId!;
+    const pvcName = `peerbot-workspace-${agentId}`;
+    await this.createPVC(pvcName, agentId, traceparent);
 
     // Get environment variables before creating the deployment spec
     // Include secrets (same as Docker behavior) - secrets are passed via env vars
@@ -478,7 +506,8 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
               // Add platform-specific metadata
               ...resolvePlatformDeploymentMetadata(messageData),
               "peerbot.io/created": new Date().toISOString(),
-              "peerbot.io/space-id": spaceId,
+              "peerbot.io/agent-id": agentId,
+              ...(traceparent ? { "peerbot.io/traceparent": traceparent } : {}),
             },
             labels: { ...BASE_WORKER_LABELS },
           },
@@ -518,6 +547,10 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
                     name: key,
                     value: value,
                   })),
+                  // Add traceparent for distributed tracing (passed to worker)
+                  ...(traceparent
+                    ? [{ name: "TRACEPARENT", value: traceparent }]
+                    : []),
                 ],
                 resources: {
                   requests: this.config.worker.resources.requests,
@@ -569,15 +602,33 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       },
     };
 
+    // Create child span for worker creation (linked to parent via traceparent)
+    const workerSpan = createChildSpan("worker_creation", traceparent, {
+      "peerbot.deployment_name": deploymentName,
+      "peerbot.user_id": userId,
+      "peerbot.agent_id": agentId,
+    });
+
+    logger.info(
+      { traceparent, deploymentName },
+      "Submitting deployment to K8s API"
+    );
+
     try {
-      logger.info(`📦 Submitting deployment ${deploymentName} to K8s API...`);
       const response = await this.appsV1Api.createNamespacedDeployment(
         this.config.kubernetes.namespace,
         deployment
       );
       const statusResponse = response as { response?: { statusCode?: number } };
+      workerSpan?.setAttribute(
+        "http.status_code",
+        statusResponse.response?.statusCode || 0
+      );
+      workerSpan?.setStatus({ code: SpanStatusCode.OK });
+      workerSpan?.end();
       logger.info(
-        `✅ Deployment ${deploymentName} created successfully with status: ${statusResponse.response?.statusCode || "unknown"}`
+        { deploymentName, status: statusResponse.response?.statusCode },
+        "Deployment created successfully"
       );
     } catch (error) {
       const k8sError = error as {
@@ -594,6 +645,13 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         body: k8sError.body,
         response: k8sError.response?.statusMessage,
       });
+
+      // End span with error
+      workerSpan?.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: k8sError.message || "Deployment failed",
+      });
+      workerSpan?.end();
 
       // Check for specific error conditions and throw OrchestratorError
       if (k8sError.statusCode === 409) {
@@ -684,9 +742,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     }
   }
 
-  async deleteDeployment(deploymentId: string): Promise<void> {
-    const deploymentName = `peerbot-worker-${deploymentId}`;
-
+  async deleteDeployment(deploymentName: string): Promise<void> {
     // Delete the deployment with propagation policy
     try {
       await this.appsV1Api.deleteNamespacedDeployment(
