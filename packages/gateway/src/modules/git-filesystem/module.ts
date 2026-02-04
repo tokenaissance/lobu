@@ -73,10 +73,12 @@ export class GitFilesystemModule extends BaseModule {
     }
 
     // Initialize cache manager
-    // Use GIT_CACHE_DIR if set, otherwise fall back to writable temp directories
-    const defaultCacheDir = process.env.HOME
-      ? `${process.env.HOME}/.cache/termos/git`
-      : "/tmp/termos/git";
+    // Use GIT_CACHE_DIR if set, otherwise fall back to /tmp (always writable)
+    const home = process.env.HOME;
+    const defaultCacheDir =
+      home && home !== "/" && home !== ""
+        ? `${home}/.cache/termos/git`
+        : "/tmp/termos/git";
     const cacheDir = process.env.GIT_CACHE_DIR || defaultCacheDir;
     this.cacheManager = new GitCacheManager(cacheDir);
     await this.cacheManager.init();
