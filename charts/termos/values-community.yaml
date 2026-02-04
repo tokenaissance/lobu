@@ -4,10 +4,6 @@
 global:
   imagePullSecrets: []
 
-# Spegel P2P image distribution (disabled - not needed for this deployment)
-spegel:
-  enabled: false
-
 # Kubernetes namespace
 kubernetes:
   namespace: termos

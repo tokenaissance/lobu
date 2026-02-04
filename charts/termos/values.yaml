@@ -239,20 +239,6 @@ workerQuota:
     pods: "15" # Max 15 concurrent worker pods
     jobs: "10" # Legacy job limit
 
-# Spegel P2P image distribution
-spegel:
-  enabled: false
-  image:
-    tag: "v0.4.0"
-  # Resources for Spegel containers (required by resource quota)
-  resources:
-    limits:
-      cpu: "200m"
-      memory: "256Mi"
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
-
 # Prometheus metrics and monitoring
 metrics:
   enabled: true  # Enable ServiceMonitor for Prometheus/Grafana
