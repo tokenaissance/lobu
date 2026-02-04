@@ -165,26 +165,6 @@ export class WhatsAppFileHandler implements IFileHandler {
         }
         if (mediaContent.url) {
           logger.debug({ url: mediaContent.url }, "Media URL");
-
-          // TEMP DEBUG: Write URL to file for manual testing
-          try {
-            const fs = require("fs");
-            const debugInfo = {
-              timestamp: new Date().toISOString(),
-              messageId: msg.key?.id,
-              mediaType: key,
-              url: mediaContent.url,
-              directPath: mediaContent.directPath,
-              expectedSize: mediaContent.fileLength,
-              mimetype: mediaContent.mimetype,
-            };
-            fs.appendFileSync(
-              "/tmp/voice-debug.log",
-              JSON.stringify(debugInfo) + "\n"
-            );
-          } catch (err) {
-            // Ignore file write errors
-          }
         }
 
         // Retry logic: WhatsApp CDN may not have the file immediately available
