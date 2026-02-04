@@ -20,6 +20,8 @@ RUN --mount=type=cache,target=/root/.bun/install/cache bun install || true
 # Copy source code
 COPY packages/core/ ./packages/core/
 COPY packages/gateway/ ./packages/gateway/
+# Copy CLI's mcp-servers.json (referenced by gateway's mcp-registry)
+COPY packages/cli/src/mcp-servers.json ./packages/cli/src/mcp-servers.json
 
 # Build core package (gateway runs from source for faster iteration)
 WORKDIR /app/packages/core
