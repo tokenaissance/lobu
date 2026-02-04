@@ -10,6 +10,7 @@ const INTERNAL_PREFIXES = ["/api/anthropic", "/internal", "/worker", "/mcp"];
 
 // Routes that render HTML pages or are browser redirects (not API endpoints)
 const EXCLUDED_ROUTES = [
+  "/", // Landing page
   "/settings", // HTML settings page
   "/api/v1/oauth/providers/{provider}/login", // OAuth redirect
   "/api/v1/oauth/github/login", // GitHub OAuth redirect

@@ -243,6 +243,17 @@ function setupServer(
       logger.info("Settings HTML page enabled at :8080/settings");
     }
 
+    // Landing page (docs + integrations)
+    {
+      const { createLandingRoutes } = require("../routes/public/landing");
+      const landingRouter = createLandingRoutes({
+        publicGatewayUrl: coreServices.getPublicGatewayUrl(),
+        githubUrl: "https://github.com/termos-dev/termos",
+      });
+      app.route("", landingRouter);
+      logger.info("Landing page enabled at :8080/");
+    }
+
     // Agent config routes (/api/v1/agents/{id}/config)
     if (agentSettingsStore) {
       const {

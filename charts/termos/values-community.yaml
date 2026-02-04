@@ -12,8 +12,18 @@ kubernetes:
 config:
   githubOrganization: "termos-dev"
   githubClientId: ""  # Add your GitHub OAuth App Client ID
-  ingressUrl: "https://gateway.termos.dev"  # Critical for OAuth redirects
+  ingressUrl: "https://termos.owletto.com"  # Critical for OAuth redirects
   sessionTimeoutMinutes: "5"
+
+# Bitnami Sealed Secrets (production)
+sealedSecrets:
+  enabled: true
+  encryptedData:
+    claude-code-oauth-token: AgC1UL+VA6FdOWbe8lnAwPSZbOG6moSiW+/lRf+5vhF137K/iMd5aJh0mFAZesw5wcNo7wNee1XuLkAbc+fnWcpj5kPkBXj3TLau2/iE5TPr7BOcfZpM57yeDjCBD1nysq36hPsX+x/gZFLo00i/WL5YBSpdgTC5u+3yxszKDoeQF7tqqKSeP3e6kBxhssfaH1okflWrrLc0q4gtbErzrxtRvEs2fVltkySwocgrulsxMDu8m9PJKobalb0ove+GmkfLbO/iBTvNGHY+ON6xAQ+6qMb0T8jyW/77JEHxX99ILfgiT3dNVrHkmhnzVrUAmYqz68c5NwSDIpOxFgg84xxfWgMims9uzvQciVIAnrGZi/0Q9UERCBf3Q4lFZtNPc0FDMDSvFOEckrv/V2sXg0EZk9G2DtjC25i44S/kLzdyqSgX6MbqbcvAzA2c74Kdt9Ndjt6sYIY62fB9I+R4mPmxIXIhirD3sZnFenXXswNE1hxTlh7akFHrBydwhX7BPnUewaw8zdX4Y6uO1MHuIIGvgdSCS+a+aVNfwcMOnrC0kq54KP1mZYILHaxdPYHQ1ltHdv4W4fzL5yhcJISQrhtHq+5NkGyWTFHqnsyWNPUIMBwUgzzvcgwB3z1rgF4eFjAjQa+KHTqU3TxPDdd7Jar/uBuP/z7stwLygf4jEeapGbit8mLn4MNjCsSmY6gcmTg=
+    encryption-key: AgCS/w/GmcyGWW+xmd+mSpoW5YSxxtn4MnBWez4DUUUrWhq5jPhVp0dBZCX0wukyvUsHdiIxa16G8ns5gun4+WiAnd7vzkEGzY9Pu5F/MnFj2TGRh/qHAvK3IBIgHMP6lGiIIdROLUW3qXJou5tsHzCIA7VEKzlKcvDULxtmwlYSGSOFeMTegiZYZ1eArS50I9qV+gZSYVefYCF3mkyduLdSRzbPcmCO7stS3WCgWTqq1Wtb5m/uKvOMgB8zHbTwNIAU+kmqegOEnHNTE9Gd0QVc02YbMPo1g8B787V+gtH+IZa0VcG+aIOuGj+BbAspO2Zob1mZOIvkM+T2BBOQrl4cdN/3PWc+okS8VKzVwm4sKDtezSPP/OdE1vMe/oi0Vh6JjO4bHwX2Oh6EGigOQ8A8SxDFvr8YK4lK/60xPFLlNaVq+Lk5MrXsGWvJPq6T39K8OvOYdR/Qxr3ksNWEY/7RaXoc/hPDbv5wDQvFEfRedk645/HovWO5wRX58JufGgpgceDsZWmnRwXfjtBgA3hFVwuHeUYnXpofdpNzP+wurFblQKK5Hb5z2e0jzGyxHZKZ6Fs0qansMrxloAl4cu726lLsjs/TpxCOm4765K0UUrk3XQPlgZxf3l2Xy6z6IH05zWxfxCKlfU3GT0GQwieGyZk1mgredXJH27o3iYTsR/utJn76qm5RFMFWyfirxLkJ3v0J61XHuczRr5Er+j6VoSq66RmTc8Q/xf/BP9EdOkSL5cp11Y/hYUVi9w==
+    slack-app-token: AgCgbEujflx8lZP2CYkbkDm5s79xBbC6OG4U0I/VnFCp4P/0VY/qzTTHYWxVsR9F1NizYaRhpbDL9kCrGf7KTbpgYIjVoBOaoUJ4cnR77amxKwCSTtnAhucfvzTGUSieljhrpTJQ6XZ5+p55KzVD4DF6NbxvBSa3zmq/J4aE2UgnCWq+Oz1fOb7WjyOIWFVY/DJsjDT9/lvwrC3o23wRV5COxFcjv0MjWkaphqJWNejyJka6z1Q5yug2oj1jq9RHqqmBtu41EEszuQDY8wjt48tiPB8admao4SldxoWYatHd+3cSe+DIHIvhP2ch9hhWh/nfcDqqtYAtJ49+2ktXr80MW29bOBzg+NSzraErxJowHJXvpF0mVUMT1+SdgGH4FT09E4C14NuEFydmWIxC1pMf1TH7tgLuoCnSPX1GO4t2kKyTJPz/tgvo5e3/pDgYI7y1VJXq+ODX3t1HgIq+N6zLbhlioDiigIo1XE7Pg+iJlezFFkIJ/sQRF1PW02n6Y/nLFIEbEe/EIBE0HJ1Eg1lk4LOMR9Du9Q9gp0fnf+eal9Es2PsO+fZA1wUcCc3jCt5GwTtGF7AerctJYXU1c5DDvUhyzWu0a4nMpVm0qm6i0LYnSTH9pbNM5ErEtEEXNMjo2NWs8zviYyr7sMvBoMvKLPyigY7KQ7mHqEt4ErEC2HxMUnnZ4EtTrcEt4Gdey+68MTxkP8GmwXFWiQpTzgbcw3UyTsrRzXSmRgJWOtO4WGh9WbxTb5FS1raiRr7DbyWam98bC884w1plXoBJmKodqC9A3rhlGFyquniRL91Rk/n2y7Mj975aBWNmqqlHCeG0
+    slack-bot-token: AgCLBuSleGyrByfj1WykuZN6SpJlvhubx0QTms/UTk6weizpINO+3cBv2eNuz1OES6XirJcSWXmJ91gnfRBJ264F/xJbKJDlhqf5jkTS8Y9zhKT9/Xi6CetyYtw67C+KD6WWwY/b1lxtDSFlrUOPIOcGOEIzyYoWL6UtGmgRGe7d44P41csoA642PllbtO1MrQGpYfZ9uF/DeWYPf0RNllbLUcoker/UEoXpt2UGHCrTDAEc/0XGglIbnJpETonojnGbu36yjaA1yWGXRvQz4ecD2PKYNgXdWns/GcVowm1e7auEZTVk1bh+VHQQ5oBOGsZt4QJUCIkumj4vCH9bTNOHWFJSYqa2qlFuLeJwqx594qNokdHH/TNSaiwzvDF71RuOGhDuF+/SldbLuGrKfX9eWQ7GsTgasRvpw92qGAimGZFD/99IDhpUGSgfjdz6wAw7YLmDpWVsT3RkrLVkyBhaSgFn825E4oipf0v2ypbiFYQHLCpyOZVgClNMw/jFrvvoBiYMg5YiVIfO7ukoZ7gzffZdNmEHDq2Rl8BPXfcXUi3QNaARY81q3HEwMnsIRgS3NExQG3ZUk6wwz8rA21PMg12Bdb/6vjds0Nvdc9aBuESpYQC3e630SvZtC9b2kBKNk8ImJKxizBysTeQB5iveTx7wKdZH2iQaOPHqXdwmL4qB3AnYagfkoEySWMV+9GREMs08grBsVsQmMa41ikULQYCvMNyEdO4VjMBFpucbodbVAAOBDnu8fCMhm189wreXpYWv37Fiq8g=
+    slack-signing-secret: AgCWrUSckh4sgREsuDXDA6gvIcwINSJui09G9N18hmtQjDSzCPfxxhc/f+SOoDmh78VMeufEn47r5Li0gHCQpCRE4zKT86aeHG/eNpQZ37LIvv1dAgnqqOy3c0FZ1I+JFOESjgq6LS4IE4PYTzzWu74nZm0vQ1iH+rM4O5iyVxdG9PoOU9K7gQ5PqEn7mj/fx5q4cPrQ543xW7eyC4o4uwNeRbcL7fkSTtqhNzIF+ain347TxxYqcuOn7fSK3BbBRPEo25eXFnwqgcXYG6TtDczNa93/eogrgbq5lxDKDjXl3T77HR8g2SkETtOK/8u7BasqfVIMpjzdp6Z8i16aNgjjdjrFovDIAbJFqzvDaTd10LfvE7ELYZjzw72MG76vZTpg76bmtBQzCovAjW8dCV5M1Sd8mM2a/7mAnO0qCbzfqYCvgsneVthY0WmIbjoT60Kwmzdj1a+EbviDiDRNt8bwl4Q2FwyrydEy1vaWRuIDf/csgi5OmKc2VqKW7EFXfSCln7dFsT1HcWq+Of946WcDyt8/QItrurI43Hn47hpH1ETJKKquvmLiKeRj5T8HEAXM1i6eMbZBZZ181UVlQ8jl2yq8MzGmVw10r/ELPatwRHtTeO6gmuCC11lvBm5VwaUM74yCmdbfQTvEhbCqFlBFErsICd2AHbRcI/vFXiSUiJTylWMqvnTWkUWmU/ZDvUiSV1m37E52z/L3j35IO9W5Dd2gVmPA3cfTfvbqlP8kvA==
 
 # RBAC configuration
 rbac:
@@ -48,18 +58,18 @@ networkPolicy:
 # Ingress configuration for public access
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: gateway.termos.dev
+    - host: termos.owletto.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: termos-tls
       hosts:
-        - gateway.termos.dev
+        - termos.owletto.com
 
 # Slack configuration
 slack:

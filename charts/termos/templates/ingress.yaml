@@ -39,13 +39,21 @@ spec:
                   number: 8080
           # Route /health to port 8080
           - path: /health
-            pathType: Exact
+            pathType: Prefix
             backend:
               service:
                 name: {{ include "termos.fullname" $ }}-gateway
                 port:
                   number: 8080
-          # Route everything else to port 3000 (Slack)
+          # Route Slack HTTP endpoints to port 3000
+          - path: /slack
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "termos.fullname" $ }}-gateway
+                port:
+                  number: {{ $.Values.slack.port }}
+          # Route web pages to port 8080
           {{- range .paths }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
@@ -53,7 +61,7 @@ spec:
               service:
                 name: {{ include "termos.fullname" $ }}-gateway
                 port:
-                  number: {{ $.Values.slack.port }}
+                  number: 8080
           {{- end }}
     {{- end }}
 {{- end }}
