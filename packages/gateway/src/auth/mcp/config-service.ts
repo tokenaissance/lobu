@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLogger, verifyWorkerToken } from "@peerbot/core";
+import { createLogger, verifyWorkerToken } from "@termosdev/core";
 import { z } from "zod";
 import type {
   DiscoveredOAuthMetadata,

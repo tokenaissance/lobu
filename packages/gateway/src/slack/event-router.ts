@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import type { IModuleRegistry } from "@peerbot/core";
-import { createLogger } from "@peerbot/core";
+import type { IModuleRegistry } from "@termosdev/core";
+import { createLogger } from "@termosdev/core";
 import type { App } from "@slack/bolt";
 import type {
   FileDeletedEvent,
@@ -12,7 +12,6 @@ import type {
 import type { WebClient } from "@slack/web-api";
 import type { QueueProducer } from "../infrastructure/queue";
 import type { InteractionService } from "../interactions";
-import type { PlatformAdapter } from "../platform";
 import type { ISessionManager } from "../session";
 
 const logger = createLogger("slack-events");
@@ -44,8 +43,7 @@ export class SlackEventHandlers {
     config: MessageHandlerConfig,
     private moduleRegistry: IModuleRegistry,
     sessionManager: ISessionManager,
-    interactionService: InteractionService,
-    platform?: PlatformAdapter
+    interactionService: InteractionService
   ) {
     this.config = config;
     this.sessionManager = sessionManager;
@@ -60,8 +58,7 @@ export class SlackEventHandlers {
     );
     this.actionHandler = new ActionHandler(
       this.messageHandler,
-      this.moduleRegistry,
-      platform
+      this.moduleRegistry
     );
     this.shortcutCommandHandler = new ShortcutCommandHandler(app);
 
@@ -135,7 +132,7 @@ export class SlackEventHandlers {
         await client.chat.postMessage({
           channel: assistantEvent.assistant_thread.channel_id,
           thread_ts: assistantEvent.assistant_thread.thread_ts,
-          text: "👋 Hi! I'm Peerbot, your AI coding assistant. How can I help you today?",
+          text: "👋 Hi! I'm Termos, your AI coding assistant. How can I help you today?",
         });
       } catch (error) {
         logger.error("Failed to send assistant thread welcome message:", error);
@@ -698,6 +695,15 @@ export class SlackEventHandlers {
     store: import("../auth/settings").AgentSettingsStore
   ): void {
     this.messageHandler.setAgentSettingsStore(store);
+  }
+
+  /**
+   * Set the transcription service for voice/audio processing
+   */
+  setTranscriptionService(
+    service: import("../services/transcription-service").TranscriptionService
+  ): void {
+    this.messageHandler.setTranscriptionService(service);
   }
 
   /**

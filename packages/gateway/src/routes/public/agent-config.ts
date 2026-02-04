@@ -114,6 +114,7 @@ const updateConfigRoute = createRoute({
                 ),
               })
               .optional(),
+            verboseLogging: z.boolean().optional(),
             githubUser: z
               .null()
               .optional()
@@ -210,7 +211,7 @@ export function createAgentConfigRoutes(
           headers: {
             Authorization: `Bearer ${githubUser.accessToken}`,
             Accept: "application/vnd.github+json",
-            "User-Agent": "Peerbot",
+            "User-Agent": "Termos",
           },
         });
         if (resp.ok) {
@@ -326,7 +327,58 @@ function validateSettings(
   }
 
   if (input.mcpServers && typeof input.mcpServers === "object") {
-    settings.mcpServers = input.mcpServers;
+    settings.mcpServers = {};
+    for (const [id, config] of Object.entries(input.mcpServers)) {
+      // Validate MCP ID format (alphanumeric, dash, underscore, starting with letter)
+      const cleanId = id.trim();
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(cleanId)) {
+        throw new Error(`Invalid MCP ID: ${cleanId}`);
+      }
+
+      // Skip if config is not an object
+      if (typeof config !== "object" || config === null) continue;
+
+      const mcpConfig: Record<string, unknown> = {};
+      const cfg = config as Record<string, unknown>;
+
+      // Validate URL for HTTP MCPs
+      if (typeof cfg.url === "string") {
+        const url = cfg.url.trim();
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+          throw new Error(
+            `Invalid MCP URL for ${cleanId}: must be http:// or https://`
+          );
+        }
+        mcpConfig.url = url;
+      }
+
+      // Handle command-based MCPs
+      if (typeof cfg.command === "string") {
+        mcpConfig.command = cfg.command;
+        if (Array.isArray(cfg.args)) {
+          mcpConfig.args = cfg.args.filter((a) => typeof a === "string");
+        }
+      }
+
+      // Optional fields
+      if (typeof cfg.description === "string") {
+        mcpConfig.description = cfg.description;
+      }
+      if (typeof cfg.enabled === "boolean") {
+        mcpConfig.enabled = cfg.enabled;
+      }
+
+      // Copy through any other config fields (oauth, headers, etc.)
+      for (const [key, value] of Object.entries(cfg)) {
+        if (
+          !["url", "command", "args", "description", "enabled"].includes(key)
+        ) {
+          mcpConfig[key] = value;
+        }
+      }
+
+      settings.mcpServers[cleanId] = mcpConfig;
+    }
   }
 
   if (input.envVars && typeof input.envVars === "object") {
@@ -360,6 +412,10 @@ function validateSettings(
 
   if (input.skillsConfig) {
     settings.skillsConfig = input.skillsConfig;
+  }
+
+  if (typeof input.verboseLogging === "boolean") {
+    settings.verboseLogging = input.verboseLogging;
   }
 
   return settings;

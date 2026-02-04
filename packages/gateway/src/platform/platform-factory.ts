@@ -3,7 +3,7 @@
  * Replaces conditional platform creation in gateway startup.
  */
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { PlatformAdapter } from "../platform";
 
 const logger = createLogger("platform-factory");

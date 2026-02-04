@@ -28,12 +28,12 @@
     // Workspace module resolution
     "baseUrl": ".",
     "paths": {
-      "@peerbot/core": ["packages/core/src/index.ts"],
-      "@peerbot/core/*": ["packages/core/src/*"],
-      "@peerbot/gateway": ["packages/gateway/src/index.ts"],
-      "@peerbot/gateway/*": ["packages/gateway/src/*"],
-      "@peerbot/worker": ["packages/worker/src/index.ts"],
-      "@peerbot/worker/*": ["packages/worker/src/*"]
+      "@termosdev/core": ["packages/core/src/index.ts"],
+      "@termosdev/core/*": ["packages/core/src/*"],
+      "@termosdev/gateway": ["packages/gateway/src/index.ts"],
+      "@termosdev/gateway/*": ["packages/gateway/src/*"],
+      "@termosdev/worker": ["packages/worker/src/index.ts"],
+      "@termosdev/worker/*": ["packages/worker/src/*"]
     }
   },
   "include": ["packages/*/src/**/*", "src/**/*", "test/**/*"],

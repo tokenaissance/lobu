@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 /**
- * Main entry point for Peerbot Gateway
- * Exports types and utilities for other packages (like @peerbot/slack)
+ * Main entry point for Termos Gateway
+ * Exports types and utilities for other packages (like @termosdev/slack)
  */
 
 // Export types and classes for external packages

@@ -6,7 +6,7 @@ import {
   type GitConfig,
   type NetworkConfig,
   type NixConfig,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { IMessageQueue } from "./types";
 
 const logger = createLogger("queue-producer");

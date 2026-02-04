@@ -1,4 +1,4 @@
-import { moduleRegistry } from "@peerbot/core";
+import { moduleRegistry } from "@termosdev/core";
 import { platformRegistry } from "../platform";
 import type {
   DeploymentInfo,
@@ -81,9 +81,9 @@ export async function buildModuleEnvVars(
 }
 
 export const BASE_WORKER_LABELS = {
-  "app.kubernetes.io/name": "peerbot",
+  "app.kubernetes.io/name": "termos",
   "app.kubernetes.io/component": "worker",
-  "peerbot/managed-by": "orchestrator",
+  "termos/managed-by": "orchestrator",
 } as const;
 
 /**

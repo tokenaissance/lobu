@@ -1,4 +1,4 @@
-# Contributing to Peerbot
+# Contributing to Termos
 
 ## Pull Request Process
 

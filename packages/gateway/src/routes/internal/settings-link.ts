@@ -5,11 +5,13 @@
  * Used by the GetSettingsLink custom MCP tool.
  */
 
-import { createLogger, verifyWorkerToken } from "@peerbot/core";
+import { createLogger, verifyWorkerToken } from "@termosdev/core";
 import { Hono } from "hono";
 import {
   buildSettingsUrl,
   generateSettingsToken,
+  type PrefillMcpServer,
+  type PrefillSkill,
 } from "../../auth/settings/token-service";
 
 const logger = createLogger("internal-settings-link-routes");
@@ -55,6 +57,10 @@ export function createSettingsLinkRoutes(): Hono<WorkerContext> {
    *
    * Body: {
    *   reason?: string (optional explanation for what to configure)
+   *   message?: string (optional message to display on settings page)
+   *   prefillEnvVars?: string[] (optional env var keys to pre-fill)
+   *   prefillSkills?: PrefillSkill[] (optional skills to pre-fill)
+   *   prefillMcpServers?: PrefillMcpServer[] (optional MCP servers to pre-fill)
    * }
    *
    * Response: {
@@ -66,7 +72,19 @@ export function createSettingsLinkRoutes(): Hono<WorkerContext> {
     try {
       const worker = c.get("worker");
       const body = await c.req.json().catch(() => ({}));
-      const { reason } = body as { reason?: string };
+      const {
+        reason,
+        message,
+        prefillEnvVars,
+        prefillSkills,
+        prefillMcpServers,
+      } = body as {
+        reason?: string;
+        message?: string;
+        prefillEnvVars?: string[];
+        prefillSkills?: PrefillSkill[];
+        prefillMcpServers?: PrefillMcpServer[];
+      };
 
       const agentId = worker.agentId;
       const userId = worker.userId;
@@ -82,11 +100,21 @@ export function createSettingsLinkRoutes(): Hono<WorkerContext> {
         userId,
         platform,
         reason: reason?.substring(0, 100),
+        hasMessage: !!message,
+        prefillEnvVarsCount: prefillEnvVars?.length || 0,
+        prefillSkillsCount: prefillSkills?.length || 0,
+        prefillMcpServersCount: prefillMcpServers?.length || 0,
       });
 
-      // Generate token with 1 hour TTL
+      // Generate token with 1 hour TTL and optional message/prefill
       const ttlMs = 60 * 60 * 1000; // 1 hour
-      const token = generateSettingsToken(agentId, userId, platform, ttlMs);
+      const token = generateSettingsToken(agentId, userId, platform, {
+        ttlMs,
+        message,
+        prefillEnvVars,
+        prefillSkills,
+        prefillMcpServers,
+      });
       const url = buildSettingsUrl(token);
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 

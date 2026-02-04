@@ -5,7 +5,7 @@
  * Merged from: base/types.ts, types.ts, interfaces.ts
  */
 
-import type { WorkerTransport } from "@peerbot/core";
+import type { WorkerTransport } from "@termosdev/core";
 
 // ============================================================================
 // WORKER INTERFACES

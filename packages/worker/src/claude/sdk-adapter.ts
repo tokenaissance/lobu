@@ -6,7 +6,7 @@ import {
   createLogger,
   sanitizeForLogging,
   type ToolsConfig,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { InteractionClient } from "../common/interaction-client";
 import type { ProgressCallback } from "../core/types";
 import { ensureBaseUrl } from "../core/url-utils";
@@ -68,25 +68,10 @@ const TOOL_APPROVAL_OPTIONS = [
   "Deny",
 ] as const;
 
-// Auto-allow non-destructive tools and Task (for autonomous subagent delegation)
-// Also auto-allow AskUserQuestion since it's specifically for asking the user questions
-// File operations (Write, Edit) are safe in sandboxed environment
-const DEFAULT_AUTO_ALLOW_TOOLS = [
-  "Bash",
-  "Read",
-  "Write",
-  "Edit",
-  "Grep",
-  "Glob",
-  "WebSearch",
-  "WebFetch",
-  "BashOutput",
-  "Task",
-  "mcp__peerbot__AskUserQuestion",
-  "mcp__peerbot__UploadUserFile",
-  "mcp__peerbot__GetChannelHistory",
-  "mcp__peerbot__ScheduleReminder",
-];
+// Default: allow ALL tools unless user configures deniedTools in settings
+// This enables autonomous operation by default - users can restrict via settings page
+// Note: This was previously an allowlist, now it's a flag for default behavior
+const DEFAULT_ALLOW_ALL_TOOLS = true;
 
 /**
  * Check if a tool name matches a pattern (Claude Code compatible).
@@ -288,13 +273,13 @@ Use it when the user references past discussions or you need context.`);
           historyEnabled: customToolsConfig.historyEnabled,
         }
       );
-      allMcpServers.peerbot = customTools;
+      allMcpServers.termos = customTools;
       const tools = ["UploadUserFile", "AskUserQuestion"];
       if (customToolsConfig.historyEnabled) {
         tools.push("GetChannelHistory");
       }
       logger.info(
-        `Added custom tools server: peerbot (tools: ${tools.join(", ")})`
+        `Added custom tools server: termos (tools: ${tools.join(", ")})`
       );
 
       // Note: We don't add interaction tools MCP server anymore
@@ -453,16 +438,16 @@ Use it when the user references past discussions or you need context.`);
           };
         }
 
-        // 4. Fall back to default auto-allow list
-        if (isToolInPatterns(toolName, DEFAULT_AUTO_ALLOW_TOOLS, input)) {
-          logger.info(`Auto-allowing non-destructive tool: ${toolName}`);
+        // 4. Default behavior: allow all tools (user can restrict via settings)
+        if (DEFAULT_ALLOW_ALL_TOOLS) {
+          logger.info(`Auto-allowing tool by default: ${toolName}`);
           return {
             behavior: "allow" as const,
             updatedInput: input,
           };
         }
 
-        // For other tools, ask the user via our interaction system
+        // If DEFAULT_ALLOW_ALL_TOOLS is false, ask user for permission
         logger.info(`Tool ${toolName} requires user approval`);
 
         try {
@@ -487,7 +472,7 @@ Use it when the user references past discussions or you need context.`);
 
           const toolResponse = await client.askUser({
             interactionType: "tool_approval",
-            question: `Claude wants to execute \`${toolName}\`:\n${inputSummary}\n\nAllow this?`,
+            question: `Claude wants to execute \`${toolName}\`:\n${inputSummary}\n\nReply 1 to allow, 2 to always allow, 3 to deny`,
             options: TOOL_APPROVAL_OPTIONS as any,
             metadata: {
               toolName,

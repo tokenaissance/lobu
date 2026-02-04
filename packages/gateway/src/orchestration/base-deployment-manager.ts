@@ -4,7 +4,7 @@ import {
   extractTraceId,
   generateWorkerToken,
   OrchestratorError,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import { mcpConfigStore } from "../auth/mcp/mcp-config-store";
 import type { MessagePayload } from "../infrastructure/queue/queue-producer";
 import { networkConfigStore } from "../proxy/network-config-store";
@@ -29,7 +29,7 @@ export function generateDeploymentName(
   // Sanitize userId: remove non-alphanumeric, lowercase, take first 8 chars
   const sanitizedUserId = userId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const shortUserId = sanitizedUserId.slice(0, 8);
-  return `peerbot-worker-${shortUserId}-${shortThreadId}`;
+  return `termos-worker-${shortUserId}-${shortThreadId}`;
 }
 
 // Type for module environment variable builder function
@@ -344,8 +344,8 @@ export abstract class BaseDeploymentManager {
         const tempoUrl = new URL(tempoEndpoint);
         envVars.NO_PROXY = `${envVars.NO_PROXY},${tempoUrl.hostname}`;
       } catch {
-        // If URL parsing fails, just add peerbot-tempo as fallback
-        envVars.NO_PROXY = `${envVars.NO_PROXY},peerbot-tempo`;
+        // If URL parsing fails, just add termos-tempo as fallback
+        envVars.NO_PROXY = `${envVars.NO_PROXY},termos-tempo`;
       }
     }
 

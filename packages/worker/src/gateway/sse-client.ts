@@ -9,7 +9,7 @@ import {
   extractTraceId,
   flushTracing,
   SpanStatusCode,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import { z } from "zod";
 import { InteractionClient } from "../common/interaction-client";
 import type { WorkerConfig, WorkerExecutor } from "../core/types";
@@ -421,10 +421,10 @@ export class GatewayClient {
       this.currentJobId = data.jobId;
       // Create child span for job received (linked to parent via traceparent)
       const span = createChildSpan("job_received", traceparent, {
-        "peerbot.job_id": data.jobId,
-        "peerbot.message_id": data.messageId,
-        "peerbot.thread_id": data.threadId,
-        "peerbot.job_type": data.jobType || "message",
+        "termos.job_id": data.jobId,
+        "termos.message_id": data.messageId,
+        "termos.thread_id": data.threadId,
+        "termos.job_type": data.jobType || "message",
       });
       span?.setStatus({ code: SpanStatusCode.OK });
       span?.end();
@@ -492,8 +492,8 @@ export class GatewayClient {
 
     // Create span for exec execution
     const span = createChildSpan("exec_execution", traceparent, {
-      "peerbot.exec_id": execId,
-      "peerbot.command": execCommand.substring(0, 100),
+      "termos.exec_id": execId,
+      "termos.command": execCommand.substring(0, 100),
     });
 
     // Determine working directory
@@ -578,7 +578,7 @@ export class GatewayClient {
       // Send completion
       await transport.sendExecComplete(execId, exitCode);
 
-      span?.setAttribute("peerbot.exit_code", exitCode);
+      span?.setAttribute("termos.exit_code", exitCode);
       span?.setStatus({ code: SpanStatusCode.OK });
       span?.end();
       await flushTracing();
@@ -665,10 +665,10 @@ export class GatewayClient {
 
     // Create child span for agent execution (linked to parent via traceparent)
     const span = createChildSpan("agent_execution", traceparent, {
-      "peerbot.message_id": message.payload.messageId,
-      "peerbot.thread_id": message.payload.threadId,
-      "peerbot.user_id": message.payload.userId,
-      "peerbot.model": message.payload.agentOptions?.model || "default",
+      "termos.message_id": message.payload.messageId,
+      "termos.thread_id": message.payload.threadId,
+      "termos.user_id": message.payload.userId,
+      "termos.model": message.payload.agentOptions?.model || "default",
     });
 
     try {

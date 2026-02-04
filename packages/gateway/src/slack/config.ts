@@ -6,7 +6,7 @@ import {
   type AgentOptions as CoreAgentOptions,
   getOptionalEnv,
   getOptionalNumber,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { LogLevel } from "@slack/bolt";
 
 // ============================================================================

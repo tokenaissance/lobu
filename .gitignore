@@ -7,11 +7,11 @@ node_modules
 .env
 .env.*
 .tmp/*
-charts/peerbot/values-local.yaml
+charts/termos/values-local.yaml
 
 # Helm dependency files
-charts/peerbot/charts/
-charts/peerbot/Chart.lock
+charts/termos/charts/
+charts/termos/Chart.lock
 
 # Build output - compiled artifacts should not be committed
 dist/
@@ -30,6 +30,8 @@ tsconfig.tsbuildinfo
 workspaces/*
 
 # SSH keys for Terraform
-charts/peerbot/provider/hetzner/ssh_key
-charts/peerbot/provider/hetzner/ssh_key.pub
+charts/termos/provider/hetzner/ssh_key
+charts/termos/provider/hetzner/ssh_key.pub
 .github-app-private-key.pem
+debug-voice-urls.js
+docs/

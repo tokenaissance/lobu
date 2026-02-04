@@ -2,7 +2,7 @@ import {
   createLogger,
   type InstructionContext,
   type InstructionProvider,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import {
   ProcessManagerInstructionProvider,
   ProjectsInstructionProvider,

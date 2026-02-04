@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger, type PendingInteraction } from "@peerbot/core";
+import { createLogger, type PendingInteraction } from "@termosdev/core";
 import { ensureBaseUrl } from "../core/url-utils";
 
 const logger = createLogger("claude-session");

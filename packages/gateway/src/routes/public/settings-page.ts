@@ -85,7 +85,7 @@ export function renderSettingsPage(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Settings - Peerbot</title>
+  <title>Agent Settings - Termos</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-amber-700 to-amber-900 p-4">
@@ -100,6 +100,75 @@ export function renderSettingsPage(
       Settings saved!
     </div>
     <div id="error-msg" class="hidden bg-red-100 text-red-800 px-3 py-2 rounded-lg mb-4 text-center text-sm"></div>
+    ${
+      payload.message
+        ? `<div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg mb-4 text-sm">
+      <div class="flex items-start gap-2">
+        <span class="text-lg">💡</span>
+        <div>${escapeHtml(payload.message)}</div>
+      </div>
+    </div>`
+        : ""
+    }
+    ${
+      payload.prefillSkills?.length || payload.prefillMcpServers?.length
+        ? `<!-- Suggested Additions Section -->
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+      <h3 class="text-sm font-medium text-amber-900 mb-3 flex items-center gap-2">
+        <span>⚡</span> Quick Setup
+      </h3>
+      ${
+        payload.prefillSkills?.length
+          ? `<div class="mb-3">
+        <p class="text-xs font-medium text-amber-800 mb-2">Suggested Skills:</p>
+        <div id="prefill-skills-list" class="space-y-2">
+          ${payload.prefillSkills
+            .map(
+              (skill, idx) => `
+          <div class="flex items-center justify-between bg-white rounded-lg p-2 border border-amber-200" id="prefill-skill-${idx}">
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-medium text-gray-800">${escapeHtml(skill.name || skill.repo)}</p>
+              ${skill.description ? `<p class="text-xs text-gray-500 truncate">${escapeHtml(skill.description)}</p>` : ""}
+              <p class="text-xs text-gray-400 font-mono">${escapeHtml(skill.repo)}</p>
+            </div>
+            <button type="button" onclick="addPrefillSkill(${idx})" class="ml-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-all flex-shrink-0">
+              Add
+            </button>
+          </div>`
+            )
+            .join("")}
+        </div>
+      </div>`
+          : ""
+      }
+      ${
+        payload.prefillMcpServers?.length
+          ? `<div>
+        <p class="text-xs font-medium text-amber-800 mb-2">Suggested MCP Servers:</p>
+        <div id="prefill-mcp-list" class="space-y-2">
+          ${payload.prefillMcpServers
+            .map(
+              (mcp, idx) => `
+          <div class="flex items-center justify-between bg-white rounded-lg p-2 border border-amber-200" id="prefill-mcp-${idx}">
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-medium text-gray-800">${escapeHtml(mcp.name || mcp.id)}</p>
+              ${mcp.url ? `<p class="text-xs text-gray-500 truncate">${escapeHtml(mcp.url)}</p>` : ""}
+              ${mcp.command ? `<p class="text-xs text-gray-400 font-mono">${escapeHtml(mcp.command)} ${(mcp.args || []).join(" ")}</p>` : ""}
+              ${mcp.envVars?.length ? `<p class="text-xs text-amber-600">Requires: ${mcp.envVars.join(", ")}</p>` : ""}
+            </div>
+            <button type="button" onclick="addPrefillMcp(${idx})" class="ml-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-all flex-shrink-0">
+              Add
+            </button>
+          </div>`
+            )
+            .join("")}
+        </div>
+      </div>`
+          : ""
+      }
+    </div>`
+        : ""
+    }
 
     <!-- Providers Section (outside form) -->
     <div class="bg-gray-50 rounded-lg p-4 mb-4">
@@ -193,6 +262,54 @@ export function renderSettingsPage(
               </button>
             </div>
             <p class="text-xs text-gray-400 mt-1">Skills from <a href="https://skills.sh" target="_blank" class="text-amber-600 hover:underline">skills.sh</a> extend Claude's capabilities.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MCP Servers Section -->
+      <div class="bg-gray-50 rounded-lg p-3">
+        <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" onclick="toggleSection(this)">
+          <span>&#128268;</span>
+          MCP Servers
+          <span id="mcps-loading" class="hidden animate-spin text-amber-600">&#8635;</span>
+          <span class="ml-auto text-xs text-gray-400 transition-transform rotate-[-90deg]" id="mcps-arrow">&#9660;</span>
+        </h3>
+        <div id="mcps-content" class="hidden pt-3 space-y-3">
+          <!-- MCPs Error -->
+          <div id="mcps-error" class="hidden bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs"></div>
+
+          <!-- Enabled MCPs List -->
+          <div id="mcps-list" class="space-y-2">
+            <p class="text-xs text-gray-500">No MCP servers configured yet.</p>
+          </div>
+
+          <!-- Add MCP Section -->
+          <div class="border-t border-gray-200 pt-3">
+            <p class="text-xs font-medium text-gray-600 mb-2">Add MCP Servers</p>
+
+            <!-- Search Input -->
+            <div class="relative mb-2">
+              <input type="text" id="mcpSearchInput" placeholder="Search MCP servers..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-amber-600 focus:ring-1 focus:ring-amber-200 outline-none">
+              <div id="mcpSearchResults" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              </div>
+            </div>
+
+            <!-- Quick Add: Curated MCPs -->
+            <div class="mb-2">
+              <p class="text-xs text-gray-500 mb-1">Quick add popular MCPs:</p>
+              <div id="curatedMcpChips" class="flex flex-wrap gap-1">
+              </div>
+            </div>
+
+            <!-- Manual Entry for custom MCPs -->
+            <div class="space-y-2">
+              <input type="text" id="customMcpId" placeholder="MCP ID (e.g., my-custom-mcp)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-amber-600 focus:ring-1 focus:ring-amber-200 outline-none">
+              <input type="text" id="customMcpUrl" placeholder="URL (e.g., https://mcp.example.com/sse)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-amber-600 focus:ring-1 focus:ring-amber-200 outline-none">
+              <button type="button" id="addCustomMcpBtn" class="px-3 py-2 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
+                Add Custom MCP
+              </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">MCP servers extend Claude's capabilities with external tools and data sources.</p>
           </div>
         </div>
       </div>
@@ -321,14 +438,29 @@ export function renderSettingsPage(
         <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" onclick="toggleSection(this)">
           <span>&#128203;</span>
           Environment Variables
-          <span class="ml-auto text-xs text-gray-400 transition-transform rotate-[-90deg]" id="envvars-arrow">&#9660;</span>
+          ${payload.prefillEnvVars?.length ? '<span class="text-xs text-amber-600 font-normal">(action needed)</span>' : ""}
+          <span class="ml-auto text-xs text-gray-400 transition-transform ${payload.prefillEnvVars?.length ? "" : "rotate-[-90deg]"}" id="envvars-arrow">&#9660;</span>
         </h3>
-        <div id="envvars-content" class="hidden pt-3">
+        <div id="envvars-content" class="${payload.prefillEnvVars?.length ? "" : "hidden "}pt-3">
           <textarea id="envVars" name="envVars" placeholder="API_KEY=your_key&#10;DEBUG=true" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono min-h-[60px] resize-y focus:border-amber-600 focus:ring-1 focus:ring-amber-200 outline-none">${escapeHtml(
-            Object.entries(s.envVars || {})
-              .map(([k, v]) => `${k}=${v}`)
-              .join("\n")
+            (() => {
+              const existingEnvVars = s.envVars || {};
+              const prefillKeys = payload.prefillEnvVars || [];
+              // Merge: existing vars first, then prefill keys that don't exist yet
+              const allKeys = new Set([
+                ...Object.keys(existingEnvVars),
+                ...prefillKeys,
+              ]);
+              return Array.from(allKeys)
+                .map((k) => `${k}=${existingEnvVars[k] || ""}`)
+                .join("\n");
+            })()
           )}</textarea>
+          ${
+            payload.prefillEnvVars?.length
+              ? `<p class="text-xs text-amber-600 mt-1">⬆️ Please fill in the values for the highlighted variables above.</p>`
+              : ""
+          }
         </div>
       </div>
 
@@ -369,6 +501,15 @@ export function renderSettingsPage(
           <input type="checkbox" id="historyEnabled" name="historyEnabled" ${s.historyConfig?.enabled ? "checked" : ""} class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
           <span class="text-sm font-medium text-gray-800">Include conversation history</span>
         </label>
+      </div>
+
+      <!-- Verbose Logging -->
+      <div class="bg-gray-50 rounded-lg p-3">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="verboseLogging" name="verboseLogging" ${s.verboseLogging ? "checked" : ""} class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+          <span class="text-sm font-medium text-gray-800">Verbose logging</span>
+        </label>
+        <p class="text-xs text-gray-500 mt-1 ml-6">Show tool calls, reasoning tokens, and detailed output</p>
       </div>
 
       <button type="submit" id="save-btn" class="w-full py-3 bg-gradient-to-r from-amber-700 to-amber-800 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
@@ -463,6 +604,10 @@ export function renderSettingsPage(
       // History config
       const historyEnabled = document.getElementById('historyEnabled').checked;
       settings.historyConfig = { enabled: historyEnabled };
+
+      // Verbose logging
+      const verboseLogging = document.getElementById('verboseLogging').checked;
+      settings.verboseLogging = verboseLogging;
 
       try {
         const response = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token), {
@@ -1175,6 +1320,275 @@ export function renderSettingsPage(
     initSkills();
 
     // ============================================================================
+    // MCP Servers Management
+    // ============================================================================
+
+    let currentMcpServers = ${JSON.stringify(s.mcpServers || {})};
+    let mcpSearchTimeout = null;
+
+    async function initMcps() {
+      // Load curated MCPs as chips
+      try {
+        const resp = await fetch('/api/v1/mcps/registry?token=' + encodeURIComponent(token));
+        const data = await resp.json();
+
+        const chipsContainer = document.getElementById('curatedMcpChips');
+        chipsContainer.innerHTML = data.mcps.map(function(mcp) {
+          const alreadyAdded = currentMcpServers.hasOwnProperty(mcp.id);
+          const disabledClass = alreadyAdded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-amber-200';
+          return '<button type="button" onclick="addMcpFromChip(\\'' + escapeHtmlJS(mcp.id) + '\\')" ' +
+            'class="px-2 py-1 text-xs rounded-full bg-amber-100 text-amber-800 ' + disabledClass + '" ' +
+            (alreadyAdded ? 'disabled title="Already added"' : 'title="' + escapeHtmlJS(mcp.description) + '"') + '>' +
+            escapeHtmlJS(mcp.name) +
+          '</button>';
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load curated MCPs:', e);
+      }
+
+      // Setup search input
+      const searchInput = document.getElementById('mcpSearchInput');
+      searchInput.addEventListener('input', function(e) {
+        clearTimeout(mcpSearchTimeout);
+        mcpSearchTimeout = setTimeout(function() {
+          searchMcps(e.target.value);
+        }, 300);
+      });
+
+      searchInput.addEventListener('focus', function() {
+        if (searchInput.value.trim()) {
+          document.getElementById('mcpSearchResults').classList.remove('hidden');
+        }
+      });
+
+      // Hide search results when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#mcpSearchInput') && !e.target.closest('#mcpSearchResults')) {
+          document.getElementById('mcpSearchResults').classList.add('hidden');
+        }
+      });
+
+      // Render current MCPs
+      renderMcpsList();
+    }
+
+    async function searchMcps(query) {
+      const resultsContainer = document.getElementById('mcpSearchResults');
+
+      if (!query.trim()) {
+        resultsContainer.classList.add('hidden');
+        return;
+      }
+
+      resultsContainer.innerHTML = '<div class="p-2 text-xs text-gray-500">Searching...</div>';
+      resultsContainer.classList.remove('hidden');
+
+      try {
+        const resp = await fetch('/api/v1/mcps/registry?token=' + encodeURIComponent(token) + '&q=' + encodeURIComponent(query));
+        const data = await resp.json();
+
+        if (data.mcps.length === 0) {
+          resultsContainer.innerHTML = '<div class="p-2 text-xs text-gray-500">No MCPs found</div>';
+          return;
+        }
+
+        resultsContainer.innerHTML = data.mcps.map(function(mcp) {
+          const alreadyAdded = currentMcpServers.hasOwnProperty(mcp.id);
+          return '<div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" ' +
+            'onclick="addMcpFromSearch(\\'' + escapeHtmlJS(mcp.id) + '\\')">' +
+            '<div class="flex items-center justify-between">' +
+              '<div class="flex-1 min-w-0">' +
+                '<p class="text-xs font-medium text-gray-800 truncate">' + escapeHtmlJS(mcp.name) + '</p>' +
+                '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(mcp.description) + '</p>' +
+              '</div>' +
+              '<div class="flex items-center gap-2 ml-2">' +
+                '<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">' + escapeHtmlJS(mcp.type) + '</span>' +
+                (alreadyAdded ? '<span class="text-xs text-green-600">Added</span>' : '<span class="text-xs text-amber-600">+ Add</span>') +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        resultsContainer.innerHTML = '<div class="p-2 text-xs text-red-500">Search failed</div>';
+      }
+    }
+
+    function renderMcpsList() {
+      const container = document.getElementById('mcps-list');
+      const mcpIds = Object.keys(currentMcpServers);
+
+      if (mcpIds.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-500">No MCP servers configured yet.</p>';
+        return;
+      }
+
+      container.innerHTML = mcpIds.map(function(mcpId) {
+        const config = currentMcpServers[mcpId];
+        const enabled = config.enabled !== false;
+        const enabledClass = enabled
+          ? 'bg-green-100 text-green-800'
+          : 'bg-gray-100 text-gray-500';
+        const toggleLabel = enabled ? 'Enabled' : 'Disabled';
+
+        // Build description from config
+        let description = config.description || '';
+        if (!description && config.url) description = config.url;
+        if (!description && config.command) description = config.command + ' ' + (config.args || []).join(' ');
+
+        return '<div class="flex items-center justify-between p-2 bg-white rounded border border-gray-200">' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-xs font-medium text-gray-800 truncate">' + escapeHtmlJS(mcpId) + '</p>' +
+            (description ? '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(description) + '</p>' : '') +
+          '</div>' +
+          '<div class="flex items-center gap-2 ml-2 flex-shrink-0">' +
+            '<button type="button" onclick="toggleMcp(\\'' + escapeHtmlJS(mcpId) + '\\')" ' +
+              'class="px-2 py-1 text-xs rounded ' + enabledClass + '">' + toggleLabel + '</button>' +
+            '<button type="button" onclick="removeMcp(\\'' + escapeHtmlJS(mcpId) + '\\')" ' +
+              'class="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">Remove</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function addMcpFromChip(mcpId) {
+      if (currentMcpServers.hasOwnProperty(mcpId)) return;
+      await addMcp(mcpId, null);
+      initMcps(); // Refresh chips
+    }
+
+    async function addMcpFromSearch(mcpId) {
+      if (currentMcpServers.hasOwnProperty(mcpId)) return;
+      await addMcp(mcpId, null);
+      document.getElementById('mcpSearchInput').value = '';
+      document.getElementById('mcpSearchResults').classList.add('hidden');
+      initMcps(); // Refresh chips
+    }
+
+    async function addMcp(mcpId, customUrl) {
+      setMcpsLoading(true);
+
+      try {
+        // Build MCP config
+        const mcpConfig = {
+          enabled: true,
+        };
+        if (customUrl) {
+          mcpConfig.url = customUrl;
+        }
+
+        const updatedMcpServers = {
+          ...currentMcpServers,
+          [mcpId]: mcpConfig,
+        };
+
+        const resp = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mcpServers: updatedMcpServers })
+        });
+
+        if (resp.ok) {
+          currentMcpServers = updatedMcpServers;
+          renderMcpsList();
+          document.getElementById('customMcpId').value = '';
+          document.getElementById('customMcpUrl').value = '';
+        } else {
+          const result = await resp.json();
+          throw new Error(result.error || 'Failed to add MCP');
+        }
+      } catch (e) {
+        showMcpsError(e.message);
+      } finally {
+        setMcpsLoading(false);
+      }
+    }
+
+    async function toggleMcp(mcpId) {
+      const config = currentMcpServers[mcpId];
+      if (!config) return;
+
+      const newEnabled = config.enabled === false;
+      const updatedMcpServers = {
+        ...currentMcpServers,
+        [mcpId]: { ...config, enabled: newEnabled },
+      };
+
+      try {
+        const resp = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mcpServers: updatedMcpServers })
+        });
+
+        if (resp.ok) {
+          currentMcpServers = updatedMcpServers;
+          renderMcpsList();
+        } else {
+          const result = await resp.json();
+          throw new Error(result.error || 'Failed to toggle MCP');
+        }
+      } catch (e) {
+        showMcpsError(e.message);
+      }
+    }
+
+    async function removeMcp(mcpId) {
+      if (!confirm('Remove this MCP server?')) return;
+
+      const updatedMcpServers = { ...currentMcpServers };
+      delete updatedMcpServers[mcpId];
+
+      try {
+        const resp = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mcpServers: updatedMcpServers })
+        });
+
+        if (resp.ok) {
+          currentMcpServers = updatedMcpServers;
+          renderMcpsList();
+          initMcps(); // Refresh chips
+        } else {
+          const result = await resp.json();
+          throw new Error(result.error || 'Failed to remove MCP');
+        }
+      } catch (e) {
+        showMcpsError(e.message);
+      }
+    }
+
+    function setMcpsLoading(loading) {
+      const spinner = document.getElementById('mcps-loading');
+      if (loading) {
+        spinner.classList.remove('hidden');
+        document.getElementById('mcps-error').classList.add('hidden');
+      } else {
+        spinner.classList.add('hidden');
+      }
+    }
+
+    function showMcpsError(msg) {
+      const el = document.getElementById('mcps-error');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(function() { el.classList.add('hidden'); }, 5000);
+    }
+
+    // Event listener for custom MCP add button
+    document.getElementById('addCustomMcpBtn').addEventListener('click', async function() {
+      const mcpId = document.getElementById('customMcpId').value.trim();
+      const mcpUrl = document.getElementById('customMcpUrl').value.trim();
+      if (mcpId) {
+        await addMcp(mcpId, mcpUrl || null);
+        initMcps();
+      }
+    });
+
+    // Initialize MCPs on page load
+    initMcps();
+
+    // ============================================================================
     // Scheduled Reminders Management
     // ============================================================================
 
@@ -1303,6 +1717,167 @@ export function renderSettingsPage(
 
     // Initialize schedules on page load
     initSchedules();
+
+    // ============================================================================
+    // Prefill Skills and MCP Servers (from settings link)
+    // ============================================================================
+
+    const prefillSkills = ${JSON.stringify(payload.prefillSkills || [])};
+    const prefillMcpServers = ${JSON.stringify(payload.prefillMcpServers || [])};
+
+    async function addPrefillSkill(index) {
+      const skill = prefillSkills[index];
+      if (!skill) return;
+
+      const btn = document.querySelector('#prefill-skill-' + index + ' button');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+      }
+
+      try {
+        // Fetch skill content from GitHub
+        const fetchResp = await fetch('/api/v1/skills/fetch?token=' + encodeURIComponent(token), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo: skill.repo })
+        });
+
+        const fetchResult = await fetchResp.json();
+        if (!fetchResp.ok) {
+          throw new Error(fetchResult.error || 'Failed to fetch skill');
+        }
+
+        // Add to current skills
+        const newSkill = {
+          repo: fetchResult.repo,
+          name: fetchResult.name || skill.name,
+          description: fetchResult.description || skill.description,
+          enabled: true,
+          content: fetchResult.content,
+          contentFetchedAt: fetchResult.fetchedAt
+        };
+
+        const updatedSkills = [...currentSkills, newSkill];
+
+        const resp = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skillsConfig: { skills: updatedSkills } })
+        });
+
+        if (resp.ok) {
+          currentSkills = updatedSkills;
+          renderSkillsList();
+
+          // Update button to show added
+          if (btn) {
+            btn.textContent = 'Added ✓';
+            btn.className = btn.className.replace('bg-amber-600 hover:bg-amber-700', 'bg-green-600');
+          }
+
+          document.getElementById('success-msg').textContent = 'Skill "' + (skill.name || skill.repo) + '" added!';
+          document.getElementById('success-msg').classList.remove('hidden');
+        } else {
+          const result = await resp.json();
+          throw new Error(result.error || 'Failed to add skill');
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Add';
+        }
+      }
+    }
+
+    async function addPrefillMcp(index) {
+      const mcp = prefillMcpServers[index];
+      if (!mcp) return;
+
+      const btn = document.querySelector('#prefill-mcp-' + index + ' button');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+      }
+
+      try {
+        // Get current settings to merge MCP servers
+        const getResp = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token));
+        const currentConfig = await getResp.json();
+        const currentMcpServers = currentConfig.settings?.mcpServers || {};
+
+        // Build MCP server config
+        const mcpConfig = {};
+        if (mcp.url) mcpConfig.url = mcp.url;
+        if (mcp.type) mcpConfig.type = mcp.type;
+        if (mcp.command) mcpConfig.command = mcp.command;
+        if (mcp.args) mcpConfig.args = mcp.args;
+        if (mcp.name) mcpConfig.description = mcp.name;
+
+        // Add to current MCP servers
+        const updatedMcpServers = {
+          ...currentMcpServers,
+          [mcp.id]: mcpConfig
+        };
+
+        // If MCP requires env vars, add them to prefill
+        if (mcp.envVars && mcp.envVars.length > 0) {
+          // Get current env vars
+          const currentEnvVars = currentConfig.settings?.envVars || {};
+          const envVarsTextarea = document.getElementById('envVars');
+          const currentText = envVarsTextarea.value;
+
+          // Add missing env var keys
+          let newText = currentText;
+          for (const envVar of mcp.envVars) {
+            if (!currentEnvVars[envVar] && !currentText.includes(envVar + '=')) {
+              newText = newText.trim() + (newText.trim() ? '\\n' : '') + envVar + '=';
+            }
+          }
+          envVarsTextarea.value = newText;
+
+          // Expand env vars section
+          const envContent = document.getElementById('envvars-content');
+          const envArrow = document.getElementById('envvars-arrow');
+          if (envContent && envContent.classList.contains('hidden')) {
+            envContent.classList.remove('hidden');
+            envArrow.classList.remove('rotate-[-90deg]');
+          }
+        }
+
+        const resp = await fetch('/api/v1/agents/' + encodeURIComponent(agentId) + '/config?token=' + encodeURIComponent(token), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mcpServers: updatedMcpServers })
+        });
+
+        if (resp.ok) {
+          // Update button to show added
+          if (btn) {
+            btn.textContent = 'Added ✓';
+            btn.className = btn.className.replace('bg-amber-600 hover:bg-amber-700', 'bg-green-600');
+          }
+
+          const mcpName = mcp.name || mcp.id;
+          let successMsg = 'MCP server "' + mcpName + '" added!';
+          if (mcp.envVars && mcp.envVars.length > 0) {
+            successMsg += ' Please fill in the required environment variables below.';
+          }
+          document.getElementById('success-msg').textContent = successMsg;
+          document.getElementById('success-msg').classList.remove('hidden');
+        } else {
+          const result = await resp.json();
+          throw new Error(result.error || 'Failed to add MCP server');
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Add';
+        }
+      }
+    }
   </script>
 </body>
 </html>`;
@@ -1314,7 +1889,7 @@ export function renderErrorPage(message: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings Error - Peerbot</title>
+  <title>Settings Error - Termos</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center p-5">

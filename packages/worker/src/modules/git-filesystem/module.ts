@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { BaseModule, createLogger } from "@peerbot/core";
+import { BaseModule, createLogger } from "@termosdev/core";
 
 const logger = createLogger("git-filesystem-worker");
 
@@ -159,7 +159,7 @@ export class GitFilesystemWorkerModule extends BaseModule {
       // Configure git user for commits
       await exec(
         "git",
-        ["config", "user.email", `${config.username}@peerbot.local`],
+        ["config", "user.email", `${config.username}@termos.local`],
         { cwd: config.workspaceDir }
       );
       await exec("git", ["config", "user.name", config.username], {

@@ -4,7 +4,7 @@
  * via the PlatformRegistry, eliminating duplicate queue filtering logic.
  */
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type {
   IMessageQueue,
   QueueJob,

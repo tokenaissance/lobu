@@ -1,4 +1,4 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 
 const logger = createLogger("oauth-discovery");
 
@@ -374,7 +374,7 @@ export class OAuthDiscoveryService {
 
       // Prepare registration request
       const registrationRequest = {
-        client_name: "Peerbot",
+        client_name: "Termos",
         redirect_uris: [this.callbackUrl],
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],

@@ -239,7 +239,7 @@ export function createOAuthRoutes(config: OAuthRoutesConfig): OpenAPIHono {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
           Accept: "application/vnd.github+json",
-          "User-Agent": "Peerbot",
+          "User-Agent": "Termos",
         },
       });
 

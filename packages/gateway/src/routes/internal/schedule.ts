@@ -5,7 +5,7 @@
  * Used by custom MCP tools (ScheduleReminder, CancelReminder, ListReminders).
  */
 
-import { createLogger, verifyWorkerToken } from "@peerbot/core";
+import { createLogger, verifyWorkerToken } from "@termosdev/core";
 import { Hono } from "hono";
 import type { ScheduledWakeupService } from "../../orchestration/scheduled-wakeup";
 

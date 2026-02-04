@@ -3,7 +3,7 @@
  * Exposes basic gateway metrics in Prometheus text format
  */
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 
 const logger = createLogger("metrics");
 
@@ -26,83 +26,83 @@ const metrics: Map<string, Metric> = new Map();
 function initializeMetrics() {
   // Worker deployment metrics
   registerMetric(
-    "peerbot_worker_deployments_total",
+    "termos_worker_deployments_total",
     "Total number of worker deployments created",
     "counter"
   );
   registerMetric(
-    "peerbot_worker_deployments_failed_total",
+    "termos_worker_deployments_failed_total",
     "Total number of failed worker deployments",
     "counter"
   );
   registerMetric(
-    "peerbot_worker_deployments_active",
+    "termos_worker_deployments_active",
     "Current number of active worker deployments",
     "gauge"
   );
 
   // Message queue metrics
   registerMetric(
-    "peerbot_messages_received_total",
+    "termos_messages_received_total",
     "Total number of messages received",
     "counter"
   );
   registerMetric(
-    "peerbot_messages_processed_total",
+    "termos_messages_processed_total",
     "Total number of messages processed",
     "counter"
   );
   registerMetric(
-    "peerbot_queue_length",
+    "termos_queue_length",
     "Current message queue length",
     "gauge"
   );
 
   // PVC metrics
   registerMetric(
-    "peerbot_pvc_created_total",
+    "termos_pvc_created_total",
     "Total number of PVCs created",
     "counter"
   );
   registerMetric(
-    "peerbot_pvc_deleted_total",
+    "termos_pvc_deleted_total",
     "Total number of PVCs deleted",
     "counter"
   );
   registerMetric(
-    "peerbot_pvc_cleanup_failed_total",
+    "termos_pvc_cleanup_failed_total",
     "Total number of failed PVC cleanup operations",
     "counter"
   );
 
   // Redis metrics
   registerMetric(
-    "peerbot_redis_connection_errors_total",
+    "termos_redis_connection_errors_total",
     "Total number of Redis connection errors",
     "counter"
   );
 
   // HTTP proxy metrics
   registerMetric(
-    "peerbot_proxy_requests_total",
+    "termos_proxy_requests_total",
     "Total number of HTTP proxy requests",
     "counter"
   );
   registerMetric(
-    "peerbot_proxy_requests_blocked_total",
+    "termos_proxy_requests_blocked_total",
     "Total number of blocked proxy requests",
     "counter"
   );
 
   // Process metrics
   registerMetric(
-    "peerbot_process_start_time_seconds",
+    "termos_process_start_time_seconds",
     "Start time of the process since unix epoch in seconds",
     "gauge"
   );
 
   // Set process start time
-  setGauge("peerbot_process_start_time_seconds", Math.floor(Date.now() / 1000));
+  setGauge("termos_process_start_time_seconds", Math.floor(Date.now() / 1000));
 
   logger.info("✅ Prometheus metrics initialized");
 }

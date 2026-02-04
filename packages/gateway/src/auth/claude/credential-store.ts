@@ -1,4 +1,4 @@
-import { BaseCredentialStore } from "@peerbot/core";
+import { BaseCredentialStore } from "@termosdev/core";
 import type Redis from "ioredis";
 
 export interface ClaudeCredentials {

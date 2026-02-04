@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { App } from "@slack/bolt";
 import { Assistant } from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
@@ -26,7 +26,7 @@ export function setupAssistantHandlers(
     threadStarted: async ({ say, setSuggestedPrompts, setTitle }) => {
       logger.info("Assistant thread started");
 
-      say("👋 Hi! I'm Peerbot, your AI assistant. How can I help you today?");
+      say("👋 Hi! I'm Termos, your AI assistant. How can I help you today?");
 
       // Set suggested prompts for the user
       setSuggestedPrompts({
@@ -46,7 +46,7 @@ export function setupAssistantHandlers(
         ],
       });
 
-      await setTitle("Peerbot");
+      await setTitle("Termos");
     },
 
     // Called when the context changes (e.g., user switches channels)

@@ -1,4 +1,4 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 

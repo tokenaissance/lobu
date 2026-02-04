@@ -2,7 +2,7 @@
 
 import { serve } from "@hono/node-server";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { apiReference } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import type { GatewayConfig } from "../config";
@@ -40,7 +40,7 @@ function setupServer(
   // Health endpoints
   app.get("/health", (c) => {
     const mode =
-      process.env.PEERBOT_MODE ||
+      process.env.TERMOS_MODE ||
       (process.env.DEPLOYMENT_MODE === "docker" ? "local" : "cloud");
 
     return c.json({
@@ -82,7 +82,7 @@ function setupServer(
   }
 
   // Register module endpoints
-  const { moduleRegistry } = require("@peerbot/core");
+  const { moduleRegistry } = require("@termosdev/core");
   if (moduleRegistry.registerHonoEndpoints) {
     moduleRegistry.registerHonoEndpoints(app);
   } else {
@@ -293,6 +293,14 @@ function setupServer(
       logger.info("Skills routes enabled at :8080/api/v1/skills/*");
     }
 
+    // MCP registry routes (/api/v1/mcps)
+    {
+      const { createMcpRoutes } = require("../routes/public/mcps");
+      const mcpRouter = createMcpRoutes();
+      app.route("/api/v1/mcps", mcpRouter);
+      logger.info("MCP routes enabled at :8080/api/v1/mcps/*");
+    }
+
     // OAuth routes (/api/v1/oauth)
     if (agentSettingsStore) {
       const { createOAuthRoutes } = require("../routes/public/oauth");
@@ -337,12 +345,12 @@ function setupServer(
   app.doc("/api/docs/openapi.json", {
     openapi: "3.0.0",
     info: {
-      title: "Peerbot API",
+      title: "Termos API",
       version: "1.0.0",
       description: `
 ## Overview
 
-The Peerbot API allows you to create and interact with AI agents programmatically.
+The Termos API allows you to create and interact with AI agents programmatically.
 
 ## Authentication
 
@@ -412,6 +420,11 @@ Agents can be configured with custom MCP (Model Context Protocol) servers:
         name: "Skills",
         description:
           "Browse and fetch agent skills from the skills.sh registry.",
+      },
+      {
+        name: "MCPs",
+        description:
+          "Browse MCP (Model Context Protocol) servers from the registry.",
       },
       {
         name: "OAuth",
@@ -680,7 +693,7 @@ export async function startGateway(
   slackConfig: SlackConfig | null,
   whatsappConfig?: WhatsAppConfig | null
 ): Promise<void> {
-  logger.info("Starting Peerbot Gateway");
+  logger.info("Starting Termos Gateway");
 
   // Start filtering proxy for worker network isolation (if enabled)
   const { startFilteringProxy } = await import("../proxy/proxy-manager");
@@ -765,8 +778,11 @@ export async function startGateway(
   );
   logger.info("Orchestrator configured with core services");
 
-  // Get file handler from Slack platform (if available)
-  const fileHandler = slackPlatform?.getFileHandler() ?? null;
+  // Get file handler from active platform (Slack or WhatsApp)
+  const fileHandler =
+    slackPlatform?.getFileHandler() ??
+    whatsappPlatform?.getFileHandler() ??
+    null;
   const sessionManager = coreServices.getSessionManager();
 
   // Setup server on port 8080
@@ -781,7 +797,7 @@ export async function startGateway(
     coreServices
   );
 
-  logger.info("Peerbot Gateway is running!");
+  logger.info("Termos Gateway is running!");
 
   // Setup graceful shutdown
   const cleanup = async () => {

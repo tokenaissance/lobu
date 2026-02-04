@@ -1,4 +1,4 @@
-import { BaseRedisStore } from "@peerbot/core";
+import { BaseRedisStore } from "@termosdev/core";
 import type { IMessageQueue } from "../../infrastructure/queue";
 
 export interface InputValues {

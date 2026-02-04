@@ -1,4 +1,4 @@
-import type { InstructionContext, InstructionProvider } from "@peerbot/core";
+import type { InstructionContext, InstructionProvider } from "@termosdev/core";
 
 /**
  * Provides Slack-specific formatting and interactivity instructions

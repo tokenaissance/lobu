@@ -1,6 +1,6 @@
-# Using @peerbot/worker with Custom Base Images
+# Using @termosdev/worker with Custom Base Images
 
-This guide explains how to install and run the Peerbot worker in your own Docker base image.
+This guide explains how to install and run the Termos worker in your own Docker base image.
 
 ## Why Use a Custom Base Image?
 
@@ -12,7 +12,7 @@ This guide explains how to install and run the Peerbot worker in your own Docker
 
 ## System Requirements
 
-The Peerbot worker requires these system dependencies:
+The Termos worker requires these system dependencies:
 
 | Dependency | Version | Required For |
 |------------|---------|--------------|
@@ -42,13 +42,13 @@ RUN apk add --no-cache \
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker package
-RUN npm install -g @peerbot/worker@^0.1.0
+RUN npm install -g @termosdev/worker@^0.1.0
 
 # Set up workspace
 WORKDIR /workspace
 
 # Run worker
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]
 ```
 
 ### Method 2: Using Bun (Recommended)
@@ -67,10 +67,10 @@ RUN apk add --no-cache \
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker
-RUN bun add -g @peerbot/worker@^0.1.0
+RUN bun add -g @termosdev/worker@^0.1.0
 
 # Run worker
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]
 ```
 
 ### Method 3: Company Approved Base
@@ -93,12 +93,12 @@ RUN apt-get update && apt-get install -y \
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker
-RUN npm install -g @peerbot/worker@^0.1.0
+RUN npm install -g @termosdev/worker@^0.1.0
 
 # Your company's security/monitoring agents
 RUN /company/install-security-agents.sh
 
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]
 ```
 
 ### Method 4: Distroless (Minimal Attack Surface)
@@ -113,17 +113,17 @@ RUN apk add --no-cache git curl python3
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker
-RUN npm install -g @peerbot/worker@^0.1.0
+RUN npm install -g @termosdev/worker@^0.1.0
 
 # Runtime stage (minimal)
 FROM gcr.io/distroless/nodejs20-debian12
 
 # Copy only runtime files from builder
-COPY --from=builder /usr/local/bin/peerbot-worker /usr/local/bin/
+COPY --from=builder /usr/local/bin/termos-worker /usr/local/bin/
 COPY --from=builder /usr/local/bin/claude /usr/local/bin/
-COPY --from=builder /usr/local/lib/node_modules/@peerbot/worker /usr/local/lib/node_modules/@peerbot/worker
+COPY --from=builder /usr/local/lib/node_modules/@termosdev/worker /usr/local/lib/node_modules/@termosdev/worker
 
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]
 ```
 
 ## Environment Variables
@@ -164,7 +164,7 @@ RUN apk add --no-cache \
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker
-RUN npm install -g @peerbot/worker@^0.1.0
+RUN npm install -g @termosdev/worker@^0.1.0
 
 # Install Python tools
 RUN pip3 install --break-system-packages \
@@ -182,14 +182,14 @@ COPY ./scripts /workspace/scripts
 RUN chmod +x /workspace/scripts/*.sh
 
 WORKDIR /workspace
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]
 ```
 
 ## Troubleshooting
 
 ### Worker won't start
 
-**Error:** `peerbot-worker: command not found`
+**Error:** `termos-worker: command not found`
 - **Solution:** Ensure npm/bun installed the package globally, or use full path
 
 **Error:** `claude: command not found`
@@ -208,9 +208,9 @@ CMD ["peerbot-worker"]
 **Error:** `EACCES: permission denied`
 - **Solution:** Run as root or add user to docker group:
   ```dockerfile
-  RUN addgroup -S peerbot && adduser -S peerbot -G peerbot
-  RUN addgroup peerbot docker
-  USER peerbot
+  RUN addgroup -S termos && adduser -S termos -G termos
+  RUN addgroup termos docker
+  USER termos
   ```
 
 ## Compatibility Matrix
@@ -227,11 +227,11 @@ CMD ["peerbot-worker"]
 
 ## Migration from Base Image
 
-If you're currently using `FROM buremba/peerbot-worker-base`, here's how to migrate:
+If you're currently using `FROM buremba/termos-worker-base`, here's how to migrate:
 
 **Before:**
 ```dockerfile
-FROM buremba/peerbot-worker-base:0.1.0
+FROM buremba/termos-worker-base:0.1.0
 RUN pip install pandas
 ```
 
@@ -246,16 +246,16 @@ RUN apk add --no-cache git docker-cli python3 py3-pip curl
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker
-RUN npm install -g @peerbot/worker@^0.1.0
+RUN npm install -g @termosdev/worker@^0.1.0
 
 # Your customizations (same as before!)
 RUN pip3 install pandas
 
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]
 ```
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/buremba/peerbot/issues)
+- [GitHub Issues](https://github.com/termos-dev/termos/issues)
 - [Compatibility Matrix](./compatibility-matrix.md)
 - [Base Image Quick Start](../README.md) (if custom base isn't needed)

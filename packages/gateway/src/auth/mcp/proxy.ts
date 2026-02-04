@@ -1,4 +1,4 @@
-import { createLogger, verifyWorkerToken } from "@peerbot/core";
+import { createLogger, verifyWorkerToken } from "@termosdev/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { IMessageQueue } from "../../infrastructure/queue";

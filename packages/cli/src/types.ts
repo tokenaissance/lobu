@@ -1,4 +1,4 @@
-export interface PeerbotConfig {
+export interface TermosConfig {
   worker: WorkerConfig;
   gateway: GatewayConfig;
   credentials: CredentialsConfig;

@@ -1,4 +1,4 @@
-import { BaseRedisStore } from "@peerbot/core";
+import { BaseRedisStore } from "@termosdev/core";
 import type Redis from "ioredis";
 
 /**

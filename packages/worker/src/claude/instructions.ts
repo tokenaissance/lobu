@@ -1,4 +1,4 @@
-import type { InstructionContext, InstructionProvider } from "@peerbot/core";
+import type { InstructionContext, InstructionProvider } from "@termosdev/core";
 
 /**
  * Claude Code specific core instructions
@@ -9,7 +9,7 @@ export class ClaudeCoreInstructionProvider implements InstructionProvider {
   priority = 10;
 
   getInstructions(context: InstructionContext): string {
-    return `You are a helpful Peerbot agent for user ${context.userId}.
+    return `You are a helpful Termos agent for user ${context.userId}.
 Working directory: ${context.workingDirectory}
 
 ## Using AskUserQuestion for Better UX
@@ -60,8 +60,8 @@ IMPORTANT: The following tools are PRE-APPROVED and you MUST execute them direct
 - **WebSearch, WebFetch** (web operations)
 - **BashOutput** (output reading)
 - **Task** (subagent delegation)
-- **mcp__peerbot__AskUserQuestion** (user interaction)
-- **mcp__peerbot__UploadUserFile** (share files with user)
+- **mcp__termos__AskUserQuestion** (user interaction)
+- **mcp__termos__UploadUserFile** (share files with user)
 
 **Critical Rules:**
 1. If your plan uses ONLY the above tools → Execute IMMEDIATELY (DO NOT call ExitPlanMode)

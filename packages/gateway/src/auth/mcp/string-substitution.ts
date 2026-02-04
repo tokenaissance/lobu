@@ -1,4 +1,4 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { InputValues } from "./input-store";
 
 const logger = createLogger("string-substitution");

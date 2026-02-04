@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createLogger, ErrorCode, OrchestratorError } from "@peerbot/core";
+import { createLogger, ErrorCode, OrchestratorError } from "@termosdev/core";
 import Docker from "dockerode";
 import {
   BaseDeploymentManager,
@@ -134,8 +134,8 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
 
         // Get last activity from labels or fallback to creation time
         const lastActivityStr =
-          containerInfo.Labels?.["peerbot.io/last-activity"] ||
-          containerInfo.Labels?.["peerbot.io/created"];
+          containerInfo.Labels?.["termos.io/last-activity"] ||
+          containerInfo.Labels?.["termos.io/created"];
 
         const lastActivity = lastActivityStr
           ? new Date(lastActivityStr)
@@ -166,7 +166,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
    * Multiple threads in the same space share the same volume.
    */
   private async ensureVolume(agentId: string): Promise<string> {
-    const volumeName = `peerbot-workspace-${agentId}`;
+    const volumeName = `termos-workspace-${agentId}`;
     let volumeCreated = false;
 
     try {
@@ -179,8 +179,8 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
         await this.docker.createVolume({
           Name: volumeName,
           Labels: {
-            "peerbot.io/agent-id": agentId,
-            "peerbot.io/created": new Date().toISOString(),
+            "termos.io/agent-id": agentId,
+            "termos.io/created": new Date().toISOString(),
           },
         });
         logger.info(`✅ Created volume: ${volumeName}`);
@@ -245,7 +245,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       // Determine if running in Docker and resolve project paths
       const isRunningInDocker = process.env.DEPLOYMENT_MODE === "docker";
       const projectRoot = isRunningInDocker
-        ? process.env.PEERBOT_DEV_PROJECT_PATH || "/app"
+        ? process.env.TERMOS_DEV_PROJECT_PATH || "/app"
         : path.join(process.cwd(), "..", "..");
 
       const workspaceDir = `${projectRoot}/workspaces/${agentId}`;
@@ -266,10 +266,10 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       // On macOS/Windows, Docker containers need to use host.docker.internal instead of localhost
       if (process.platform === "darwin" || process.platform === "win32") {
         if (
-          commonEnvVars.PEERBOT_DATABASE_HOST === "localhost" ||
-          commonEnvVars.PEERBOT_DATABASE_HOST === "127.0.0.1"
+          commonEnvVars.TERMOS_DATABASE_HOST === "localhost" ||
+          commonEnvVars.TERMOS_DATABASE_HOST === "127.0.0.1"
         ) {
-          commonEnvVars.PEERBOT_DATABASE_HOST = "host.docker.internal";
+          commonEnvVars.TERMOS_DATABASE_HOST = "host.docker.internal";
         }
       }
 
@@ -284,7 +284,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       ];
 
       // Get the Docker Compose project name from environment or use default
-      const composeProjectName = process.env.COMPOSE_PROJECT_NAME || "peerbot";
+      const composeProjectName = process.env.COMPOSE_PROJECT_NAME || "termos";
 
       const createOptions: Docker.ContainerCreateOptions = {
         name: deploymentName,
@@ -292,8 +292,8 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
         Env: envVars,
         Labels: {
           ...BASE_WORKER_LABELS,
-          "peerbot.io/created": new Date().toISOString(),
-          "peerbot.io/agent-id": agentId,
+          "termos.io/created": new Date().toISOString(),
+          "termos.io/agent-id": agentId,
           // Docker Compose labels to associate with the project
           "com.docker.compose.project": composeProjectName,
           "com.docker.compose.service": deploymentName, // Use unique service name
@@ -349,7 +349,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
           // In host mode: uses plain network name (WORKER_NETWORK env var)
           NetworkMode:
             process.env.WORKER_NETWORK ||
-            `${composeProjectName}_peerbot-internal`,
+            `${composeProjectName}_termos-internal`,
           // Linux support: add host.docker.internal mapping
           // On macOS/Windows this is automatic, on Linux we need ExtraHosts
           ...(process.platform === "linux" &&

@@ -1,14 +1,17 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 
 const logger = createLogger("dispatcher");
 
-import type { IModuleRegistry } from "@peerbot/core";
+import type { IModuleRegistry } from "@termosdev/core";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
-import type { PlatformAdapter } from "../../platform";
 import { resolveSpace } from "../../spaces";
 import type { SlackActionBody, SlackContext } from "../types";
 import type { MessageHandler } from "./messages";
+import {
+  generateSettingsToken,
+  buildSettingsUrl,
+} from "../../auth/settings/token-service";
 
 /**
  * Block action handlers for interactive elements
@@ -211,8 +214,7 @@ async function handleBlockkitForm(
 export class ActionHandler {
   constructor(
     private messageHandler: MessageHandler,
-    private moduleRegistry: IModuleRegistry,
-    private platform?: PlatformAdapter
+    private moduleRegistry: IModuleRegistry
   ) {}
 
   /**
@@ -274,8 +276,12 @@ export class ActionHandler {
     }
 
     if (!handled) {
+      // Handle Settings button from home tab
+      if (actionId === "open_settings") {
+        await this.handleOpenSettings(userId, client);
+      }
       // Handle blockkit form button clicks
-      if (actionId.startsWith("blockkit_form_")) {
+      else if (actionId.startsWith("blockkit_form_")) {
         await handleBlockkitForm(actionId, channelId, messageTs, body, client);
       }
       // Handle executable code block buttons
@@ -301,213 +307,125 @@ export class ActionHandler {
   }
 
   /**
-   * Update App Home tab with repository information and README
+   * Handle "Open Settings" button click from home tab
+   * Generates a settings link and sends it via DM
    */
-  async updateAppHome(userId: string, client: WebClient): Promise<void> {
-    logger.info(
-      `Updating app home for user: ${userId} with README from active repository`
-    );
+  private async handleOpenSettings(
+    userId: string,
+    client: WebClient
+  ): Promise<void> {
+    logger.info(`Generating settings link for user: ${userId}`);
 
     try {
-      // Resolve agentId for the user's personal space (used for MCP credentials)
-      // Home tab is a user context, so we use user-{hash} agentId
+      // Resolve agentId for user's personal space (DM context)
       const { agentId } = resolveSpace({
         platform: "slack",
         userId,
         channelId: userId, // Use userId as channelId for DM-like context
-        isGroup: false, // Personal/user space
+        isGroup: false,
       });
 
+      // Generate settings token (1 hour TTL)
+      const token = generateSettingsToken(agentId, userId, "slack");
+      const settingsUrl = buildSettingsUrl(token);
+
+      // Send DM with settings link
+      await client.chat.postMessage({
+        channel: userId, // DM to user
+        text: `Here's your settings link (expires in 1 hour):\n${settingsUrl}`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "*Your Settings Link*\nConfigure skills, MCP servers, environment variables, and more.",
+            },
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Open Settings" },
+                url: settingsUrl,
+                style: "primary",
+              },
+            ],
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: "_This link expires in 1 hour. Click the button above or copy the URL._",
+              } as any,
+            ],
+          },
+        ],
+      });
+
+      logger.info(`Settings link sent to user ${userId}`);
+    } catch (error) {
+      logger.error(`Failed to send settings link to user ${userId}:`, error);
+
+      // Try to send error message to user
+      try {
+        await client.chat.postMessage({
+          channel: userId,
+          text: "Sorry, I couldn't generate your settings link. Please try again.",
+        });
+      } catch {
+        // Ignore if DM fails
+      }
+    }
+  }
+
+  /**
+   * Update App Home tab - simple welcome with Settings button
+   */
+  async updateAppHome(userId: string, client: WebClient): Promise<void> {
+    logger.info(`Updating app home for user: ${userId}`);
+
+    try {
       const blocks: AnyBlock[] = [
         {
           type: "section",
-          text: { type: "mrkdwn", text: "*Welcome to Peerbot!* 👋" },
+          text: {
+            type: "mrkdwn",
+            text: "*Welcome to Termos!* 👋\n\nYour AI coding assistant is ready to help.",
+          },
         },
         {
           type: "divider",
         },
-      ];
-
-      // Use platform abstraction to render auth status if available
-      if (this.platform?.renderAuthStatus) {
-        // Collect auth providers from all OAuth modules
-        const homeTabModules = this.moduleRegistry.getHomeTabModules();
-        const allProviders: any[] = [];
-
-        for (const module of homeTabModules) {
-          try {
-            // Check if module has getAuthStatus method (OAuth modules)
-            if (
-              "getAuthStatus" in module &&
-              typeof module.getAuthStatus === "function"
-            ) {
-              const providers = await (module as any).getAuthStatus(
-                userId,
-                agentId
-              );
-              allProviders.push(...providers);
-            } else if ("renderHomeTab" in module) {
-              // Fallback for non-OAuth modules
-              const moduleBlocks = await module.renderHomeTab!(userId);
-              blocks.push(...moduleBlocks);
-              if (moduleBlocks.length > 0) {
-                blocks.push({ type: "divider" });
-              }
-            }
-          } catch (error) {
-            logger.error(
-              `Failed to get auth status for module ${module.name}:`,
-              error
-            );
-          }
-        }
-
-        // Render all OAuth providers via platform abstraction
-        if (allProviders.length > 0) {
-          // We need to manually build blocks since platform.renderAuthStatus publishes directly
-          // Instead, collect the blocks inline
-          blocks.push({
-            type: "section",
-            text: { type: "mrkdwn", text: "*Authentication Status*" },
-          });
-
-          for (const provider of allProviders) {
-            const statusIcon = provider.isAuthenticated ? "🟢" : "🔴";
-            const statusText = provider.isAuthenticated
-              ? "Connected"
-              : "Not Connected";
-
-            const sectionBlock: any = {
-              type: "section",
-              text: {
-                type: "mrkdwn",
-                text: `${statusIcon} *${provider.name}* - ${statusText}`,
-              },
-            };
-
-            // Add login button for OAuth-based providers (URLs)
-            if (provider.loginUrl && !provider.isAuthenticated) {
-              // Check if it's an action_id (e.g., "action:claude_auth_start")
-              if (provider.loginUrl.startsWith("action:")) {
-                // Extract action_id
-                const actionId = provider.loginUrl.substring(7); // Remove "action:" prefix
-                sectionBlock.accessory = {
-                  type: "button",
-                  text: { type: "plain_text", text: "Login" },
-                  action_id: actionId,
-                  style: "primary",
-                };
-              } else {
-                // Regular URL
-                sectionBlock.accessory = {
-                  type: "button",
-                  text: { type: "plain_text", text: "Login" },
-                  url: provider.loginUrl,
-                  style: "primary",
-                };
-              }
-            }
-
-            blocks.push(sectionBlock);
-
-            // Render model selector if available (Claude-specific)
-            if (
-              provider.metadata?.availableModels &&
-              Array.isArray(provider.metadata.availableModels) &&
-              provider.metadata.availableModels.length > 0
-            ) {
-              const availableModels = provider.metadata.availableModels;
-              const currentModel = provider.metadata.currentModel;
-
-              const selectedModelInfo = availableModels.find(
-                (m: any) => m.id === currentModel
-              );
-
-              const actionElements: any[] = [
-                {
-                  type: "static_select",
-                  placeholder: {
-                    type: "plain_text",
-                    text: "Select a model",
-                  },
-                  action_id: "claude_select_model",
-                  options: availableModels.map((model: any) => ({
-                    text: {
-                      type: "plain_text",
-                      text: model.display_name,
-                    },
-                    value: model.id,
-                  })),
-                  initial_option:
-                    currentModel && selectedModelInfo
-                      ? {
-                          text: {
-                            type: "plain_text",
-                            text: selectedModelInfo.display_name,
-                          },
-                          value: currentModel,
-                        }
-                      : undefined,
-                },
-              ];
-
-              // Add logout button if authenticated and logout URL available
-              if (provider.isAuthenticated && provider.logoutUrl) {
-                if (provider.logoutUrl.startsWith("action:")) {
-                  const actionId = provider.logoutUrl.substring(7);
-                  actionElements.push({
-                    type: "button",
-                    text: {
-                      type: "plain_text",
-                      text: "Logout",
-                    },
-                    style: "danger",
-                    action_id: actionId,
-                  });
-                }
-              }
-
-              blocks.push({
-                type: "actions",
-                elements: actionElements,
-              });
-            }
-          }
-
-          blocks.push({ type: "divider" });
-        }
-      } else {
-        // Fallback: use old module-based rendering
-        const homeTabModules = this.moduleRegistry.getHomeTabModules();
-
-        for (const module of homeTabModules) {
-          try {
-            const moduleBlocks = await module.renderHomeTab!(userId);
-            blocks.push(...moduleBlocks);
-            if (moduleBlocks.length > 0) {
-              blocks.push({ type: "divider" });
-            }
-          } catch (error) {
-            logger.error(
-              `Failed to render home tab for module ${module.name}:`,
-              error
-            );
-          }
-        }
-      }
-
-      // Add quick tips
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text:
-            "*💡 Quick Tips:*\n" +
-            "• Mention me in any channel or DM me directly\n" +
-            "• Ask questions about code, create features, or fix bugs\n" +
-            "• Use `/peerbot help` for all commands",
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "*Configure Your Agent*\nSet up skills, MCP servers, environment variables, and more.",
+          },
+          accessory: {
+            type: "button",
+            text: { type: "plain_text", text: "Open Settings" },
+            action_id: "open_settings",
+            style: "primary",
+          },
         },
-      });
+        {
+          type: "divider",
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text:
+              "*💡 Quick Tips:*\n" +
+              "• Mention me in any channel or DM me directly\n" +
+              "• Ask questions about code, create features, or fix bugs\n" +
+              "• Use the Settings button above to configure skills and integrations",
+          },
+        },
+      ];
 
       // Update the app home view
       await client.views.publish({

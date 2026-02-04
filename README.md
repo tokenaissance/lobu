@@ -1,4 +1,4 @@
-# Peerbot
+# Termos
 
 **Claude Code as a custom Slack bot.** Create your own custom sandboxedagents that works directly in Slack threads.
 
@@ -6,7 +6,7 @@
 
 ```bash
 # Create a new bot (interactive setup)
-npm create peerbot my-slack-bot
+npm create termos my-slack-bot
 
 # Start the bot
 cd my-slack-bot
@@ -32,12 +32,12 @@ That's it! Your bot is now running and ready to help in Slack.
 
 ## Worker Customization
 
-Peerbot supports two modes for customizing your AI workers:
+Termos supports two modes for customizing your AI workers:
 
 ### Quick Start Mode (Recommended)
 Extend our base image with your tools:
 ```dockerfile
-FROM buremba/peerbot-worker-base:0.1.0
+FROM buremba/termos-worker-base:0.1.0
 
 # Add Python packages
 RUN pip install pandas matplotlib
@@ -51,7 +51,7 @@ Install the worker package in any base image:
 ```dockerfile
 FROM your-company/approved-base:latest
 
-RUN npm install -g @peerbot/worker@^0.1.0
+RUN npm install -g @termosdev/worker@^0.1.0
 RUN pip install pandas
 ```
 
@@ -108,9 +108,9 @@ curl -X POST http://localhost:8080/api/messaging/send \
 ## Published Packages
 
 **NPM:**
-- [`create-peerbot`](https://www.npmjs.com/package/create-peerbot) - Deployment CLI
-- [`@peerbot/worker`](https://www.npmjs.com/package/@peerbot/worker) - Worker runtime
+- [`create-termos`](https://www.npmjs.com/package/create-termos) - Deployment CLI
+- [`@termosdev/worker`](https://www.npmjs.com/package/@termosdev/worker) - Worker runtime
 
 **Docker Hub:**
-- [`buremba/peerbot-gateway`](https://hub.docker.com/r/buremba/peerbot-gateway)
-- [`buremba/peerbot-worker-base`](https://hub.docker.com/r/buremba/peerbot-worker-base)
+- [`buremba/termos-gateway`](https://hub.docker.com/r/buremba/termos-gateway)
+- [`buremba/termos-worker-base`](https://hub.docker.com/r/buremba/termos-worker-base)

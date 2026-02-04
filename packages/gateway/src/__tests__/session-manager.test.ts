@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { ThreadSession } from "@peerbot/core";
+import type { ThreadSession } from "@termosdev/core";
 import { RedisSessionStore, SessionManager } from "../services/session-manager";
 import { cleanupTestEnv, MockMessageQueue, setupTestEnv } from "./setup";
 

@@ -1,5 +1,5 @@
 # Advanced Mode: Bring Your Own Base Image
-# This Dockerfile installs @peerbot/worker as a package instead of extending our base image.
+# This Dockerfile installs @termosdev/worker as a package instead of extending our base image.
 # You have full control over the base OS, system packages, and security configuration.
 
 # STEP 1: Choose your base image
@@ -23,8 +23,8 @@ RUN apk add --no-cache \
 # STEP 3: Install Claude CLI (required for AI interactions)
 RUN curl -L https://claude.ai/install.sh | sh
 
-# STEP 4: Install Peerbot worker package
-RUN npm install -g @peerbot/worker@latest
+# STEP 4: Install Termos worker package
+RUN npm install -g @termosdev/worker@latest
 
 # === CUSTOMIZE BELOW THIS LINE ===
 
@@ -50,4 +50,4 @@ RUN npm install -g @peerbot/worker@latest
 WORKDIR /workspace
 
 # Run the worker
-CMD ["peerbot-worker"]
+CMD ["termos-worker"]

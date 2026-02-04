@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger, moduleRegistry } from "@peerbot/core";
+import { createLogger, moduleRegistry } from "@termosdev/core";
 import { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import { ClaudeModelPreferenceStore } from "../auth/claude/model-preference-store";
 import { ClaudeOAuthModule } from "../auth/claude/oauth-module";

@@ -1,5 +1,5 @@
 {
-  "name": "@peerbot/gateway",
+  "name": "@termosdev/gateway",
   "version": "1.0.0",
   "private": true,
   "description": "Slack gateway service that routes messages to Kubernetes worker Jobs",
@@ -17,7 +17,7 @@
     "@hono/node-server": "^1.19.9",
     "@hono/zod-openapi": "^1.2.1",
     "@kubernetes/client-node": "0.21.0",
-    "@peerbot/core": "workspace:*",
+    "@termosdev/core": "workspace:*",
     "@scalar/hono-api-reference": "^0.9.39",
     "@sentry/node": "^10.19.0",
     "@slack/bolt": "^4.5.0",

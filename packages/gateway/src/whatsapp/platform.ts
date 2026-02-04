@@ -6,7 +6,7 @@ import {
   createLogger,
   type UserInteraction,
   type UserSuggestion,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import { platformAuthRegistry } from "../auth/platform-auth";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import type { IFileHandler } from "../platform/file-handler";
@@ -495,6 +495,37 @@ export class WhatsAppPlatform implements PlatformAdapter {
       channelId: whatsapp.chat,
       threadId: "",
     };
+  }
+
+  /**
+   * Get conversation history for a chat.
+   * WhatsApp stores history in-memory per chat JID.
+   */
+  async getConversationHistory(
+    channelId: string,
+    _threadId: string | undefined,
+    limit: number,
+    before: string | undefined
+  ): Promise<{
+    messages: Array<{
+      timestamp: string;
+      user: string;
+      text: string;
+      isBot?: boolean;
+    }>;
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
+    if (!this.messageHandler) {
+      return { messages: [], nextCursor: null, hasMore: false };
+    }
+
+    // Normalize channel ID to JID format
+    const chatJid = channelId.includes("@")
+      ? channelId
+      : `${channelId.replace("+", "")}@s.whatsapp.net`;
+
+    return this.messageHandler.getHistory(chatJid, limit, before);
   }
 }
 

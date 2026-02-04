@@ -10,7 +10,7 @@ import {
   TIME,
   type UserInteraction,
   type UserSuggestion,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { Redis } from "ioredis";
 
 const logger = createLogger("interactions");

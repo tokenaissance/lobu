@@ -11,7 +11,7 @@ import {
   createLogger,
   type InstructionProvider,
   type UserInteraction,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import { broadcastToAgent } from "../routes/public/agent";
@@ -250,7 +250,7 @@ export class ApiPlatform implements PlatformAdapter {
       channelId: agentId,
       teamId: "api",
       agentId: agentId, // agentId is the isolation boundary
-      botId: "peerbot-api",
+      botId: "termos-api",
       platform: "api",
       messageText: message,
       platformMetadata,

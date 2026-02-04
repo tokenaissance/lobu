@@ -1,4 +1,4 @@
-title = "Peerbot Gitleaks Configuration"
+title = "Termos Gitleaks Configuration"
 extends = "github://gitleaks/gitleaks/v8/config/gitleaks.toml"
 
 [allowlist]

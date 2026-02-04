@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger, DEFAULTS, REDIS_KEYS } from "@peerbot/core";
+import { createLogger, DEFAULTS, REDIS_KEYS } from "@termosdev/core";
 import type Redis from "ioredis";
 import type { IMessageQueue } from "../infrastructure/queue";
 import {

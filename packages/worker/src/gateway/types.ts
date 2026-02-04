@@ -2,7 +2,7 @@
  * Shared types for gateway communication
  */
 
-import type { AgentOptions, ThreadResponsePayload } from "@peerbot/core";
+import type { AgentOptions, ThreadResponsePayload } from "@termosdev/core";
 
 /**
  * Platform-specific metadata (e.g., Slack team_id, channel, thread_ts)

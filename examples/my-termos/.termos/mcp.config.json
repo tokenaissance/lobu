@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "oauth": {
+        "authUrl": "https://github.com/login/oauth/authorize",
+        "tokenUrl": "https://github.com/login/oauth/access_token",
+        "clientId": "${GITHUB_CLIENT_ID}",
+        "clientSecret": "${env:GITHUB_CLIENT_SECRET}",
+        "scopes": ["repo", "read:user"],
+        "grantType": "authorization_code",
+        "responseType": "code"
+      }
+    },
+    "sentry": {
+      "url": "https://mcp.sentry.dev/mcp"
+    }
+  }
+}

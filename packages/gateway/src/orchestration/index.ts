@@ -2,7 +2,7 @@ export * from "./base-deployment-manager";
 export * from "./deployment-utils";
 export * from "./impl";
 
-import { createLogger, moduleRegistry } from "@peerbot/core";
+import { createLogger, moduleRegistry } from "@termosdev/core";
 import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import type {
   BaseDeploymentManager,

@@ -1,10 +1,10 @@
 # MCP OAuth Configuration Guide
 
-This directory contains examples for configuring MCP (Model Context Protocol) servers with OAuth authentication in Peerbot.
+This directory contains examples for configuring MCP (Model Context Protocol) servers with OAuth authentication in Termos.
 
 ## Overview
 
-Peerbot supports multiple MCP authentication patterns:
+Termos supports multiple MCP authentication patterns:
 
 1. **Automatic OAuth Discovery** - MCP server advertises OAuth endpoints (RFC 8414/9728)
 2. **Dynamic Client Registration** - Automatic OAuth app creation (RFC 7591)

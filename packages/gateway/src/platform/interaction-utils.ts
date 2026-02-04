@@ -2,7 +2,7 @@
  * Shared interaction utilities for platform interaction renderers.
  */
 
-import type { FieldSchema } from "@peerbot/core";
+import type { FieldSchema } from "@termosdev/core";
 
 export type InteractionDisplayType = "radio" | "single-form" | "multi-section";
 

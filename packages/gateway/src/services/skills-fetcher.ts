@@ -1,4 +1,4 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 
 const logger = createLogger("skills-fetcher");
 

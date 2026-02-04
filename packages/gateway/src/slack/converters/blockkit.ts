@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { createHash } from "node:crypto";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import {
   parseCodeBlockMetadata,
   processCodeBlockWithAction,

@@ -4,7 +4,7 @@ import type {
   InstructionProvider,
   UserInteraction,
   UserSuggestion,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { ClaudeCredentialStore } from "./auth/claude/credential-store";
 import type { ClaudeModelPreferenceStore } from "./auth/claude/model-preference-store";
 import type { McpProxy } from "./auth/mcp/proxy";
@@ -246,6 +246,32 @@ export interface PlatformAdapter {
     threadId: string;
     teamId?: string;
   } | null;
+
+  /**
+   * Get conversation history for a channel/thread.
+   * Used by the GetChannelHistory tool to fetch past messages.
+   *
+   * @param channelId - Channel/chat identifier
+   * @param threadId - Thread identifier (optional)
+   * @param limit - Maximum number of messages to return
+   * @param before - ISO timestamp cursor for pagination
+   * @returns History response with messages and pagination info
+   */
+  getConversationHistory?(
+    channelId: string,
+    threadId: string | undefined,
+    limit: number,
+    before: string | undefined
+  ): Promise<{
+    messages: Array<{
+      timestamp: string;
+      user: string;
+      text: string;
+      isBot?: boolean;
+    }>;
+    nextCursor: string | null;
+    hasMore: boolean;
+  }>;
 }
 
 // ============================================================================

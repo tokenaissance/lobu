@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { z } from "zod";
 import type {
   ProcessInfo,

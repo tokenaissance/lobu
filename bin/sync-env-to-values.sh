@@ -8,16 +8,16 @@ ENV_FILE=".env"
 # Determine values file based on environment or explicit path
 if [ -n "$2" ]; then
     # Environment specified (dev, production, local)
-    VALUES_FILE="charts/peerbot/values-$2.yaml"
+    VALUES_FILE="charts/termos/values-$2.yaml"
 elif [ -n "$1" ] && [[ "$1" == *.yaml ]]; then
     # Explicit values file path provided
     VALUES_FILE="$1"
 elif [ -n "$1" ]; then
     # Environment name provided as first argument
-    VALUES_FILE="charts/peerbot/values-$1.yaml"
+    VALUES_FILE="charts/termos/values-$1.yaml"
 else
     # Default to base values.yaml
-    VALUES_FILE="charts/peerbot/values.yaml"
+    VALUES_FILE="charts/termos/values.yaml"
 fi
 
 if [ ! -f "$ENV_FILE" ]; then

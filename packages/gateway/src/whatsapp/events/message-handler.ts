@@ -4,7 +4,7 @@
  * Adapted from clawdbot/src/web/inbound.ts
  */
 
-import { createLogger, generateTraceId } from "@peerbot/core";
+import { createLogger, generateTraceId } from "@termosdev/core";
 import {
   type BaileysEventMap,
   extractMessageContent,
@@ -157,6 +157,16 @@ export class WhatsAppMessageHandler {
 
     if (settings.toolsConfig) {
       mergedOptions.toolsConfig = settings.toolsConfig;
+    }
+
+    // MCP servers from agent settings
+    if (settings.mcpServers) {
+      mergedOptions.mcpServers = settings.mcpServers;
+    }
+
+    // Verbose logging
+    if (settings.verboseLogging !== undefined) {
+      mergedOptions.verboseLogging = settings.verboseLogging;
     }
 
     return mergedOptions;
@@ -836,6 +846,10 @@ The user sent a voice message but transcription failed. Let them know and sugges
     // Fetch agent settings and merge with config defaults
     const agentOptions = await this.getAgentOptionsWithSettings(agentId);
 
+    // Extract top-level configs from agentOptions for orchestration
+    const { networkConfig, gitConfig, mcpServers, ...remainingOptions } =
+      agentOptions;
+
     const payload: MessagePayload = {
       platform: "whatsapp",
       userId: context.senderE164 || context.senderJid,
@@ -863,7 +877,11 @@ The user sent a voice message but transcription failed. Let them know and sugges
         conversationHistory:
           conversationHistory.length > 0 ? conversationHistory : undefined,
       },
-      agentOptions,
+      agentOptions: remainingOptions,
+      // Set top-level configs for orchestration
+      networkConfig,
+      gitConfig,
+      mcpConfig: mcpServers ? { mcpServers } : undefined,
     };
 
     await this.queueProducer.enqueueMessage(payload);
@@ -1075,6 +1093,70 @@ The user sent a voice message but transcription failed. Let them know and sugges
       fromMe: true,
       timestamp: Date.now(),
     });
+  }
+
+  /**
+   * Get conversation history for API endpoint.
+   * Returns messages formatted for the history API.
+   */
+  getHistory(
+    chatJid: string,
+    limit: number,
+    before?: string
+  ): {
+    messages: Array<{
+      timestamp: string;
+      user: string;
+      text: string;
+      isBot?: boolean;
+    }>;
+    nextCursor: string | null;
+    hasMore: boolean;
+  } {
+    const history = this.conversationHistory.get(chatJid);
+    if (!history) {
+      return { messages: [], nextCursor: null, hasMore: false };
+    }
+
+    // Check TTL
+    const ttlMs = this.config.historyTtlSeconds * 1000;
+    if (Date.now() - history.lastUpdated > ttlMs) {
+      this.conversationHistory.delete(chatJid);
+      return { messages: [], nextCursor: null, hasMore: false };
+    }
+
+    // Filter by before timestamp if provided
+    let messages = history.messages;
+    if (before) {
+      const beforeTs = new Date(before).getTime();
+      messages = messages.filter((m) => m.timestamp < beforeTs);
+    }
+
+    // Sort by timestamp descending (newest first) and limit
+    const sorted = [...messages]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, limit);
+
+    // Format for API response
+    const formatted = sorted.map((msg) => ({
+      timestamp: new Date(msg.timestamp).toISOString(),
+      user: msg.senderName || (msg.fromMe ? "Assistant" : "User"),
+      text: msg.text,
+      isBot: msg.fromMe,
+    }));
+
+    const hasMore = messages.length > limit;
+    const lastMessage = sorted[sorted.length - 1];
+    const nextCursor =
+      hasMore && lastMessage
+        ? new Date(lastMessage.timestamp).toISOString()
+        : null;
+
+    return {
+      messages: formatted,
+      nextCursor,
+      hasMore,
+    };
   }
 
   /**

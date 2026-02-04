@@ -1,7 +1,7 @@
 import * as http from "node:http";
 import * as net from "node:net";
 import { URL } from "node:url";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import {
   isUnrestrictedMode,
   loadAllowedDomains,

@@ -1,4 +1,4 @@
-import { BaseModule, createLogger, decrypt, encrypt } from "@peerbot/core";
+import { BaseModule, createLogger, decrypt, encrypt } from "@termosdev/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { GenericOAuth2Client } from "../oauth/generic-client";

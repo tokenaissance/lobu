@@ -3,7 +3,7 @@ import {
   type ModuleSessionContext,
   moduleRegistry,
   type SessionContext,
-} from "@peerbot/core";
+} from "@termosdev/core";
 
 const logger = createLogger("worker");
 

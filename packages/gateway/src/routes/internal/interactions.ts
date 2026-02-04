@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger, verifyWorkerToken } from "@peerbot/core";
+import { createLogger, verifyWorkerToken } from "@termosdev/core";
 import { Hono } from "hono";
 import type { InteractionService } from "../../interactions";
 

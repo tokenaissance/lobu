@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 
 const logger = createLogger("worker-connection-manager");
 

@@ -2,7 +2,7 @@ import { exec } from "node:child_process";
 import { access, constants, mkdir, open, unlink } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { GitHubAppAuth, type RepoInfo } from "./github-app";
 
 const execAsync = promisify(exec);
@@ -77,7 +77,7 @@ export interface CacheResult {
  * Workers use these as reference repos to save storage space.
  *
  * Cache structure:
- *   /var/cache/peerbot/git/
+ *   /var/cache/termos/git/
  *   ├── github.com/
  *   │   ├── owner1/repo1.git/
  *   │   └── owner2/repo2.git/

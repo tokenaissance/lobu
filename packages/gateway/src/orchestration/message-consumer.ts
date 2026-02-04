@@ -8,7 +8,7 @@ import {
   OrchestratorError,
   retryWithBackoff,
   SpanStatusCode,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import * as Sentry from "@sentry/node";
 import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import { platformAuthRegistry } from "../auth/platform-auth";
@@ -131,10 +131,10 @@ export class MessageConsumer {
 
     // Create child span for queue processing (linked to message_received span)
     const queueSpan = createChildSpan("queue_processing", traceparent, {
-      "peerbot.trace_id": traceId,
-      "peerbot.job_id": jobId,
-      "peerbot.user_id": data?.userId || "unknown",
-      "peerbot.thread_id": data?.threadId || "unknown",
+      "termos.trace_id": traceId,
+      "termos.job_id": jobId,
+      "termos.user_id": data?.userId || "unknown",
+      "termos.thread_id": data?.threadId || "unknown",
     });
 
     // Get traceparent to pass to worker (for further context propagation)

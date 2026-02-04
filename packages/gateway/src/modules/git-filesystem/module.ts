@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { BaseModule, createLogger } from "@peerbot/core";
+import { BaseModule, createLogger } from "@termosdev/core";
 import { GitCacheManager } from "./cache-manager";
 import { GitHubAppAuth } from "./github-app";
 
 const logger = createLogger("git-filesystem-module");
 
 /**
- * Git Filesystem Module for Peerbot.
+ * Git Filesystem Module for Termos.
  *
  * Provides git repository support for agents:
  * - Clones repositories into worker workspaces
@@ -19,7 +19,7 @@ const logger = createLogger("git-filesystem-module");
  * - GITHUB_APP_PRIVATE_KEY: GitHub App private key (PEM format)
  * - GITHUB_APP_PRIVATE_KEY_PATH: Path to private key file (alternative)
  * - GITHUB_PERSONAL_ACCESS_TOKEN: Global PAT for simpler auth
- * - GIT_CACHE_DIR: Directory for git cache (default: /var/cache/peerbot/git)
+ * - GIT_CACHE_DIR: Directory for git cache (default: /var/cache/termos/git)
  */
 export class GitFilesystemModule extends BaseModule {
   name = "git-filesystem";
@@ -76,10 +76,10 @@ export class GitFilesystemModule extends BaseModule {
     // Use local cache dir for development (falls back to /var/cache for production)
     const defaultCacheDir =
       process.env.NODE_ENV === "production"
-        ? "/var/cache/peerbot/git"
+        ? "/var/cache/termos/git"
         : process.env.HOME
-          ? `${process.env.HOME}/.cache/peerbot/git`
-          : "./.peerbot/git-cache";
+          ? `${process.env.HOME}/.cache/termos/git`
+          : "./.termos/git-cache";
     const cacheDir = process.env.GIT_CACHE_DIR || defaultCacheDir;
     this.cacheManager = new GitCacheManager(cacheDir);
     await this.cacheManager.init();

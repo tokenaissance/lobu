@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { GatewayConfig } from "./config";
 import { type PlatformAdapter, platformRegistry } from "./platform";
 import { UnifiedThreadResponseConsumer } from "./platform/unified-thread-consumer";

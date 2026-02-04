@@ -21,7 +21,7 @@ module.exports = {
     {
       name: "worker-must-not-know-platforms",
       comment:
-        "Worker stays platform-agnostic and should only rely on @peerbot/core.",
+        "Worker stays platform-agnostic and should only rely on @termosdev/core.",
       severity: "error",
       from: {
         path: "^packages/worker/src",
@@ -33,7 +33,7 @@ module.exports = {
     {
       name: "gateway-must-not-import-worker",
       comment:
-        "Gateway keeps platform adapters separate; shared logic lives in @peerbot/core.",
+        "Gateway keeps platform adapters separate; shared logic lives in @termosdev/core.",
       severity: "error",
       from: {
         path: "^packages/gateway/src",

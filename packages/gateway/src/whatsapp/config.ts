@@ -2,7 +2,7 @@
  * WhatsApp platform configuration.
  */
 
-import { getOptionalBoolean, getOptionalNumber } from "@peerbot/core";
+import { getOptionalBoolean, getOptionalNumber } from "@termosdev/core";
 
 export interface WhatsAppConfig {
   /** Enable WhatsApp platform */

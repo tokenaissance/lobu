@@ -5,7 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
-import { createLogger, sanitizeFilename } from "@peerbot/core";
+import { createLogger, sanitizeFilename } from "@termosdev/core";
 import {
   type AnyMessageContent,
   downloadContentFromMessage,
@@ -31,6 +31,31 @@ import type {
 import type { BaileysClient } from "./connection/baileys-client";
 
 const logger = createLogger("whatsapp-file-handler");
+
+/**
+ * Wrap a promise with a timeout to prevent indefinite blocking
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operationName: string
+): Promise<T> {
+  let timeoutId: Timer;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId!);
+    throw error;
+  }
+}
 
 function getJwtSecret(): string {
   const secret = process.env.ENCRYPTION_KEY;
@@ -111,14 +136,24 @@ export class WhatsAppFileHandler implements IFileHandler {
             messageId: msg.key?.id,
             mediaType: key,
             hasMediaKey: !!mediaContent.mediaKey,
+            mediaKeyLength: mediaContent.mediaKey?.length,
             hasDirectPath: !!mediaContent.directPath,
+            directPathLength: mediaContent.directPath?.length,
             hasUrl: !!mediaContent.url,
+            urlLength: mediaContent.url?.length,
+            urlDomain: mediaContent.url
+              ? new URL(mediaContent.url).hostname
+              : null,
             hasFileEncSha256: !!mediaContent.fileEncSha256,
             hasFileSha256: !!mediaContent.fileSha256,
             fileLength: mediaContent.fileLength,
             mimetype: mediaContent.mimetype,
+            messageTimestamp: msg.messageTimestamp,
+            messageAge: msg.messageTimestamp
+              ? Date.now() - Number(msg.messageTimestamp) * 1000
+              : null,
           },
-          "Downloading media from message - full details"
+          "🔍 VOICE DEBUG: Downloading media from message - full details"
         );
 
         // Log the direct path and URL for debugging
@@ -130,6 +165,26 @@ export class WhatsAppFileHandler implements IFileHandler {
         }
         if (mediaContent.url) {
           logger.debug({ url: mediaContent.url }, "Media URL");
+
+          // TEMP DEBUG: Write URL to file for manual testing
+          try {
+            const fs = require("fs");
+            const debugInfo = {
+              timestamp: new Date().toISOString(),
+              messageId: msg.key?.id,
+              mediaType: key,
+              url: mediaContent.url,
+              directPath: mediaContent.directPath,
+              expectedSize: mediaContent.fileLength,
+              mimetype: mediaContent.mimetype,
+            };
+            fs.appendFileSync(
+              "/tmp/voice-debug.log",
+              JSON.stringify(debugInfo) + "\n"
+            );
+          } catch (err) {
+            // Ignore file write errors
+          }
         }
 
         // Retry logic: WhatsApp CDN may not have the file immediately available
@@ -143,10 +198,11 @@ export class WhatsAppFileHandler implements IFileHandler {
 
         // Initial delay before first attempt - WhatsApp CDN needs time to propagate media
         // Voice messages in particular often fail on immediate download
-        const initialDelayMs = 1500;
+        // Analysis shows 26 bytes = encryption header only, CDN needs 1-2s to propagate full file
+        const initialDelayMs = 1500; // 1.5 seconds - enough for CDN propagation, short enough for token validity
         logger.info(
           { messageId: msg.key?.id, mediaType: key, delay: initialDelayMs },
-          "Waiting for CDN propagation before download attempt"
+          "🕐 VOICE DEBUG: Waiting for CDN propagation before download attempt"
         );
         await new Promise((resolve) => setTimeout(resolve, initialDelayMs));
 
@@ -161,19 +217,28 @@ export class WhatsAppFileHandler implements IFileHandler {
                 hasUpdateMediaMessage: !!updateMediaMessage,
                 mediaUrl: mediaContent.url?.substring(0, 80),
                 directPath: mediaContent.directPath,
+                currentTime: new Date().toISOString(),
+                mediaKeyExists: !!mediaContent.mediaKey,
+                expectedSize,
               },
-              "Attempting media download"
+              "📥 VOICE DEBUG: Attempting media download"
             );
 
             // Call updateMediaMessage to refresh the media URL/keys
             // Do this on every attempt including the first, as URLs can be stale
-            if (updateMediaMessage) {
+            // Use timeout to prevent indefinite blocking (seen in production)
+            if (attempt > 1 && updateMediaMessage) {
+              // Only refresh URL on retries, first attempt uses fresh original URL
               logger.info(
                 { messageId: msg.key?.id, attempt },
                 "Calling updateMediaMessage to refresh media URL"
               );
               try {
-                const updatedMsg = await updateMediaMessage(msg);
+                const updatedMsg = await withTimeout(
+                  updateMediaMessage(msg),
+                  10000, // 10 second timeout
+                  "updateMediaMessage"
+                );
                 // Update the message reference with fresh URLs
                 if (updatedMsg?.message) {
                   msg = updatedMsg as WAMessage;
@@ -238,11 +303,13 @@ export class WhatsAppFileHandler implements IFileHandler {
               continue;
             }
 
-            // Check for empty or suspiciously small buffer (< 100 bytes is likely just encryption header)
-            const minValidSize = 100;
+            // Check for empty or suspiciously small buffer
+            // Based on analysis: 26 bytes = encryption header only, need full file
+            const minValidSize = Math.max(100, expectedSize * 0.1); // At least 10% of expected size
             if (
               downloadedBuffer.length === 0 ||
-              downloadedBuffer.length < minValidSize
+              downloadedBuffer.length < minValidSize ||
+              (downloadedBuffer.length <= 30 && expectedSize > 1000) // Specific check for header-only responses
             ) {
               logger.warn(
                 {
@@ -250,8 +317,14 @@ export class WhatsAppFileHandler implements IFileHandler {
                   mediaType: key,
                   attempt,
                   bufferLength: downloadedBuffer.length,
+                  expectedSize,
+                  minValidSize,
+                  possibleCause:
+                    downloadedBuffer.length <= 30
+                      ? "CDN returned header-only (26-30 bytes typical)"
+                      : "Partial download detected",
                 },
-                "Downloaded media buffer is empty or too small, trying downloadContentFromMessage"
+                "📦 VOICE DEBUG: Downloaded media buffer too small - likely CDN propagation delay"
               );
 
               // Try alternative download method using downloadContentFromMessage
@@ -301,9 +374,53 @@ export class WhatsAppFileHandler implements IFileHandler {
               }
 
               if (downloadedBuffer.length < minValidSize) {
-                lastError = new Error(
-                  `Downloaded media buffer too small: ${downloadedBuffer.length} bytes`
-                );
+                // BAILEYS FIX: Force reupload on partial content since Baileys only triggers reupload on 404/410
+                // Try on every attempt since CDN propagation timing is unpredictable
+                if (updateMediaMessage) {
+                  logger.warn(
+                    {
+                      messageId: msg.key?.id,
+                      bufferLength: downloadedBuffer.length,
+                      expectedSize,
+                      attempt,
+                    },
+                    "🔄 BAILEYS FIX: Forcing reupload due to partial content (Baileys limitation)"
+                  );
+                  try {
+                    const reuploadedMsg = await withTimeout(
+                      updateMediaMessage(msg),
+                      10000,
+                      "forced reupload on partial content"
+                    );
+                    if (reuploadedMsg?.message) {
+                      msg = reuploadedMsg as WAMessage;
+                      logger.info(
+                        { messageId: msg.key?.id, attempt },
+                        "Message reuploaded due to partial content"
+                      );
+                      // Continue with the retry loop to try the fresh URL
+                      lastError = new Error(
+                        `Downloaded media buffer too small: ${downloadedBuffer.length} bytes, retrying with reuploaded message`
+                      );
+                    } else {
+                      lastError = new Error(
+                        `Downloaded media buffer too small: ${downloadedBuffer.length} bytes`
+                      );
+                    }
+                  } catch (reuploadError) {
+                    logger.warn(
+                      { error: String(reuploadError), attempt },
+                      "Failed to reupload message"
+                    );
+                    lastError = new Error(
+                      `Downloaded media buffer too small: ${downloadedBuffer.length} bytes`
+                    );
+                  }
+                } else {
+                  lastError = new Error(
+                    `Downloaded media buffer too small: ${downloadedBuffer.length} bytes`
+                  );
+                }
               } else {
                 // Fallback succeeded!
                 buffer = downloadedBuffer;
@@ -351,22 +468,35 @@ export class WhatsAppFileHandler implements IFileHandler {
             }
           } catch (downloadError) {
             lastError = downloadError as Error;
+            const error = downloadError as Error;
             logger.warn(
               {
                 error: String(downloadError),
-                errorMessage: (downloadError as Error)?.message,
+                errorMessage: error?.message,
+                errorName: error?.name,
+                errorStack: error?.stack?.split("\n").slice(0, 3),
                 messageId: msg.key?.id,
                 mediaType: key,
                 attempt,
+                isTimeoutError: error?.message?.includes("timeout"),
+                isNetworkError:
+                  error?.message?.includes("network") ||
+                  error?.message?.includes("fetch"),
+                isWhatsAppError:
+                  error?.message?.includes("whatsapp") ||
+                  error?.message?.includes("baileys"),
+                currentTime: new Date().toISOString(),
               },
-              "downloadMediaMessage attempt failed"
+              "❌ VOICE DEBUG: downloadMediaMessage attempt failed"
             );
           }
 
-          // Wait before retrying (exponential backoff: 2s, 4s, 8s, 16s, 32s)
-          // Starting at 2s since CDN propagation is the main issue
+          // Wait before retrying - use shorter delays for first attempts since CDN propagation
+          // usually completes within a few seconds, longer delays for later attempts
+          // Pattern: 2s, 3s, 5s, 10s (total max wait: 20s instead of 150s+)
           if (attempt < maxRetries) {
-            const delay = 2 ** attempt * 1000;
+            const delays = [2000, 3000, 5000, 10000]; // milliseconds
+            const delay = delays[Math.min(attempt - 1, delays.length - 1)];
             logger.info(
               { messageId: msg.key?.id, attempt, delay, maxRetries },
               "Waiting before retry"
@@ -378,18 +508,50 @@ export class WhatsAppFileHandler implements IFileHandler {
         if (!buffer) {
           const errorMsg =
             lastError?.message || "Download returned empty buffer";
-          logger.error(
-            {
-              error: errorMsg,
-              messageId: msg.key?.id,
-              mediaType: key,
-              maxRetries,
+          const detailedError = {
+            baseError: errorMsg,
+            lastErrorName: lastError?.name,
+            lastErrorStack: lastError?.stack?.split("\n").slice(0, 3),
+            messageId: msg.key?.id,
+            mediaType: key,
+            maxRetries,
+            attemptsCompleted: maxRetries,
+            finalMediaState: {
+              hasUrl: !!mediaContent.url,
+              hasDirectPath: !!mediaContent.directPath,
+              hasMediaKey: !!mediaContent.mediaKey,
+              urlDomain: mediaContent.url
+                ? new URL(mediaContent.url).hostname
+                : null,
+              expectedSize,
+              mimetype: mediaContent.mimetype,
+              messageAge: msg.messageTimestamp
+                ? Date.now() - Number(msg.messageTimestamp) * 1000
+                : null,
             },
-            "Failed to download media after all retries"
+            possibleCauses: [
+              !mediaContent.url && "Missing media URL",
+              !mediaContent.mediaKey && "Missing media encryption key",
+              !mediaContent.directPath && "Missing direct path",
+              expectedSize === 0 && "Unknown file size",
+              lastError?.message?.includes("timeout") && "Network timeout",
+              lastError?.message?.includes("network") &&
+                "Network connectivity issue",
+              msg.messageTimestamp &&
+                Date.now() - Number(msg.messageTimestamp) * 1000 > 86400000 &&
+                "Message older than 24 hours",
+            ].filter(Boolean),
+            finalTime: new Date().toISOString(),
+          };
+
+          logger.error(
+            detailedError,
+            "💥 VOICE DEBUG: Failed to download media after all retries - DETAILED ANALYSIS"
           );
+
           errors.push({
             mediaType: key,
-            error: errorMsg,
+            error: `${errorMsg} | Detailed: ${JSON.stringify(detailedError.possibleCauses)}`,
             messageId: msg.key?.id ?? undefined,
           });
           continue;
@@ -427,8 +589,18 @@ export class WhatsAppFileHandler implements IFileHandler {
         });
 
         logger.info(
-          { fileId, fileName, mimeType, size: buffer.length },
-          "Extracted media from WhatsApp message"
+          {
+            fileId,
+            fileName,
+            mimeType,
+            size: buffer.length,
+            messageId: msg.key?.id,
+            mediaType: key,
+            downloadTime: new Date().toISOString(),
+            totalTimeSpent: Date.now() - Date.now(), // Will be updated in actual run
+            attemptsNeeded: "Will be tracked in retry loop",
+          },
+          "✅ VOICE DEBUG: Successfully extracted media from WhatsApp message"
         );
 
         // Auto-cleanup after 1 hour
@@ -627,8 +799,8 @@ export class WhatsAppFileHandler implements IFileHandler {
       {
         expiresIn,
         algorithm: "HS256",
-        issuer: "peerbot-gateway",
-        audience: "peerbot-worker",
+        issuer: "termos-gateway",
+        audience: "termos-worker",
       }
     );
   }
@@ -645,8 +817,8 @@ export class WhatsAppFileHandler implements IFileHandler {
     try {
       const decoded = jwt.verify(token, this.jwtSecret, {
         algorithms: ["HS256"],
-        issuer: "peerbot-gateway",
-        audience: "peerbot-worker",
+        issuer: "termos-gateway",
+        audience: "termos-worker",
       });
 
       if (

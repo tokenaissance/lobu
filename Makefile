@@ -1,4 +1,4 @@
-# Development Makefile for Peerbot
+# Development Makefile for Termos
 
 .PHONY: help setup build compile dev prod test clean logs restart deploy down build-packages check-build watch-packages
 
@@ -46,7 +46,7 @@ setup:
 # Build the worker image
 build-worker:
 	@echo "📦 Building worker image..."
-	@docker build -t peerbot-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
+	@docker build -t termos-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
 
 # Catch-all target to prevent errors when passing arguments
 %:
@@ -73,36 +73,36 @@ deploy:
 		if [ -f "$$TARGET_PATH" ]; then \
 			VALUES_FILE="$$TARGET_PATH"; \
 			echo "📋 Using custom values file: $$VALUES_FILE"; \
-		elif [ -f "charts/peerbot/values-$$TARGET_PATH.yaml" ]; then \
-			VALUES_FILE="charts/peerbot/values-$$TARGET_PATH.yaml"; \
+		elif [ -f "charts/termos/values-$$TARGET_PATH.yaml" ]; then \
+			VALUES_FILE="charts/termos/values-$$TARGET_PATH.yaml"; \
 			echo "📋 Using environment file: $$VALUES_FILE"; \
 		else \
 			echo "❌ Values file not found: $$TARGET_PATH"; \
-			echo "❌ Also tried: charts/peerbot/values-$$TARGET_PATH.yaml"; \
+			echo "❌ Also tried: charts/termos/values-$$TARGET_PATH.yaml"; \
 			exit 1; \
 		fi; \
-	elif [ -f "charts/peerbot/values-local.yaml" ]; then \
-		VALUES_FILE="charts/peerbot/values-local.yaml"; \
+	elif [ -f "charts/termos/values-local.yaml" ]; then \
+		VALUES_FILE="charts/termos/values-local.yaml"; \
 		echo "📋 Using existing $$VALUES_FILE"; \
 	else \
-		VALUES_FILE="charts/peerbot/values-local.yaml"; \
+		VALUES_FILE="charts/termos/values-local.yaml"; \
 		echo "🔄 Creating $$VALUES_FILE from .env and base values.yaml..."; \
-		cp "charts/peerbot/values.yaml" "$$VALUES_FILE"; \
+		cp "charts/termos/values.yaml" "$$VALUES_FILE"; \
 		./bin/sync-env-to-values.sh local; \
 	fi; \
 	echo "🎯 Deploying using $$VALUES_FILE"; \
 	echo "🚀 Building and deploying to K8s..."; \
 	if [ -z "$$GITHUB_ACTIONS" ]; then \
 		echo "📦 Building Docker images..."; \
-		docker build -f Dockerfile.gateway -t peerbot-gateway:latest .; \
-		docker build -f Dockerfile.worker -t peerbot-worker:latest .; \
+		docker build -f Dockerfile.gateway -t termos-gateway:latest .; \
+		docker build -f Dockerfile.worker -t termos-worker:latest .; \
 	else \
 		echo "📦 Using pre-built Docker images from registry..."; \
 	fi; \
 	if command -v kind >/dev/null 2>&1 && kind get clusters 2>/dev/null | grep -q kind; then \
 		echo "📦 Loading images into kind..."; \
-		kind load docker-image peerbot-gateway:latest; \
-		kind load docker-image peerbot-worker:latest; \
+		kind load docker-image termos-gateway:latest; \
+		kind load docker-image termos-worker:latest; \
 	fi; \
 	echo "🔧 Deploying with Helm..."; \
 	if [ -z "$$GITHUB_ACTIONS" ]; then \
@@ -110,19 +110,19 @@ deploy:
 	fi; \
 	echo "📋 Final values file: $$VALUES_FILE"; \
 	if [ -n "$$GITHUB_ACTIONS" ]; then \
-		IMAGE_REPO="$${DOCKER_NAMESPACE:-peerbot}"; \
+		IMAGE_REPO="$${DOCKER_NAMESPACE:-buremba}"; \
 		IMAGE_TAG="$${IMAGE_TAG:-latest}"; \
-		IMAGE_OVERRIDES="--set gateway.image.repository=$$IMAGE_REPO/peerbot-gateway \
+		IMAGE_OVERRIDES="--set gateway.image.repository=$$IMAGE_REPO/termos-gateway \
 			--set gateway.image.tag=$$IMAGE_TAG \
-			--set worker.image.repository=$$IMAGE_REPO/peerbot-worker \
+			--set worker.image.repository=$$IMAGE_REPO/termos-worker \
 			--set worker.image.tag=$$IMAGE_TAG"; \
 	else \
 		IMAGE_OVERRIDES=""; \
 	fi; \
-	helm upgrade --install "$${DEPLOYMENT_NAME:-peerbot}" charts/peerbot/ \
+	helm upgrade --install "$${DEPLOYMENT_NAME:-termos}" charts/termos/ \
 		--dependency-update \
 		--create-namespace \
-		--namespace "$${NAMESPACE:-peerbot}" \
+		--namespace "$${NAMESPACE:-termos}" \
 		-f "$$VALUES_FILE" \
 		$$IMAGE_OVERRIDES \
 		--set secrets.encryptionKey="$$ENCRYPTION_KEY" \
@@ -133,8 +133,8 @@ deploy:
 		--wait \
 		--timeout "$${HELM_TIMEOUT:-10m}"
 	@echo "✅ Deployed to K8s. Check status with:"
-	@echo "  kubectl get pods -n $${NAMESPACE:-peerbot}"
-	@echo "  kubectl logs -f deployment/$${DEPLOYMENT_NAME:-peerbot}-gateway -n $${NAMESPACE:-peerbot}"
+	@echo "  kubectl get pods -n $${NAMESPACE:-termos}"
+	@echo "  kubectl logs -f deployment/$${DEPLOYMENT_NAME:-termos}-gateway -n $${NAMESPACE:-termos}"
 
 # View logs based on deployment mode
 logs:
@@ -147,10 +147,10 @@ logs:
 	if [ "$$DEPLOYMENT_MODE" = "kubernetes" ] || [ "$$DEPLOYMENT_MODE" = "k8s" ]; then \
 		echo "☸️  Viewing Kubernetes logs..."; \
 		echo "Select a pod to view logs:"; \
-		kubectl get pods -n peerbot; \
+		kubectl get pods -n termos; \
 		echo ""; \
 		echo "View logs with:"; \
-		echo "  kubectl logs -f <pod-name> -n peerbot"; \
+		echo "  kubectl logs -f <pod-name> -n termos"; \
 	else \
 		echo "For development, view logs in the terminal where gateway is running"; \
 		echo "Or use: docker compose logs -f gateway"; \
@@ -158,7 +158,7 @@ logs:
 
 # Stop worker containers
 down:
-	@echo "🛑 Stopping peerbot worker containers..."
+	@echo "🛑 Stopping termos worker containers..."
 	@docker ps -q --filter "label=app.kubernetes.io/component=worker" | xargs -r docker stop 2>/dev/null || true
 	@docker ps -aq --filter "label=app.kubernetes.io/component=worker" | xargs -r docker rm 2>/dev/null || true
 	@echo "✅ Worker containers stopped"
@@ -171,18 +171,18 @@ clean:
 	else \
 		DEPLOYMENT_MODE="docker"; \
 	fi; \
-	echo "🧹 Cleaning up peerbot resources (mode: $$DEPLOYMENT_MODE)..."; \
+	echo "🧹 Cleaning up termos resources (mode: $$DEPLOYMENT_MODE)..."; \
 	if [ "$$DEPLOYMENT_MODE" = "kubernetes" ] || [ "$$DEPLOYMENT_MODE" = "k8s" ]; then \
 		echo "☸️  Cleaning Kubernetes resources..."; \
-		helm uninstall peerbot -n peerbot 2>/dev/null || true; \
-		kubectl delete namespace peerbot --wait=false 2>/dev/null || true; \
+		helm uninstall termos -n termos 2>/dev/null || true; \
+		kubectl delete namespace termos --wait=false 2>/dev/null || true; \
 		echo "✅ Kubernetes resources cleaned up"; \
 	else \
 		echo "🐳 Cleaning Docker worker containers..."; \
 		docker ps -q --filter "label=app.kubernetes.io/component=worker" | xargs -r docker stop 2>/dev/null || true; \
 		docker ps -aq --filter "label=app.kubernetes.io/component=worker" | xargs -r docker rm 2>/dev/null || true; \
-		docker volume ls -q --filter "name=peerbot-workspace-" | xargs -r docker volume rm 2>/dev/null || true; \
-		docker network rm peerbot-internal 2>/dev/null || true; \
+		docker volume ls -q --filter "name=termos-workspace-" | xargs -r docker volume rm 2>/dev/null || true; \
+		docker network rm termos-internal 2>/dev/null || true; \
 		echo "✅ Docker containers and volumes cleaned up"; \
 	fi
 
@@ -196,7 +196,7 @@ clean-workers:
 	echo "🧹 Removing worker containers (mode: $$DEPLOYMENT_MODE)..."; \
 	if [ "$$DEPLOYMENT_MODE" = "kubernetes" ] || [ "$$DEPLOYMENT_MODE" = "k8s" ]; then \
 		echo "☸️  Removing Kubernetes worker pods..."; \
-		kubectl delete pods -n peerbot -l app.kubernetes.io/component=worker --wait=false 2>/dev/null || true; \
+		kubectl delete pods -n termos -l app.kubernetes.io/component=worker --wait=false 2>/dev/null || true; \
 		echo "✅ Kubernetes worker pods removed"; \
 	else \
 		echo "🐳 Removing Docker worker containers..."; \

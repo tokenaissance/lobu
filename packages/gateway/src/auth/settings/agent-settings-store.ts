@@ -6,7 +6,7 @@ import {
   type NetworkConfig,
   type SkillsConfig,
   type ToolsConfig,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type Redis from "ioredis";
 
 /**
@@ -30,6 +30,8 @@ export interface AgentSettings {
   skillsConfig?: SkillsConfig;
   /** Tool permission configuration - allowed/denied tools */
   toolsConfig?: ToolsConfig;
+  /** Enable verbose logging (show tool calls, reasoning, etc.) */
+  verboseLogging?: boolean;
   /** Connected GitHub user info */
   githubUser?: {
     login: string;

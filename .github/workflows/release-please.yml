@@ -54,14 +54,14 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           npm whoami
 
-      - name: Publish create-peerbot to NPM
+      - name: Publish create-termos to NPM
         if: ${{ steps.release.outputs.release_created }}
         working-directory: packages/cli
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @peerbot/worker to NPM
+      - name: Publish @termos/worker to NPM
         if: ${{ steps.release.outputs.release_created }}
         working-directory: packages/worker
         run: npm publish --access public

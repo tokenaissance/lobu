@@ -1,4 +1,4 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { ClaudeCredentialStore } from "../../auth/claude/credential-store";
@@ -147,7 +147,7 @@ export class AnthropicProxy {
     let agentId: string | undefined;
     if (workerToken && !workerToken.startsWith("sk-ant-")) {
       // This is a worker token, not an Anthropic API key
-      const { verifyWorkerToken } = await import("@peerbot/core");
+      const { verifyWorkerToken } = await import("@termosdev/core");
       const tokenData = verifyWorkerToken(workerToken);
 
       if (!tokenData) {
@@ -298,7 +298,7 @@ export class AnthropicProxy {
       headers["x-api-key"] = apiKey;
       headers["Content-Type"] =
         c.req.header("content-type") || "application/json";
-      headers["User-Agent"] = c.req.header("user-agent") || "peerbot-proxy/1.0";
+      headers["User-Agent"] = c.req.header("user-agent") || "termos-proxy/1.0";
 
       // Forward additional headers that Anthropic might need
       const anthropicVersion = c.req.header("anthropic-version");

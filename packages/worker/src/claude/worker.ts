@@ -3,8 +3,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import type { InstructionProvider } from "@peerbot/core";
-import { createLogger } from "@peerbot/core";
+import type { InstructionProvider } from "@termosdev/core";
+import { createLogger } from "@termosdev/core";
 import type { InteractionClient } from "../common/interaction-client";
 import { BaseWorker } from "../core/base-worker";
 import type {
@@ -49,7 +49,7 @@ export class ClaudeWorker extends BaseWorker {
     try {
       logger.info(`Creating Claude SDK session ${this.config.sessionKey}`);
 
-      // Parse Claude options (includes historyConfig from agent settings)
+      // Parse Claude options (includes historyConfig and verboseLogging from agent settings)
       const rawOptions = JSON.parse(this.config.agentOptions) as Record<
         string,
         unknown
@@ -59,6 +59,10 @@ export class ClaudeWorker extends BaseWorker {
         | { enabled?: boolean }
         | undefined;
       const historyEnabled = historyConfig?.enabled ?? false;
+      const verboseLogging = rawOptions.verboseLogging === true;
+
+      // Configure progress processor with verbose mode
+      this.progressProcessor.setVerboseLogging(verboseLogging);
 
       // Check if Claude session exists in workspace
       const workspaceDir = this.getWorkingDirectory();

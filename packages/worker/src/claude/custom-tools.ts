@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as nodeFs from "node:fs";
 import * as path from "node:path";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import FormData from "form-data";
 import { z } from "zod";
 import type { InteractionClient } from "../common/interaction-client";
@@ -577,12 +577,82 @@ export function createCustomToolsServer(
   tools.push(
     tool(
       "GetSettingsLink",
-      "Generate a settings link for the user to configure their agent. Use when the user needs to add API keys (like transcription providers), enable features, change model settings, or configure other options. The link opens a web page where they can securely enter settings.",
+      "Generate a settings link for the user to configure their agent. Use when the user needs to add API keys, enable skills, configure MCP servers, or change other settings. The link opens a web page where they can securely configure options. You can pre-fill environment variables, skills, and MCP servers for easy setup.",
       {
         reason: z
           .string()
           .describe(
             "Brief explanation of what the user should configure (e.g., 'add your OpenAI API key for voice transcription')"
+          ),
+        message: z
+          .string()
+          .optional()
+          .describe(
+            "Optional message to display on the settings page with instructions (e.g., 'Get your API key from https://platform.openai.com/api-keys')"
+          ),
+        prefillEnvVars: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Optional list of environment variable names to pre-fill in the settings form (e.g., ['OPENAI_API_KEY', 'TRANSCRIPTION_PROVIDER'])"
+          ),
+        prefillSkills: z
+          .array(
+            z.object({
+              repo: z
+                .string()
+                .describe("Skill repository (e.g., 'anthropics/skills/pdf')"),
+              name: z
+                .string()
+                .optional()
+                .describe("Display name for the skill"),
+              description: z
+                .string()
+                .optional()
+                .describe("Brief description of what the skill does"),
+            })
+          )
+          .optional()
+          .describe(
+            "Optional list of skills to pre-fill for the user to enable (e.g., [{ repo: 'anthropics/skills/pdf', name: 'PDF Reader' }])"
+          ),
+        prefillMcpServers: z
+          .array(
+            z.object({
+              id: z.string().describe("Unique identifier for the MCP server"),
+              name: z
+                .string()
+                .optional()
+                .describe("Display name for the MCP server"),
+              url: z
+                .string()
+                .optional()
+                .describe("Server URL for SSE-type MCPs"),
+              type: z
+                .enum(["sse", "stdio"])
+                .optional()
+                .describe(
+                  "Server type: 'sse' for HTTP or 'stdio' for command-based"
+                ),
+              command: z
+                .string()
+                .optional()
+                .describe("Command to run for stdio-type MCPs"),
+              args: z
+                .array(z.string())
+                .optional()
+                .describe("Arguments for stdio-type MCPs"),
+              envVars: z
+                .array(z.string())
+                .optional()
+                .describe(
+                  "Required environment variable names (user fills values)"
+                ),
+            })
+          )
+          .optional()
+          .describe(
+            "Optional list of MCP servers to pre-fill for the user to enable"
           ),
       } as const,
       async (args) => {
@@ -595,7 +665,13 @@ export function createCustomToolsServer(
               Authorization: `Bearer ${workerToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ reason: args.reason }),
+            body: JSON.stringify({
+              reason: args.reason,
+              message: args.message,
+              prefillEnvVars: args.prefillEnvVars,
+              prefillSkills: args.prefillSkills,
+              prefillMcpServers: args.prefillMcpServers,
+            }),
           });
 
           if (!response.ok) {
@@ -1006,7 +1082,7 @@ export function createCustomToolsServer(
   }
 
   return createSdkMcpServer({
-    name: "peerbot",
+    name: "termos",
     version: "1.0.0",
     tools,
   });

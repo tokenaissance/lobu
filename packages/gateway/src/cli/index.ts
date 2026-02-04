@@ -5,7 +5,7 @@ import {
   createLogger,
   initSentry,
   initTracing,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import { Command } from "commander";
 import {
   buildGatewayConfig,
@@ -28,8 +28,8 @@ async function main() {
   const program = new Command();
 
   program
-    .name("peerbot-gateway")
-    .description("Peerbot gateway service - connects Slack to Claude workers")
+    .name("termos-gateway")
+    .description("Termos gateway service - connects Slack to Claude workers")
     .version("1.0.0");
 
   // WhatsApp setup command
@@ -64,9 +64,9 @@ async function main() {
 
         // Initialize OpenTelemetry tracing for Tempo (if configured)
         initTracing({
-          serviceName: "peerbot-gateway",
+          serviceName: "termos-gateway",
           serviceVersion: process.env.npm_package_version || "2.0.0",
-          tempoEndpoint: process.env.TEMPO_ENDPOINT, // e.g., "http://peerbot-tempo:4318/v1/traces"
+          tempoEndpoint: process.env.TEMPO_ENDPOINT, // e.g., "http://termos-tempo:4318/v1/traces"
           enabled: !!process.env.TEMPO_ENDPOINT,
         });
 

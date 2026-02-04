@@ -36,17 +36,17 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           npm whoami
 
-      - name: Force publish create-peerbot to NPM
+      - name: Force publish create-termos to NPM
         working-directory: packages/cli
         run: |
           # Create minimal dist if missing
           mkdir -p dist
-          echo 'console.log("create-peerbot v2.0.0");' > dist/index.js || true
+          echo 'console.log("create-termos v2.0.0");' > dist/index.js || true
           npm publish --access public --force || npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Force publish @peerbot/worker to NPM (stub)
+      - name: Force publish @termos/worker to NPM (stub)
         working-directory: packages/worker
         run: |
           # Create minimal dist if missing

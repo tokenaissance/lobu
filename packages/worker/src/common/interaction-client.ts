@@ -7,7 +7,7 @@ import {
   retryWithBackoff,
   TIME,
   type UserInteractionResponse,
-} from "@peerbot/core";
+} from "@termosdev/core";
 
 const logger = createLogger("interaction-client");
 

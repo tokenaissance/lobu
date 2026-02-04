@@ -1,5 +1,5 @@
 {
-  "name": "create-peerbot",
+  "name": "create-termos",
   "version": "2.3.0",
   "workspaces": [
     "packages/cli",
@@ -30,8 +30,8 @@
     "dev:gateway": "bun run packages/gateway/src/index.ts",
     "dev:worker": "bun run packages/worker/src/index.ts",
     "docker:build": "docker build -f docker/gateway.Dockerfile -t claude-gateway . && docker build -f docker/worker.Dockerfile -t claude-worker .",
-    "k8s:deploy": "helm upgrade --install peerbot charts/peerbot --dependency-update",
-    "k8s:uninstall": "helm uninstall peerbot"
+    "k8s:deploy": "helm upgrade --install termos charts/termos --dependency-update",
+    "k8s:uninstall": "helm uninstall termos"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.2",

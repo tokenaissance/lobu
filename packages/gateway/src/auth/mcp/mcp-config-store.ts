@@ -1,4 +1,4 @@
-import { type AgentMcpConfig, createLogger } from "@peerbot/core";
+import { type AgentMcpConfig, createLogger } from "@termosdev/core";
 
 const logger = createLogger("mcp-config-store");
 
@@ -13,7 +13,7 @@ const logger = createLogger("mcp-config-store");
 export class McpConfigStore {
   private configs: Map<string, AgentMcpConfig> = new Map();
   private redisClient: any = null;
-  private readonly REDIS_PREFIX = "peerbot:mcp:config:";
+  private readonly REDIS_PREFIX = "termos:mcp:config:";
   private readonly REDIS_TTL = 24 * 60 * 60; // 24 hours
 
   /**

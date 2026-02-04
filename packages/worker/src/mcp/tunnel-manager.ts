@@ -2,7 +2,7 @@
 
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { ProcessInfo } from "./types";
 
 const logger = createLogger("worker");
@@ -118,12 +118,12 @@ export async function startTunnel(
       urlExtracted = true;
       clearTimeout(extractTimeout);
       const prefix = urlMatch[1];
-      info.tunnelUrl = `https://${prefix}.peerbot.ai`;
+      info.tunnelUrl = `https://${prefix}.termos.dev`;
       tunnelLogStream.write(
         `\n[MCP] Successfully extracted URL: ${urlMatch[0]}\n`
       );
       tunnelLogStream.write(
-        `[MCP] Converted to peerbot.ai: ${info.tunnelUrl}\n`
+        `[MCP] Converted to termos.dev: ${info.tunnelUrl}\n`
       );
       logger.error(
         `[MCP Process Manager - Tunnel ${info.id}] Established: ${info.tunnelUrl}`

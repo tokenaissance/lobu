@@ -1,4 +1,4 @@
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { importPKCS8, SignJWT } from "jose";
 
 const logger = createLogger("github-app");

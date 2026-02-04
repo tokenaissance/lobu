@@ -1,0 +1,174 @@
+# Community deployment values for OVH Kubernetes cluster
+
+# Global configuration
+global:
+  imagePullSecrets: []
+
+# Spegel P2P image distribution
+spegel:
+  enabled: true
+  # Resources for Spegel containers (required by resource quota)
+  resources:
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+
+# Kubernetes namespace
+kubernetes:
+  namespace: termos
+
+# Configuration
+config:
+  githubOrganization: "termos-dev"
+  githubClientId: ""  # Add your GitHub OAuth App Client ID
+  ingressUrl: "https://gateway.termos.dev"  # Critical for OAuth redirects
+  sessionTimeoutMinutes: "5"
+
+# RBAC configuration
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+# Security settings for production
+podSecurityStandards:
+  enabled: false  # OVH may not support this
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  readOnlyRootFilesystem: false
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false  # Start without it
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+
+# Network Policy
+networkPolicy:
+  enabled: false
+
+# Ingress configuration for public access
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: gateway.termos.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: termos-tls
+      hosts:
+        - gateway.termos.dev
+
+# Slack configuration
+slack:
+  enabled: true  # Enable Slack platform
+  port: 3000
+  socketMode: false  # HTTP mode required for web access/ingress
+  allowDirectMessages: true
+  allowPrivateChannels: true
+  enableStatusReactions: true
+  enableProgressUpdates: true
+
+# Claude configuration
+claude:
+  model: "claude-sonnet-4-20250514"
+  timeoutMinutes: "5"
+
+# Worker configuration
+worker:
+  enabled: false  # Dynamic workers only
+  image:
+    repository: buremba/termos-worker-base
+    pullPolicy: Always
+    tag: latest
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "500m"
+  persistence:
+    enabled: true
+    size: "5Gi"
+    storageClass: ""
+  job:
+    timeoutSeconds: 300
+    backoffLimit: 0
+    ttlSecondsAfterFinished: 300
+  env:
+    USE_CLAUDE_RESUME: "true"
+    CLAUDE_CODE_ENABLE_UNIFIED_READ_TOOL: "1"
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+    BASH_DEFAULT_TIMEOUT_MS: "60000"
+    BASH_MAX_TIMEOUT_MS: "300000"
+    CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: "1"
+    DISABLE_AUTOUPDATER: "1"
+    K8S_SKIP_TLS_VERIFY: "true"
+
+# Gateway configuration
+gateway:
+  enabled: true
+  image:
+    repository: buremba/termos-gateway
+    pullPolicy: Always
+    tag: latest
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  config:
+    nodeEnv: "production"
+    logLevel: "INFO"
+  anthropicProxy:
+    enabled: true
+    baseUrl: ""
+
+# Resource quota - Production limits
+resourceQuota:
+  enabled: true
+  requests:
+    cpu: "15"      # 30 workers × 0.25 CPU request + core services
+    memory: "40Gi"  # 30 workers × 1Gi + core services
+  limits:
+    cpu: "20"      # 30 workers × 0.5 CPU + core services (~18 CPU needed)
+    memory: "70Gi"  # 30 workers × 2Gi + core services
+  counts:
+    pods: "50"     # Support 30+ worker pods plus core services
+    persistentvolumeclaims: "100"  # Support persistent volumes for workers
+    pvcs: "100"    # Alias for persistentvolumeclaims
+    secrets: "100" # Support Helm releases and user secrets
+
+# Worker-specific quota
+workerQuota:
+  enabled: true
+  requests:
+    cpu: "8"       # 30 workers × 0.25 CPU
+    memory: "30Gi"  # 30 workers × 1Gi
+  limits:
+    cpu: "15"      # 30 workers × 0.5 CPU
+    memory: "60Gi"  # 30 workers × 2Gi
+  counts:
+    pods: "35"     # Max 30-35 concurrent worker pods
+    jobs: "35"     # Legacy job limit

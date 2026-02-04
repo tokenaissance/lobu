@@ -4,7 +4,7 @@ import type {
   SDKAssistantMessage,
   SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 
 const logger = createLogger("claude-processor");
 
@@ -93,6 +93,16 @@ export class ProgressProcessor {
   private currentThinking: string = "";
   private chronologicalOutput: string = "";
   private lastSentContent: string = "";
+  private verboseLogging: boolean = false;
+
+  /**
+   * Enable or disable verbose logging mode.
+   * When enabled, shows tool calls, reasoning tokens, and detailed output.
+   */
+  setVerboseLogging(enabled: boolean): void {
+    this.verboseLogging = enabled;
+    logger.info(`Verbose logging ${enabled ? "enabled" : "disabled"}`);
+  }
 
   /**
    * Process streaming update and return formatted content
@@ -184,11 +194,15 @@ export class ProgressProcessor {
           this.chronologicalOutput += `${block.text}\n`;
           hasUpdate = true;
         } else if (block.type === "thinking" && block.thinking?.trim()) {
-          // Store thinking content - will be shown as status
+          // Store thinking content
           this.currentThinking = block.thinking.trim();
           logger.info(
             `💭 Thinking block received (${this.currentThinking.length} chars): ${this.currentThinking.substring(0, 100)}...`
           );
+          // In verbose mode, output thinking blocks
+          if (this.verboseLogging) {
+            this.chronologicalOutput += `\n💭 *Reasoning:*\n${this.currentThinking}\n\n`;
+          }
           hasUpdate = true;
         } else if (block.type === "tool_use") {
           // Check for TodoWrite updates
@@ -263,12 +277,26 @@ export class ProgressProcessor {
     const toolName = toolUse.name;
     const params = toolUse.input || {};
 
-    // Hide system tools (mcp__peerbot__*)
-    if (toolName.startsWith("mcp__peerbot__")) {
+    // Hide system tools (mcp__termos__*) unless in verbose mode
+    if (toolName.startsWith("mcp__termos__") && !this.verboseLogging) {
       return "";
     }
 
     const config = TOOL_DISPLAY_CONFIG[toolName];
+
+    // In verbose mode, show full tool input
+    if (this.verboseLogging) {
+      const formattedName = config
+        ? toolName
+        : this.formatMcpToolName(toolName);
+      const emoji = config?.emoji || "🔧";
+      const inputStr =
+        Object.keys(params).length > 0
+          ? `\n\`\`\`json\n${JSON.stringify(params, null, 2)}\n\`\`\``
+          : "";
+      return `└ ${emoji} **${formattedName}**${inputStr}`;
+    }
+
     if (!config) {
       const formattedName = this.formatMcpToolName(toolName);
       // For Task tool, include description if available

@@ -1,4 +1,4 @@
-import { BaseModule, createLogger, decrypt } from "@peerbot/core";
+import { BaseModule, createLogger, decrypt } from "@termosdev/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { IMessageQueue } from "../../infrastructure/queue";

@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { InstructionProvider } from "@peerbot/core";
+import type { InstructionProvider } from "@termosdev/core";
 import { BaseWorker } from "../core/base-worker";
 import type { ProgressUpdate, SessionExecutionResult } from "../core/types";
 import { mockWorkerConfig, TestHelpers } from "./setup";

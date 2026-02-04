@@ -25,9 +25,9 @@ on:
   #     - '.github/workflows/deploy-community.yml'
 
 env:
-  NAMESPACE: peerbot
-  DEPLOYMENT_NAME: peerbot
-  DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME || 'peerbot' }}
+  NAMESPACE: termos
+  DEPLOYMENT_NAME: termos
+  DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME || 'buremba' }}
 
 jobs:
   deploy:
@@ -185,7 +185,7 @@ jobs:
           
           # Wait for all pods to be ready
           echo "⏳ Waiting for all pods to be ready..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=peerbot -n $NAMESPACE --timeout=300s || true
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=termos -n $NAMESPACE --timeout=300s || true
           
           echo ""
           echo "📝 Recent Logs from Gateway:"

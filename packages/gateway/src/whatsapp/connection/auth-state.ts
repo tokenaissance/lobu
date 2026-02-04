@@ -4,7 +4,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type {
   AuthenticationCreds,
   SignalDataTypeMap,

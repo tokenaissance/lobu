@@ -1,8 +1,8 @@
 {
-  "name": "@peerbot/core",
+  "name": "@termosdev/core",
   "version": "2.0.0",
   "private": true,
-  "description": "Core utilities for Peerbot",
+  "description": "Core utilities for Termos",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

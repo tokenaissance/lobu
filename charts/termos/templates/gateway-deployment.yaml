@@ -1,0 +1,300 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "termos.fullname" . }}-gateway
+  labels:
+    {{- include "termos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.gateway.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "termos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      annotations:
+        # Auto-restart pod when secrets change
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "termos.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "termos.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: gateway
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.global.imageRegistry }}{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.gateway.service.targetPort }}
+              protocol: TCP
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+            # HTTP proxy port for worker network isolation
+            - name: proxy
+              containerPort: 8118
+              protocol: TCP
+          # Startup probe: Allow up to 60s for gateway to initialize (Redis, K8s client, etc.)
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 2
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 0  # Startup probe handles initial delay
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 0  # Startup probe handles initial delay
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          env:
+            # Port configuration
+            - name: PORT
+              value: "{{ .Values.gateway.service.targetPort }}"
+
+            {{- if .Values.slack.enabled }}
+            # Slack configuration
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: slack-bot-token
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: slack-signing-secret
+                  optional: true
+            - name: SLACK_APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: slack-app-token
+                  optional: true
+            - name: SLACK_HTTP_MODE
+              value: {{ if .Values.slack.socketMode }}"false"{{ else }}"true"{{ end }}
+            - name: SLACK_ALLOW_DIRECT_MESSAGES
+              value: "{{ .Values.slack.allowDirectMessages }}"
+            - name: SLACK_ALLOW_PRIVATE_CHANNELS
+              value: "{{ .Values.slack.allowPrivateChannels }}"
+            {{- end }}
+
+            {{- if .Values.whatsapp.enabled }}
+            # WhatsApp configuration
+            - name: WHATSAPP_ENABLED
+              value: "true"
+            - name: WHATSAPP_SELF_CHAT
+              value: "{{ .Values.whatsapp.selfChat }}"
+            - name: WHATSAPP_ALLOW_GROUPS
+              value: "{{ .Values.whatsapp.allowGroups }}"
+            - name: WHATSAPP_REQUIRE_MENTION
+              value: "{{ .Values.whatsapp.requireMention }}"
+            # WhatsApp credentials mounted as file (too large for env var)
+            - name: WHATSAPP_CREDENTIALS
+              value: "/etc/whatsapp/credentials.txt"
+            {{- end }}
+
+            # Kubernetes configuration
+            - name: DEPLOYMENT_MODE
+              value: "kubernetes"
+            - name: KUBERNETES_NAMESPACE
+              value: "{{ .Values.kubernetes.namespace }}"
+            - name: WORKER_IMAGE_REPOSITORY
+              value: "{{ .Values.global.imageRegistry }}{{ .Values.worker.image.repository }}"
+            - name: WORKER_IMAGE_TAG
+              value: "{{ .Values.worker.image.tag }}"
+            - name: WORKER_CPU
+              value: "{{ .Values.worker.resources.requests.cpu }}"
+            - name: WORKER_MEMORY
+              value: "{{ .Values.worker.resources.requests.memory }}"
+            - name: WORKER_TIMEOUT_SECONDS
+              value: "{{ .Values.worker.job.timeoutSeconds }}"
+            - name: WORKER_RUNTIME_CLASS_NAME
+              value: "{{ .Values.worker.runtimeClassName }}"
+            # Worker network access control (via HTTP proxy)
+            - name: WORKER_ALLOWED_DOMAINS
+              value: "{{ .Values.worker.allowedDomains }}"
+            {{- if .Values.worker.disallowedDomains }}
+            - name: WORKER_DISALLOWED_DOMAINS
+              value: "{{ .Values.worker.disallowedDomains }}"
+            {{- end }}
+
+            # Redis queue configuration
+            {{- if .Values.redis.enabled }}
+            {{- if .Values.redis.auth.enabled }}
+            # IMPORTANT: REDIS_PASSWORD must be defined BEFORE QUEUE_URL for $(VAR) substitution to work
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-redis
+                  key: redis-password
+            - name: QUEUE_URL
+              value: "redis://:$(REDIS_PASSWORD)@{{ include "termos.fullname" . }}-redis-master:6379"
+            {{- else }}
+            - name: QUEUE_URL
+              value: "redis://{{ include "termos.fullname" . }}-redis-master:6379"
+            {{- end }}
+            {{- end }}
+            # Dispatcher service name for workers to connect back
+            - name: DISPATCHER_SERVICE_NAME
+              value: "{{ include "termos.fullname" . }}-gateway"
+
+            # Sentry configuration
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: sentry-dsn
+                  optional: true
+
+            {{- if .Values.tempo.enabled }}
+            # Tempo distributed tracing endpoint
+            - name: TEMPO_ENDPOINT
+              value: "http://{{ .Release.Name }}-tempo:4318/v1/traces"
+            {{- end }}
+
+            # GitHub App authentication for git workspace support
+            {{- if .Values.gitCache.enabled }}
+            - name: GIT_CACHE_DIR
+              value: "{{ .Values.gitCache.persistence.mountPath }}"
+            {{- if .Values.secrets.githubAppId }}
+            - name: GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: github-app-id
+                  optional: true
+            - name: GITHUB_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: github-app-private-key
+                  optional: true
+            {{- end }}
+            {{- if .Values.secrets.githubPersonalAccessToken }}
+            - name: GITHUB_PERSONAL_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: github-personal-access-token
+                  optional: true
+            {{- end }}
+            {{- end }}
+
+            # Claude configuration
+            - name: AGENT_DEFAULT_MODEL
+              value: "{{ .Values.claude.model }}"
+            - name: TIMEOUT_MINUTES
+              value: "{{ .Values.claude.timeoutMinutes }}"
+            - name: ALLOWED_TOOLS
+              value: "{{ .Values.claude.allowedTools }}"
+            
+            # Session configuration
+            - name: SESSION_TIMEOUT_MINUTES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "termos.fullname" . }}-config
+                  key: session-timeout-minutes
+            
+            # Application configuration
+            - name: NODE_ENV
+              value: "{{ .Values.gateway.config.nodeEnv }}"
+            - name: LOG_LEVEL
+              value: "{{ .Values.gateway.config.logLevel }}"
+            # Use simple console logger (Winston doesn't work with Bun on Alpine)
+            - name: USE_SIMPLE_LOGGER
+              value: "true"
+
+            # Encryption key for token at-rest encryption
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: encryption-key
+                  optional: true
+            
+            # Anthropic proxy configuration (always enabled)
+            - name: CLAUDE_CODE_OAUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "termos.fullname" . }}-secrets
+                  key: claude-code-oauth-token
+            {{- if .Values.gateway.anthropicProxy.baseUrl }}
+            - name: ANTHROPIC_BASE_URL
+              value: "{{ .Values.gateway.anthropicProxy.baseUrl }}"
+            {{- end }}
+          volumeMounts:
+            # Tmpfs for tsx and other temp files (required for readOnlyRootFilesystem)
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.whatsapp.enabled }}
+            - name: whatsapp-credentials
+              mountPath: /etc/whatsapp
+              readOnly: true
+            {{- end }}
+            {{- if .Values.gitCache.enabled }}
+            - name: git-cache
+              mountPath: {{ .Values.gitCache.persistence.mountPath }}
+            {{- end }}
+      volumes:
+        # Tmpfs for temporary files (in-memory)
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: "256Mi"
+        {{- if .Values.whatsapp.enabled }}
+        - name: whatsapp-credentials
+          secret:
+            secretName: {{ include "termos.fullname" . }}-whatsapp
+            optional: true
+        {{- end }}
+        {{- if .Values.gitCache.enabled }}
+        - name: git-cache
+          {{- if .Values.gitCache.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "termos.fullname" . }}-git-cache
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}{{- end }}

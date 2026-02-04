@@ -1,4 +1,4 @@
-import { createLogger, type NetworkConfig } from "@peerbot/core";
+import { createLogger, type NetworkConfig } from "@termosdev/core";
 
 const logger = createLogger("network-allowlist");
 

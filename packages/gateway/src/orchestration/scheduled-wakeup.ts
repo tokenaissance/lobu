@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { CronExpressionParser } from "cron-parser";
 import type { IMessageQueue, QueueJob } from "../infrastructure/queue";
 

@@ -4,8 +4,8 @@
  * and Slack-specific status indicators.
  */
 
-import type { IModuleRegistry } from "@peerbot/core";
-import { AsyncLock, createLogger, DEFAULTS, REDIS_KEYS } from "@peerbot/core";
+import type { IModuleRegistry } from "@termosdev/core";
+import { AsyncLock, createLogger, DEFAULTS, REDIS_KEYS } from "@termosdev/core";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 import type Redis from "ioredis";

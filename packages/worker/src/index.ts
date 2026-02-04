@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger, initTracing, moduleRegistry } from "@peerbot/core";
+import { createLogger, initTracing, moduleRegistry } from "@termosdev/core";
 
 const logger = createLogger("worker");
 
@@ -21,10 +21,10 @@ async function main() {
   logger.debug(`TEMPO_ENDPOINT: ${tempoEndpoint}`);
   if (tempoEndpoint) {
     initTracing({
-      serviceName: "peerbot-worker",
+      serviceName: "termos-worker",
       tempoEndpoint,
     });
-    logger.info(`Tracing initialized: peerbot-worker -> ${tempoEndpoint}`);
+    logger.info(`Tracing initialized: termos-worker -> ${tempoEndpoint}`);
   }
 
   // Register built-in worker modules

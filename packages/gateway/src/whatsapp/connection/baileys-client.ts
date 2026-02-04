@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import {
   type AnyMessageContent,
   type BaileysEventMap,
@@ -153,7 +153,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       version,
       logger: baileysLogger,
       printQRInTerminal: false,
-      browser: ["peerbot", "gateway", "1.0.0"],
+      browser: ["termos", "gateway", "1.0.0"],
       syncFullHistory: false,
       markOnlineOnConnect: false,
     });

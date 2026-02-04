@@ -4,7 +4,7 @@ import type {
   NetworkConfig,
   NixConfig,
   SessionContext,
-} from "@peerbot/core";
+} from "@termosdev/core";
 
 /**
  * Platform-agnostic session types and utilities

@@ -2,7 +2,7 @@
  * Message batching for grouping rapid messages
  */
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { QueuedMessage } from "./types";
 
 const logger = createLogger("message-batcher");

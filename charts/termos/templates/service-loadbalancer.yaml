@@ -1,0 +1,21 @@
+{{- if and .Values.ingress.enabled (not .Values.ingress.className) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "termos.fullname" . }}-loadbalancer
+  namespace: {{ .Values.kubernetes.namespace }}
+  labels:
+    {{- include "termos.labels" . | nindent 4 }}
+    component: gateway
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: {{ .Values.slack.port }}
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "termos.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dispatcher
+{{- end }}

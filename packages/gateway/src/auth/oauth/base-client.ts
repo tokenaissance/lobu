@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { createLogger, type Logger } from "@peerbot/core";
+import { createLogger, type Logger } from "@termosdev/core";
 
 /**
  * Base OAuth2 client with shared token exchange and refresh logic

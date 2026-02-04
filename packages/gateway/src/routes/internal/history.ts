@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
-import { createLogger, verifyWorkerToken } from "@peerbot/core";
+import { createLogger, verifyWorkerToken } from "@termosdev/core";
 import { Hono } from "hono";
+import { platformRegistry } from "../../platform";
 
 const logger = createLogger("history-routes");
 
@@ -85,14 +86,36 @@ export function createHistoryRoutes(): Hono<WorkerContext> {
         );
         return c.json(response);
       } else if (platform === "whatsapp") {
-        // WhatsApp doesn't have server-side history storage
+        // Use platform registry to get WhatsApp history
+        const whatsappPlatform = platformRegistry.get("whatsapp");
+        if (whatsappPlatform?.getConversationHistory) {
+          const response = await whatsappPlatform.getConversationHistory(
+            channelId,
+            threadId,
+            limit,
+            before
+          );
+          return c.json(response);
+        }
+        // Fallback if platform not available
         return c.json({
           messages: [],
           nextCursor: null,
           hasMore: false,
-          note: "WhatsApp history is not stored server-side",
+          note: "WhatsApp platform not initialized",
         });
       } else {
+        // Try generic platform history
+        const platformAdapter = platformRegistry.get(platform);
+        if (platformAdapter?.getConversationHistory) {
+          const response = await platformAdapter.getConversationHistory(
+            channelId,
+            threadId,
+            limit,
+            before
+          );
+          return c.json(response);
+        }
         return c.json({ error: `Unsupported platform: ${platform}` }, 400);
       }
     } catch (error) {

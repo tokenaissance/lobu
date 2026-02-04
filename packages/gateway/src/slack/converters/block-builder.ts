@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { ActionsBlockElement, Block as SlackBlock } from "@slack/types";
 import { SLACK } from "../config";
 import { convertMarkdownToSlack } from "./markdown";

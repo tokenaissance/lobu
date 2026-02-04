@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Shared exports for @peerbot/core consumers (gateway, worker, external tools)
+// Shared exports for @termosdev/core consumers (gateway, worker, external tools)
 
 export * from "./constants";
 // Constants

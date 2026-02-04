@@ -7,7 +7,7 @@ import {
   createLogger,
   type UserInteraction,
   type UserSuggestion,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import type { InteractionService } from "../interactions";
 import {
@@ -388,6 +388,7 @@ export class WhatsAppInteractionRenderer {
 
   /**
    * Extract text from message.
+   * Handles plain text, list responses, button clicks, etc.
    */
   private extractText(message: any): string | undefined {
     if (!message) return undefined;
@@ -400,6 +401,36 @@ export class WhatsAppInteractionRenderer {
     // Try extended text
     if (message.extendedTextMessage?.text) {
       return message.extendedTextMessage.text.trim();
+    }
+
+    // Try list response (rowId is the index we set)
+    if (message.listResponseMessage?.singleSelectReply?.selectedRowId) {
+      return message.listResponseMessage.singleSelectReply.selectedRowId;
+    }
+
+    // Try button response
+    if (message.buttonsResponseMessage?.selectedButtonId) {
+      return message.buttonsResponseMessage.selectedButtonId;
+    }
+
+    // Try template button response
+    if (message.templateButtonReplyMessage?.selectedId) {
+      return message.templateButtonReplyMessage.selectedId;
+    }
+
+    // Try interactive response (newer format)
+    if (
+      message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson
+    ) {
+      try {
+        const params = JSON.parse(
+          message.interactiveResponseMessage.nativeFlowResponseMessage
+            .paramsJson
+        );
+        if (params.id) return params.id;
+      } catch {
+        // Ignore parse errors
+      }
     }
 
     return undefined;

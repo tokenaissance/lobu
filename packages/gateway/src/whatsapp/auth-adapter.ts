@@ -3,7 +3,7 @@
  * Sends settings link for authentication and configuration.
  */
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import type { AuthProvider, PlatformAuthAdapter } from "../auth/platform-auth";
 import {
   buildSettingsUrl,

@@ -5,7 +5,7 @@ import {
   ErrorCode,
   OrchestratorError,
   SpanStatusCode,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import {
   BaseDeploymentManager,
   type DeploymentInfo,
@@ -348,8 +348,8 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
           // Get last activity from annotations or fallback to creation time
           const lastActivityStr =
-            deployment.metadata?.annotations?.["peerbot.io/last-activity"] ||
-            deployment.metadata?.annotations?.["peerbot.io/created"] ||
+            deployment.metadata?.annotations?.["termos.io/last-activity"] ||
+            deployment.metadata?.annotations?.["termos.io/created"] ||
             deployment.metadata?.creationTimestamp;
 
           const lastActivity = lastActivityStr
@@ -394,7 +394,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         labels: {
           ...BASE_WORKER_LABELS,
           "app.kubernetes.io/component": "worker-storage",
-          "peerbot.io/agent-id": agentId,
+          "termos.io/agent-id": agentId,
         },
       },
       spec: {
@@ -412,9 +412,9 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Create child span for PVC setup (linked to parent via traceparent)
     const span = createChildSpan("pvc_setup", traceparent, {
-      "peerbot.pvc_name": pvcName,
-      "peerbot.agent_id": agentId,
-      "peerbot.pvc_size": this.config.worker.persistence?.size || "1Gi",
+      "termos.pvc_name": pvcName,
+      "termos.agent_id": agentId,
+      "termos.pvc_size": this.config.worker.persistence?.size || "1Gi",
     });
 
     logger.info({ traceparent, pvcName, agentId, size: "1Gi" }, "Creating PVC");
@@ -439,7 +439,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         body: k8sError.body,
       });
       if (k8sError.statusCode === 409) {
-        span?.setAttribute("peerbot.pvc_exists", true);
+        span?.setAttribute("termos.pvc_exists", true);
         span?.setStatus({ code: SpanStatusCode.OK });
         span?.end();
         logger.info(`PVC ${pvcName} already exists (reusing)`);
@@ -473,7 +473,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Use agentId for PVC naming (shared across threads in same space)
     const agentId = messageData?.agentId!;
-    const pvcName = `peerbot-workspace-${agentId}`;
+    const pvcName = `termos-workspace-${agentId}`;
     await this.createPVC(pvcName, agentId, traceparent);
 
     // Get environment variables before creating the deployment spec
@@ -505,14 +505,14 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
             annotations: {
               // Add platform-specific metadata
               ...resolvePlatformDeploymentMetadata(messageData),
-              "peerbot.io/created": new Date().toISOString(),
-              "peerbot.io/agent-id": agentId,
-              ...(traceparent ? { "peerbot.io/traceparent": traceparent } : {}),
+              "termos.io/created": new Date().toISOString(),
+              "termos.io/agent-id": agentId,
+              ...(traceparent ? { "termos.io/traceparent": traceparent } : {}),
             },
             labels: { ...BASE_WORKER_LABELS },
           },
           spec: {
-            serviceAccountName: "peerbot-worker",
+            serviceAccountName: "termos-worker",
             // Only set runtimeClassName if configured and available (validated on startup)
             ...(this.config.worker.runtimeClassName
               ? { runtimeClassName: this.config.worker.runtimeClassName }
@@ -604,9 +604,9 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Create child span for worker creation (linked to parent via traceparent)
     const workerSpan = createChildSpan("worker_creation", traceparent, {
-      "peerbot.deployment_name": deploymentName,
-      "peerbot.user_id": userId,
-      "peerbot.agent_id": agentId,
+      "termos.deployment_name": deploymentName,
+      "termos.user_id": userId,
+      "termos.agent_id": agentId,
     });
 
     logger.info(
@@ -777,7 +777,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       const patch = {
         metadata: {
           annotations: {
-            "peerbot.io/last-activity": timestamp,
+            "termos.io/last-activity": timestamp,
           },
         },
       };
@@ -806,7 +806,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
   protected getDispatcherHost(): string {
     const dispatcherService =
-      process.env.DISPATCHER_SERVICE_NAME || "peerbot-dispatcher";
+      process.env.DISPATCHER_SERVICE_NAME || "termos-dispatcher";
     return `${dispatcherService}.${this.config.kubernetes.namespace}.svc.cluster.local`;
   }
 }

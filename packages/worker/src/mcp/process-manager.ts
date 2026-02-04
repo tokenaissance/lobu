@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { createMCPServer, startHTTPServer } from "./mcp-server";
 import { startTunnel } from "./tunnel-manager";
 import type {

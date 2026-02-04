@@ -1,4 +1,4 @@
-import { createLogger, DEFAULTS } from "@peerbot/core";
+import { createLogger, DEFAULTS } from "@termosdev/core";
 import type { WebClient } from "@slack/web-api";
 import {
   type AgentSettingsStore,
@@ -13,6 +13,7 @@ import type {
 import type { InteractionService } from "../../interactions";
 import type { ISessionManager, ThreadSession } from "../../session";
 import { generateSessionKey } from "../../session";
+import type { TranscriptionService } from "../../services/transcription-service";
 import { resolveSpace } from "../../spaces";
 import type { MessageHandlerConfig } from "../config";
 import type { SlackContext, SlackMessageEvent } from "../types";
@@ -23,6 +24,7 @@ export class MessageHandler {
   private readonly SESSION_TTL = DEFAULTS.SESSION_TTL_MS;
   private channelBindingService?: ChannelBindingService;
   private agentSettingsStore?: AgentSettingsStore;
+  private transcriptionService?: TranscriptionService;
 
   constructor(
     private queueProducer: QueueProducer,
@@ -44,6 +46,123 @@ export class MessageHandler {
    */
   setAgentSettingsStore(store: AgentSettingsStore): void {
     this.agentSettingsStore = store;
+  }
+
+  /**
+   * Set the transcription service for voice/audio processing (optional)
+   */
+  setTranscriptionService(service: TranscriptionService): void {
+    this.transcriptionService = service;
+  }
+
+  /**
+   * Transcribe audio files from Slack message.
+   * Returns the original message with transcriptions prepended.
+   */
+  private async transcribeAudioFiles(
+    userRequest: string,
+    files: any[] | undefined
+  ): Promise<string> {
+    if (!files?.length || !this.transcriptionService) {
+      return userRequest;
+    }
+
+    // Filter for audio files
+    const audioFiles = files.filter((f) => {
+      const mimetype = f.mimetype?.toLowerCase() || "";
+      const filetype = f.filetype?.toLowerCase() || "";
+      return (
+        mimetype.startsWith("audio/") ||
+        mimetype === "application/ogg" ||
+        ["mp3", "m4a", "wav", "ogg", "opus", "webm", "aac"].includes(filetype)
+      );
+    });
+
+    if (audioFiles.length === 0) {
+      return userRequest;
+    }
+
+    logger.info(
+      { audioFileCount: audioFiles.length },
+      "Attempting to transcribe Slack audio files"
+    );
+
+    const transcriptions: string[] = [];
+
+    for (const audioFile of audioFiles) {
+      try {
+        // Download the file from Slack
+        const downloadUrl =
+          audioFile.url_private_download || audioFile.url_private;
+        if (!downloadUrl) {
+          logger.warn(
+            { fileId: audioFile.id },
+            "No download URL for audio file"
+          );
+          continue;
+        }
+
+        const response = await fetch(downloadUrl, {
+          headers: {
+            Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+          },
+        });
+
+        if (!response.ok) {
+          logger.warn(
+            { fileId: audioFile.id, status: response.status },
+            "Failed to download Slack audio file"
+          );
+          continue;
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const mimetype = audioFile.mimetype || "audio/mpeg";
+        const filename =
+          audioFile.name || `audio.${audioFile.filetype || "mp3"}`;
+
+        const result = await this.transcriptionService.transcribe(
+          buffer,
+          filename,
+          mimetype
+        );
+
+        if ("text" in result) {
+          // Success case
+          transcriptions.push(`[Voice message]: ${result.text}`);
+          logger.info(
+            { fileId: audioFile.id, textLength: result.text.length },
+            "Audio transcription successful"
+          );
+        } else if (
+          result.error?.includes("No transcription provider configured")
+        ) {
+          logger.info("Transcription service not configured - skipping audio");
+          break; // No point trying more files
+        } else {
+          logger.warn(
+            { fileId: audioFile.id, error: result.error },
+            "Audio transcription failed"
+          );
+        }
+      } catch (error) {
+        logger.error(
+          { fileId: audioFile.id, error: String(error) },
+          "Error transcribing audio file"
+        );
+      }
+    }
+
+    if (transcriptions.length === 0) {
+      return userRequest;
+    }
+
+    // Prepend transcriptions to the message
+    const transcriptionPrefix = transcriptions.join("\n\n");
+    if (!userRequest.trim() || userRequest === "[Audio message]") {
+      return transcriptionPrefix;
+    }
+    return `${transcriptionPrefix}\n\n${userRequest}`;
   }
 
   /**
@@ -95,6 +214,16 @@ export class MessageHandler {
 
     if (settings.historyConfig) {
       mergedOptions.historyConfig = settings.historyConfig;
+    }
+
+    // MCP servers from agent settings
+    if (settings.mcpServers) {
+      mergedOptions.mcpServers = settings.mcpServers;
+    }
+
+    // Verbose logging
+    if (settings.verboseLogging !== undefined) {
+      mergedOptions.verboseLogging = settings.verboseLogging;
     }
 
     return mergedOptions;
@@ -156,6 +285,12 @@ export class MessageHandler {
     );
     logger.info(
       `📨 Handling request from user ${context.userId} in thread ${context.threadTs || context.messageTs}`
+    );
+
+    // Transcribe audio files if present
+    const processedRequest = await this.transcribeAudioFiles(
+      userRequest,
+      files
     );
 
     // CRITICAL: Always use thread_ts for thread identification
@@ -360,6 +495,10 @@ export class MessageHandler {
       if (isNewConversation) {
         await this.sessionManager.setSession(threadSession);
 
+        // Extract top-level configs from agentOptions for orchestration
+        const { networkConfig, gitConfig, mcpServers, ...remainingOptions } =
+          agentOptions;
+
         const deploymentPayload: MessagePayload = {
           userId: context.userId,
           botId: this.getBotId(),
@@ -368,7 +507,7 @@ export class MessageHandler {
           agentId,
           platform: "slack",
           messageId: context.messageTs,
-          messageText: userRequest,
+          messageText: processedRequest,
           channelId: context.channelId,
           platformMetadata: {
             teamId: context.teamId,
@@ -379,7 +518,11 @@ export class MessageHandler {
             botResponseId: threadSession.botResponseId,
             files: files || [],
           },
-          agentOptions,
+          agentOptions: remainingOptions,
+          // Set top-level configs for orchestration
+          networkConfig,
+          gitConfig,
+          mcpConfig: mcpServers ? { mcpServers } : undefined,
         };
 
         const jobId =
@@ -398,6 +541,10 @@ export class MessageHandler {
       } else {
         await this.sessionManager.setSession(threadSession);
 
+        // Extract top-level configs from agentOptions for orchestration
+        const { networkConfig, gitConfig, mcpServers, ...remainingOptions } =
+          agentOptions;
+
         // Enqueue to user-specific queue
         const threadPayload: MessagePayload = {
           botId: this.getBotId(),
@@ -408,7 +555,7 @@ export class MessageHandler {
           platform: "slack",
           channelId: context.channelId,
           messageId: context.messageTs,
-          messageText: userRequest,
+          messageText: processedRequest,
           platformMetadata: {
             teamId: context.teamId,
             userDisplayName: context.userDisplayName,
@@ -418,7 +565,11 @@ export class MessageHandler {
             botResponseId: threadSession.botResponseId,
             files: files || [],
           },
-          agentOptions,
+          agentOptions: remainingOptions,
+          // Set top-level configs for orchestration
+          networkConfig,
+          gitConfig,
+          mcpConfig: mcpServers ? { mcpServers } : undefined,
         };
 
         const jobId = await this.queueProducer.enqueueMessage(threadPayload);

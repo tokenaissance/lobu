@@ -19,12 +19,12 @@
         },
         {
           "type": "json",
-          "path": "charts/peerbot/Chart.yaml",
+          "path": "charts/termos/Chart.yaml",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "charts/peerbot/Chart.yaml",
+          "path": "charts/termos/Chart.yaml",
           "jsonpath": "$.appVersion"
         }
       ]
@@ -32,14 +32,14 @@
     "packages/cli": {
       "changelog-path": "CHANGELOG.md",
       "release-type": "node",
-      "package-name": "create-peerbot",
+      "package-name": "create-termos",
       "include-component-in-tag": true,
       "include-v-in-tag": false
     },
     "packages/worker": {
       "changelog-path": "CHANGELOG.md",
       "release-type": "node",
-      "package-name": "@peerbot/worker",
+      "package-name": "@termosdev/worker",
       "include-component-in-tag": true,
       "include-v-in-tag": false
     }

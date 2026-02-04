@@ -28,9 +28,9 @@ export async function runCli(
 ): Promise<void> {
   const program = new Command();
   program
-    .name("create-peerbot")
+    .name("create-termos")
     .description(
-      "Initialize a new Peerbot project and generate docker-compose.yml"
+      "Initialize a new Termos project and generate docker-compose.yml"
     )
     .argument("[project-name]", "Name of the project (optional)")
     .version(await getPackageVersion())

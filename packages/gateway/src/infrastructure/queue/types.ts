@@ -1,5 +1,5 @@
 /**
- * Message queue interface and payload types for peerbot
+ * Message queue interface and payload types for termos
  * Supports multiple queue backends (currently Redis via BullMQ)
  */
 

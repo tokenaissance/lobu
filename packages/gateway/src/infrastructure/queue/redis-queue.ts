@@ -2,7 +2,7 @@
  * Redis-based message queue implementation using BullMQ
  */
 
-import { createLogger } from "@peerbot/core";
+import { createLogger } from "@termosdev/core";
 import { type JobsOptions, Queue, type QueueEvents, Worker } from "bullmq";
 import Redis from "ioredis";
 import type {

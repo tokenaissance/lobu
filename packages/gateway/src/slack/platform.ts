@@ -6,7 +6,7 @@ import {
   moduleRegistry,
   type UserInteraction,
   type UserSuggestion,
-} from "@peerbot/core";
+} from "@termosdev/core";
 import { App, type AppOptions, ExpressReceiver, LogLevel } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
 import type { NextFunction, Request, Response } from "express";
@@ -184,8 +184,7 @@ export class SlackPlatform implements PlatformAdapter {
       },
       moduleRegistry,
       services.getSessionManager(),
-      interactionService,
-      this // Pass platform instance for auth status rendering
+      interactionService
     );
 
     // Wire up channel binding service for agent routing
@@ -200,6 +199,13 @@ export class SlackPlatform implements PlatformAdapter {
     if (agentSettingsStore) {
       this.eventHandlers.setAgentSettingsStore(agentSettingsStore);
       logger.info("✅ Agent settings store wired to Slack event handlers");
+    }
+
+    // Wire up transcription service for voice messages
+    const transcriptionService = services.getTranscriptionService();
+    if (transcriptionService) {
+      this.eventHandlers.setTranscriptionService(transcriptionService);
+      logger.info("✅ Transcription service wired to Slack event handlers");
     }
 
     logger.info("✅ Slack platform initialized");

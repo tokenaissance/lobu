@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { createLogger, type Logger } from "@peerbot/core";
+import { createLogger, type Logger } from "@termosdev/core";
 import type Redis from "ioredis";
 
 /**

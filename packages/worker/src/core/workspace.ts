@@ -1,7 +1,11 @@
 #!/usr/bin/env bun
 
 import { mkdir } from "node:fs/promises";
-import { createLogger, sanitizeThreadId, WorkspaceError } from "@peerbot/core";
+import {
+  createLogger,
+  sanitizeThreadId,
+  WorkspaceError,
+} from "@termosdev/core";
 import type { WorkspaceInfo, WorkspaceSetupConfig } from "./types";
 
 const logger = createLogger("workspace");
@@ -12,7 +16,7 @@ const logger = createLogger("workspace");
 
 /**
  * Extract thread ID from deployment name
- * Example: peerbot-worker-1756766056.836119 -> 1756766056.836119
+ * Example: termos-worker-1756766056.836119 -> 1756766056.836119
  */
 function extractThreadIdFromDeploymentName(
   deploymentName: string | undefined

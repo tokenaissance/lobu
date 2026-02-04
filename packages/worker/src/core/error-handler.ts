@@ -1,4 +1,4 @@
-import { createLogger, type WorkerTransport } from "@peerbot/core";
+import { createLogger, type WorkerTransport } from "@termosdev/core";
 
 const logger = createLogger("base-worker");
 

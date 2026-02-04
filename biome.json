@@ -10,7 +10,7 @@
     "includes": [
       "**",
       "!**/test/fixtures/",
-      "!**/charts/peerbot/templates/",
+      "!**/charts/termos/templates/",
       "!**/packages/**/*/workspaces/",
       "!**/dist/",
       "!**/node_modules/"
