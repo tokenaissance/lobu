@@ -106,7 +106,7 @@ slack:
 
 # WhatsApp configuration
 whatsapp:
-  enabled: true
+  enabled: false
   selfChat: true  # Allow self-chat mode for testing
   allowGroups: true
   requireMention: true
