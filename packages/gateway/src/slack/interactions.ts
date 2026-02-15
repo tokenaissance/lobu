@@ -284,7 +284,11 @@ export class SlackInteractionRenderer {
       await this.interactionService.setMessageTs(interaction.id, result.ts);
     }
 
-    await this.setThreadStatus(interaction.channelId, interaction.conversationId, "");
+    await this.setThreadStatus(
+      interaction.channelId,
+      interaction.conversationId,
+      ""
+    );
   }
 
   /**

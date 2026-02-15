@@ -261,7 +261,7 @@ Use it when the user references past discussions or you need context.`);
         dispatcherUrl,
         workerToken,
         customToolsConfig.channelId,
-        (customToolsConfig.conversationId ?? customToolsConfig.threadId ?? ""),
+        customToolsConfig.conversationId ?? customToolsConfig.threadId ?? "",
         interactionClient,
         {
           platform: customToolsConfig.platform,

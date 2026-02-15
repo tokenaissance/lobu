@@ -190,7 +190,8 @@ export abstract class BaseWorker implements WorkerExecutor {
           platform: this.config.platform,
           channelId: this.config.channelId,
           userId: this.config.userId,
-          conversationId: this.config.conversationId || this.config.threadId || "",
+          conversationId:
+            this.config.conversationId || this.config.threadId || "",
           threadId: this.config.conversationId || this.config.threadId || "",
           messageId: this.config.responseId,
           workingDirectory: this.workspaceManager.getCurrentWorkingDirectory(),
@@ -225,7 +226,8 @@ export abstract class BaseWorker implements WorkerExecutor {
           attributes: {
             "user.id": this.config.userId,
             "session.key": this.config.sessionKey,
-            "conversation.id": this.config.conversationId || this.config.threadId || "",
+            "conversation.id":
+              this.config.conversationId || this.config.threadId || "",
             agent: this.getAgentName(),
           },
         },
@@ -264,7 +266,8 @@ export abstract class BaseWorker implements WorkerExecutor {
       const moduleData = await collectModuleData({
         workspaceDir: this.workspaceManager.getCurrentWorkingDirectory(),
         userId: this.config.userId,
-        conversationId: this.config.conversationId || this.config.threadId || "",
+        conversationId:
+          this.config.conversationId || this.config.threadId || "",
         threadId: this.config.conversationId || this.config.threadId || "",
       });
       this.workerTransport.setModuleData(moduleData);

@@ -42,7 +42,6 @@ export function generateDeploymentName(
   return `termos-worker-${shortUserId}-${hash}`;
 }
 
-
 // Type for module environment variable builder function
 export type ModuleEnvVarsBuilder = (
   userId: string,
@@ -257,7 +256,8 @@ export abstract class BaseDeploymentManager {
       );
     }
 
-    const { conversationId, threadId, channelId, platformMetadata } = messageData as any;
+    const { conversationId, threadId, channelId, platformMetadata } =
+      messageData as any;
     const effectiveConversationId = conversationId || threadId;
 
     if (!effectiveConversationId || !channelId) {
@@ -299,10 +299,7 @@ export abstract class BaseDeploymentManager {
     // The HTTP proxy extracts deploymentName from Proxy-Authorization header
     // and looks up the config from networkConfigStore
     if (messageData.networkConfig) {
-      await networkConfigStore.set(
-        deploymentName,
-        messageData.networkConfig
-      );
+      await networkConfigStore.set(deploymentName, messageData.networkConfig);
       logger.debug(
         `Stored network config for ${deploymentName}: allowed=${messageData.networkConfig.allowedDomains?.length ?? 0}, denied=${messageData.networkConfig.deniedDomains?.length ?? 0}`
       );
@@ -370,9 +367,7 @@ export abstract class BaseDeploymentManager {
       DEPLOYMENT_NAME: deploymentName,
       CHANNEL_ID: channelId,
       ORIGINAL_MESSAGE_TS:
-        platformMetadata?.originalMessageTs ||
-        messageData.messageId ||
-        "",
+        platformMetadata?.originalMessageTs || messageData.messageId || "",
       LOG_LEVEL: "info",
       WORKSPACE_DIR: "/workspace",
       CONVERSATION_ID: effectiveConversationId,
@@ -395,8 +390,7 @@ export abstract class BaseDeploymentManager {
 
     // Add optional environment variables only if they exist
     if (messageData?.platformMetadata?.botResponseTs) {
-      envVars.BOT_RESPONSE_TS =
-        messageData.platformMetadata.botResponseTs;
+      envVars.BOT_RESPONSE_TS = messageData.platformMetadata.botResponseTs;
     }
 
     // Add trace ID for end-to-end observability
@@ -430,16 +424,9 @@ export abstract class BaseDeploymentManager {
     if (includeSecrets && this.moduleEnvVarsBuilder) {
       // Add module-specific environment variables
       try {
-        envVars = await this.moduleEnvVarsBuilder(
-          userId,
-          agentId,
-          envVars
-        );
+        envVars = await this.moduleEnvVarsBuilder(userId, agentId, envVars);
       } catch (error) {
-        logger.warn(
-          "Failed to build module environment variables:",
-          error
-        );
+        logger.warn("Failed to build module environment variables:", error);
       }
     }
     // Add worker environment variables from configuration
@@ -464,10 +451,7 @@ export abstract class BaseDeploymentManager {
     }
 
     // Inject system ANTHROPIC_API_KEY if not already set by modules/user
-    if (
-      !envVars.ANTHROPIC_API_KEY &&
-      !envVars.CLAUDE_CODE_OAUTH_TOKEN
-    ) {
+    if (!envVars.ANTHROPIC_API_KEY && !envVars.CLAUDE_CODE_OAUTH_TOKEN) {
       const systemKey = process.env.ANTHROPIC_API_KEY;
       if (systemKey) {
         envVars.ANTHROPIC_API_KEY = systemKey;
@@ -492,10 +476,7 @@ export abstract class BaseDeploymentManager {
           envVars[key] = placeholder;
           hasSecrets = true;
         } catch (error) {
-          logger.warn(
-            `Failed to generate placeholder for ${key}:`,
-            error
-          );
+          logger.warn(`Failed to generate placeholder for ${key}:`, error);
         }
       }
 
@@ -561,16 +542,14 @@ export abstract class BaseDeploymentManager {
 
       // Sort deployments by last activity (oldest first)
       const sortedDeployments = [...activeDeployments].sort(
-        (a, b) =>
-          a.lastActivity.getTime() - b.lastActivity.getTime()
+        (a, b) => a.lastActivity.getTime() - b.lastActivity.getTime()
       );
 
       let processedCount = 0;
 
       // Process each deployment based on its state
       for (const analysis of sortedDeployments) {
-        const { deploymentName, replicas, isIdle, isVeryOld } =
-          analysis;
+        const { deploymentName, replicas, isIdle, isVeryOld } = analysis;
 
         if (isVeryOld) {
           // Delete very old deployments (>= 7 days)
@@ -602,13 +581,9 @@ export abstract class BaseDeploymentManager {
         (d) => !d.isVeryOld
       );
       if (remainingDeployments.length > maxDeployments) {
-        const excessCount =
-          remainingDeployments.length - maxDeployments;
+        const excessCount = remainingDeployments.length - maxDeployments;
 
-        const deploymentsToDelete = remainingDeployments.slice(
-          0,
-          excessCount
-        );
+        const deploymentsToDelete = remainingDeployments.slice(0, excessCount);
         for (const { deploymentName } of deploymentsToDelete) {
           try {
             await this.deleteWorkerDeployment(deploymentName);

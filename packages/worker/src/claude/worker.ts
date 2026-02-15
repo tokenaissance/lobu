@@ -108,7 +108,8 @@ export class ClaudeWorker extends BaseWorker {
         this.getWorkingDirectory(),
         {
           channelId: this.config.channelId,
-          conversationId: this.config.conversationId || this.config.threadId || "",
+          conversationId:
+            this.config.conversationId || this.config.threadId || "",
           threadId: this.config.conversationId || this.config.threadId || "",
           platform: this.config.platform,
           historyEnabled,

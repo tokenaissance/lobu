@@ -12,7 +12,9 @@ class FakeRedis {
     return entry.expiresAtMs <= Date.now();
   }
 
-  private getEntry(key: string): { value: string; expiresAtMs?: number } | undefined {
+  private getEntry(
+    key: string
+  ): { value: string; expiresAtMs?: number } | undefined {
     const entry = this.data.get(key);
     if (!entry) return undefined;
     if (this.isExpired(entry)) {
@@ -137,4 +139,3 @@ describe("SystemMessageLimiter", () => {
     expect(attempts).toBe(2);
   });
 });
-

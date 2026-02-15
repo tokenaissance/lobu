@@ -163,7 +163,7 @@ export function createOpenClawCustomTools(params: {
             headers: {
               Authorization: `Bearer ${params.workerToken}`,
               "X-Channel-Id": params.channelId,
-              "X-Thread-Id": (params.conversationId || params.threadId || ""),
+              "X-Thread-Id": params.conversationId || params.threadId || "",
               ...headers,
               "Content-Length": formDataBuffer.length.toString(),
             },
@@ -762,7 +762,7 @@ export function createOpenClawCustomTools(params: {
               headers: {
                 Authorization: `Bearer ${params.workerToken}`,
                 "X-Channel-Id": params.channelId,
-                "X-Thread-Id": (params.conversationId || params.threadId || ""),
+                "X-Thread-Id": params.conversationId || params.threadId || "",
                 "X-Voice-Message": "true",
                 ...headers,
                 "Content-Length": formDataBuffer.length.toString(),
@@ -829,7 +829,7 @@ export function createOpenClawCustomTools(params: {
           const queryParams = new URLSearchParams({
             platform,
             channelId: params.channelId,
-            threadId: (params.conversationId || params.threadId || ""),
+            threadId: params.conversationId || params.threadId || "",
             limit: String(limit),
           });
 

@@ -98,7 +98,8 @@ export class WorkerGateway {
       return c.json({ error: "Invalid token" }, 401);
     }
 
-    const { deploymentName, userId, conversationId, threadId } = auth.tokenData as any;
+    const { deploymentName, userId, conversationId, threadId } =
+      auth.tokenData as any;
     const effectiveConversationId = conversationId || threadId;
     if (!effectiveConversationId) {
       return c.json({ error: "Invalid token (missing conversationId)" }, 401);
@@ -148,7 +149,10 @@ export class WorkerGateway {
       await this.jobRouter.resumeWorker(deploymentName);
 
       // Send any pending interaction responses
-      await this.sendPendingInteractionResponses(effectiveConversationId, deploymentName);
+      await this.sendPendingInteractionResponses(
+        effectiveConversationId,
+        deploymentName
+      );
 
       // Handle client disconnect
       sseWriter.onClose(() => {
@@ -258,7 +262,9 @@ export class WorkerGateway {
             platform || "unknown",
             instructionContext
           ),
-          this.interactionService.getPendingUnansweredInteractions(effectiveConversationId),
+          this.interactionService.getPendingUnansweredInteractions(
+            effectiveConversationId
+          ),
         ]);
 
       logger.info(

@@ -691,7 +691,8 @@ export class GatewayClient {
       this.currentTraceId ||
       process.env.TRACE_ID;
 
-    const conversationId = message.payload.conversationId || message.payload.threadId || "";
+    const conversationId =
+      message.payload.conversationId || message.payload.threadId || "";
 
     // Create child span for agent execution (linked to parent via traceparent)
     const span = createChildSpan("agent_execution", traceparent, {
@@ -824,7 +825,8 @@ export class GatewayClient {
   }
 
   private payloadToWorkerConfig(payload: MessagePayload): WorkerConfig {
-    const conversationId = payload.conversationId || payload.threadId || "default";
+    const conversationId =
+      payload.conversationId || payload.threadId || "default";
     const platformMetadata = payload.platformMetadata;
 
     const agentOptions = {

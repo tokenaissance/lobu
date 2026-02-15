@@ -124,7 +124,8 @@ export interface ISessionManager {
 export function generateSessionKey(context: SessionContext): string {
   // Use thread ID as the session key (if in a thread)
   // Otherwise use message ID
-  const id = context.conversationId || context.threadId || context.messageId || "";
+  const id =
+    context.conversationId || context.threadId || context.messageId || "";
 
   // If we have a thread ID, use it directly as the session key
   // This ensures consistency across all worker executions in the same thread

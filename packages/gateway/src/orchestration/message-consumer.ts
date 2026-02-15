@@ -114,7 +114,10 @@ export class MessageConsumer {
     if (!this.systemMessageLimiter) {
       // RedisQueue provides a shared ioredis client.
       const redis = this.queue.getRedisClient();
-      this.systemMessageLimiter = new SystemMessageLimiter(redis, "termos:sysmsg");
+      this.systemMessageLimiter = new SystemMessageLimiter(
+        redis,
+        "termos:sysmsg"
+      );
     }
     return this.systemMessageLimiter;
   }
@@ -157,7 +160,7 @@ export class MessageConsumer {
         traceId,
         jobId,
         userId: data?.userId,
-        conversationId: ((data as any)?.conversationId || data?.threadId),
+        conversationId: (data as any)?.conversationId || data?.threadId,
       },
       "Processing job with trace context"
     );
@@ -230,7 +233,7 @@ export class MessageConsumer {
                   userId: data.userId,
                   channelId: data.channelId,
                   conversationId: effectiveConversationId,
-            threadId: (data as any).threadId,
+                  threadId: (data as any).threadId,
                   platform: data.platform,
                   platformMetadata: data.platformMetadata,
                   ephemeral: true,
@@ -444,7 +447,7 @@ export class MessageConsumer {
       }
 
       logger.info(
-        `✅ Sent message to thread queue ${threadQueueName} for conversation ${(data.conversationId || data.threadId)}, jobId: ${jobId}`
+        `✅ Sent message to thread queue ${threadQueueName} for conversation ${data.conversationId || data.threadId}, jobId: ${jobId}`
       );
     } catch (error) {
       logger.error(`❌ [ERROR] sendToWorkerQueue failed:`, error);

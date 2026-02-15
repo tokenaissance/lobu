@@ -130,11 +130,11 @@ export class QueueProducer {
         retryLimit: options?.retryLimit || 3,
         retryDelay: options?.retryDelay || 30,
         expireInSeconds: options?.expireInSeconds || 300, // 5 minutes = 300 seconds
-        singletonKey: `message-${payload.userId}-${(payload.conversationId || payload.threadId)}-${payload.messageId || Date.now()}`, // Prevent duplicates
+        singletonKey: `message-${payload.userId}-${payload.conversationId || payload.threadId}-${payload.messageId || Date.now()}`, // Prevent duplicates
       });
 
       logger.info(
-        `Enqueued message job ${jobId} for user ${payload.userId}, conversation ${(payload.conversationId || payload.threadId)}`
+        `Enqueued message job ${jobId} for user ${payload.userId}, conversation ${payload.conversationId || payload.threadId}`
       );
       return jobId || "job-sent";
     } catch (error) {

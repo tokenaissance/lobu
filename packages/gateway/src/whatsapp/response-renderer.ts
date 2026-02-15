@@ -209,7 +209,12 @@ export class WhatsAppResponseRenderer implements ResponseRenderer {
     const errorMessage = `Error: ${payload.error}`;
     await this.sendMessage(chatJid, errorMessage);
     logger.error(
-      { traceId, chatJid, threadId: payload.conversationId, error: payload.error },
+      {
+        traceId,
+        chatJid,
+        threadId: payload.conversationId,
+        error: payload.error,
+      },
       "Sent error response"
     );
   }

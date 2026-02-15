@@ -323,7 +323,12 @@ export class TelegramResponseRenderer implements ResponseRenderer {
     }
 
     logger.error(
-      { traceId, chatId, threadId: payload.conversationId, error: payload.error },
+      {
+        traceId,
+        chatId,
+        threadId: payload.conversationId,
+        error: payload.error,
+      },
       "Sent error response"
     );
   }

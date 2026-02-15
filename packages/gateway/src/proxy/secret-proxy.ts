@@ -149,8 +149,12 @@ export class SecretProxy {
     const responseHeaders = new Headers();
     response.headers.forEach((value, key) => {
       if (
-        !["transfer-encoding", "connection", "upgrade", "content-encoding"]
-          .includes(key.toLowerCase())
+        ![
+          "transfer-encoding",
+          "connection",
+          "upgrade",
+          "content-encoding",
+        ].includes(key.toLowerCase())
       ) {
         responseHeaders.set(key, value);
       }
@@ -210,7 +214,13 @@ export async function deleteSecretMappings(
   const pattern = `${REDIS_KEY_PREFIX}*`;
   let cursor = "0";
   do {
-    const [next, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+    const [next, keys] = await redis.scan(
+      cursor,
+      "MATCH",
+      pattern,
+      "COUNT",
+      100
+    );
     cursor = next;
     for (const key of keys) {
       try {
@@ -242,7 +252,13 @@ export async function updateSecretValue(
   let cursor = "0";
   let updated = 0;
   do {
-    const [next, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+    const [next, keys] = await redis.scan(
+      cursor,
+      "MATCH",
+      pattern,
+      "COUNT",
+      100
+    );
     cursor = next;
     for (const key of keys) {
       try {

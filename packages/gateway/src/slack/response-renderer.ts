@@ -420,7 +420,9 @@ export class SlackResponseRenderer implements ResponseRenderer {
         });
       } else {
         const botTs =
-          existingBotMessageTs || payload.botResponseId || payload.conversationId;
+          existingBotMessageTs ||
+          payload.botResponseId ||
+          payload.conversationId;
         await this.slackClient.chat.update({
           channel: payload.channelId,
           ts: botTs,

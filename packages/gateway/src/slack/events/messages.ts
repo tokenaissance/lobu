@@ -509,7 +509,7 @@ export class MessageHandler {
       // Create thread session with turn count
       const threadSession: ThreadSession = {
         conversationId: threadTs,
-          threadId: threadTs,
+        threadId: threadTs,
         channelId: context.channelId,
         userId: context.userId,
         threadCreator: context.userId, // Store the thread creator

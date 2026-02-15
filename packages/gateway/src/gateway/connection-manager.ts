@@ -63,7 +63,12 @@ export class WorkerConnectionManager {
     this.connections.set(deploymentName, connection);
 
     // Send initial connection event
-    this.sendSSE(writer, "connected", { deploymentName, userId, conversationId, threadId: conversationId });
+    this.sendSSE(writer, "connected", {
+      deploymentName,
+      userId,
+      conversationId,
+      threadId: conversationId,
+    });
 
     logger.info(
       `Worker ${deploymentName} connected (user: ${userId}, conversation: ${conversationId})`
