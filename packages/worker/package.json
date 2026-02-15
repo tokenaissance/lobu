@@ -26,7 +26,7 @@
     "url": "https://github.com/lobu-ai/lobu.git",
     "directory": "packages/worker"
   },
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "engines": {
     "node": ">=18.0.0"
   },

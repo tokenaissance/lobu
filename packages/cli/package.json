@@ -20,7 +20,7 @@
     "cli"
   ],
   "author": "Burak Emre",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "commander": "^12.0.0",
     "inquirer": "^9.2.14",

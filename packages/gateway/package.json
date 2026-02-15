@@ -1,7 +1,7 @@
 {
   "name": "@lobu/gateway",
   "version": "1.0.0",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "private": true,
   "description": "Slack gateway service that routes messages to Kubernetes worker Jobs",
   "main": "dist/index.js",
