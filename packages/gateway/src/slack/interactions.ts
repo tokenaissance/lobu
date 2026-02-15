@@ -3,7 +3,7 @@ import {
   type FieldSchema,
   type UserInteraction,
   type UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { Block } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 import type { InteractionService } from "../interactions";

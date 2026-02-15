@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
-import { createLogger, ErrorCode, OrchestratorError } from "@termosdev/core";
+import { createLogger, ErrorCode, OrchestratorError } from "@lobu/core";
 
 // Type for SandboxManager singleton - using minimal interface for dynamic import
 interface ISandboxManager {
@@ -37,7 +37,7 @@ interface LocalProcess {
 }
 
 /**
- * LocalDeploymentManager - Spawns termos workers as local subprocesses
+ * LocalDeploymentManager - Spawns lobu workers as local subprocesses
  *
  * This deployment manager runs workers directly on the host machine using
  * child_process.spawn(). Useful for development and single-machine deployments.
@@ -170,15 +170,15 @@ export class LocalDeploymentManager extends BaseDeploymentManager {
   }
 
   /**
-   * Find the termos project root directory
+   * Find the lobu project root directory
    */
   private findProjectRoot(): string {
     // Check environment variable first
-    if (process.env.TERMOS_PROJECT_ROOT) {
-      return process.env.TERMOS_PROJECT_ROOT;
+    if (process.env.LOBU_PROJECT_ROOT) {
+      return process.env.LOBU_PROJECT_ROOT;
     }
 
-    // Walk up from current directory looking for package.json with termos
+    // Walk up from current directory looking for package.json with lobu
     let currentDir = process.cwd();
     for (let i = 0; i < 10; i++) {
       const packageJsonPath = path.join(currentDir, "package.json");
@@ -189,10 +189,10 @@ export class LocalDeploymentManager extends BaseDeploymentManager {
           );
           // Check if this is the monorepo root:
           // - Has workspaces array (monorepo indicator)
-          // - Or has name "termos" or "create-termos"
+          // - Or has name "lobu" or "create-lobu"
           if (
-            packageJson.name === "termos" ||
-            packageJson.name === "create-termos" ||
+            packageJson.name === "lobu" ||
+            packageJson.name === "create-lobu" ||
             (Array.isArray(packageJson.workspaces) &&
               packageJson.workspaces.length > 0)
           ) {
@@ -216,7 +216,7 @@ export class LocalDeploymentManager extends BaseDeploymentManager {
    */
   private getWorkspaceDir(agentId: string): string {
     const baseDir =
-      process.env.TERMOS_WORKSPACES_DIR ||
+      process.env.LOBU_WORKSPACES_DIR ||
       path.join(this.findProjectRoot(), "workspaces");
     return path.join(baseDir, agentId);
   }

@@ -1,5 +1,5 @@
 import type { Server } from "node:http";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { startHttpProxy, stopHttpProxy } from "./http-proxy";
 
 const logger = createLogger("proxy-manager");

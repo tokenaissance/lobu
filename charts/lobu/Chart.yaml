@@ -1,6 +1,6 @@
 apiVersion: v2
-name: termos
-description: Termos - Kubernetes deployment for thread-based AI conversations
+name: lobu
+description: Lobu - Kubernetes deployment for thread-based AI conversations
 type: application
 version: 1.0.1
 appVersion: "1.0.0"
@@ -11,9 +11,9 @@ keywords:
   - bot
   - kubernetes
   - conversations
-home: https://github.com/termos-dev/termos
+home: https://github.com/lobu-ai/lobu
 sources:
-  - https://github.com/termos-dev/termos
+  - https://github.com/lobu-ai/lobu
 maintainers:
   - name: Burak Emre Kabakci
     email: emrekabakci@gmail.com
@@ -24,18 +24,18 @@ annotations:
   artifacthub.io/operatorCapabilities: Basic Install
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
-    - name: termos-dispatcher
-      image: buremba/termos-dispatcher:latest
-    - name: termos-worker
-      image: buremba/termos-worker-base:latest
+    - name: lobu-dispatcher
+      image: buremba/lobu-dispatcher:latest
+    - name: lobu-worker
+      image: buremba/lobu-worker-base:latest
   artifacthub.io/links: |
     - name: GitHub Repository
-      url: https://github.com/termos-dev/termos
+      url: https://github.com/lobu-ai/lobu
     - name: Documentation
-      url: https://github.com/termos-dev/termos#readme
+      url: https://github.com/lobu-ai/lobu#readme
   artifacthub.io/changes: |
     - kind: added
-      description: Initial Helm chart for Termos deployment
+      description: Initial Helm chart for Lobu deployment
     - kind: added
       description: Kubernetes deployment with persistent volumes
 dependencies:

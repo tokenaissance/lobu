@@ -7,7 +7,7 @@ import {
   createLogger,
   generateTraceId,
   type AgentOptions as CoreAgentOptions,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { Bot } from "grammy";
 import type { AdminStatusCache } from "../../auth/admin-status-cache";
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";

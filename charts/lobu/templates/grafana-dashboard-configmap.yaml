@@ -2,13 +2,13 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: termos-grafana-dashboard
+  name: lobu-grafana-dashboard
   namespace: {{ .Values.grafana.namespace | default "monitoring" }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     grafana_dashboard: "1"
 data:
-  termos-traces.json: |
+  lobu-traces.json: |
     {
       "annotations": {
         "list": []
@@ -99,7 +99,7 @@ data:
                 "uid": "${lokiDatasource}"
               },
               "editorMode": "code",
-              "expr": "sum(count_over_time({namespace=\"termos\"} |= \"stage_end\" | json [$__interval]))",
+              "expr": "sum(count_over_time({namespace=\"lobu\"} |= \"stage_end\" | json [$__interval]))",
               "queryType": "range",
               "refId": "A"
             }
@@ -211,7 +211,7 @@ data:
                 "uid": "${lokiDatasource}"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"termos\"} |= \"stage_end\" | json",
+              "expr": "{namespace=\"lobu\"} |= \"stage_end\" | json",
               "queryType": "range",
               "refId": "A"
             }
@@ -414,7 +414,7 @@ data:
                 "uid": "${lokiDatasource}"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"termos\"} |= \"$traceIdFilter\" |= \"stage_end\" | json | line_format \"{{.stage}}={{.duration}}\"",
+              "expr": "{namespace=\"lobu\"} |= \"$traceIdFilter\" |= \"stage_end\" | json | line_format \"{{.stage}}={{.duration}}\"",
               "queryType": "range",
               "refId": "A"
             }
@@ -485,7 +485,7 @@ data:
                 "uid": "${lokiDatasource}"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"termos\"} |= \"$traceIdFilter\" | json",
+              "expr": "{namespace=\"lobu\"} |= \"$traceIdFilter\" | json",
               "queryType": "range",
               "refId": "A"
             }
@@ -522,7 +522,7 @@ data:
                 "uid": "${lokiDatasource}"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"termos\"} |= \"error\" | json",
+              "expr": "{namespace=\"lobu\"} |= \"error\" | json",
               "queryType": "range",
               "refId": "A"
             }
@@ -582,8 +582,8 @@ data:
       },
       "timepicker": {},
       "timezone": "browser",
-      "title": "Termos Message Traces",
-      "uid": "termos-traces",
+      "title": "Lobu Message Traces",
+      "uid": "lobu-traces",
       "version": 2,
       "weekStart": ""
     }

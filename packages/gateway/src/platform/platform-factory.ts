@@ -6,7 +6,7 @@
 import {
   createLogger,
   type AgentOptions as CoreAgentOptions,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { PlatformAdapter } from "../platform";
 
 const logger = createLogger("platform-factory");

@@ -1,4 +1,4 @@
-import type { InstructionContext, InstructionProvider } from "@termosdev/core";
+import type { InstructionContext, InstructionProvider } from "@lobu/core";
 
 /**
  * Provides Slack-specific formatting and interactivity instructions

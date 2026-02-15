@@ -9,7 +9,7 @@ import {
   extractTraceId,
   flushTracing,
   SpanStatusCode,
-} from "@termosdev/core";
+} from "@lobu/core";
 import { z } from "zod";
 import { InteractionClient } from "../common/interaction-client";
 import type { WorkerConfig, WorkerExecutor } from "../core/types";
@@ -448,10 +448,10 @@ export class GatewayClient {
       this.currentJobId = data.jobId;
       // Create child span for job received (linked to parent via traceparent)
       const span = createChildSpan("job_received", traceparent, {
-        "termos.job_id": data.jobId,
-        "termos.message_id": data.messageId,
-        "termos.conversation_id": conversationId,
-        "termos.job_type": data.jobType || "message",
+        "lobu.job_id": data.jobId,
+        "lobu.message_id": data.messageId,
+        "lobu.conversation_id": conversationId,
+        "lobu.job_type": data.jobType || "message",
       });
       span?.setStatus({ code: SpanStatusCode.OK });
       span?.end();
@@ -520,8 +520,8 @@ export class GatewayClient {
 
     // Create span for exec execution
     const span = createChildSpan("exec_execution", traceparent, {
-      "termos.exec_id": execId,
-      "termos.command": execCommand.substring(0, 100),
+      "lobu.exec_id": execId,
+      "lobu.command": execCommand.substring(0, 100),
     });
 
     // Determine working directory
@@ -607,7 +607,7 @@ export class GatewayClient {
       // Send completion
       await transport.sendExecComplete(execId, exitCode);
 
-      span?.setAttribute("termos.exit_code", exitCode);
+      span?.setAttribute("lobu.exit_code", exitCode);
       span?.setStatus({ code: SpanStatusCode.OK });
       span?.end();
       await flushTracing();
@@ -696,10 +696,10 @@ export class GatewayClient {
 
     // Create child span for agent execution (linked to parent via traceparent)
     const span = createChildSpan("agent_execution", traceparent, {
-      "termos.message_id": message.payload.messageId,
-      "termos.conversation_id": conversationId,
-      "termos.user_id": message.payload.userId,
-      "termos.model": message.payload.agentOptions?.model || "default",
+      "lobu.message_id": message.payload.messageId,
+      "lobu.conversation_id": conversationId,
+      "lobu.user_id": message.payload.userId,
+      "lobu.model": message.payload.agentOptions?.model || "default",
     });
 
     try {

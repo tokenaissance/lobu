@@ -7,7 +7,7 @@
  * - DELETE /{platform}/{channelId} - Delete a binding
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { ChannelBindingService } from "../../channels";
 

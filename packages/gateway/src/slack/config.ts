@@ -6,7 +6,7 @@ import {
   type AgentOptions as CoreAgentOptions,
   getOptionalEnv,
   getOptionalNumber,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { LogLevel } from "@slack/bolt";
 
 // ============================================================================

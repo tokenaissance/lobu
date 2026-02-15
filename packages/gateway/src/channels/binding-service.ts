@@ -1,4 +1,4 @@
-import { BaseRedisStore, createLogger } from "@termosdev/core";
+import { BaseRedisStore, createLogger } from "@lobu/core";
 import type Redis from "ioredis";
 
 const logger = createLogger("channel-binding-service");

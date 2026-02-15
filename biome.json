@@ -10,7 +10,7 @@
     "includes": [
       "**",
       "!**/test/fixtures/",
-      "!**/charts/termos/templates/",
+      "!**/charts/lobu/templates/",
       "!**/packages/**/*/workspaces/",
       "!**/dist/",
       "!**/node_modules/"

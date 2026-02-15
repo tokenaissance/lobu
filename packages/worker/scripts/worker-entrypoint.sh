@@ -2,7 +2,7 @@
 set -e
 
 # Container entrypoint script for Claude Worker
-echo "🚀 Starting Termos Worker..."
+echo "🚀 Starting Lobu Worker..."
 
 # Function to handle cleanup on exit
 cleanup() {
@@ -64,8 +64,8 @@ echo "  - Container CPU Limit: $(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo 
 
 # Setup git global configuration
 echo "⚙️ Setting up git configuration..."
-git config --global user.name "Termos Worker"
-git config --global user.email "termos@noreply.github.com"
+git config --global user.name "Lobu Worker"
+git config --global user.email "lobu@noreply.github.com"
 git config --global init.defaultBranch main
 git config --global pull.rebase false
 git config --global safe.directory '*'

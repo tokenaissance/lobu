@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 
 const logger = createLogger("socket-health-monitor");
 

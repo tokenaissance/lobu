@@ -7,7 +7,7 @@ import {
   createLogger,
   type WorkerTransport,
   type WorkerTransportConfig,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { ResponseData } from "./types";
 
 const logger = createLogger("http-worker-transport");

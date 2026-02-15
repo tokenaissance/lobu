@@ -5,7 +5,7 @@
  * Used by the GenerateAudio custom MCP tool.
  */
 
-import { createLogger, verifyWorkerToken } from "@termosdev/core";
+import { createLogger, verifyWorkerToken } from "@lobu/core";
 import { Hono } from "hono";
 import type { TranscriptionService } from "../../services/transcription-service";
 

@@ -2,10 +2,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "termos.fullname" . }}
+  name: {{ include "lobu.fullname" . }}
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -34,7 +34,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "termos.fullname" $ }}-gateway
+                name: {{ include "lobu.fullname" $ }}-gateway
                 port:
                   number: 8080
           # Route /health to port 8080
@@ -42,7 +42,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "termos.fullname" $ }}-gateway
+                name: {{ include "lobu.fullname" $ }}-gateway
                 port:
                   number: 8080
           # Route Slack HTTP endpoints to port 3000
@@ -50,7 +50,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "termos.fullname" $ }}-gateway
+                name: {{ include "lobu.fullname" $ }}-gateway
                 port:
                   number: {{ $.Values.slack.port }}
           # Route web pages to port 8080
@@ -59,7 +59,7 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "termos.fullname" $ }}-gateway
+                name: {{ include "lobu.fullname" $ }}-gateway
                 port:
                   number: 8080
           {{- end }}

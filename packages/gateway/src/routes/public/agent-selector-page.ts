@@ -7,7 +7,7 @@
  * - POST /agent-selector/create - Create new agent and bind
  */
 
-import { createLogger, decrypt, encrypt } from "@termosdev/core";
+import { createLogger, decrypt, encrypt } from "@lobu/core";
 import { Hono } from "hono";
 import type {
   AgentMetadata,
@@ -316,7 +316,7 @@ function renderSelectorPage(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Configure Agent - Termos</title>
+  <title>Configure Agent - Lobu</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-amber-700 to-amber-900 p-4">
@@ -493,7 +493,7 @@ function renderErrorPage(message: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Configuration Error - Termos</title>
+  <title>Configuration Error - Lobu</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center p-5">

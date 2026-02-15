@@ -4,7 +4,7 @@ import type {
   NetworkConfig,
   NixConfig,
   SessionContext,
-} from "@termosdev/core";
+} from "@lobu/core";
 
 /**
  * Platform-agnostic session types and utilities

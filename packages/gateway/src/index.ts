@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 /**
- * Main entry point for Termos Gateway
- * Exports types and utilities for other packages (like @termosdev/slack)
+ * Main entry point for Lobu Gateway
+ * Exports types and utilities for other packages (like @lobu/slack)
  */
 
 // Export types and classes for external packages

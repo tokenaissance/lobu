@@ -1,4 +1,4 @@
-import { BaseCredentialStore } from "@termosdev/core";
+import { BaseCredentialStore } from "@lobu/core";
 import type Redis from "ioredis";
 
 export interface McpCredentialRecord {

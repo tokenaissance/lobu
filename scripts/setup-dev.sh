@@ -7,14 +7,14 @@ command -v bun >/dev/null || { echo "Install bun: curl -fsSL https://bun.sh/inst
 command -v docker >/dev/null || { echo "Install Docker Desktop"; exit 1; }
 
 # Create Redis data directory
-mkdir -p .termos/redis-data
+mkdir -p .lobu/redis-data
 
 # Create Docker network for workers (if not exists)
-docker network create termos-internal 2>/dev/null || true
+docker network create lobu-internal 2>/dev/null || true
 
 # Build worker image
 echo "Building worker image..."
-docker build -t termos-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
+docker build -t lobu-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
 
 # Build packages
 echo "Building packages..."

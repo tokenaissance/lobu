@@ -2,11 +2,7 @@
 
 import type { Options as SDKOptions } from "@anthropic-ai/claude-agent-sdk";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import {
-  createLogger,
-  sanitizeForLogging,
-  type ToolsConfig,
-} from "@termosdev/core";
+import { createLogger, sanitizeForLogging, type ToolsConfig } from "@lobu/core";
 import type { InteractionClient } from "../common/interaction-client";
 import type { ProgressCallback } from "../core/types";
 import { createCustomToolsServer } from "./custom-tools";
@@ -268,13 +264,13 @@ Use it when the user references past discussions or you need context.`);
           historyEnabled: customToolsConfig.historyEnabled,
         }
       );
-      allMcpServers.termos = customTools;
+      allMcpServers.lobu = customTools;
       const tools = ["UploadUserFile", "AskUserQuestion"];
       if (customToolsConfig.historyEnabled) {
         tools.push("GetChannelHistory");
       }
       logger.info(
-        `Added custom tools server: termos (tools: ${tools.join(", ")})`
+        `Added custom tools server: lobu (tools: ${tools.join(", ")})`
       );
 
       // Note: We don't add interaction tools MCP server anymore

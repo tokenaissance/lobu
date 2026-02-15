@@ -5,7 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
-import { createLogger, sanitizeFilename } from "@termosdev/core";
+import { createLogger, sanitizeFilename } from "@lobu/core";
 import {
   type AnyMessageContent,
   downloadContentFromMessage,
@@ -779,8 +779,8 @@ export class WhatsAppFileHandler implements IFileHandler {
       {
         expiresIn,
         algorithm: "HS256",
-        issuer: "termos-gateway",
-        audience: "termos-worker",
+        issuer: "lobu-gateway",
+        audience: "lobu-worker",
       }
     );
   }
@@ -797,8 +797,8 @@ export class WhatsAppFileHandler implements IFileHandler {
     try {
       const decoded = jwt.verify(token, this.jwtSecret, {
         algorithms: ["HS256"],
-        issuer: "termos-gateway",
-        audience: "termos-worker",
+        issuer: "lobu-gateway",
+        audience: "lobu-worker",
       });
 
       if (

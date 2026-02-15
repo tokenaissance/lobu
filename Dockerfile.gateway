@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Set up workspace for gateway + core
 COPY tsconfig.json ./
-RUN echo '{ "name": "@termosdev/gateway-build", "private": true, "workspaces": [ "packages/core", "packages/gateway" ] }' > package.json
+RUN echo '{ "name": "@lobu/gateway-build", "private": true, "workspaces": [ "packages/core", "packages/gateway" ] }' > package.json
 COPY packages/core/package.json ./packages/core/
 COPY packages/gateway/package.json ./packages/gateway/
 

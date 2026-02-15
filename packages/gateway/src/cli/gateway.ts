@@ -2,7 +2,7 @@
 
 import { serve } from "@hono/node-server";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { apiReference } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import type { GatewayConfig } from "../config";
@@ -41,7 +41,7 @@ function setupServer(
   // Health endpoints
   app.get("/health", (c) => {
     const mode =
-      process.env.TERMOS_MODE ||
+      process.env.LOBU_MODE ||
       (process.env.DEPLOYMENT_MODE === "docker" ? "local" : "cloud");
 
     return c.json({
@@ -83,7 +83,7 @@ function setupServer(
   }
 
   // Register module endpoints
-  const { moduleRegistry } = require("@termosdev/core");
+  const { moduleRegistry } = require("@lobu/core");
   if (moduleRegistry.registerHonoEndpoints) {
     moduleRegistry.registerHonoEndpoints(app);
   } else {
@@ -253,7 +253,7 @@ function setupServer(
       const { createLandingRoutes } = require("../routes/public/landing");
       const landingRouter = createLandingRoutes({
         publicGatewayUrl: coreServices.getPublicGatewayUrl(),
-        githubUrl: "https://github.com/termos-dev/termos",
+        githubUrl: "https://github.com/lobu-ai/lobu",
       });
       app.route("", landingRouter);
       logger.info("Landing page enabled at :8080/");
@@ -396,12 +396,12 @@ function setupServer(
   app.doc("/api/docs/openapi.json", {
     openapi: "3.0.0",
     info: {
-      title: "Termos API",
+      title: "Lobu API",
       version: "1.0.0",
       description: `
 ## Overview
 
-The Termos API allows you to create and interact with AI agents programmatically.
+The Lobu API allows you to create and interact with AI agents programmatically.
 
 ## Authentication
 
@@ -745,7 +745,7 @@ export async function startGateway(
   whatsappConfig?: WhatsAppConfig | null,
   telegramConfig?: TelegramConfig | null
 ): Promise<void> {
-  logger.info("Starting Termos Gateway");
+  logger.info("Starting Lobu Gateway");
 
   // Start filtering proxy for worker network isolation (if enabled)
   const { startFilteringProxy } = await import("../proxy/proxy-manager");
@@ -870,7 +870,7 @@ export async function startGateway(
     coreServices
   );
 
-  logger.info("Termos Gateway is running!");
+  logger.info("Lobu Gateway is running!");
 
   // Setup graceful shutdown
   const cleanup = async () => {

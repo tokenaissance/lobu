@@ -1,11 +1,11 @@
 {
-  "name": "create-termos",
+  "name": "create-lobu",
   "version": "2.3.0",
-  "description": "CLI for deploying and managing Termos across multiple platforms",
+  "description": "CLI for deploying and managing Lobu across multiple platforms",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "create-termos": "./bin/create-termos.js"
+    "create-lobu": "./bin/create-lobu.js"
   },
   "scripts": {
     "build": "tsc && node scripts/build.cjs",
@@ -13,7 +13,7 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "termos",
+    "lobu",
     "slack",
     "ai",
     "claude",

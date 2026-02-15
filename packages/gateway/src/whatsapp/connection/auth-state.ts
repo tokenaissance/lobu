@@ -4,7 +4,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type {
   AuthenticationCreds,
   SignalDataTypeMap,

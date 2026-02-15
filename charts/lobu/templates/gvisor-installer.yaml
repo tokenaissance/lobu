@@ -21,9 +21,9 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "termos.fullname" . }}-gvisor-installer
+  name: {{ include "lobu.fullname" . }}-gvisor-installer
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     app.kubernetes.io/component: gvisor-installer
 spec:
   selector:

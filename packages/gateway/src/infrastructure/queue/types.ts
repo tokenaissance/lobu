@@ -1,5 +1,5 @@
 /**
- * Message queue interface and payload types for termos
+ * Message queue interface and payload types for lobu
  * Supports multiple queue backends (currently Redis via BullMQ)
  */
 

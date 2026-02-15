@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import { ClaudeOAuthClient } from "../auth/oauth/claude-client";
 import type { AgentSettingsStore } from "../auth/settings/agent-settings-store";

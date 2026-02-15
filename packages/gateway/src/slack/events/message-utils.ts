@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 

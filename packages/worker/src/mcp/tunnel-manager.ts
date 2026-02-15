@@ -2,7 +2,7 @@
 
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { ProcessInfo } from "./types";
 
 const logger = createLogger("worker");
@@ -118,13 +118,11 @@ export async function startTunnel(
       urlExtracted = true;
       clearTimeout(extractTimeout);
       const prefix = urlMatch[1];
-      info.tunnelUrl = `https://${prefix}.termos.dev`;
+      info.tunnelUrl = `https://${prefix}.lobu.ai`;
       tunnelLogStream.write(
         `\n[MCP] Successfully extracted URL: ${urlMatch[0]}\n`
       );
-      tunnelLogStream.write(
-        `[MCP] Converted to termos.dev: ${info.tunnelUrl}\n`
-      );
+      tunnelLogStream.write(`[MCP] Converted to lobu.ai: ${info.tunnelUrl}\n`);
       logger.error(
         `[MCP Process Manager - Tunnel ${info.id}] Established: ${info.tunnelUrl}`
       );

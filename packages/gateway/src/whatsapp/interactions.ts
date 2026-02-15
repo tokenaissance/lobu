@@ -7,7 +7,7 @@ import {
   createLogger,
   type UserInteraction,
   type UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import type { InteractionService } from "../interactions";
 import {

@@ -3,7 +3,7 @@ kind: PriorityClass
 metadata:
   name: worker-priority
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 value: 100
 globalDefault: false
 description: "Priority class for Claude worker pods to use dedicated resource quota"

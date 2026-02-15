@@ -1,4 +1,4 @@
-# Development Makefile for Termos
+# Development Makefile for Lobu
 
 .PHONY: help setup build compile dev prod test clean logs restart deploy down build-packages check-build watch-packages
 
@@ -46,7 +46,7 @@ setup:
 # Build the worker image
 build-worker:
 	@echo "📦 Building worker image..."
-	@docker build -t termos-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
+	@docker build -t lobu-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
 
 # Catch-all target to prevent errors when passing arguments
 %:
@@ -73,36 +73,36 @@ deploy:
 		if [ -f "$$TARGET_PATH" ]; then \
 			VALUES_FILE="$$TARGET_PATH"; \
 			echo "📋 Using custom values file: $$VALUES_FILE"; \
-		elif [ -f "charts/termos/values-$$TARGET_PATH.yaml" ]; then \
-			VALUES_FILE="charts/termos/values-$$TARGET_PATH.yaml"; \
+		elif [ -f "charts/lobu/values-$$TARGET_PATH.yaml" ]; then \
+			VALUES_FILE="charts/lobu/values-$$TARGET_PATH.yaml"; \
 			echo "📋 Using environment file: $$VALUES_FILE"; \
 		else \
 			echo "❌ Values file not found: $$TARGET_PATH"; \
-			echo "❌ Also tried: charts/termos/values-$$TARGET_PATH.yaml"; \
+			echo "❌ Also tried: charts/lobu/values-$$TARGET_PATH.yaml"; \
 			exit 1; \
 		fi; \
-	elif [ -f "charts/termos/values-local.yaml" ]; then \
-		VALUES_FILE="charts/termos/values-local.yaml"; \
+	elif [ -f "charts/lobu/values-local.yaml" ]; then \
+		VALUES_FILE="charts/lobu/values-local.yaml"; \
 		echo "📋 Using existing $$VALUES_FILE"; \
 	else \
-		VALUES_FILE="charts/termos/values-local.yaml"; \
+		VALUES_FILE="charts/lobu/values-local.yaml"; \
 		echo "🔄 Creating $$VALUES_FILE from .env and base values.yaml..."; \
-		cp "charts/termos/values.yaml" "$$VALUES_FILE"; \
+		cp "charts/lobu/values.yaml" "$$VALUES_FILE"; \
 		./bin/sync-env-to-values.sh local; \
 	fi; \
 	echo "🎯 Deploying using $$VALUES_FILE"; \
 	echo "🚀 Building and deploying to K8s..."; \
 	if [ -z "$$GITHUB_ACTIONS" ]; then \
 		echo "📦 Building Docker images..."; \
-		docker build -f Dockerfile.gateway -t termos-gateway:latest .; \
-		docker build -f Dockerfile.worker -t termos-worker:latest .; \
+		docker build -f Dockerfile.gateway -t lobu-gateway:latest .; \
+		docker build -f Dockerfile.worker -t lobu-worker:latest .; \
 	else \
 		echo "📦 Using pre-built Docker images from registry..."; \
 	fi; \
 	if command -v kind >/dev/null 2>&1 && kind get clusters 2>/dev/null | grep -q kind; then \
 		echo "📦 Loading images into kind..."; \
-		kind load docker-image termos-gateway:latest; \
-		kind load docker-image termos-worker:latest; \
+		kind load docker-image lobu-gateway:latest; \
+		kind load docker-image lobu-worker:latest; \
 	fi; \
 	echo "🔧 Deploying with Helm..."; \
 	if [ -z "$$GITHUB_ACTIONS" ]; then \
@@ -112,17 +112,17 @@ deploy:
 	if [ -n "$$GITHUB_ACTIONS" ]; then \
 		IMAGE_REPO="$${DOCKER_NAMESPACE:-buremba}"; \
 		IMAGE_TAG="$${IMAGE_TAG:-latest}"; \
-		IMAGE_OVERRIDES="--set gateway.image.repository=$$IMAGE_REPO/termos-gateway \
+		IMAGE_OVERRIDES="--set gateway.image.repository=$$IMAGE_REPO/lobu-gateway \
 			--set gateway.image.tag=$$IMAGE_TAG \
-			--set worker.image.repository=$$IMAGE_REPO/termos-worker \
+			--set worker.image.repository=$$IMAGE_REPO/lobu-worker \
 			--set worker.image.tag=$$IMAGE_TAG"; \
 	else \
 		IMAGE_OVERRIDES=""; \
 	fi; \
-	helm upgrade --install "$${DEPLOYMENT_NAME:-termos}" charts/termos/ \
+	helm upgrade --install "$${DEPLOYMENT_NAME:-lobu}" charts/lobu/ \
 		--dependency-update \
 		--create-namespace \
-		--namespace "$${NAMESPACE:-termos}" \
+		--namespace "$${NAMESPACE:-lobu}" \
 		-f "$$VALUES_FILE" \
 		$$IMAGE_OVERRIDES \
 		--set secrets.encryptionKey="$$ENCRYPTION_KEY" \
@@ -133,8 +133,8 @@ deploy:
 		--wait \
 		--timeout "$${HELM_TIMEOUT:-10m}"
 	@echo "✅ Deployed to K8s. Check status with:"
-	@echo "  kubectl get pods -n $${NAMESPACE:-termos}"
-	@echo "  kubectl logs -f deployment/$${DEPLOYMENT_NAME:-termos}-gateway -n $${NAMESPACE:-termos}"
+	@echo "  kubectl get pods -n $${NAMESPACE:-lobu}"
+	@echo "  kubectl logs -f deployment/$${DEPLOYMENT_NAME:-lobu}-gateway -n $${NAMESPACE:-lobu}"
 
 # View logs based on deployment mode
 logs:
@@ -147,10 +147,10 @@ logs:
 	if [ "$$DEPLOYMENT_MODE" = "kubernetes" ] || [ "$$DEPLOYMENT_MODE" = "k8s" ]; then \
 		echo "☸️  Viewing Kubernetes logs..."; \
 		echo "Select a pod to view logs:"; \
-		kubectl get pods -n termos; \
+		kubectl get pods -n lobu; \
 		echo ""; \
 		echo "View logs with:"; \
-		echo "  kubectl logs -f <pod-name> -n termos"; \
+		echo "  kubectl logs -f <pod-name> -n lobu"; \
 	else \
 		echo "For development, view logs in the terminal where gateway is running"; \
 		echo "Or use: docker compose logs -f gateway"; \
@@ -158,7 +158,7 @@ logs:
 
 # Stop worker containers
 down:
-	@echo "🛑 Stopping termos worker containers..."
+	@echo "🛑 Stopping lobu worker containers..."
 	@docker ps -q --filter "label=app.kubernetes.io/component=worker" | xargs -r docker stop 2>/dev/null || true
 	@docker ps -aq --filter "label=app.kubernetes.io/component=worker" | xargs -r docker rm 2>/dev/null || true
 	@echo "✅ Worker containers stopped"
@@ -171,18 +171,18 @@ clean:
 	else \
 		DEPLOYMENT_MODE="docker"; \
 	fi; \
-	echo "🧹 Cleaning up termos resources (mode: $$DEPLOYMENT_MODE)..."; \
+	echo "🧹 Cleaning up lobu resources (mode: $$DEPLOYMENT_MODE)..."; \
 	if [ "$$DEPLOYMENT_MODE" = "kubernetes" ] || [ "$$DEPLOYMENT_MODE" = "k8s" ]; then \
 		echo "☸️  Cleaning Kubernetes resources..."; \
-		helm uninstall termos -n termos 2>/dev/null || true; \
-		kubectl delete namespace termos --wait=false 2>/dev/null || true; \
+		helm uninstall lobu -n lobu 2>/dev/null || true; \
+		kubectl delete namespace lobu --wait=false 2>/dev/null || true; \
 		echo "✅ Kubernetes resources cleaned up"; \
 	else \
 		echo "🐳 Cleaning Docker worker containers..."; \
 		docker ps -q --filter "label=app.kubernetes.io/component=worker" | xargs -r docker stop 2>/dev/null || true; \
 		docker ps -aq --filter "label=app.kubernetes.io/component=worker" | xargs -r docker rm 2>/dev/null || true; \
-		docker volume ls -q --filter "name=termos-workspace-" | xargs -r docker volume rm 2>/dev/null || true; \
-		docker network rm termos-internal 2>/dev/null || true; \
+		docker volume ls -q --filter "name=lobu-workspace-" | xargs -r docker volume rm 2>/dev/null || true; \
+		docker network rm lobu-internal 2>/dev/null || true; \
 		echo "✅ Docker containers and volumes cleaned up"; \
 	fi
 
@@ -196,7 +196,7 @@ clean-workers:
 	echo "🧹 Removing worker containers (mode: $$DEPLOYMENT_MODE)..."; \
 	if [ "$$DEPLOYMENT_MODE" = "kubernetes" ] || [ "$$DEPLOYMENT_MODE" = "k8s" ]; then \
 		echo "☸️  Removing Kubernetes worker pods..."; \
-		kubectl delete pods -n termos -l app.kubernetes.io/component=worker --wait=false 2>/dev/null || true; \
+		kubectl delete pods -n lobu -l app.kubernetes.io/component=worker --wait=false 2>/dev/null || true; \
 		echo "✅ Kubernetes worker pods removed"; \
 	else \
 		echo "🐳 Removing Docker worker containers..."; \

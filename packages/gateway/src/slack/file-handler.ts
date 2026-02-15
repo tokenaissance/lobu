@@ -3,7 +3,7 @@
  */
 
 import { Readable } from "node:stream";
-import { createLogger, sanitizeFilename } from "@termosdev/core";
+import { createLogger, sanitizeFilename } from "@lobu/core";
 import type { WebClient } from "@slack/web-api";
 import jwt from "jsonwebtoken";
 import type {
@@ -164,8 +164,8 @@ export class SlackFileHandler implements IFileHandler {
       {
         expiresIn,
         algorithm: "HS256",
-        issuer: "termos-gateway",
-        audience: "termos-worker",
+        issuer: "lobu-gateway",
+        audience: "lobu-worker",
       }
     );
   }
@@ -180,8 +180,8 @@ export class SlackFileHandler implements IFileHandler {
       const jwtSecret = getJwtSecret();
       const decoded = jwt.verify(token, jwtSecret, {
         algorithms: ["HS256"],
-        issuer: "termos-gateway",
-        audience: "termos-worker",
+        issuer: "lobu-gateway",
+        audience: "lobu-worker",
       });
 
       if (

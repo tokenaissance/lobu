@@ -5,7 +5,7 @@ import {
   ErrorCode,
   OrchestratorError,
   SpanStatusCode,
-} from "@termosdev/core";
+} from "@lobu/core";
 import {
   BaseDeploymentManager,
   type DeploymentInfo,
@@ -348,8 +348,8 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
           // Get last activity from annotations or fallback to creation time
           const lastActivityStr =
-            deployment.metadata?.annotations?.["termos.io/last-activity"] ||
-            deployment.metadata?.annotations?.["termos.io/created"] ||
+            deployment.metadata?.annotations?.["lobu.io/last-activity"] ||
+            deployment.metadata?.annotations?.["lobu.io/created"] ||
             deployment.metadata?.creationTimestamp;
 
           const lastActivity = lastActivityStr
@@ -394,7 +394,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         labels: {
           ...BASE_WORKER_LABELS,
           "app.kubernetes.io/component": "worker-storage",
-          "termos.io/agent-id": agentId,
+          "lobu.io/agent-id": agentId,
         },
       },
       spec: {
@@ -412,9 +412,9 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Create child span for PVC setup (linked to parent via traceparent)
     const span = createChildSpan("pvc_setup", traceparent, {
-      "termos.pvc_name": pvcName,
-      "termos.agent_id": agentId,
-      "termos.pvc_size": this.config.worker.persistence?.size || "1Gi",
+      "lobu.pvc_name": pvcName,
+      "lobu.agent_id": agentId,
+      "lobu.pvc_size": this.config.worker.persistence?.size || "1Gi",
     });
 
     logger.info({ traceparent, pvcName, agentId, size: "1Gi" }, "Creating PVC");
@@ -439,7 +439,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
         body: k8sError.body,
       });
       if (k8sError.statusCode === 409) {
-        span?.setAttribute("termos.pvc_exists", true);
+        span?.setAttribute("lobu.pvc_exists", true);
         span?.setStatus({ code: SpanStatusCode.OK });
         span?.end();
         logger.info(`PVC ${pvcName} already exists (reusing)`);
@@ -473,7 +473,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Use agentId for PVC naming (shared across threads in same space)
     const agentId = messageData?.agentId!;
-    const pvcName = `termos-workspace-${agentId}`;
+    const pvcName = `lobu-workspace-${agentId}`;
     await this.createPVC(pvcName, agentId, traceparent);
 
     // Get environment variables before creating the deployment spec
@@ -505,14 +505,14 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
             annotations: {
               // Add platform-specific metadata
               ...resolvePlatformDeploymentMetadata(messageData),
-              "termos.io/created": new Date().toISOString(),
-              "termos.io/agent-id": agentId,
-              ...(traceparent ? { "termos.io/traceparent": traceparent } : {}),
+              "lobu.io/created": new Date().toISOString(),
+              "lobu.io/agent-id": agentId,
+              ...(traceparent ? { "lobu.io/traceparent": traceparent } : {}),
             },
             labels: { ...BASE_WORKER_LABELS },
           },
           spec: {
-            serviceAccountName: "termos-worker",
+            serviceAccountName: "lobu-worker",
             // Only set runtimeClassName if configured and available (validated on startup)
             ...(this.config.worker.runtimeClassName
               ? { runtimeClassName: this.config.worker.runtimeClassName }
@@ -604,9 +604,9 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
     // Create child span for worker creation (linked to parent via traceparent)
     const workerSpan = createChildSpan("worker_creation", traceparent, {
-      "termos.deployment_name": deploymentName,
-      "termos.user_id": userId,
-      "termos.agent_id": agentId,
+      "lobu.deployment_name": deploymentName,
+      "lobu.user_id": userId,
+      "lobu.agent_id": agentId,
     });
 
     logger.info(
@@ -777,7 +777,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       const patch = {
         metadata: {
           annotations: {
-            "termos.io/last-activity": timestamp,
+            "lobu.io/last-activity": timestamp,
           },
         },
       };
@@ -806,7 +806,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
 
   protected getDispatcherHost(): string {
     const dispatcherService =
-      process.env.DISPATCHER_SERVICE_NAME || "termos-dispatcher";
+      process.env.DISPATCHER_SERVICE_NAME || "lobu-dispatcher";
     return `${dispatcherService}.${this.config.kubernetes.namespace}.svc.cluster.local`;
   }
 }

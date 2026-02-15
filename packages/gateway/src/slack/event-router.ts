@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import type { IModuleRegistry } from "@termosdev/core";
-import { createLogger } from "@termosdev/core";
+import type { IModuleRegistry } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import type { App } from "@slack/bolt";
 import type {
   FileDeletedEvent,
@@ -132,7 +132,7 @@ export class SlackEventHandlers {
         await client.chat.postMessage({
           channel: assistantEvent.assistant_thread.channel_id,
           thread_ts: assistantEvent.assistant_thread.thread_ts,
-          text: "👋 Hi! I'm Termos, your AI coding assistant. How can I help you today?",
+          text: "👋 Hi! I'm Lobu, your AI coding assistant. How can I help you today?",
         });
       } catch (error) {
         logger.error("Failed to send assistant thread welcome message:", error);

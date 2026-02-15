@@ -19,12 +19,12 @@
         },
         {
           "type": "json",
-          "path": "charts/termos/Chart.yaml",
+          "path": "charts/lobu/Chart.yaml",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "charts/termos/Chart.yaml",
+          "path": "charts/lobu/Chart.yaml",
           "jsonpath": "$.appVersion"
         }
       ]
@@ -32,14 +32,14 @@
     "packages/cli": {
       "changelog-path": "CHANGELOG.md",
       "release-type": "node",
-      "package-name": "create-termos",
+      "package-name": "create-lobu",
       "include-component-in-tag": true,
       "include-v-in-tag": false
     },
     "packages/worker": {
       "changelog-path": "CHANGELOG.md",
       "release-type": "node",
-      "package-name": "@termosdev/worker",
+      "package-name": "@lobu/worker",
       "include-component-in-tag": true,
       "include-v-in-tag": false
     }

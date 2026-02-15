@@ -1,4 +1,4 @@
-import type { ToolsConfig } from "@termosdev/core";
+import type { ToolsConfig } from "@lobu/core";
 
 export type BashCommandPolicy = {
   allowAll: boolean;

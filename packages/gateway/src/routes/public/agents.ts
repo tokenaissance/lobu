@@ -7,7 +7,7 @@
  * - DELETE /api/v1/agent-management/agents/{agentId} - Delete an agent
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { AgentSettingsStore } from "../../auth/settings";

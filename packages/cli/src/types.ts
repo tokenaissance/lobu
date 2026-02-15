@@ -1,4 +1,4 @@
-export interface TermosConfig {
+export interface LobuConfig {
   worker: WorkerConfig;
   gateway: GatewayConfig;
   credentials: CredentialsConfig;

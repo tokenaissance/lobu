@@ -1,4 +1,4 @@
-import { createLogger, type NetworkConfig } from "@termosdev/core";
+import { createLogger, type NetworkConfig } from "@lobu/core";
 
 const logger = createLogger("network-allowlist");
 

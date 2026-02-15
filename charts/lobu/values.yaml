@@ -1,4 +1,4 @@
-# Default values for Termos
+# Default values for Lobu
 # This is the template configuration for local development
 
 # Global configuration
@@ -32,14 +32,14 @@ sealedSecrets:
     # github-token: "AgBw..."
 
 config:
-  githubOrganization: "termos-dev"
+  githubOrganization: "lobu-ai"
   githubRepository: "" # Optional: Override repository URL for all users
   githubClientId: "" # Optional: GitHub OAuth Client ID
   ingressUrl: "" # Optional: Public URL base for OAuth callbacks
   sessionTimeoutMinutes: "5"
 
 kubernetes:
-  namespace: termos
+  namespace: lobu
 
 # RBAC configuration
 rbac:
@@ -130,15 +130,15 @@ gitCache:
     enabled: true
     size: "10Gi"
     storageClass: ""  # Use default storage class
-    # Mount path for cache (default: /var/cache/termos/git)
-    mountPath: "/var/cache/termos/git"
+    # Mount path for cache (default: /var/cache/lobu/git)
+    mountPath: "/var/cache/lobu/git"
 
 # Disable static worker deployment - workers are created dynamically by dispatcher
 worker:
   enabled: false
   runtimeClassName: ""  # Empty uses default runtime; set to "gvisor" after manual setup
   image:
-    repository: buremba/termos-worker-base
+    repository: buremba/lobu-worker-base
     pullPolicy: Always
     tag: latest
   resources:
@@ -177,7 +177,7 @@ gateway:
   enabled: true
   replicaCount: 1
   image:
-    repository: buremba/termos-gateway
+    repository: buremba/lobu-gateway
     pullPolicy: Always
     tag: latest
   resources:
@@ -207,7 +207,7 @@ gateway:
         # kubernetes.io/ingress.class: internal
         # nginx.ingress.kubernetes.io/ssl-redirect: "false"
       hosts:
-        - host: termos-internal.local
+        - host: lobu-internal.local
           paths:
             - path: /api/proxy
               pathType: Prefix
@@ -273,7 +273,7 @@ redis:
       limits:
         memory: "256Mi"
         cpu: "200m"
-  # Connection URL used by gateway: redis://termos-redis-master:6379
+  # Connection URL used by gateway: redis://lobu-redis-master:6379
 
 # Grafana Loki datasource for log aggregation
 grafana:

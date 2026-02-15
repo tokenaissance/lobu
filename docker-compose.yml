@@ -1,4 +1,4 @@
-version: "3.8"
+name: lobu
 
 services:
   # Redis for queue and state management
@@ -6,7 +6,7 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     networks:
-      - termos-internal
+      - lobu-internal
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -21,7 +21,7 @@ services:
       dockerfile: Dockerfile.worker
       args:
         NODE_ENV: production
-    image: termos-worker:latest
+    image: lobu-worker:latest
     # This service only builds the image, doesn't run continuously
     command: echo "Worker image built successfully"
     profiles:
@@ -31,7 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gateway
-    image: termos-gateway:latest
+    image: lobu-gateway:latest
     environment:
       NODE_ENV: production
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
@@ -42,7 +42,7 @@ services:
       AGENT_DEFAULT_MODEL: ${AGENT_DEFAULT_MODEL}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
       QUEUE_URL: redis://redis:6379
-      TERMOS_MCP_SERVERS_URL: ${TERMOS_MCP_SERVERS_URL:-examples/mcp/oauth.json}
+      LOBU_MCP_SERVERS_URL: ${LOBU_MCP_SERVERS_URL:-examples/mcp/oauth.json}
       PUBLIC_GATEWAY_URL: ${PUBLIC_GATEWAY_URL}
       # Network isolation settings
       # Empty/unset: Complete isolation (deny all)
@@ -62,8 +62,8 @@ services:
       - "8080:8080"
       - "8118:8118" # HTTP proxy for workers
     networks:
-      - termos-public   # Internet access
-      - termos-internal # Internal services (redis, workers)
+      - lobu-public   # Internet access
+      - lobu-internal # Internal services (redis, workers)
     restart: unless-stopped
     depends_on:
       redis:
@@ -71,11 +71,11 @@ services:
 
 networks:
   # Public network with internet access (gateway only)
-  termos-public:
+  lobu-public:
     driver: bridge
 
   # Internal network - no direct internet access
   # Workers use this network and can only reach internet via gateway's proxy
-  termos-internal:
+  lobu-internal:
     internal: true
     driver: bridge

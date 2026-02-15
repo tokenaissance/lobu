@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { z } from "zod";
 import type { PlatformRegistry } from "../../platform";
 

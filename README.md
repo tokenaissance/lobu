@@ -1,4 +1,4 @@
-# Termos
+# Lobu
 
 **Agent orchestration for messaging platforms.** Run AI coding agents (Claude Code, Codex, OpenClaw) in sandboxed containers, accessible via Slack, WhatsApp, or API.
 
@@ -42,7 +42,7 @@
 
 ```bash
 # Create a new bot
-npm create termos my-bot
+npm create lobu my-bot
 
 # Configure and start
 cd my-bot
@@ -52,7 +52,7 @@ npm run dev
 
 ## API
 
-Full API documentation: [termos.dev/api](https://termos.dev/api)
+Full API documentation: [lobu.ai/api](https://lobu.ai/api)
 
 ### Start a Session
 
@@ -124,7 +124,7 @@ curl -X POST https://your-gateway/api/v1/agents/{agentId}/sessions \
 
 ## Reliability and Experience
 
-- **Cloud agents, not local** - Unlike OpenClaw’s local execution, Termos runs agents on managed cloud workers.
+- **Cloud agents, not local** - Unlike OpenClaw’s local execution, Lobu runs agents on managed cloud workers.
 - **Your own computer, preserved** - Each thread gets a persistent workspace (your tools, repos, and files stay intact).
 - **Stateful by default** - Sessions resume after restarts and scale-to-zero events.
 - **Optional browser control** - Integrate Owletto when you want the agent to drive a browser.
@@ -132,7 +132,7 @@ curl -X POST https://your-gateway/api/v1/agents/{agentId}/sessions \
 ## Worker Customization
 
 ```dockerfile
-FROM buremba/termos-worker-base:latest
+FROM buremba/lobu-worker-base:latest
 
 # Add your tools
 RUN pip install pandas matplotlib
@@ -167,16 +167,16 @@ PUBLIC_GATEWAY_URL=https://your-domain.com
 ### Kubernetes Deployment
 
 ```bash
-helm repo add termos https://charts.termos.dev
-helm install termos termos/termos -f values.yaml
+helm repo add lobu https://charts.lobu.ai
+helm install lobu lobu/lobu -f values.yaml
 ```
 
 ## Contributing
 
 ```bash
 # Clone and install
-git clone https://github.com/termos-dev/termos
-cd termos && bun install
+git clone https://github.com/lobu-ai/lobu
+cd lobu && bun install
 
 # Development
 make dev              # Start gateway
@@ -189,14 +189,14 @@ bun run test
 ## Packages
 
 **NPM:**
-- [`create-termos`](https://www.npmjs.com/package/create-termos) - CLI for creating new bots
-- [`@termosdev/worker`](https://www.npmjs.com/package/@termosdev/worker) - Worker runtime
-- [`@termosdev/gateway`](https://www.npmjs.com/package/@termosdev/gateway) - Gateway server
-- [`@termosdev/core`](https://www.npmjs.com/package/@termosdev/core) - Shared utilities
+- [`create-lobu`](https://www.npmjs.com/package/create-lobu) - CLI for creating new bots
+- [`@lobu/worker`](https://www.npmjs.com/package/@lobu/worker) - Worker runtime
+- [`@lobu/gateway`](https://www.npmjs.com/package/@lobu/gateway) - Gateway server
+- [`@lobu/core`](https://www.npmjs.com/package/@lobu/core) - Shared utilities
 
 **Docker Hub:**
-- [`buremba/termos-gateway`](https://hub.docker.com/r/buremba/termos-gateway)
-- [`buremba/termos-worker-base`](https://hub.docker.com/r/buremba/termos-worker-base)
+- [`buremba/lobu-gateway`](https://hub.docker.com/r/buremba/lobu-gateway)
+- [`buremba/lobu-worker-base`](https://hub.docker.com/r/buremba/lobu-worker-base)
 
 ## License
 

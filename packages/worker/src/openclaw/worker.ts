@@ -2,7 +2,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { createLogger, type ToolsConfig } from "@termosdev/core";
+import { createLogger, type ToolsConfig } from "@lobu/core";
 import {
   createAgentSession,
   SessionManager,

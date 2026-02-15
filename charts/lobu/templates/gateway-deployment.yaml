@@ -2,9 +2,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "termos.fullname" . }}-gateway
+  name: {{ include "lobu.fullname" . }}-gateway
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     app.kubernetes.io/component: gateway
 spec:
   {{- if not .Values.autoscaling.enabled }}
@@ -12,7 +12,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "termos.selectorLabels" . | nindent 6 }}
+      {{- include "lobu.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: gateway
   template:
     metadata:
@@ -23,14 +23,14 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "termos.selectorLabels" . | nindent 8 }}
+        {{- include "lobu.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: gateway
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "termos.serviceAccountName" . }}
+      serviceAccountName: {{ include "lobu.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -86,18 +86,18 @@ spec:
             - name: SLACK_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: slack-bot-token
             - name: SLACK_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: slack-signing-secret
                   optional: true
             - name: SLACK_APP_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: slack-app-token
                   optional: true
             - name: SLACK_HTTP_MODE
@@ -155,24 +155,24 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-redis
+                  name: {{ include "lobu.fullname" . }}-redis
                   key: redis-password
             - name: QUEUE_URL
-              value: "redis://:$(REDIS_PASSWORD)@{{ include "termos.fullname" . }}-redis-master:6379"
+              value: "redis://:$(REDIS_PASSWORD)@{{ include "lobu.fullname" . }}-redis-master:6379"
             {{- else }}
             - name: QUEUE_URL
-              value: "redis://{{ include "termos.fullname" . }}-redis-master:6379"
+              value: "redis://{{ include "lobu.fullname" . }}-redis-master:6379"
             {{- end }}
             {{- end }}
             # Dispatcher service name for workers to connect back
             - name: DISPATCHER_SERVICE_NAME
-              value: "{{ include "termos.fullname" . }}-gateway"
+              value: "{{ include "lobu.fullname" . }}-gateway"
 
             # Sentry configuration
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: sentry-dsn
                   optional: true
 
@@ -190,13 +190,13 @@ spec:
             - name: GITHUB_APP_ID
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: github-app-id
                   optional: true
             - name: GITHUB_APP_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: github-app-private-key
                   optional: true
             {{- end }}
@@ -204,7 +204,7 @@ spec:
             - name: GITHUB_PERSONAL_ACCESS_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: github-personal-access-token
                   optional: true
             {{- end }}
@@ -222,7 +222,7 @@ spec:
             - name: SESSION_TIMEOUT_MINUTES
               valueFrom:
                 configMapKeyRef:
-                  name: {{ include "termos.fullname" . }}-config
+                  name: {{ include "lobu.fullname" . }}-config
                   key: session-timeout-minutes
             
             # Application configuration
@@ -242,7 +242,7 @@ spec:
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: encryption-key
                   optional: true
             
@@ -250,7 +250,7 @@ spec:
             - name: CLAUDE_CODE_OAUTH_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "termos.fullname" . }}-secrets
+                  name: {{ include "lobu.fullname" . }}-secrets
                   key: claude-code-oauth-token
             {{- if .Values.gateway.anthropicProxy.baseUrl }}
             - name: ANTHROPIC_BASE_URL
@@ -278,14 +278,14 @@ spec:
         {{- if .Values.whatsapp.enabled }}
         - name: whatsapp-credentials
           secret:
-            secretName: {{ include "termos.fullname" . }}-whatsapp
+            secretName: {{ include "lobu.fullname" . }}-whatsapp
             optional: true
         {{- end }}
         {{- if .Values.gitCache.enabled }}
         - name: git-cache
           {{- if .Values.gitCache.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{ include "termos.fullname" . }}-git-cache
+            claimName: {{ include "lobu.fullname" . }}-git-cache
           {{- else }}
           emptyDir: {}
           {{- end }}

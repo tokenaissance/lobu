@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as nodeFs from "node:fs";
 import * as path from "node:path";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import FormData from "form-data";
 import { z } from "zod";
 import type { InteractionClient } from "../common/interaction-client";
@@ -1082,7 +1082,7 @@ export function createCustomToolsServer(
   }
 
   return createSdkMcpServer({
-    name: "termos",
+    name: "lobu",
     version: "1.0.0",
     tools,
   });

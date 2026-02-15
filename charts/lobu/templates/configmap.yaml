@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "termos.fullname" . }}-config
+  name: {{ include "lobu.fullname" . }}-config
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 data:
   # GitHub Configuration
   github-organization: {{ .Values.config.githubOrganization | quote }}

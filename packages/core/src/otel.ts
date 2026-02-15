@@ -35,8 +35,8 @@ export interface OtelConfig {
  *
  * @example
  * initTracing({
- *   serviceName: "termos-gateway",
- *   tempoEndpoint: "http://termos-tempo:4318/v1/traces",
+ *   serviceName: "lobu-gateway",
+ *   tempoEndpoint: "http://lobu-tempo:4318/v1/traces",
  * });
  */
 export function initTracing(config: OtelConfig): void {

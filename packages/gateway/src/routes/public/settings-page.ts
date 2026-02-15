@@ -85,7 +85,7 @@ export function renderSettingsPage(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Settings - Termos</title>
+  <title>Agent Settings - Lobu</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-amber-700 to-amber-900 p-4">
@@ -1889,7 +1889,7 @@ export function renderErrorPage(message: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings Error - Termos</title>
+  <title>Settings Error - Lobu</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center p-5">

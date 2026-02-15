@@ -2,10 +2,10 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "termos.fullname" . }}-gateway-pdb
+  name: {{ include "lobu.fullname" . }}-gateway-pdb
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     component: gateway
 spec:
   # Ensure at least one gateway pod is always available
@@ -16,7 +16,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      app: {{ include "termos.name" . }}
+      app: {{ include "lobu.name" . }}
       component: gateway
 
 ---
@@ -25,10 +25,10 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "termos.fullname" . }}-worker-pdb
+  name: {{ include "lobu.fullname" . }}-worker-pdb
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     component: worker
 spec:
   # Allow more aggressive disruption for worker pods

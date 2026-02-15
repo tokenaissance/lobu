@@ -8,7 +8,7 @@ import {
   createLogger,
   type InstructionProvider,
   type WorkerTransport,
-} from "@termosdev/core";
+} from "@lobu/core";
 import * as Sentry from "@sentry/node";
 import { HttpWorkerTransport } from "../gateway/gateway-integration";
 import { generateCustomInstructions } from "../instructions/builder";

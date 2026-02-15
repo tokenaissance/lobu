@@ -3,7 +3,7 @@
  * Sends settings link for authentication and configuration.
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { AuthProvider, PlatformAuthAdapter } from "../auth/platform-auth";
 import {
   buildSettingsUrl,

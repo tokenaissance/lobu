@@ -14,9 +14,9 @@ To enable:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "termos.fullname" . }}-worker-shared-pvc
+  name: {{ include "lobu.fullname" . }}-worker-shared-pvc
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     app.kubernetes.io/component: worker-shared-storage
 spec:
   accessModes:

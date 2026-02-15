@@ -7,7 +7,7 @@ import {
   type AgentOptions as CoreAgentOptions,
   type UserInteraction,
   type UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import { platformAuthRegistry } from "../auth/platform-auth";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import type { IFileHandler } from "../platform/file-handler";

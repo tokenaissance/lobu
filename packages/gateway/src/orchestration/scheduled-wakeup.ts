@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { CronExpressionParser } from "cron-parser";
 import type { IMessageQueue, QueueJob } from "../infrastructure/queue";
 

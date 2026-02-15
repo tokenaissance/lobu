@@ -1,4 +1,4 @@
-import { createLogger, DEFAULTS } from "@termosdev/core";
+import { createLogger, DEFAULTS } from "@lobu/core";
 import type { WebClient } from "@slack/web-api";
 import type { AdminStatusCache } from "../../auth/admin-status-cache";
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";

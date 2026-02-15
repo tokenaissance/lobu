@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { createLogger, type Logger } from "@termosdev/core";
+import { createLogger, type Logger } from "@lobu/core";
 
 /**
  * Base OAuth2 client with shared token exchange and refresh logic

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger, moduleRegistry } from "@termosdev/core";
+import { createLogger, moduleRegistry } from "@lobu/core";
 import { AdminStatusCache } from "../auth/admin-status-cache";
 import { AgentMetadataStore } from "../auth/agent-metadata-store";
 import { ClaudeCredentialStore } from "../auth/claude/credential-store";

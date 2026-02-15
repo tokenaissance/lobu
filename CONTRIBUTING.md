@@ -1,4 +1,4 @@
-# Contributing to Termos
+# Contributing to Lobu
 
 ## Pull Request Process
 

@@ -7,7 +7,7 @@ import {
   retryWithBackoff,
   TIME,
   type UserInteractionResponse,
-} from "@termosdev/core";
+} from "@lobu/core";
 
 const logger = createLogger("interaction-client");
 

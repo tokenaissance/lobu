@@ -10,7 +10,7 @@ import {
   type NetworkConfig,
   verifyWorkerToken,
   type WorkerTokenData,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -36,9 +36,9 @@ const RESERVED_EXEC_ENV_KEYS = new Set([
   "NO_PROXY",
   "ALL_PROXY",
   "WORKSPACE_DIR",
-  "TERMOS_WORKSPACES_DIR",
+  "LOBU_WORKSPACES_DIR",
   "WORKER_TOKEN",
-  "TERMOS_API_KEY",
+  "LOBU_API_KEY",
   "ENCRYPTION_KEY",
   "TRACE_ID",
   "TRACEPARENT",
@@ -627,7 +627,7 @@ export function createAgentApi(
   };
 
   const checkApiKey = (c: Context): boolean => {
-    const apiKey = process.env.TERMOS_API_KEY;
+    const apiKey = process.env.LOBU_API_KEY;
     if (!apiKey) return true;
     const providedKey = c.req.header("X-API-Key");
     return providedKey === apiKey;
@@ -907,8 +907,8 @@ export function createAgentApi(
     await sessionManager.touchSession(agentId);
 
     const { span: rootSpan, traceparent } = createRootSpan("message_received", {
-      "termos.agent_id": agentId,
-      "termos.message_id": messageId,
+      "lobu.agent_id": agentId,
+      "lobu.message_id": messageId,
     });
 
     try {
@@ -920,7 +920,7 @@ export function createAgentApi(
         channelId: tokenData.channelId,
         teamId: tokenData.teamId || "api",
         agentId: tokenData.agentId || `api-${tokenData.userId}`,
-        botId: "termos-api",
+        botId: "lobu-api",
         platform: "api",
         messageText: content,
         platformMetadata: {
@@ -988,8 +988,8 @@ export function createAgentApi(
     }
 
     const { span: rootSpan, traceparent } = createRootSpan("exec_received", {
-      "termos.agent_id": agentId,
-      "termos.exec_id": execId,
+      "lobu.agent_id": agentId,
+      "lobu.exec_id": execId,
     });
 
     try {
@@ -1001,7 +1001,7 @@ export function createAgentApi(
         channelId: tokenData.channelId,
         teamId: tokenData.teamId || "api",
         agentId: tokenData.agentId || `api-${tokenData.userId}`,
-        botId: "termos-api",
+        botId: "lobu-api",
         platform: "api",
         messageText: "",
         platformMetadata: {

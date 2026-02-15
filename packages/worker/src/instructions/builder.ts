@@ -2,7 +2,7 @@ import {
   createLogger,
   type InstructionContext,
   type InstructionProvider,
-} from "@termosdev/core";
+} from "@lobu/core";
 import {
   ProcessManagerInstructionProvider,
   ProjectsInstructionProvider,

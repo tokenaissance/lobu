@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { marked } from "marked";
 
 const logger = createLogger("dispatcher");

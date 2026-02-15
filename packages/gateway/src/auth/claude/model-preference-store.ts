@@ -1,4 +1,4 @@
-import { BaseRedisStore } from "@termosdev/core";
+import { BaseRedisStore } from "@lobu/core";
 import type Redis from "ioredis";
 
 /**

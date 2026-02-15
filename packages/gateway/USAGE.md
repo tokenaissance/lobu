@@ -1,6 +1,6 @@
 # Gateway Environment Variables
 
-This document describes all environment variables used by the Termos Gateway.
+This document describes all environment variables used by the Lobu Gateway.
 
 ## Required Variables
 
@@ -66,16 +66,16 @@ This document describes all environment variables used by the Termos Gateway.
 
 ## MCP (Model Context Protocol) Configuration
 
-### `TERMOS_MCP_SERVERS_URL`
+### `LOBU_MCP_SERVERS_URL`
 **Description**: Path to MCP servers configuration file
 **Format**: File path (relative to project root)
-**Example**: `file:///app/.termos/mcp.config.json` or `.termos/mcp.config.json`
+**Example**: `file:///app/.lobu/mcp.config.json` or `.lobu/mcp.config.json`
 **Used by**: MCP server discovery and OAuth configuration
 
 ### `PUBLIC_GATEWAY_URL`
 **Description**: Public URL where gateway is accessible (required for MCP OAuth callbacks)
 **Format**: URL without trailing slash
-**Example**: `https://termos.example.com`
+**Example**: `https://lobu.example.com`
 **Default**: `http://localhost:8080`
 **Used by**: OAuth callback URL generation
 
@@ -102,8 +102,8 @@ This document describes all environment variables used by the Termos Gateway.
 ### `COMPOSE_PROJECT_NAME`
 **Description**: Docker Compose project name (Docker mode only)
 **Format**: Alphanumeric string
-**Default**: `termos`
-**Used by**: Docker network name resolution (`${COMPOSE_PROJECT_NAME}_termos-network`)
+**Default**: `lobu`
+**Used by**: Docker network name resolution (`${COMPOSE_PROJECT_NAME}_lobu-network`)
 
 ## Worker Configuration
 
@@ -111,7 +111,7 @@ This document describes all environment variables used by the Termos Gateway.
 
 #### `WORKER_IMAGE_REPOSITORY`
 **Description**: Worker Docker image repository
-**Default**: `buremba/termos-worker`
+**Default**: `buremba/lobu-worker`
 **Used by**: Worker container deployment
 
 #### `WORKER_IMAGE_TAG`
@@ -186,10 +186,10 @@ This document describes all environment variables used by the Termos Gateway.
 **Example**: `${PWD}/examples/my-tool:/workspace/my-tool:ro;${PWD}/data:/data:rw`
 **Used by**: Docker bind mounts in development mode
 
-#### `TERMOS_DEV_PROJECT_PATH` (Internal - Development Only)
+#### `LOBU_DEV_PROJECT_PATH` (Internal - Development Only)
 **Description**: Host project path for mounting into worker containers (internal use, set automatically in docker-compose.dev.yml)
 **Format**: Absolute host path
-**Example**: `/Users/username/Code/termos`
+**Example**: `/Users/username/Code/lobu`
 **Note**: Only needed in development mode when gateway runs in Docker and needs to mount host directories into workers
 **Used by**: Docker bind mounts for hot reload
 
@@ -219,7 +219,7 @@ This document describes all environment variables used by the Termos Gateway.
 **Description**: AppArmor profile name for workers
 **Format**: Profile name
 **Default**: Docker's default AppArmor profile (recommended)
-**Example**: `docker-termos-worker`
+**Example**: `docker-lobu-worker`
 **Used by**: Docker SecurityOpt configuration
 
 #### `WORKER_USERNS_MODE`
@@ -272,12 +272,12 @@ This document describes all environment variables used by the Termos Gateway.
 
 ### `QUEUE_DIRECT_MESSAGE`
 **Description**: Queue name for direct messages
-**Default**: `termos:queue:direct-message`
+**Default**: `lobu:queue:direct-message`
 **Used by**: Message routing
 
 ### `QUEUE_MESSAGE_QUEUE`
 **Description**: Queue name for channel messages
-**Default**: `termos:queue:message-queue`
+**Default**: `lobu:queue:message-queue`
 **Used by**: Message routing
 
 ### `QUEUE_RETRY_LIMIT`
@@ -333,7 +333,7 @@ This document describes all environment variables used by the Termos Gateway.
 ### `DISPATCHER_SERVICE_NAME`
 **Description**: Kubernetes service name for gateway (for worker callbacks)
 **Format**: Kubernetes service name
-**Default**: `termos-dispatcher`
+**Default**: `lobu-dispatcher`
 **Used by**: Worker-to-gateway communication
 
 ## Health Monitoring

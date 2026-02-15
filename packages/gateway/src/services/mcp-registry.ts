@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

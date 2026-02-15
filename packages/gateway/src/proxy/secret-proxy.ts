@@ -1,12 +1,12 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type Redis from "ioredis";
 
 const logger = createLogger("secret-proxy");
 
-const PLACEHOLDER_PREFIX = "termos_secret_";
-const REDIS_KEY_PREFIX = "termos:secret:";
+const PLACEHOLDER_PREFIX = "lobu_secret_";
+const REDIS_KEY_PREFIX = "lobu:secret:";
 
 export interface SecretMapping {
   agentId: string;

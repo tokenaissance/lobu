@@ -7,7 +7,7 @@ import {
   createLogger,
   type UserInteraction,
   type UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import { InlineKeyboard, type Bot } from "grammy";
 import type { InteractionService } from "../interactions";
 import {

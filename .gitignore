@@ -7,11 +7,11 @@ node_modules
 .env
 .env.*
 .tmp/*
-charts/termos/values-local.yaml
+charts/lobu/values-local.yaml
 
 # Helm dependency files
-charts/termos/charts/
-charts/termos/Chart.lock
+charts/lobu/charts/
+charts/lobu/Chart.lock
 
 # Build output - compiled artifacts should not be committed
 dist/
@@ -24,14 +24,17 @@ packages/**/*.js
 packages/**/*.js.map
 packages/**/*.d.ts
 packages/**/*.d.ts.map
+
+# CLI bin entrypoint is source-controlled (needed for CI publishing)
+!packages/cli/bin/*.js
 tsconfig.tsbuildinfo
 **/tsconfig.tsbuildinfo
 
 workspaces/*
 
 # SSH keys for Terraform
-charts/termos/provider/hetzner/ssh_key
-charts/termos/provider/hetzner/ssh_key.pub
+charts/lobu/provider/hetzner/ssh_key
+charts/lobu/provider/hetzner/ssh_key.pub
 .github-app-private-key.pem
 debug-voice-urls.js
 docs/

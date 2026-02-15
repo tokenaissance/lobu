@@ -1,11 +1,6 @@
 #!/usr/bin/env bun
 
-import {
-  ConfigError,
-  createLogger,
-  initSentry,
-  initTracing,
-} from "@termosdev/core";
+import { ConfigError, createLogger, initSentry, initTracing } from "@lobu/core";
 import { Command } from "commander";
 import {
   buildGatewayConfig,
@@ -29,8 +24,8 @@ async function main() {
   const program = new Command();
 
   program
-    .name("termos-gateway")
-    .description("Termos gateway service - connects Slack to Claude workers")
+    .name("lobu-gateway")
+    .description("Lobu gateway service - connects Slack to Claude workers")
     .version("1.0.0");
 
   // WhatsApp setup command
@@ -65,9 +60,9 @@ async function main() {
 
         // Initialize OpenTelemetry tracing for Tempo (if configured)
         initTracing({
-          serviceName: "termos-gateway",
+          serviceName: "lobu-gateway",
           serviceVersion: process.env.npm_package_version || "2.0.0",
-          tempoEndpoint: process.env.TEMPO_ENDPOINT, // e.g., "http://termos-tempo:4318/v1/traces"
+          tempoEndpoint: process.env.TEMPO_ENDPOINT, // e.g., "http://lobu-tempo:4318/v1/traces"
           enabled: !!process.env.TEMPO_ENDPOINT,
         });
 

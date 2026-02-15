@@ -21,7 +21,7 @@ module.exports = {
     {
       name: "worker-must-not-know-platforms",
       comment:
-        "Worker stays platform-agnostic and should only rely on @termosdev/core.",
+        "Worker stays platform-agnostic and should only rely on @lobu/core.",
       severity: "error",
       from: {
         path: "^packages/worker/src",
@@ -33,7 +33,7 @@ module.exports = {
     {
       name: "gateway-must-not-import-worker",
       comment:
-        "Gateway keeps platform adapters separate; shared logic lives in @termosdev/core.",
+        "Gateway keeps platform adapters separate; shared logic lives in @lobu/core.",
       severity: "error",
       from: {
         path: "^packages/gateway/src",

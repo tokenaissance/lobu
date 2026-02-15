@@ -1,4 +1,4 @@
-import { moduleRegistry } from "@termosdev/core";
+import { moduleRegistry } from "@lobu/core";
 import { platformRegistry } from "../platform";
 import type {
   DeploymentInfo,
@@ -81,9 +81,9 @@ export async function buildModuleEnvVars(
 }
 
 export const BASE_WORKER_LABELS = {
-  "app.kubernetes.io/name": "termos",
+  "app.kubernetes.io/name": "lobu",
   "app.kubernetes.io/component": "worker",
-  "termos/managed-by": "orchestrator",
+  "lobu/managed-by": "orchestrator",
 } as const;
 
 /**

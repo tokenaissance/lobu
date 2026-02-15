@@ -1,5 +1,5 @@
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 
 const logger = createLogger("openclaw-processor");
 

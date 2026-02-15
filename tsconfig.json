@@ -28,12 +28,12 @@
     // Workspace module resolution
     "baseUrl": ".",
     "paths": {
-      "@termosdev/core": ["packages/core/src/index.ts"],
-      "@termosdev/core/*": ["packages/core/src/*"],
-      "@termosdev/gateway": ["packages/gateway/src/index.ts"],
-      "@termosdev/gateway/*": ["packages/gateway/src/*"],
-      "@termosdev/worker": ["packages/worker/src/index.ts"],
-      "@termosdev/worker/*": ["packages/worker/src/*"]
+      "@lobu/core": ["packages/core/src/index.ts"],
+      "@lobu/core/*": ["packages/core/src/*"],
+      "@lobu/gateway": ["packages/gateway/src/index.ts"],
+      "@lobu/gateway/*": ["packages/gateway/src/*"],
+      "@lobu/worker": ["packages/worker/src/index.ts"],
+      "@lobu/worker/*": ["packages/worker/src/*"]
     }
   },
   "include": ["packages/*/src/**/*", "src/**/*", "test/**/*"],

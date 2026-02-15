@@ -36,15 +36,15 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           
           # Update dependencies
-          helm dependency update charts/termos
+          helm dependency update charts/lobu
           
           # Package the chart
-          helm package charts/termos --destination .
+          helm package charts/lobu --destination .
 
       - name: Checkout Helm Repository
         uses: actions/checkout@v4
         with:
-          repository: termos-dev/helm-charts  # Create this public repository
+          repository: lobu-ai/helm-charts  # Create this public repository
           token: ${{ secrets.GH_TOKEN_PEERBOT }}  # Cross-repo write access
           path: helm-repo
           ref: main
@@ -52,34 +52,34 @@ jobs:
       - name: Update Helm Repository
         run: |
           # Copy new chart to repository
-          cp termos-*.tgz helm-repo/
+          cp lobu-*.tgz helm-repo/
           
           cd helm-repo
           
           # Generate updated index
-          helm repo index . --url https://termos-dev.github.io/helm-charts/
+          helm repo index . --url https://lobu-ai.github.io/helm-charts/
           
           # Create/Update README
           cat > README.md << 'EOF'
-          # Termos Helm Charts Repository
+          # Lobu Helm Charts Repository
 
-          This repository hosts Helm charts for Termos.
+          This repository hosts Helm charts for Lobu.
 
           ## Usage
 
           ```bash
-          helm repo add termos https://termos-dev.github.io/helm-charts/
+          helm repo add lobu https://lobu-ai.github.io/helm-charts/
           helm repo update
-          helm install my-termos termos/termos
+          helm install my-lobu lobu/lobu
           ```
 
           ## Available Charts
 
-          - `termos` - Kubernetes deployment chart for Termos Slack bot
+          - `lobu` - Kubernetes deployment chart for Lobu Slack bot
 
           ## Source
 
-          The source code for Termos is maintained in a private repository.
+          The source code for Lobu is maintained in a private repository.
           For issues and feature requests, please contact the maintainers.
           EOF
           
@@ -87,7 +87,7 @@ jobs:
           cat > artifacthub-repo.yml << 'EOF'
           repositoryID: 2bad8467-2919-492c-9423-1d3f2750c24b
           owners:
-            - name: termos-dev
+            - name: lobu-ai
               email: emre@rakam.io
           EOF
           
@@ -97,7 +97,7 @@ jobs:
           
           # Commit and push
           git add -A
-          git commit -m "Update Helm chart termos to $(grep '^version:' $GITHUB_WORKSPACE/charts/termos/Chart.yaml | awk '{print $2}')" || echo "No changes"
+          git commit -m "Update Helm chart lobu to $(grep '^version:' $GITHUB_WORKSPACE/charts/lobu/Chart.yaml | awk '{print $2}')" || echo "No changes"
           git push origin main
 
       - name: Publish to GitHub Pages
@@ -113,7 +113,7 @@ jobs:
           ARTIFACTHUB_API_KEY_ID: ${{ secrets.ARTIFACTHUB_API_KEY_ID }}
           ARTIFACTHUB_API_KEY_SECRET: ${{ secrets.ARTIFACTHUB_API_KEY_SECRET }}
         run: |
-          CHART_VERSION=$(grep '^version:' charts/termos/Chart.yaml | awk '{print $2}')
+          CHART_VERSION=$(grep '^version:' charts/lobu/Chart.yaml | awk '{print $2}')
           
           # Notify ArtifactHub about the new version
           curl -X POST \
@@ -122,19 +122,19 @@ jobs:
             -H "Content-Type: application/json" \
             "https://artifacthub.io/api/v1/tracker/helm" \
             -d "{
-              \"repository\": \"termos\",
+              \"repository\": \"lobu\",
               \"version\": \"$CHART_VERSION\",
-              \"url\": \"https://termos-dev.github.io/helm-charts/\"
+              \"url\": \"https://lobu-ai.github.io/helm-charts/\"
             }" || echo "ArtifactHub notification failed, but continuing..."
 
       - name: Output Repository Information
         run: |
-          CHART_VERSION=$(grep '^version:' charts/termos/Chart.yaml | awk '{print $2}')
+          CHART_VERSION=$(grep '^version:' charts/lobu/Chart.yaml | awk '{print $2}')
           echo "📦 Helm chart published successfully!"
-          echo "🔗 Helm repository URL: https://termos-dev.github.io/helm-charts/"
-          echo "📦 Chart Package: https://termos-dev.github.io/helm-charts/termos-${CHART_VERSION}.tgz"
+          echo "🔗 Helm repository URL: https://lobu-ai.github.io/helm-charts/"
+          echo "📦 Chart Package: https://lobu-ai.github.io/helm-charts/lobu-${CHART_VERSION}.tgz"
           echo ""
           echo "To use this repository:"
-          echo "helm repo add termos https://termos-dev.github.io/helm-charts/"
+          echo "helm repo add lobu https://lobu-ai.github.io/helm-charts/"
           echo "helm repo update"
-          echo "helm install my-termos termos/termos"
+          echo "helm install my-lobu lobu/lobu"

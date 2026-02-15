@@ -1,4 +1,4 @@
-import type { InstructionContext, InstructionProvider } from "@termosdev/core";
+import type { InstructionContext, InstructionProvider } from "@lobu/core";
 
 /**
  * OpenClaw core instructions
@@ -8,7 +8,7 @@ export class OpenClawCoreInstructionProvider implements InstructionProvider {
   priority = 10;
 
   getInstructions(context: InstructionContext): string {
-    return `You are a helpful Termos agent for user ${context.userId}.
+    return `You are a helpful Lobu agent for user ${context.userId}.
 Working directory: ${context.workingDirectory}
 
 ## Using AskUserQuestion for Better UX

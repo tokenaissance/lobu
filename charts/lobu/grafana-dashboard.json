@@ -88,7 +88,7 @@
             "uid": "${lokiDatasource}"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({namespace=\"termos\"} |= \"stage_end\" | json [$__interval]))",
+          "expr": "sum(count_over_time({namespace=\"lobu\"} |= \"stage_end\" | json [$__interval]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -198,7 +198,7 @@
             "uid": "${lokiDatasource}"
           },
           "editorMode": "code",
-          "expr": "{namespace=\"termos\"} |= \"stage_end\" | json",
+          "expr": "{namespace=\"lobu\"} |= \"stage_end\" | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -399,7 +399,7 @@
             "uid": "${lokiDatasource}"
           },
           "editorMode": "code",
-          "expr": "{namespace=\"termos\"} |= \"$traceIdFilter\" |= \"stage_end\" | json | line_format \"{{.stage}}={{.duration}}\"",
+          "expr": "{namespace=\"lobu\"} |= \"$traceIdFilter\" |= \"stage_end\" | json | line_format \"{{.stage}}={{.duration}}\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -468,7 +468,7 @@
             "uid": "${lokiDatasource}"
           },
           "editorMode": "code",
-          "expr": "{namespace=\"termos\"} |= \"$traceIdFilter\" | json",
+          "expr": "{namespace=\"lobu\"} |= \"$traceIdFilter\" | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -505,7 +505,7 @@
             "uid": "${lokiDatasource}"
           },
           "editorMode": "code",
-          "expr": "{namespace=\"termos\"} |= \"error\" | json",
+          "expr": "{namespace=\"lobu\"} |= \"error\" | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -565,8 +565,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Termos Message Traces",
-  "uid": "termos-traces",
+  "title": "Lobu Message Traces",
+  "uid": "lobu-traces",
   "version": 2,
   "weekStart": ""
 }

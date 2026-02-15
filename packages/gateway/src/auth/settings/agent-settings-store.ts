@@ -6,7 +6,7 @@ import {
   type NetworkConfig,
   type SkillsConfig,
   type ToolsConfig,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type Redis from "ioredis";
 
 /**

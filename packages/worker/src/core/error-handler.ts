@@ -1,4 +1,4 @@
-import { createLogger, type WorkerTransport } from "@termosdev/core";
+import { createLogger, type WorkerTransport } from "@lobu/core";
 
 const logger = createLogger("base-worker");
 

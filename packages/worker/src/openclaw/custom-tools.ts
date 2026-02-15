@@ -5,7 +5,7 @@ import FormData from "form-data";
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { InteractionClient } from "../common/interaction-client";
 
 const logger = createLogger("openclaw-custom-tools");

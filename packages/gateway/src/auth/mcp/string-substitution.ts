@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { InputValues } from "./input-store";
 
 const logger = createLogger("string-substitution");

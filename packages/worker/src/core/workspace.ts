@@ -1,11 +1,7 @@
 #!/usr/bin/env bun
 
 import { mkdir } from "node:fs/promises";
-import {
-  createLogger,
-  sanitizeThreadId,
-  WorkspaceError,
-} from "@termosdev/core";
+import { createLogger, sanitizeThreadId, WorkspaceError } from "@lobu/core";
 import type { WorkspaceInfo, WorkspaceSetupConfig } from "./types";
 
 const logger = createLogger("workspace");
@@ -16,7 +12,7 @@ const logger = createLogger("workspace");
 
 /**
  * Extract thread ID from deployment name
- * Example: termos-worker-1756766056.836119 -> 1756766056.836119
+ * Example: lobu-worker-1756766056.836119 -> 1756766056.836119
  */
 function extractThreadIdFromDeploymentName(
   deploymentName: string | undefined

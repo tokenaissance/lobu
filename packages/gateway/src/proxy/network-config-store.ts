@@ -1,4 +1,4 @@
-import { createLogger, type NetworkConfig } from "@termosdev/core";
+import { createLogger, type NetworkConfig } from "@lobu/core";
 import { resolveNetworkConfig } from "../config/network-allowlist";
 
 const logger = createLogger("network-config-store");
@@ -22,7 +22,7 @@ export interface ResolvedNetworkConfig {
 export class NetworkConfigStore {
   private configs: Map<string, ResolvedNetworkConfig> = new Map();
   private redisClient: any = null;
-  private readonly REDIS_PREFIX = "termos:network:";
+  private readonly REDIS_PREFIX = "lobu:network:";
   private readonly REDIS_TTL = 24 * 60 * 60; // 24 hours
 
   /**

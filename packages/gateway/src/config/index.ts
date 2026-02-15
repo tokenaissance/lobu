@@ -2,7 +2,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { AgentOptions, LogLevel } from "@termosdev/core";
+import type { AgentOptions, LogLevel } from "@lobu/core";
 import {
   DEFAULTS as CORE_DEFAULTS,
   createLogger,
@@ -11,7 +11,7 @@ import {
   getOptionalNumber,
   getRequiredEnv,
   TIME,
-} from "@termosdev/core";
+} from "@lobu/core";
 import { config as dotenvConfig } from "dotenv";
 import type { OrchestratorConfig } from "../orchestration/base-deployment-manager";
 
@@ -23,7 +23,7 @@ const logger = createLogger("cli-config");
 
 /**
  * Gateway-specific constants
- * Core constants (TIME, REDIS_KEYS, core DEFAULTS) are imported from @termosdev/core
+ * Core constants (TIME, REDIS_KEYS, core DEFAULTS) are imported from @lobu/core
  * This file contains gateway-specific configuration values
  */
 
@@ -37,7 +37,7 @@ const GATEWAY_DEFAULTS = {
   QUEUE_DIRECT_MESSAGE: "direct_message",
   QUEUE_MESSAGE_QUEUE: "message_queue",
   /** Default worker settings */
-  WORKER_IMAGE_REPOSITORY: "termos-worker",
+  WORKER_IMAGE_REPOSITORY: "lobu-worker",
   WORKER_IMAGE_TAG: "latest",
   WORKER_IMAGE_PULL_POLICY: "Always",
   WORKER_RUNTIME_CLASS_NAME: "kata",
@@ -49,7 +49,7 @@ const GATEWAY_DEFAULTS = {
   MAX_WORKER_DEPLOYMENTS: 100,
   WORKER_STALE_TIMEOUT_MINUTES: 10,
   /** Default Kubernetes namespace */
-  KUBERNETES_NAMESPACE: "termos",
+  KUBERNETES_NAMESPACE: "lobu",
   /** Default cleanup settings */
   CLEANUP_INITIAL_DELAY_MS: TIME.FIVE_SECONDS_MS,
   CLEANUP_INTERVAL_MS: 60000, // 1 minute
@@ -59,9 +59,9 @@ const GATEWAY_DEFAULTS = {
   SOCKET_STALE_THRESHOLD_MS: 15 * TIME.MINUTE_MS, // 15 minutes
   SOCKET_PROTECT_ACTIVE_WORKERS: true,
   /** Default deployment settings */
-  TERMOS_DEV_PROJECT_PATH: "/app",
-  COMPOSE_PROJECT_NAME: "termos",
-  DISPATCHER_SERVICE_NAME: "termos-dispatcher",
+  LOBU_DEV_PROJECT_PATH: "/app",
+  COMPOSE_PROJECT_NAME: "lobu",
+  DISPATCHER_SERVICE_NAME: "lobu-dispatcher",
   /** Default log level */
   LOG_LEVEL: "INFO" as const,
   /** Default kubeconfig path */
@@ -173,7 +173,7 @@ export function buildGatewayConfig(): GatewayConfig {
   }
 
   // Build MCP config
-  const mcpServersUrl = process.env.TERMOS_MCP_SERVERS_URL;
+  const mcpServersUrl = process.env.LOBU_MCP_SERVERS_URL;
   const publicGatewayUrl = getOptionalEnv(
     "PUBLIC_GATEWAY_URL",
     DEFAULTS.PUBLIC_GATEWAY_URL

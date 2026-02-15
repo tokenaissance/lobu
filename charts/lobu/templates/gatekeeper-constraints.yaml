@@ -1,5 +1,5 @@
 {{- if .Values.gatekeeper.enabled }}
-# OPA Gatekeeper Constraint Templates and Constraints for Termos
+# OPA Gatekeeper Constraint Templates and Constraints for Lobu
 #
 # Prerequisites:
 # 1. Install Gatekeeper:
@@ -15,7 +15,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8srequirenonroot
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Requires containers to run as non-root user"
 spec:
@@ -47,7 +47,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8srequireresourcelimits
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Requires containers to have resource limits defined"
 spec:
@@ -79,7 +79,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8sblockprivileged
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Blocks privileged containers"
 spec:
@@ -111,7 +111,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8srequiredlabels
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Requires specific labels to be present"
 spec:
@@ -147,7 +147,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8sallowedregistries
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Only allows images from approved registries"
 spec:
@@ -192,7 +192,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8sreadonlyrootfs
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Requires containers to have read-only root filesystem"
 spec:
@@ -232,7 +232,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8sdropallcapabilities
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
   annotations:
     description: "Requires containers to drop all capabilities"
 spec:
@@ -257,14 +257,14 @@ spec:
 
 {{- if .Values.gatekeeper.enforceConstraints }}
 ---
-# Apply constraints to termos namespace
+# Apply constraints to lobu namespace
 # Constraint: Require non-root
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sRequireNonRoot
 metadata:
-  name: termos-require-nonroot
+  name: lobu-require-nonroot
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   match:
     kinds:
@@ -277,9 +277,9 @@ spec:
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sRequireResourceLimits
 metadata:
-  name: termos-require-resource-limits
+  name: lobu-require-resource-limits
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   match:
     kinds:
@@ -292,9 +292,9 @@ spec:
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sBlockPrivileged
 metadata:
-  name: termos-block-privileged
+  name: lobu-block-privileged
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   match:
     kinds:
@@ -307,9 +307,9 @@ spec:
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sRequiredLabels
 metadata:
-  name: termos-require-labels
+  name: lobu-require-labels
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   match:
     kinds:
@@ -326,9 +326,9 @@ spec:
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sAllowedRegistries
 metadata:
-  name: termos-allowed-registries
+  name: lobu-allowed-registries
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   match:
     kinds:
@@ -344,9 +344,9 @@ spec:
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sDropAllCapabilities
 metadata:
-  name: termos-drop-capabilities
+  name: lobu-drop-capabilities
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   match:
     kinds:

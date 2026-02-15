@@ -6,7 +6,7 @@ import {
   moduleRegistry,
   type UserInteraction,
   type UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import { App, type AppOptions, ExpressReceiver, LogLevel } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
 import type { NextFunction, Request, Response } from "express";

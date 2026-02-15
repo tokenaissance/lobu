@@ -2,7 +2,7 @@ export * from "./base-deployment-manager";
 export * from "./deployment-utils";
 export * from "./impl";
 
-import { createLogger, moduleRegistry } from "@termosdev/core";
+import { createLogger, moduleRegistry } from "@lobu/core";
 import type Redis from "ioredis";
 import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import type {

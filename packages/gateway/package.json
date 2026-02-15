@@ -1,5 +1,5 @@
 {
-  "name": "@termosdev/gateway",
+  "name": "@lobu/gateway",
   "version": "1.0.0",
   "license": "Apache-2.0",
   "private": true,
@@ -23,7 +23,7 @@
     "@slack/bolt": "^4.5.0",
     "@slack/types": "^2.17.0",
     "@slack/web-api": "^7.11.0",
-    "@termosdev/core": "workspace:*",
+    "@lobu/core": "workspace:*",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "bullmq": "^5.31.5",
     "commander": "^14.0.1",

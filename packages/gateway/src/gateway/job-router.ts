@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { IMessageQueue } from "../infrastructure/queue";
 import type { ISessionManager } from "../session";
 import type { WorkerConnectionManager } from "./connection-manager";

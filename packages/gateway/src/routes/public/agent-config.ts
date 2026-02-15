@@ -221,7 +221,7 @@ export function createAgentConfigRoutes(
           headers: {
             Authorization: `Bearer ${githubUser.accessToken}`,
             Accept: "application/vnd.github+json",
-            "User-Agent": "Termos",
+            "User-Agent": "Lobu",
           },
         });
         if (resp.ok) {

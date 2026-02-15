@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { App } from "@slack/bolt";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
@@ -97,13 +97,13 @@ export class ShortcutCommandHandler {
   private setupSlashCommands(): void {
     logger.info("Setting up slash command handlers...");
 
-    // Handle /termos command - always show context-aware welcome
-    this.app.command("/termos", async ({ ack, body, client }) => {
+    // Handle /lobu command - always show context-aware welcome
+    this.app.command("/lobu", async ({ ack, body, client }) => {
       await ack();
 
       const { user_id, channel_id } = body;
       logger.info(
-        `/termos command received from user=${user_id}, channel=${channel_id}`
+        `/lobu command received from user=${user_id}, channel=${channel_id}`
       );
 
       // Send context-aware welcome message (no thread for slash commands)
@@ -126,7 +126,7 @@ export class ShortcutCommandHandler {
         type: "header",
         text: {
           type: "plain_text",
-          text: "Welcome to Termos! 👋",
+          text: "Welcome to Lobu! 👋",
           emoji: true,
         },
       },
@@ -167,7 +167,7 @@ export class ShortcutCommandHandler {
         thread_ts?: string;
       } = {
         channel: channelId,
-        text: "Welcome to Termos! 👋",
+        text: "Welcome to Lobu! 👋",
         blocks,
       };
 
@@ -182,7 +182,7 @@ export class ShortcutCommandHandler {
       await client.chat.postEphemeral({
         channel: channelId,
         user: userId,
-        text: "Welcome to Termos! 👋",
+        text: "Welcome to Lobu! 👋",
         blocks,
       });
     }

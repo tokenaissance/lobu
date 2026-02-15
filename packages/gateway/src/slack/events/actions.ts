@@ -1,8 +1,8 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 
 const logger = createLogger("dispatcher");
 
-import type { IModuleRegistry } from "@termosdev/core";
+import type { IModuleRegistry } from "@lobu/core";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 import { resolveSpace } from "../../spaces";
@@ -392,7 +392,7 @@ export class ActionHandler {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "*Welcome to Termos!* 👋\n\nYour AI coding assistant is ready to help.",
+            text: "*Welcome to Lobu!* 👋\n\nYour AI coding assistant is ready to help.",
           },
         },
         {

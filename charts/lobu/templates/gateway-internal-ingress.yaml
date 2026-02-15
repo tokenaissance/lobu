@@ -2,10 +2,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "termos.fullname" . }}-gateway-internal
+  name: {{ include "lobu.fullname" . }}-gateway-internal
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
     app.kubernetes.io/component: gateway-internal
   annotations:
     # Internal only - not accessible from outside cluster
@@ -37,7 +37,7 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "termos.fullname" $ }}-gateway
+                name: {{ include "lobu.fullname" $ }}-gateway
                 port:
                   number: {{ $.Values.gateway.service.port }}
           {{- end }}

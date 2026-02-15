@@ -16,10 +16,10 @@
       },
     },
     "packages/cli": {
-      "name": "create-termos",
+      "name": "create-lobu",
       "version": "2.3.0",
       "bin": {
-        "create-termos": "./bin/create-termos.js",
+        "create-lobu": "./bin/create-lobu.js",
       },
       "dependencies": {
         "chalk": "^5.3.0",
@@ -35,7 +35,7 @@
       },
     },
     "packages/core": {
-      "name": "@termosdev/core",
+      "name": "@lobu/core",
       "version": "2.0.0",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
@@ -54,7 +54,7 @@
       },
     },
     "packages/gateway": {
-      "name": "@termosdev/gateway",
+      "name": "@lobu/gateway",
       "version": "1.0.0",
       "dependencies": {
         "@anthropic-ai/sandbox-runtime": "^0.0.34",
@@ -66,7 +66,7 @@
         "@slack/bolt": "^4.5.0",
         "@slack/types": "^2.17.0",
         "@slack/web-api": "^7.11.0",
-        "@termosdev/core": "workspace:*",
+        "@lobu/core": "workspace:*",
         "@whiskeysockets/baileys": "^7.0.0-rc.9",
         "bullmq": "^5.31.5",
         "commander": "^14.0.1",
@@ -92,10 +92,10 @@
       },
     },
     "packages/worker": {
-      "name": "@termosdev/worker",
+      "name": "@lobu/worker",
       "version": "2.3.0",
       "bin": {
-        "termos-worker": "./dist/index.js",
+        "lobu-worker": "./dist/index.js",
       },
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.1.28",
@@ -104,7 +104,7 @@
         "@mariozechner/pi-coding-agent": "^0.51.6",
         "@modelcontextprotocol/sdk": "^1.17.4",
         "@sentry/node": "^10.6.0",
-        "@termosdev/core": "workspace:*",
+        "@lobu/core": "workspace:*",
         "form-data": "^4.0.4",
         "zod": "^3.24.1",
       },
@@ -690,11 +690,11 @@
 
     "@smithy/uuid": ["@smithy/uuid@1.1.0", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-4aUIteuyxtBUhVdiQqcDhKFitwfd9hqoSDYY2KRXiWtgoWJ9Bmise+KfEPDiVHWeJepvF8xJO9/9+WDIciMFFw=="],
 
-    "@termosdev/core": ["@termosdev/core@workspace:packages/core"],
+    "@lobu/core": ["@lobu/core@workspace:packages/core"],
 
-    "@termosdev/gateway": ["@termosdev/gateway@workspace:packages/gateway"],
+    "@lobu/gateway": ["@lobu/gateway@workspace:packages/gateway"],
 
-    "@termosdev/worker": ["@termosdev/worker@workspace:packages/worker"],
+    "@lobu/worker": ["@lobu/worker@workspace:packages/worker"],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 
@@ -934,7 +934,7 @@
 
     "cpu-features": ["cpu-features@0.0.10", "", { "dependencies": { "buildcheck": "~0.0.6", "nan": "^2.19.0" } }, "sha512-9IkYqtX3YHPCzoVg1Py+o9057a3i0fp7S530UWokCSaFVTc7CwXPRiOjRjBQQ18ZCNafx78YfnG+HALxtVmOGA=="],
 
-    "create-termos": ["create-termos@workspace:packages/cli"],
+    "create-lobu": ["create-lobu@workspace:packages/cli"],
 
     "cron-parser": ["cron-parser@5.5.0", "", { "dependencies": { "luxon": "^3.7.1" } }, "sha512-oML4lKUXxizYswqmxuOCpgFS8BNUJpIu6k/2HVHyaL8Ynnf3wdf9tkns0yRdJLSIjkJ+b0DXHMZEHGpMwjnPww=="],
 
@@ -1834,7 +1834,7 @@
 
     "@slack/web-api/axios": ["axios@1.11.0", "", { "dependencies": { "follow-redirects": "^1.15.6", "form-data": "^4.0.4", "proxy-from-env": "^1.1.0" } }, "sha512-1Lx3WLFQWm3ooKDYZD1eXmoGO9fxYQjrycfHFC8P0sCfQVXyROp0p9PFWBehewBOdCwHc+f/b8I0fMto5eSfwA=="],
 
-    "@termosdev/worker/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+    "@lobu/worker/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "@types/body-parser/@types/node": ["@types/node@22.16.5", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-bJFoMATwIGaxxx8VJPeM8TonI8t579oRvgAuT8zFugJsJZgzqv0Fu8Mhp68iecjzG7cnN3mO2dJQ5uUM2EFrgQ=="],
 
@@ -1892,7 +1892,7 @@
 
     "color-string/color-name": ["color-name@1.1.3", "", {}, "sha512-72fSenhMw2HZMTVHeCA9KCmpEIbzWiQsjN+BHcBbS9vr1mtt+vJjPdksIBNUmKAW8TFUDPJK5SUU3QhE9NEXDw=="],
 
-    "create-termos/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
+    "create-lobu/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 
     "docker-modem/debug": ["debug@4.4.1", "", { "dependencies": { "ms": "^2.1.3" } }, "sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ=="],
 

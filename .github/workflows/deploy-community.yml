@@ -25,8 +25,8 @@ on:
   #     - '.github/workflows/deploy-community.yml'
 
 env:
-  NAMESPACE: termos
-  DEPLOYMENT_NAME: termos
+  NAMESPACE: lobu
+  DEPLOYMENT_NAME: lobu
   DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME || 'buremba' }}
 
 jobs:
@@ -185,7 +185,7 @@ jobs:
           
           # Wait for all pods to be ready
           echo "⏳ Waiting for all pods to be ready..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=termos -n $NAMESPACE --timeout=300s || true
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=lobu -n $NAMESPACE --timeout=300s || true
           
           echo ""
           echo "📝 Recent Logs from Gateway:"

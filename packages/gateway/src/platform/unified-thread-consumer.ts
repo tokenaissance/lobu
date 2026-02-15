@@ -4,7 +4,7 @@
  * via the PlatformRegistry, eliminating duplicate queue filtering logic.
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type {
   IMessageQueue,
   QueueJob,

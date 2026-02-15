@@ -4,7 +4,7 @@ import type {
   SDKAssistantMessage,
   SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 
 const logger = createLogger("claude-processor");
 
@@ -310,8 +310,8 @@ export class ProgressProcessor {
         ? (toolUse.input as Record<string, unknown>)
         : {};
 
-    // Hide system tools (mcp__termos__*) unless in verbose mode
-    if (toolName.startsWith("mcp__termos__") && !this.verboseLogging) {
+    // Hide system tools (mcp__lobu__*) unless in verbose mode
+    if (toolName.startsWith("mcp__lobu__") && !this.verboseLogging) {
       return "";
     }
 

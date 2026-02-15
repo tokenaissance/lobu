@@ -6,7 +6,7 @@ import {
   type GitConfig,
   type NetworkConfig,
   type NixConfig,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { IMessageQueue } from "./types";
 
 const logger = createLogger("queue-producer");

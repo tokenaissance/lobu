@@ -4,7 +4,7 @@
  * plain text formatting, and typing indicators.
  */
 
-import { createLogger, extractTraceId } from "@termosdev/core";
+import { createLogger, extractTraceId } from "@lobu/core";
 import type { ThreadResponsePayload } from "../infrastructure/queue";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import type { WhatsAppConfig } from "./config";

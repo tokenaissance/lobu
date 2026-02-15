@@ -2,7 +2,7 @@
  * Telegram platform configuration.
  */
 
-import { getOptionalBoolean, getOptionalNumber } from "@termosdev/core";
+import { getOptionalBoolean, getOptionalNumber } from "@lobu/core";
 
 export interface TelegramConfig {
   /** Enable Telegram platform */

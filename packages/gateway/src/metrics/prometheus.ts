@@ -3,7 +3,7 @@
  * Exposes basic gateway metrics in Prometheus text format
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 
 const logger = createLogger("metrics");
 
@@ -26,83 +26,79 @@ const metrics: Map<string, Metric> = new Map();
 function initializeMetrics() {
   // Worker deployment metrics
   registerMetric(
-    "termos_worker_deployments_total",
+    "lobu_worker_deployments_total",
     "Total number of worker deployments created",
     "counter"
   );
   registerMetric(
-    "termos_worker_deployments_failed_total",
+    "lobu_worker_deployments_failed_total",
     "Total number of failed worker deployments",
     "counter"
   );
   registerMetric(
-    "termos_worker_deployments_active",
+    "lobu_worker_deployments_active",
     "Current number of active worker deployments",
     "gauge"
   );
 
   // Message queue metrics
   registerMetric(
-    "termos_messages_received_total",
+    "lobu_messages_received_total",
     "Total number of messages received",
     "counter"
   );
   registerMetric(
-    "termos_messages_processed_total",
+    "lobu_messages_processed_total",
     "Total number of messages processed",
     "counter"
   );
-  registerMetric(
-    "termos_queue_length",
-    "Current message queue length",
-    "gauge"
-  );
+  registerMetric("lobu_queue_length", "Current message queue length", "gauge");
 
   // PVC metrics
   registerMetric(
-    "termos_pvc_created_total",
+    "lobu_pvc_created_total",
     "Total number of PVCs created",
     "counter"
   );
   registerMetric(
-    "termos_pvc_deleted_total",
+    "lobu_pvc_deleted_total",
     "Total number of PVCs deleted",
     "counter"
   );
   registerMetric(
-    "termos_pvc_cleanup_failed_total",
+    "lobu_pvc_cleanup_failed_total",
     "Total number of failed PVC cleanup operations",
     "counter"
   );
 
   // Redis metrics
   registerMetric(
-    "termos_redis_connection_errors_total",
+    "lobu_redis_connection_errors_total",
     "Total number of Redis connection errors",
     "counter"
   );
 
   // HTTP proxy metrics
   registerMetric(
-    "termos_proxy_requests_total",
+    "lobu_proxy_requests_total",
     "Total number of HTTP proxy requests",
     "counter"
   );
   registerMetric(
-    "termos_proxy_requests_blocked_total",
+    "lobu_proxy_requests_blocked_total",
     "Total number of blocked proxy requests",
     "counter"
   );
 
   // Process metrics
   registerMetric(
-    "termos_process_start_time_seconds",
+    "lobu_process_start_time_seconds",
     "Start time of the process since unix epoch in seconds",
     "gauge"
   );
 
   // Set process start time
-  setGauge("termos_process_start_time_seconds", Math.floor(Date.now() / 1000));
+  setGauge("lobu_process_start_time_seconds", Math.floor(Date.now() / 1000));
 
   logger.info("✅ Prometheus metrics initialized");
 }

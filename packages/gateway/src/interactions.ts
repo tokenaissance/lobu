@@ -10,7 +10,7 @@ import {
   TIME,
   type UserInteraction,
   type UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { Redis } from "ioredis";
 
 const logger = createLogger("interactions");

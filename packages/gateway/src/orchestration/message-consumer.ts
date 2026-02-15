@@ -9,7 +9,7 @@ import {
   OrchestratorError,
   retryWithBackoff,
   SpanStatusCode,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import { platformAuthRegistry } from "../auth/platform-auth";
 import type {
@@ -116,7 +116,7 @@ export class MessageConsumer {
       const redis = this.queue.getRedisClient();
       this.systemMessageLimiter = new SystemMessageLimiter(
         redis,
-        "termos:sysmsg"
+        "lobu:sysmsg"
       );
     }
     return this.systemMessageLimiter;
@@ -145,10 +145,10 @@ export class MessageConsumer {
 
     // Create child span for queue processing (linked to message_received span)
     const queueSpan = createChildSpan("queue_processing", traceparent, {
-      "termos.trace_id": traceId,
-      "termos.job_id": jobId,
-      "termos.user_id": data?.userId || "unknown",
-      "termos.thread_id": data?.threadId || "unknown",
+      "lobu.trace_id": traceId,
+      "lobu.job_id": jobId,
+      "lobu.user_id": data?.userId || "unknown",
+      "lobu.thread_id": data?.threadId || "unknown",
     });
 
     // Get traceparent to pass to worker (for further context propagation)

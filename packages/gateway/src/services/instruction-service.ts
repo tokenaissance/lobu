@@ -4,7 +4,7 @@ import {
   createLogger,
   type InstructionContext,
   type InstructionProvider,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { McpConfigService } from "../auth/mcp/config-service";
 import type { AgentSettingsStore } from "../auth/settings/agent-settings-store";
 

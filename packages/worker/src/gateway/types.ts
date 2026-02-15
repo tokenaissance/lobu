@@ -2,7 +2,7 @@
  * Shared types for gateway communication
  */
 
-import type { AgentOptions, ThreadResponsePayload } from "@termosdev/core";
+import type { AgentOptions, ThreadResponsePayload } from "@lobu/core";
 
 /**
  * Platform-specific metadata (e.g., Slack team_id, channel, thread_ts)

@@ -94,7 +94,7 @@ fi
 echo "Found ${#SECRET_ARGS[@]} secret(s) to seal" >&2
 
 # Create and seal the secret
-SEALED_SECRET=$(kubectl create secret generic termos-secrets \
+SEALED_SECRET=$(kubectl create secret generic lobu-secrets \
   "${SECRET_ARGS[@]}" \
   --dry-run=client -o yaml | \
 kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system \

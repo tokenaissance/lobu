@@ -153,7 +153,7 @@ function renderLandingPage(options: {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Termos Gateway</title>
+    <title>Lobu Gateway</title>
     <style>
       :root {
         --bg: #0f172a;
@@ -275,7 +275,7 @@ function renderLandingPage(options: {
         <a href="${githubUrl}" target="_blank" rel="noreferrer">GitHub</a>
         <a href="${docsUrl}">API Docs</a>
       </div>
-      <div class="kicker">Termos Gateway</div>
+      <div class="kicker">Lobu Gateway</div>
       <h1>Docs and Integrations</h1>
       <div class="subtitle">Use the API docs or connect via WhatsApp and Slack.</div>
       <div class="grid">

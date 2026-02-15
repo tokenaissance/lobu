@@ -5,7 +5,7 @@
  * Merged from: base/types.ts, types.ts, interfaces.ts
  */
 
-import type { WorkerTransport } from "@termosdev/core";
+import type { WorkerTransport } from "@lobu/core";
 
 // ============================================================================
 // WORKER INTERFACES

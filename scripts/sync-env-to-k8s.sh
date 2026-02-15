@@ -2,7 +2,7 @@
 # Sync .env to Kubernetes secrets (for local development without Sealed Secrets)
 #
 # Usage:
-#   ./scripts/sync-env-to-k8s.sh                # Sync to termos namespace
+#   ./scripts/sync-env-to-k8s.sh                # Sync to lobu namespace
 #   ./scripts/sync-env-to-k8s.sh -n my-ns       # Sync to custom namespace
 
 set -e
@@ -10,7 +10,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="${PROJECT_ROOT}/.env"
-NAMESPACE="termos"
+NAMESPACE="lobu"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
       echo "Syncs .env file to Kubernetes secrets"
       echo ""
       echo "Options:"
-      echo "  -n, --namespace NS   Target namespace (default: termos)"
+      echo "  -n, --namespace NS   Target namespace (default: lobu)"
       echo "  -h, --help           Show this help"
       exit 0
       ;;
@@ -71,18 +71,18 @@ SECRET_ARGS=()
 [[ -n "$GITHUB_CLIENT_SECRET" ]] && SECRET_ARGS+=(--from-literal=github-client-secret="$GITHUB_CLIENT_SECRET")
 
 # WhatsApp credentials - create separate secret (file too large for env var)
-WA_CREDS_FILE="${PROJECT_ROOT}/.termos/whatsapp-credentials.txt"
+WA_CREDS_FILE="${PROJECT_ROOT}/.lobu/whatsapp-credentials.txt"
 if [[ -n "$WHATSAPP_ENABLED" ]] && [[ -f "$WA_CREDS_FILE" ]]; then
   echo "Creating WhatsApp credentials secret..." >&2
-  kubectl delete secret termos-whatsapp -n "$NAMESPACE" 2>/dev/null || true
-  kubectl create secret generic termos-whatsapp \
+  kubectl delete secret lobu-whatsapp -n "$NAMESPACE" 2>/dev/null || true
+  kubectl create secret generic lobu-whatsapp \
     -n "$NAMESPACE" \
     --from-file=credentials.txt="$WA_CREDS_FILE"
   # Add Helm labels
-  kubectl label secret termos-whatsapp -n "$NAMESPACE" \
+  kubectl label secret lobu-whatsapp -n "$NAMESPACE" \
     app.kubernetes.io/managed-by=Helm --overwrite 2>/dev/null
-  kubectl annotate secret termos-whatsapp -n "$NAMESPACE" \
-    meta.helm.sh/release-name=termos \
+  kubectl annotate secret lobu-whatsapp -n "$NAMESPACE" \
+    meta.helm.sh/release-name=lobu \
     meta.helm.sh/release-namespace="$NAMESPACE" --overwrite 2>/dev/null
   echo "✓ WhatsApp credentials secret created from $WA_CREDS_FILE" >&2
 elif [[ -n "$WHATSAPP_ENABLED" ]]; then
@@ -97,23 +97,23 @@ fi
 echo "Found ${#SECRET_ARGS[@]} secret(s) to sync" >&2
 
 # Delete existing secret if it exists
-kubectl delete secret termos-secrets -n "$NAMESPACE" 2>/dev/null || true
+kubectl delete secret lobu-secrets -n "$NAMESPACE" 2>/dev/null || true
 
 # Create the secret with Helm labels for adoption
-kubectl create secret generic termos-secrets \
+kubectl create secret generic lobu-secrets \
   -n "$NAMESPACE" \
   "${SECRET_ARGS[@]}"
 
 # Add Helm labels so Helm can adopt the secrets
-kubectl label secret termos-secrets -n "$NAMESPACE" \
+kubectl label secret lobu-secrets -n "$NAMESPACE" \
   app.kubernetes.io/managed-by=Helm --overwrite 2>/dev/null
-kubectl annotate secret termos-secrets -n "$NAMESPACE" \
-  meta.helm.sh/release-name=termos \
+kubectl annotate secret lobu-secrets -n "$NAMESPACE" \
+  meta.helm.sh/release-name=lobu \
   meta.helm.sh/release-namespace="$NAMESPACE" --overwrite 2>/dev/null
 
 echo "✅ Secrets synced to namespace: $NAMESPACE" >&2
 
 # Trigger pod restart by patching the deployment with a new annotation
-kubectl patch deployment termos-gateway -n "$NAMESPACE" \
+kubectl patch deployment lobu-gateway -n "$NAMESPACE" \
   -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"secrets-sync\":\"$(date +%s)\"}}}}}" \
   2>/dev/null || echo "Note: Gateway deployment not found or not running" >&2

@@ -1,4 +1,4 @@
-import { createLogger, type PendingInteraction } from "@termosdev/core";
+import { createLogger, type PendingInteraction } from "@lobu/core";
 import { ensureBaseUrl } from "../core/url-utils";
 
 const logger = createLogger("openclaw-session-context");

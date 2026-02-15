@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createLogger, initTracing, moduleRegistry } from "@termosdev/core";
+import { createLogger, initTracing, moduleRegistry } from "@lobu/core";
 
 const logger = createLogger("worker");
 
@@ -21,10 +21,10 @@ async function main() {
   logger.debug(`TEMPO_ENDPOINT: ${tempoEndpoint}`);
   if (tempoEndpoint) {
     initTracing({
-      serviceName: "termos-worker",
+      serviceName: "lobu-worker",
       tempoEndpoint,
     });
-    logger.info(`Tracing initialized: termos-worker -> ${tempoEndpoint}`);
+    logger.info(`Tracing initialized: lobu-worker -> ${tempoEndpoint}`);
   }
 
   // Register built-in worker modules

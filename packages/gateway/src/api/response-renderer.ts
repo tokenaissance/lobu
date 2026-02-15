@@ -5,7 +5,7 @@
  * Broadcasts worker responses to SSE connections for direct API clients
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { ThreadResponsePayload } from "../infrastructure/queue/types";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import { broadcastToAgent, broadcastToExec } from "../routes/public/agent";

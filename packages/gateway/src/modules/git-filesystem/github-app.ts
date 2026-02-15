@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import { importPKCS8, SignJWT } from "jose";
 
 const logger = createLogger("github-app");

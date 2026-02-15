@@ -3,8 +3,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import type { InstructionProvider } from "@termosdev/core";
-import { createLogger } from "@termosdev/core";
+import type { InstructionProvider } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import type { InteractionClient } from "../common/interaction-client";
 import { BaseWorker } from "../core/base-worker";
 import type {

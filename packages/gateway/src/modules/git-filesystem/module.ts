@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { BaseModule, createLogger } from "@termosdev/core";
+import { BaseModule, createLogger } from "@lobu/core";
 import { GitCacheManager } from "./cache-manager";
 import { GitHubAppAuth } from "./github-app";
 
 const logger = createLogger("git-filesystem-module");
 
 /**
- * Git Filesystem Module for Termos.
+ * Git Filesystem Module for Lobu.
  *
  * Provides git repository support for agents:
  * - Clones repositories into worker workspaces
@@ -19,7 +19,7 @@ const logger = createLogger("git-filesystem-module");
  * - GITHUB_APP_PRIVATE_KEY: GitHub App private key (PEM format)
  * - GITHUB_APP_PRIVATE_KEY_PATH: Path to private key file (alternative)
  * - GITHUB_PERSONAL_ACCESS_TOKEN: Global PAT for simpler auth
- * - GIT_CACHE_DIR: Directory for git cache (default: /var/cache/termos/git)
+ * - GIT_CACHE_DIR: Directory for git cache (default: /var/cache/lobu/git)
  */
 export class GitFilesystemModule extends BaseModule {
   name = "git-filesystem";
@@ -77,8 +77,8 @@ export class GitFilesystemModule extends BaseModule {
     const home = process.env.HOME;
     const defaultCacheDir =
       home && home !== "/" && home !== ""
-        ? `${home}/.cache/termos/git`
-        : "/tmp/termos/git";
+        ? `${home}/.cache/lobu/git`
+        : "/tmp/lobu/git";
     const cacheDir = process.env.GIT_CACHE_DIR || defaultCacheDir;
     this.cacheManager = new GitCacheManager(cacheDir);
     await this.cacheManager.init();

@@ -11,7 +11,7 @@
  * 2. Falls back to first available API key
  */
 
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type { AgentSettingsStore } from "../auth/settings/agent-settings-store";
 
 const logger = createLogger("transcription-service");

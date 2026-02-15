@@ -12,7 +12,7 @@
 
 ### Repository Layout
 - Monorepo managed by Bun workspaces: `packages/gateway`, `packages/worker`, `packages/core`.
-- Top-level: `Makefile`, `bin/` (CLI/setup), `charts/termos` (Helm), `workspaces/`, `.env*`.
+- Top-level: `Makefile`, `bin/` (CLI/setup), `charts/lobu` (Helm), `workspaces/`, `.env*`.
 - TypeScript sources under `packages/*/src`. Tests in `packages/*/src/__tests__` and `packages/core/tests`.
 - **ALWAYS prefer `bun` commands over `npm`**
 - When fixing unused parameter errors, remove the parameter entirely if possible rather than prefixing with underscore
@@ -41,13 +41,13 @@ There is also a public endpoint in gateway to trigger running the agent.
 - **Known limitation**: Complex git clone fails in sandbox; use git worktree pattern (gateway clones, creates worktree for worker)
 
 #### MCP
-- Users pass the TERMOS_MCP_SERVERS_URL env (pointing to `.termos/mcp.config.json`) to enable MCP proxy in the gateway.
+- Users pass the LOBU_MCP_SERVERS_URL env (pointing to `.lobu/mcp.config.json`) to enable MCP proxy in the gateway.
 - Workers get MCP settings from gateway's internal config endpoint and use their JWT token to perform MCP calls through the proxy.
 - Built-in MCPs available to workers: AskUser (request user input), UploadFile (share files with user).
 
 #### Network
 
-- Workers run on isolated internal network (`termos-internal`) with no direct internet access. Gateway sits on both `termos-public` and `termos-internal` networks, acting as single egress point.
+- Workers run on isolated internal network (`lobu-internal`) with no direct internet access. Gateway sits on both `lobu-public` and `lobu-internal` networks, acting as single egress point.
 - **Proxy filtering**: Gateway runs custom Node.js HTTP proxy on port 8118. Workers configured with `HTTP_PROXY=http://gateway:8118` for all outbound requests (curl/wget/npm/git).
 - **Network access control** (via `WORKER_ALLOWED_DOMAINS` environment variable):
   - **Complete isolation** (default): Leave empty or unset → workers have NO internet access
@@ -324,7 +324,7 @@ curl -X POST http://localhost:8080/api/messaging/send \
 ### Telegram Test
 Use `tguser` CLI (requires `TG_API_ID` and `TG_API_HASH` from `.env`):
 ```bash
-tguser send @burembatermosbot "hello test"
+tguser send @burembalobubot "hello test"
 ```
 
 ### Check Logs

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { Readable } from "node:stream";
-import { createLogger, verifyWorkerToken } from "@termosdev/core";
+import { createLogger, verifyWorkerToken } from "@lobu/core";
 import { Hono } from "hono";
 import type { IFileHandler } from "../../platform/file-handler";
 import type { ISessionManager } from "../../session";

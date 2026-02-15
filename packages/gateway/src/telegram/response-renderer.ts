@@ -4,7 +4,7 @@
  * then edits it in-place as content arrives.
  */
 
-import { createLogger, extractTraceId } from "@termosdev/core";
+import { createLogger, extractTraceId } from "@lobu/core";
 import type { Bot } from "grammy";
 import type { ThreadResponsePayload } from "../infrastructure/queue";
 import type { ResponseRenderer } from "../platform/response-renderer";

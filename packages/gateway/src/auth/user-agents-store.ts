@@ -1,4 +1,4 @@
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import type Redis from "ioredis";
 
 const logger = createLogger("user-agents-store");

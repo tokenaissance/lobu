@@ -6,13 +6,13 @@ global:
 
 # Kubernetes namespace
 kubernetes:
-  namespace: termos
+  namespace: lobu
 
 # Configuration
 config:
-  githubOrganization: "termos-dev"
+  githubOrganization: "lobu-ai"
   githubClientId: ""  # Add your GitHub OAuth App Client ID
-  ingressUrl: "https://termos.owletto.com"  # Critical for OAuth redirects
+  ingressUrl: "https://lobu.owletto.com"  # Critical for OAuth redirects
   sessionTimeoutMinutes: "5"
 
 # Bitnami Sealed Secrets (production)
@@ -62,14 +62,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: termos.owletto.com
+    - host: lobu.owletto.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: termos-tls
+    - secretName: lobu-tls
       hosts:
-        - termos.owletto.com
+        - lobu.owletto.com
 
 # Slack configuration
 slack:
@@ -97,7 +97,7 @@ claude:
 worker:
   enabled: false  # Dynamic workers only
   image:
-    repository: buremba/termos-worker-base
+    repository: buremba/lobu-worker-base
     pullPolicy: Always
     tag: latest
   resources:
@@ -129,7 +129,7 @@ worker:
 gateway:
   enabled: true
   image:
-    repository: buremba/termos-gateway
+    repository: buremba/lobu-gateway
     pullPolicy: Always
     tag: latest
   resources:

@@ -5,7 +5,7 @@ import {
   extractTraceId,
   generateWorkerToken,
   OrchestratorError,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type Redis from "ioredis";
 import { mcpConfigStore } from "../auth/mcp/mcp-config-store";
 import type { MessagePayload } from "../infrastructure/queue/queue-producer";
@@ -39,7 +39,7 @@ export function generateDeploymentName(
     .digest("hex")
     .slice(0, 12);
 
-  return `termos-worker-${shortUserId}-${hash}`;
+  return `lobu-worker-${shortUserId}-${hash}`;
 }
 
 // Type for module environment variable builder function
@@ -407,8 +407,8 @@ export abstract class BaseDeploymentManager {
         const tempoUrl = new URL(tempoEndpoint);
         envVars.NO_PROXY = `${envVars.NO_PROXY},${tempoUrl.hostname}`;
       } catch {
-        // If URL parsing fails, just add termos-tempo as fallback
-        envVars.NO_PROXY = `${envVars.NO_PROXY},termos-tempo`;
+        // If URL parsing fails, just add lobu-tempo as fallback
+        envVars.NO_PROXY = `${envVars.NO_PROXY},lobu-tempo`;
       }
     }
 

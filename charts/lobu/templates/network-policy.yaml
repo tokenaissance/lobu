@@ -2,14 +2,14 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "termos.fullname" . }}-network-policy
+  name: {{ include "lobu.fullname" . }}-network-policy
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app: {{ include "termos.name" . }}
+      app: {{ include "lobu.name" . }}
   policyTypes:
   - Ingress
   - Egress
@@ -22,7 +22,7 @@ spec:
           name: {{ .Values.kubernetes.namespace }}
     - podSelector:
         matchLabels:
-          app: {{ include "termos.name" . }}
+          app: {{ include "lobu.name" . }}
     ports:
     - protocol: TCP
       port: 3000  # Dispatcher port
@@ -51,7 +51,7 @@ spec:
     - protocol: TCP
       port: 53
 
-  # Allow communication within the termos namespace (Redis, workers)
+  # Allow communication within the lobu namespace (Redis, workers)
   - to:
     - podSelector: {}  # All pods in same namespace
     ports:
@@ -113,10 +113,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "termos.fullname" . }}-worker-network-policy
+  name: {{ include "lobu.fullname" . }}-worker-network-policy
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
@@ -167,10 +167,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "termos.fullname" . }}-default-deny
+  name: {{ include "lobu.fullname" . }}-default-deny
   namespace: {{ .Values.kubernetes.namespace }}
   labels:
-    {{- include "termos.labels" . | nindent 4 }}
+    {{- include "lobu.labels" . | nindent 4 }}
 spec:
   podSelector: {}
   policyTypes:

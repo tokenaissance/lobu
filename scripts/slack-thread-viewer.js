@@ -250,7 +250,7 @@ if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
   console.log("");
   console.log("Examples:");
   console.log(
-    "  ./slack-thread-viewer.js 'https://termos.slack.com/archives/D095U1QV667/p1762042740217909?thread_ts=1762042394.121879&cid=D095U1QV667'"
+    "  ./slack-thread-viewer.js 'https://lobu.slack.com/archives/D095U1QV667/p1762042740217909?thread_ts=1762042394.121879&cid=D095U1QV667'"
   );
   console.log("");
   console.log("The script will:");

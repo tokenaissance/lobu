@@ -1,11 +1,11 @@
 {
-  "name": "@termosdev/worker",
+  "name": "@lobu/worker",
   "version": "2.3.0",
-  "description": "Termos worker runtime - run in your own Docker image or use our base image",
+  "description": "Lobu worker runtime - run in your own Docker image or use our base image",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "termos-worker": "./dist/index.js"
+    "lobu-worker": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -16,14 +16,14 @@
     "prepublishOnly": "bun run build"
   },
   "keywords": [
-    "termos",
+    "lobu",
     "worker",
     "ai",
     "claude"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/termos-dev/termos.git",
+    "url": "https://github.com/lobu-ai/lobu.git",
     "directory": "packages/worker"
   },
   "license": "MIT",
@@ -40,7 +40,7 @@
     "@mariozechner/pi-coding-agent": "^0.51.6",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "@sentry/node": "^10.6.0",
-    "@termosdev/core": "workspace:*",
+    "@lobu/core": "workspace:*",
     "form-data": "^4.0.4",
     "zod": "^3.24.1"
   },

@@ -4,7 +4,7 @@ import type {
   InstructionProvider,
   UserInteraction,
   UserSuggestion,
-} from "@termosdev/core";
+} from "@lobu/core";
 import type { AdminStatusCache } from "./auth/admin-status-cache";
 import type { AgentMetadataStore } from "./auth/agent-metadata-store";
 import type { ClaudeCredentialStore } from "./auth/claude/credential-store";

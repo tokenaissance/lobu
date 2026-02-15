@@ -1,4 +1,4 @@
-import { createLogger, decrypt, encrypt } from "@termosdev/core";
+import { createLogger, decrypt, encrypt } from "@lobu/core";
 
 const logger = createLogger("settings-token-service");
 

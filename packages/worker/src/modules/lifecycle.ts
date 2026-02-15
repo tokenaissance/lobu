@@ -3,7 +3,7 @@ import {
   type ModuleSessionContext,
   moduleRegistry,
   type SessionContext,
-} from "@termosdev/core";
+} from "@lobu/core";
 
 const logger = createLogger("worker");
 

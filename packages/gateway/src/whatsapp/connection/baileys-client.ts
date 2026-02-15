@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import { createLogger } from "@termosdev/core";
+import { createLogger } from "@lobu/core";
 import {
   type AnyMessageContent,
   type BaileysEventMap,
@@ -153,7 +153,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       version,
       logger: baileysLogger,
       printQRInTerminal: false,
-      browser: ["termos", "gateway", "1.0.0"],
+      browser: ["lobu", "gateway", "1.0.0"],
       syncFullHistory: false,
       markOnlineOnConnect: false,
     });

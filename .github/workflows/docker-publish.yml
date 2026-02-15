@@ -8,7 +8,7 @@ on:
       - 'packages/**'
       - 'Dockerfile.*'
       - '.github/workflows/docker-publish.yml'
-      - 'charts/termos/**'
+      - 'charts/lobu/**'
   release:
     types: [published]
   repository_dispatch:
@@ -63,7 +63,7 @@ jobs:
         id: meta-gateway
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_NAMESPACE }}/termos-gateway
+          images: ${{ env.DOCKER_NAMESPACE }}/lobu-gateway
           tags: |
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
@@ -78,17 +78,17 @@ jobs:
           tags: ${{ steps.meta-gateway.outputs.tags }}
           cache-from: |
             type=gha
-            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/termos-gateway:buildcache
+            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/lobu-gateway:buildcache
           cache-to: |
             type=gha,mode=max
-            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/termos-gateway:buildcache,mode=max
+            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/lobu-gateway:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
 
       - name: Extract metadata for Worker Base
         id: meta-worker-base
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_NAMESPACE }}/termos-worker-base
+          images: ${{ env.DOCKER_NAMESPACE }}/lobu-worker-base
           tags: |
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
@@ -104,10 +104,10 @@ jobs:
           tags: ${{ steps.meta-worker-base.outputs.tags }}
           cache-from: |
             type=gha
-            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/termos-worker-base:buildcache
+            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/lobu-worker-base:buildcache
           cache-to: |
             type=gha,mode=max
-            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/termos-worker-base:buildcache,mode=max
+            type=registry,ref=${{ env.DOCKER_NAMESPACE }}/lobu-worker-base:buildcache,mode=max
           # Only amd64 - Nix installation fails under QEMU arm64 emulation (seccomp BPF issue)
           platforms: linux/amd64
 

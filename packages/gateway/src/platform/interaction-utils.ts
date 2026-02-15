@@ -2,7 +2,7 @@
  * Shared interaction utilities for platform interaction renderers.
  */
 
-import type { FieldSchema } from "@termosdev/core";
+import type { FieldSchema } from "@lobu/core";
 
 export type InteractionDisplayType = "radio" | "single-form" | "multi-section";
 

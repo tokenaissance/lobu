@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import type { InstructionContext, WorkerTokenData } from "@termosdev/core";
-import { createLogger, verifyWorkerToken } from "@termosdev/core";
+import type { InstructionContext, WorkerTokenData } from "@lobu/core";
+import { createLogger, verifyWorkerToken } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { stream } from "hono/streaming";

@@ -8,7 +8,7 @@ import {
   type AgentOptions as CoreAgentOptions,
   createLogger,
   generateTraceId,
-} from "@termosdev/core";
+} from "@lobu/core";
 import {
   type BaileysEventMap,
   extractMessageContent,

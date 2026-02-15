@@ -88,7 +88,7 @@ RUN echo 'export PATH="/home/bun/.bun/bin:$PATH"' >> /home/claude/.bashrc && \
     echo 'export PATH="/root/.cargo/bin:$PATH"' >> /home/claude/.bashrc
 
 # Create minimal package.json for worker-only workspace
-RUN echo '{ "name": "@termosdev/worker-build", "private": true, "workspaces": [ "packages/core", "packages/worker" ] }' > package.json
+RUN echo '{ "name": "@lobu/worker-build", "private": true, "workspaces": [ "packages/core", "packages/worker" ] }' > package.json
 
 # Copy dependency manifests
 COPY bun.lock ./bun.lock
@@ -105,7 +105,7 @@ COPY scripts/ ./scripts/
 
 # Build core package in all modes (required for worker imports)
 # This must be built since worker imports from it via package.json main field
-RUN echo "Building @termosdev/core package..."; \
+RUN echo "Building @lobu/core package..."; \
     cd /app/packages/core && rm -f tsconfig.tsbuildinfo && bun run build && \
     # Create symlink so built core can resolve its dependencies from root node_modules \
     ln -sf /app/node_modules /app/packages/core/node_modules

@@ -1,31 +1,31 @@
-# create-termos
+# create-lobu
 
-CLI tool for initializing Termos projects with Docker Compose.
+CLI tool for initializing Lobu projects with Docker Compose.
 
 ## Installation
 
 ### Standalone
 
 ```bash
-npm install -g create-termos
+npm install -g create-lobu
 
-mkdir my-termos
-cd my-termos
-npm create termos my-termos
+mkdir my-lobu
+cd my-lobu
+npm create lobu my-lobu
 docker compose up -d
 ```
 
 ### npx/npm create (Recommended)
 
 ```bash
-npm create termos my-termos
-cd my-termos
+npm create lobu my-lobu
+cd my-lobu
 docker compose up -d
 ```
 
 ## Worker Deployment Options
 
-Termos supports two deployment patterns for workers:
+Lobu supports two deployment patterns for workers:
 
 ### Option 1: Base Image (Day 0 - Quick Start)
 
@@ -33,7 +33,7 @@ Termos supports two deployment patterns for workers:
 
 ```dockerfile
 # Extends our curated base image
-FROM buremba/termos-worker-base:0.1.0
+FROM buremba/lobu-worker-base:0.1.0
 
 # Add your customizations
 RUN pip install pandas
@@ -66,13 +66,13 @@ RUN apt-get update && apt-get install -y \
 # Install Claude CLI
 RUN curl -L https://claude.ai/install.sh | sh
 
-# Install Termos worker as a package
-RUN npm install -g @termosdev/worker@^0.1.0
+# Install Lobu worker as a package
+RUN npm install -g @lobu/worker@^0.1.0
 
 # Your customizations
 COPY ./scripts /workspace/scripts
 
-CMD ["termos-worker"]
+CMD ["lobu-worker"]
 ```
 
 **Pros:**
@@ -91,9 +91,9 @@ See [Worker Package Documentation](../worker/docs/custom-base-image.md) for deta
 
 ## Commands
 
-### `create-termos`
+### `create-lobu`
 
-Initialize a new Termos project in the current directory.
+Initialize a new Lobu project in the current directory.
 
 **Interactive prompts:**
 - **Worker mode:** Base image vs Package installation
@@ -111,7 +111,7 @@ Initialize a new Termos project in the current directory.
 
 ## Usage
 
-After running `npm create termos`:
+After running `npm create lobu`:
 
 ```bash
 # Start services
@@ -132,7 +132,7 @@ docker compose build worker
 ### Dockerfile.worker (Base Image Mode)
 
 ```dockerfile
-FROM buremba/termos-worker-base:0.1.0
+FROM buremba/lobu-worker-base:0.1.0
 
 # Add system packages
 RUN apt-get update && apt-get install -y postgresql-client
@@ -160,12 +160,12 @@ RUN apk add --no-cache git docker-cli python3 py3-pip curl
 RUN curl -L https://claude.ai/install.sh | sh
 
 # Install worker package
-RUN npm install -g @termosdev/worker@^0.1.0
+RUN npm install -g @lobu/worker@^0.1.0
 
 # Your customizations
 RUN pip3 install pandas matplotlib
 
-CMD ["termos-worker"]
+CMD ["lobu-worker"]
 ```
 
 ## Development Workflow
@@ -174,7 +174,7 @@ CMD ["termos-worker"]
 # 1. Create project
 mkdir my-bot
 cd my-bot
-npm create termos
+npm create lobu
 
 # 2. Choose worker mode during init
 #    - Base image (recommended)
@@ -200,22 +200,22 @@ docker compose down
 
 The CLI version locks to base image versions:
 
-- CLI `0.1.0` → `buremba/termos-worker-base:0.1.0`
-- CLI `0.2.0` → `buremba/termos-worker-base:0.2.0`
+- CLI `0.1.0` → `buremba/lobu-worker-base:0.1.0`
+- CLI `0.2.0` → `buremba/lobu-worker-base:0.2.0`
 
 This ensures compatibility between CLI and runtime images.
 
 ## Distribution Strategy
 
-Termos uses a dual distribution pattern:
+Lobu uses a dual distribution pattern:
 
 **Day 0 (Quick Start):**
-- Use `buremba/termos-worker-base` Docker image
+- Use `buremba/lobu-worker-base` Docker image
 - Extend with Dockerfile
 - Perfect for learning, prototypes
 
 **Day 2+ (Production):**
-- Install `@termosdev/worker` npm package
+- Install `@lobu/worker` npm package
 - Use your own base image
 - Perfect for enterprise, compliance
 
@@ -224,19 +224,19 @@ Termos uses a dual distribution pattern:
 **Docker Hub:**
 ```bash
 # For production (gateway)
-docker pull buremba/termos-gateway:0.1.0
+docker pull buremba/lobu-gateway:0.1.0
 
 # For quick start (extend this)
-docker pull buremba/termos-worker-base:0.1.0
+docker pull buremba/lobu-worker-base:0.1.0
 ```
 
 **NPM Registry:**
 ```bash
 # CLI tool
-npm install -g create-termos@0.1.0
+npm install -g create-lobu@0.1.0
 
 # Worker runtime (for custom base images)
-npm install -g @termosdev/worker@0.1.0
+npm install -g @lobu/worker@0.1.0
 ```
 
 ## Architecture
@@ -246,15 +246,15 @@ User creates project
         ↓
 mkdir my-bot && cd my-bot
         ↓
-npm create termos
+npm create lobu
         ↓
 Choose: Base image or Package?
         ↓
 ┌───────────────┴────────────────┐
 │ Base Image Mode                │ Package Mode
 │                                 │
-│ FROM termos-worker-base       │ FROM your-company/base
-│ RUN pip install pandas         │ RUN npm install -g @termosdev/worker
+│ FROM lobu-worker-base       │ FROM your-company/base
+│ RUN pip install pandas         │ RUN npm install -g @lobu/worker
 │                                 │ RUN pip install pandas
 └───────────────┬────────────────┘
                 ↓
@@ -269,7 +269,7 @@ Choose: Base image or Package?
 
 ## Contributing
 
-Termos CLI generates Docker Compose configurations. To modify the generated setup, see `src/commands/init.ts`.
+Lobu CLI generates Docker Compose configurations. To modify the generated setup, see `src/commands/init.ts`.
 
 ## License
 
