@@ -31,7 +31,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to OVH Kubernetes
+    name: Deploy to Hetzner Kubernetes
     runs-on: ubuntu-latest
     environment: community
     

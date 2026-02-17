@@ -198,11 +198,18 @@ export function renderSettingsPage(
         : ""
     }
 
-    <!-- Providers Section (outside form) -->
-    <div class="bg-gray-50 rounded-lg p-4 mb-4">
-      ${providers
-        .map(
-          (p, i) => `
+    <form id="settings-form" class="space-y-3">
+      <!-- Model Selection -->
+      <div class="bg-gray-50 rounded-lg p-3">
+        <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" onclick="toggleSection(this)">
+          <span>&#129302;</span>
+          Model
+          <span class="ml-auto text-xs text-gray-400 transition-transform rotate-[-90deg]" id="model-arrow">&#9660;</span>
+        </h3>
+        <div id="model-content" class="hidden pt-3">
+          ${providers
+            .map(
+              (p, i) => `
       <div class="${i > 0 ? "mt-3 pt-3 border-t border-gray-200" : ""}">
         <div class="flex items-center justify-between" id="provider-${p.id}">
           <div class="flex items-center gap-3">
@@ -238,7 +245,7 @@ export function renderSettingsPage(
           <div class="text-center">
             <p class="text-xs text-gray-600 mb-2">Enter this code at the verification page:</p>
             <p class="text-2xl font-mono font-bold text-slate-800 mb-2" id="${p.id}-user-code"></p>
-            <a id="${p.id}-verify-link" href="https://chatgpt.com/verify" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all mb-2">
+            <a id="${p.id}-verify-link" href="https://auth.openai.com/codex/device" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all mb-2">
               Open Verification Page
             </a>
             <p class="text-xs text-gray-400" id="${p.id}-poll-status">Waiting for authorization...</p>
@@ -261,19 +268,9 @@ export function renderSettingsPage(
             : ""
         }
       </div>`
-        )
-        .join("")}
-    </div>
-
-    <form id="settings-form" class="space-y-3">
-      <!-- Model Selection -->
-      <div class="bg-gray-50 rounded-lg p-3">
-        <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" onclick="toggleSection(this)">
-          <span>&#129302;</span>
-          Model
-          <span class="ml-auto text-xs text-gray-400 transition-transform rotate-[-90deg]" id="model-arrow">&#9660;</span>
-        </h3>
-        <div id="model-content" class="hidden pt-3">
+            )
+            .join("")}
+          <label class="block text-xs font-medium text-gray-700 mt-3 pt-3 border-t border-gray-200 mb-1">Model</label>
           <select id="model" name="model" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
             <option value="">Default</option>
             <optgroup label="Claude">
@@ -309,6 +306,14 @@ export function renderSettingsPage(
           <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">SOUL.md <span class="text-gray-400">- Behavior rules & instructions</span></label>
             <textarea id="soulMd" name="soulMd" placeholder="Always write tests before implementation.&#10;Prefer functional programming patterns.&#10;Never commit directly to main branch." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono min-h-[80px] resize-y focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">${escapeHtml(s.soulMd || "")}</textarea>
+            <!-- Browse Souls from ClawHub -->
+            <div class="mt-2">
+              <div class="relative">
+                <input type="text" id="soulSearchInput" placeholder="Browse community souls from ClawHub..." class="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+                <div id="soulSearchResults" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"></div>
+              </div>
+              <p class="text-xs text-gray-400 mt-1">Browse <a href="https://clawhub.ai/souls" target="_blank" class="text-slate-600 hover:underline">ClawHub souls</a> to use as a starting point. Content will be loaded into the textarea above for editing.</p>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">USER.md <span class="text-gray-400">- User-specific context</span></label>
@@ -340,7 +345,7 @@ export function renderSettingsPage(
 
             <!-- Search Input -->
             <div class="relative mb-2">
-              <input type="text" id="skillSearchInput" placeholder="Search skills from skills.sh..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+              <input type="text" id="skillSearchInput" placeholder="Search skills from ClawHub..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
               <div id="skillSearchResults" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                 <!-- Search results will be populated here -->
               </div>
@@ -356,12 +361,12 @@ export function renderSettingsPage(
 
             <!-- Manual Entry -->
             <div class="flex gap-2">
-              <input type="text" id="customSkillRepo" placeholder="Or enter repo: owner/repo" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+              <input type="text" id="customSkillRepo" placeholder="Or enter slug: skill-name" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
               <button type="button" id="addCustomSkillBtn" class="px-3 py-2 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
                 Add
               </button>
             </div>
-            <p class="text-xs text-gray-400 mt-1">Skills from <a href="https://skills.sh" target="_blank" class="text-slate-600 hover:underline">skills.sh</a> extend Claude's capabilities.</p>
+            <p class="text-xs text-gray-400 mt-1">Skills from <a href="https://clawhub.ai/skills" target="_blank" class="text-slate-600 hover:underline">ClawHub</a> extend your agent's capabilities.</p>
           </div>
         </div>
       </div>
@@ -1629,6 +1634,108 @@ export function renderSettingsPage(
 
     // Initialize skills on page load
     initSkills();
+
+    // ============================================================================
+    // Soul Browsing (ClawHub)
+    // ============================================================================
+
+    let soulSearchTimeout = null;
+
+    (function initSoulSearch() {
+      const searchInput = document.getElementById('soulSearchInput');
+      const resultsContainer = document.getElementById('soulSearchResults');
+
+      searchInput.addEventListener('input', function(e) {
+        clearTimeout(soulSearchTimeout);
+        soulSearchTimeout = setTimeout(function() {
+          searchSouls(e.target.value);
+        }, 300);
+      });
+
+      searchInput.addEventListener('focus', function() {
+        if (!searchInput.value.trim()) {
+          // Show popular souls on focus
+          searchSouls('');
+        } else {
+          resultsContainer.classList.remove('hidden');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#soulSearchInput') && !e.target.closest('#soulSearchResults')) {
+          resultsContainer.classList.add('hidden');
+        }
+      });
+    })();
+
+    async function searchSouls(query) {
+      const resultsContainer = document.getElementById('soulSearchResults');
+
+      resultsContainer.innerHTML = '<div class="p-2 text-xs text-gray-500">Loading...</div>';
+      resultsContainer.classList.remove('hidden');
+
+      try {
+        const url = query.trim()
+          ? 'https://wry-manatee-359.convex.site/api/v1/search?q=' + encodeURIComponent(query) + '&limit=8'
+          : 'https://wry-manatee-359.convex.site/api/v1/souls?limit=8';
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        const items = query.trim() ? (data.results || []) : (data.items || []);
+
+        if (items.length === 0) {
+          resultsContainer.innerHTML = '<div class="p-2 text-xs text-gray-500">No souls found</div>';
+          return;
+        }
+
+        resultsContainer.innerHTML = items.map(function(item) {
+          const slug = item.slug;
+          const name = item.displayName || slug;
+          const summary = item.summary || '';
+          return '<div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" ' +
+            'onclick="loadSoul(\\'' + escapeHtmlJS(slug) + '\\')">' +
+            '<div class="flex items-center justify-between">' +
+              '<div class="flex-1 min-w-0">' +
+                '<p class="text-xs font-medium text-gray-800 truncate">' + escapeHtmlJS(name) + '</p>' +
+                '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(summary).substring(0, 80) + '</p>' +
+              '</div>' +
+              '<span class="text-xs text-slate-600 ml-2 shrink-0">Use</span>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        resultsContainer.innerHTML = '<div class="p-2 text-xs text-red-500">Failed to search souls</div>';
+      }
+    }
+
+    async function loadSoul(slug) {
+      const textarea = document.getElementById('soulMd');
+      const resultsContainer = document.getElementById('soulSearchResults');
+      const searchInput = document.getElementById('soulSearchInput');
+
+      // Show loading state
+      searchInput.value = 'Loading ' + slug + '...';
+      searchInput.disabled = true;
+      resultsContainer.classList.add('hidden');
+
+      try {
+        const resp = await fetch('https://wry-manatee-359.convex.site/api/v1/souls/' + encodeURIComponent(slug) + '/file?path=SOUL.md');
+        if (!resp.ok) throw new Error('Failed to fetch soul');
+        const content = await resp.text();
+        textarea.value = content;
+        textarea.style.minHeight = '200px';
+        searchInput.value = '';
+      } catch (e) {
+        searchInput.value = '';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-xs text-red-500 mt-1';
+        errorDiv.textContent = 'Failed to load soul: ' + slug;
+        searchInput.parentElement.appendChild(errorDiv);
+        setTimeout(function() { errorDiv.remove(); }, 3000);
+      } finally {
+        searchInput.disabled = false;
+      }
+    }
 
     // ============================================================================
     // External Integrations (MCP) Management

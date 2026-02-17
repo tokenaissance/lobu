@@ -97,7 +97,7 @@ echo "Found ${#SECRET_ARGS[@]} secret(s) to seal" >&2
 SEALED_SECRET=$(kubectl create secret generic lobu-secrets \
   "${SECRET_ARGS[@]}" \
   --dry-run=client -o yaml | \
-kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system \
+kubeseal --controller-name=sealed-secrets-controller --controller-namespace=kube-system \
   --format yaml 2>/dev/null)
 
 if [[ $? -ne 0 ]]; then
