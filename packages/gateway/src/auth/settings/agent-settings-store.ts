@@ -26,6 +26,12 @@ export interface AgentSettings {
   mcpServers?: Record<string, McpServerConfig>;
   /** Environment variables passed to worker (KEY=VALUE pairs) */
   envVars?: Record<string, string>;
+  /** Workspace identity/instruction files (markdown content) */
+  soulMd?: string;
+  /** Workspace user-specific context (markdown content) */
+  userMd?: string;
+  /** Workspace agent identity description (markdown content) */
+  identityMd?: string;
   /** Skills configuration - enabled skills from skills.sh */
   skillsConfig?: SkillsConfig;
   /** Tool permission configuration - allowed/denied tools */

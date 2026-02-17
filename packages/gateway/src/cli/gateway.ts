@@ -202,10 +202,13 @@ function setupServer(
     const authRouter = new OpenAPIHono();
     const registeredProviders: string[] = [];
 
-    const claudeOAuthModule = coreServices.getClaudeOAuthModule();
-    if (claudeOAuthModule) {
-      authRouter.route("/claude", claudeOAuthModule.getApp());
-      registeredProviders.push("claude");
+    // Dynamically mount model provider auth routes
+    const providerModules = moduleRegistry.getModelProviderModules();
+    for (const mod of providerModules) {
+      if (mod.getApp) {
+        authRouter.route(`/${mod.providerId}`, mod.getApp());
+        registeredProviders.push(mod.providerId);
+      }
     }
 
     const mcpOAuthModule = coreServices.getMcpOAuthModule();
@@ -224,16 +227,22 @@ function setupServer(
 
     // Get shared dependencies
     const agentSettingsStore = coreServices.getAgentSettingsStore();
-    const claudeCredentialStore = coreServices.getClaudeCredentialStore();
     const claudeOAuthStateStore = coreServices.getClaudeOAuthStateStore();
     const gitFilesystemModule = coreServices.getGitFilesystemModule();
     const githubAuth = gitFilesystemModule?.getGitHubAuth() || undefined;
     const githubAppInstallUrl = process.env.GITHUB_APP_INSTALL_URL;
     const scheduledWakeupService = coreServices.getScheduledWakeupService();
 
-    const systemClaudeTokenAvailable = !!(
-      process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN
-    );
+    // Build provider stores and overrides dynamically from registered modules
+    const providerStores: Record<
+      string,
+      { hasCredentials(agentId: string): Promise<boolean> }
+    > = {};
+    const providerConnectedOverrides: Record<string, boolean> = {};
+    for (const mod of providerModules) {
+      providerStores[mod.providerId] = mod;
+      providerConnectedOverrides[mod.providerId] = mod.hasSystemKey();
+    }
 
     // Settings HTML page
     if (agentSettingsStore) {
@@ -264,12 +273,12 @@ function setupServer(
       const {
         createAgentConfigRoutes,
       } = require("../routes/public/agent-config");
+
       const agentConfigRouter = createAgentConfigRoutes({
         agentSettingsStore,
-        providerStores: claudeCredentialStore
-          ? { claude: claudeCredentialStore }
-          : undefined,
-        providerConnectedOverrides: { claude: systemClaudeTokenAvailable },
+        providerStores:
+          Object.keys(providerStores).length > 0 ? providerStores : undefined,
+        providerConnectedOverrides,
         githubAuth,
         githubAppInstallUrl,
         githubOAuthClientId: process.env.GITHUB_CLIENT_ID,
@@ -325,9 +334,8 @@ function setupServer(
       const claudeOAuthClient = new ClaudeOAuthClient();
       const oauthRouter = createOAuthRoutes({
         agentSettingsStore,
-        providerStores: claudeCredentialStore
-          ? { claude: claudeCredentialStore }
-          : undefined,
+        providerStores:
+          Object.keys(providerStores).length > 0 ? providerStores : undefined,
         oauthClients: { claude: claudeOAuthClient },
         oauthStateStore: claudeOAuthStateStore,
         githubOAuthClientId: process.env.GITHUB_CLIENT_ID,

@@ -1,4 +1,9 @@
-import { createLogger, type PendingInteraction } from "@lobu/core";
+import {
+  buildMcpToolInstructions,
+  createLogger,
+  type McpToolDef,
+  type PendingInteraction,
+} from "@lobu/core";
 import { ensureBaseUrl } from "../core/url-utils";
 
 const logger = createLogger("openclaw-session-context");
@@ -16,6 +21,7 @@ interface SessionContextResponse {
   platformInstructions: string;
   networkInstructions: string;
   mcpStatus: McpStatus[];
+  mcpTools?: Record<string, McpToolDef[]>;
   unansweredInteractions: PendingInteraction[];
 }
 
@@ -95,11 +101,16 @@ export async function getOpenClawSessionContext(): Promise<{
     );
 
     const mcpInstructions = buildMcpInstructions(data.mcpStatus);
+    const mcpToolInstructions =
+      data.mcpTools && Object.keys(data.mcpTools).length > 0
+        ? buildMcpToolInstructions(data.mcpTools, dispatcherUrl)
+        : "";
 
     const gatewayInstructions = [
       data.platformInstructions,
       data.networkInstructions,
       mcpInstructions,
+      mcpToolInstructions,
     ]
       .filter(Boolean)
       .join("\n\n");

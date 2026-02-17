@@ -63,10 +63,20 @@ function getPlatformDisplay(platform: string): { icon: string; name: string } {
   };
 }
 
+export interface ProviderMeta {
+  id: string;
+  name: string;
+  iconUrl: string;
+  authType: "oauth" | "device-code" | "api-key";
+  apiKeyInstructions: string;
+  apiKeyPlaceholder: string;
+}
+
 export interface GitHubOptions {
   githubAppConfigured: boolean;
   githubAppInstallUrl?: string;
   githubOAuthConfigured?: boolean;
+  providers?: ProviderMeta[];
 }
 
 export function renderSettingsPage(
@@ -79,6 +89,24 @@ export function renderSettingsPage(
   const githubAppConfigured = options?.githubAppConfigured ?? false;
   const githubAppInstallUrl = options?.githubAppInstallUrl ?? "";
   const githubOAuthConfigured = options?.githubOAuthConfigured ?? false;
+  const providers: ProviderMeta[] = options?.providers ?? [
+    {
+      id: "claude",
+      name: "Claude",
+      iconUrl: "https://www.anthropic.com/favicon.ico",
+      authType: "oauth",
+      apiKeyInstructions: "",
+      apiKeyPlaceholder: "",
+    },
+    {
+      id: "chatgpt",
+      name: "ChatGPT",
+      iconUrl: "https://chatgpt.com/favicon.ico",
+      authType: "device-code",
+      apiKeyInstructions: "",
+      apiKeyPlaceholder: "",
+    },
+  ];
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -172,29 +200,69 @@ export function renderSettingsPage(
 
     <!-- Providers Section (outside form) -->
     <div class="bg-gray-50 rounded-lg p-4 mb-4">
-      <div class="flex items-center justify-between" id="provider-claude">
-        <div class="flex items-center gap-3">
-          <img src="https://www.anthropic.com/favicon.ico" alt="Claude" class="w-5 h-5 rounded">
-          <div>
-            <p class="text-sm font-medium text-gray-800">Claude</p>
-            <p class="text-xs text-gray-500" id="claude-status">Checking...</p>
+      ${providers
+        .map(
+          (p, i) => `
+      <div class="${i > 0 ? "mt-3 pt-3 border-t border-gray-200" : ""}">
+        <div class="flex items-center justify-between" id="provider-${p.id}">
+          <div class="flex items-center gap-3">
+            <img src="${escapeHtml(p.iconUrl)}" alt="${escapeHtml(p.name)}" class="w-5 h-5 rounded">
+            <div>
+              <p class="text-sm font-medium text-gray-800">${escapeHtml(p.name)}</p>
+              <p class="text-xs text-gray-500" id="${p.id}-status">Checking...</p>
+            </div>
           </div>
-        </div>
-        <button type="button" id="claude-auth-btn" class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-slate-100 text-slate-800 hover:bg-slate-200">
-          Connect
-        </button>
-      </div>
-      <!-- Code input (hidden by default) -->
-      <div id="claude-code-input" class="hidden mt-3 pt-3 border-t border-gray-200">
-        <p class="text-xs text-gray-600 mb-2">Paste the authentication code from Claude:</p>
-        <div class="flex gap-2">
-          <input type="text" id="claude-auth-code" placeholder="CODE#STATE" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-          <button type="button" id="claude-submit-code" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
-            Submit
+          <button type="button" id="${p.id}-auth-btn" class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-slate-100 text-slate-800 hover:bg-slate-200">
+            Connect
           </button>
         </div>
-        <p class="text-xs text-gray-400 mt-1">Format: CODE#STATE (copy the entire code shown after login)</p>
-      </div>
+        ${
+          p.authType === "oauth"
+            ? `<!-- Code input (hidden by default) -->
+        <div id="${p.id}-code-input" class="hidden mt-3 pt-3 border-t border-gray-200">
+          <p class="text-xs text-gray-600 mb-2">Paste the authentication code from ${escapeHtml(p.name)}:</p>
+          <div class="flex gap-2">
+            <input type="text" id="${p.id}-auth-code" placeholder="CODE#STATE" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+            <button type="button" id="${p.id}-submit-code" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
+              Submit
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">Format: CODE#STATE (copy the entire code shown after login)</p>
+        </div>`
+            : ""
+        }
+        ${
+          p.authType === "device-code"
+            ? `<!-- Device code flow (hidden by default) -->
+        <div id="${p.id}-device-code" class="hidden mt-3 pt-3 border-t border-gray-200">
+          <div class="text-center">
+            <p class="text-xs text-gray-600 mb-2">Enter this code at the verification page:</p>
+            <p class="text-2xl font-mono font-bold text-slate-800 mb-2" id="${p.id}-user-code"></p>
+            <a id="${p.id}-verify-link" href="https://chatgpt.com/verify" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all mb-2">
+              Open Verification Page
+            </a>
+            <p class="text-xs text-gray-400" id="${p.id}-poll-status">Waiting for authorization...</p>
+          </div>
+        </div>`
+            : ""
+        }
+        ${
+          p.authType === "api-key"
+            ? `<!-- API key input (hidden by default) -->
+        <div id="${p.id}-api-key-input" class="hidden mt-3 pt-3 border-t border-gray-200">
+          <p class="text-xs text-gray-600 mb-2">${p.apiKeyInstructions}</p>
+          <div class="flex gap-2">
+            <input type="password" id="${p.id}-api-key" placeholder="${escapeHtml(p.apiKeyPlaceholder)}" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+            <button type="button" id="${p.id}-save-key" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
+              Save
+            </button>
+          </div>
+        </div>`
+            : ""
+        }
+      </div>`
+        )
+        .join("")}
     </div>
 
     <form id="settings-form" class="space-y-3">
@@ -208,12 +276,44 @@ export function renderSettingsPage(
         <div id="model-content" class="hidden pt-3">
           <select id="model" name="model" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
             <option value="">Default</option>
-            <option value="claude-sonnet-4" ${s.model === "claude-sonnet-4" ? "selected" : ""}>Claude Sonnet 4</option>
-            <option value="claude-sonnet-4-5" ${s.model === "claude-sonnet-4-5" ? "selected" : ""}>Claude Sonnet 4.5</option>
-            <option value="claude-opus-4" ${s.model === "claude-opus-4" ? "selected" : ""}>Claude Opus 4</option>
-            <option value="claude-haiku-4" ${s.model === "claude-haiku-4" ? "selected" : ""}>Claude Haiku 4</option>
-            <option value="claude-haiku-4-5" ${s.model === "claude-haiku-4-5" ? "selected" : ""}>Claude Haiku 4.5</option>
+            <optgroup label="Claude">
+              <option value="claude-sonnet-4" ${s.model === "claude-sonnet-4" ? "selected" : ""}>Claude Sonnet 4</option>
+              <option value="claude-sonnet-4-5" ${s.model === "claude-sonnet-4-5" ? "selected" : ""}>Claude Sonnet 4.5</option>
+              <option value="claude-opus-4" ${s.model === "claude-opus-4" ? "selected" : ""}>Claude Opus 4</option>
+              <option value="claude-haiku-4" ${s.model === "claude-haiku-4" ? "selected" : ""}>Claude Haiku 4</option>
+              <option value="claude-haiku-4-5" ${s.model === "claude-haiku-4-5" ? "selected" : ""}>Claude Haiku 4.5</option>
+            </optgroup>
+            <optgroup label="ChatGPT">
+              <option value="openclaw/openai-codex/gpt-5.2-codex" ${s.model === "openclaw/openai-codex/gpt-5.2-codex" ? "selected" : ""}>GPT-5.2 Codex</option>
+              <option value="openclaw/openai-codex/gpt-5.1" ${s.model === "openclaw/openai-codex/gpt-5.1" ? "selected" : ""}>GPT-5.1</option>
+              <option value="openclaw/openai-codex/gpt-5.1-codex-max" ${s.model === "openclaw/openai-codex/gpt-5.1-codex-max" ? "selected" : ""}>GPT-5.1 Codex Max</option>
+              <option value="openclaw/openai-codex/gpt-5.1-codex-mini" ${s.model === "openclaw/openai-codex/gpt-5.1-codex-mini" ? "selected" : ""}>GPT-5.1 Codex Mini</option>
+            </optgroup>
           </select>
+        </div>
+      </div>
+
+      <!-- Workspace Files Section -->
+      <div class="bg-gray-50 rounded-lg p-3">
+        <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" onclick="toggleSection(this)">
+          <span>&#128220;</span>
+          Agent Instructions
+          <span class="ml-auto text-xs text-gray-400 transition-transform rotate-[-90deg]" id="workspace-arrow">&#9660;</span>
+        </h3>
+        <div id="workspace-content" class="hidden pt-3 space-y-3">
+          <p class="text-xs text-gray-500">Define your agent's identity, behavior rules, and user context. Supports Markdown with optional YAML frontmatter (auto-stripped).</p>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">IDENTITY.md <span class="text-gray-400">- Who the agent is</span></label>
+            <textarea id="identityMd" name="identityMd" placeholder="You are a helpful coding assistant named Alex.&#10;You specialize in TypeScript and React development." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono min-h-[60px] resize-y focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">${escapeHtml(s.identityMd || "")}</textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">SOUL.md <span class="text-gray-400">- Behavior rules & instructions</span></label>
+            <textarea id="soulMd" name="soulMd" placeholder="Always write tests before implementation.&#10;Prefer functional programming patterns.&#10;Never commit directly to main branch." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono min-h-[80px] resize-y focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">${escapeHtml(s.soulMd || "")}</textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">USER.md <span class="text-gray-400">- User-specific context</span></label>
+            <textarea id="userMd" name="userMd" placeholder="The user prefers concise responses.&#10;Their timezone is UTC+3.&#10;They use VS Code as their IDE." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono min-h-[60px] resize-y focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">${escapeHtml(s.userMd || "")}</textarea>
+          </div>
         </div>
       </div>
 
@@ -610,6 +710,14 @@ export function renderSettingsPage(
       const model = document.getElementById('model').value;
       if (model) settings.model = model;
 
+      // Workspace files (IDENTITY.md, SOUL.md, USER.md)
+      const identityMd = document.getElementById('identityMd').value;
+      const soulMd = document.getElementById('soulMd').value;
+      const userMd = document.getElementById('userMd').value;
+      settings.identityMd = identityMd;
+      settings.soulMd = soulMd;
+      settings.userMd = userMd;
+
       // Network config
       const allowedDomains = parseLines(document.getElementById('allowedDomains').value);
       const deniedDomains = parseLines(document.getElementById('deniedDomains').value);
@@ -691,10 +799,12 @@ export function renderSettingsPage(
       }
     });
 
-    // Provider handling
-    const PROVIDERS = {
-      claude: { name: 'Claude' }
-    };
+    // Provider handling (dynamically rendered from server)
+    const PROVIDERS = ${JSON.stringify(
+      Object.fromEntries(
+        providers.map((p) => [p.id, { name: p.name, authType: p.authType }])
+      )
+    )};
 
     async function checkProviders() {
       try {
@@ -729,7 +839,20 @@ export function renderSettingsPage(
     }
 
     function connectProvider(provider) {
-      // Open OAuth in new tab so user can complete auth flow
+      const info = PROVIDERS[provider];
+      if (!info) return;
+
+      if (info.authType === 'device-code') {
+        connectChatGPT();
+        return;
+      }
+
+      if (info.authType === 'api-key') {
+        connectApiKey(provider);
+        return;
+      }
+
+      // OAuth flow: open in new tab so user can complete auth flow
       window.open('/api/v1/oauth/providers/' + provider + '/login?token=' + encodeURIComponent(token), '_blank');
 
       // Show the code input section
@@ -787,10 +910,141 @@ export function renderSettingsPage(
       }
     }
 
+    // API key flow
+    function connectApiKey(provider) {
+      const inputSection = document.getElementById(provider + '-api-key-input');
+      if (inputSection) {
+        inputSection.classList.remove('hidden');
+      }
+
+      const status = document.getElementById(provider + '-status');
+      if (status) {
+        status.textContent = 'Enter your API key...';
+        status.className = 'text-xs text-slate-600';
+      }
+
+      const saveBtn = document.getElementById(provider + '-save-key');
+      const keyField = document.getElementById(provider + '-api-key');
+
+      if (saveBtn && keyField) {
+        saveBtn.onclick = async () => {
+          const apiKey = keyField.value.trim();
+          if (!apiKey) return;
+
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+
+          try {
+            const resp = await fetch('/api/v1/auth/' + provider + '/save-key', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ agentId, apiKey })
+            });
+
+            const result = await resp.json();
+
+            if (resp.ok) {
+              inputSection.classList.add('hidden');
+              keyField.value = '';
+              updateProviderStatus(provider, true);
+              const name = PROVIDERS[provider]?.name || provider;
+              document.getElementById('success-msg').textContent = 'Connected to ' + name + '!';
+              document.getElementById('success-msg').classList.remove('hidden');
+            } else {
+              throw new Error(result.error || 'Failed to save API key');
+            }
+          } catch (e) {
+            alert('Error: ' + e.message);
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save';
+          }
+        };
+      }
+    }
+
+    // ChatGPT device code flow
+    let chatgptPollTimer = null;
+
+    async function connectChatGPT() {
+      const status = document.getElementById('chatgpt-status');
+      const deviceCodeSection = document.getElementById('chatgpt-device-code');
+      const pollStatus = document.getElementById('chatgpt-poll-status');
+
+      try {
+        status.textContent = 'Starting...';
+        status.className = 'text-xs text-slate-600';
+
+        const resp = await fetch('/api/v1/auth/chatgpt/start', { method: 'POST' });
+        const data = await resp.json();
+
+        if (!resp.ok) throw new Error(data.error || 'Failed to start auth');
+
+        // Show device code UI
+        document.getElementById('chatgpt-user-code').textContent = data.userCode;
+        const verifyLink = document.getElementById('chatgpt-verify-link');
+        if (data.verificationUrl) {
+          verifyLink.href = data.verificationUrl;
+        }
+        deviceCodeSection.classList.remove('hidden');
+        status.textContent = 'Waiting for authorization...';
+
+        // Start polling
+        const interval = Math.max((data.interval || 5) * 1000, 3000);
+        chatgptPollTimer = setInterval(() => {
+          pollChatGPTToken(data.deviceAuthId, data.userCode);
+        }, interval);
+
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+        status.className = 'text-xs text-red-600';
+      }
+    }
+
+    async function pollChatGPTToken(deviceAuthId, userCode) {
+      try {
+        const resp = await fetch('/api/v1/auth/chatgpt/poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceAuthId, userCode, agentId })
+        });
+        const data = await resp.json();
+
+        if (data.status === 'success') {
+          clearInterval(chatgptPollTimer);
+          chatgptPollTimer = null;
+          document.getElementById('chatgpt-device-code').classList.add('hidden');
+          updateProviderStatus('chatgpt', true);
+          document.getElementById('success-msg').textContent = 'Connected to ChatGPT!';
+          document.getElementById('success-msg').classList.remove('hidden');
+        } else if (data.error) {
+          clearInterval(chatgptPollTimer);
+          chatgptPollTimer = null;
+          document.getElementById('chatgpt-poll-status').textContent = 'Error: ' + data.error;
+        }
+        // status === 'pending' means keep polling
+      } catch (e) {
+        // Network error - keep polling
+        console.error('Poll error:', e);
+      }
+    }
+
     async function disconnectProvider(provider) {
-      const name = PROVIDERS[provider]?.name || provider;
+      const info = PROVIDERS[provider];
+      const name = info?.name || provider;
       if (!confirm('Disconnect from ' + name + '? You will need to reconnect to use this provider.')) return;
-      await fetch('/api/v1/oauth/providers/' + provider + '/logout?token=' + encodeURIComponent(token), { method: 'POST' });
+
+      if (info?.authType === 'device-code' || info?.authType === 'api-key') {
+        // Both device-code and api-key providers have a /logout endpoint under /api/v1/auth/{provider}/
+        await fetch('/api/v1/auth/' + provider + '/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId })
+        });
+      } else {
+        // OAuth providers use the oauth route
+        await fetch('/api/v1/oauth/providers/' + provider + '/logout?token=' + encodeURIComponent(token), { method: 'POST' });
+      }
       checkProviders();
     }
 

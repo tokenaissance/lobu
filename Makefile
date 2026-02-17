@@ -1,24 +1,19 @@
 # Development Makefile for Lobu
 
-.PHONY: help setup build compile dev prod test clean logs restart deploy down build-packages check-build watch-packages
+.PHONY: help setup build compile prod test clean logs restart deploy down build-packages check-build dev
 
 # Default target
 help:
 	@echo "Available commands:"
 	@echo "  make setup                                 - Setup development environment (run once)"
+	@echo "  make dev                                   - Start dev environment (Docker Compose Watch)"
 	@echo "  make build-packages                        - Build all TypeScript packages"
 	@echo "  make build-worker                          - Build worker Docker image"
-	@echo "  make watch-packages                        - Watch packages and rebuild on changes"
 	@echo "  make deploy                                - Deploy to K8s using values-local.yaml"
 	@echo "  make deploy TARGET=production              - Deploy to K8s using values-production.yaml"
 	@echo "  make test                                  - Run test bot"
 	@echo "  make clean                                 - Stop all services and clean up"
 	@echo "  make clean-workers                         - Remove worker containers only"
-	@echo ""
-	@echo "Development:"
-	@echo "  redis-server                               - Start Redis"
-	@echo "  make watch-packages                        - Watch and rebuild packages"
-	@echo "  cd packages/gateway && bun run dev         - Run gateway with hot reload"
 
 # Build all TypeScript packages in dependency order
 build-packages:
@@ -35,9 +30,9 @@ build-packages:
 check-build:
 	@./scripts/check-build-status.sh
 
-# Watch packages and rebuild on changes (for active development)
-watch-packages:
-	@./scripts/watch-packages.sh
+# Start dev environment with Docker Compose Watch
+dev:
+	docker compose watch
 
 # Setup development environment (run once)
 setup:

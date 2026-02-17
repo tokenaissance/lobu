@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createLogger, type ToolsConfig } from "@lobu/core";
 import {
+  AuthStorage,
   createAgentSession,
   SessionManager,
   SettingsManager,
@@ -66,6 +67,12 @@ export class OpenClawWorker extends BaseWorker {
     const baseUrlOverride = resolveAnthropicBaseUrl(rawOptions);
 
     ensureAnthropicApiKey();
+
+    // Set up auth storage with runtime API key overrides
+    const authStorage = new AuthStorage();
+    if (process.env.OPENAI_API_KEY) {
+      authStorage.setRuntimeApiKey("openai-codex", process.env.OPENAI_API_KEY);
+    }
 
     const baseModel = getModel(provider as any, modelId as any) as any;
     const model =
@@ -170,6 +177,7 @@ Use it when the user references past discussions or you need context.`);
       customTools,
       sessionManager,
       settingsManager,
+      authStorage,
     });
 
     // Note: Using default streamFn (not streamSimple) for compatibility

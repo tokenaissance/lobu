@@ -23,13 +23,11 @@ COPY packages/gateway/ ./packages/gateway/
 # Copy CLI's mcp-servers.json (referenced by gateway's mcp-registry)
 COPY packages/cli/src/mcp-servers.json ./packages/cli/src/mcp-servers.json
 
-# Build core package (gateway runs from source for faster iteration)
+# Build core package dist (used by Node.js in production, Bun uses src/ via conditional exports)
 WORKDIR /app/packages/core
 RUN bun run build
 
-# Install tsx for running TypeScript with Node.js
 WORKDIR /app
-RUN npm install -g tsx
 
 # Runtime configuration
 ENV NODE_ENV=production
@@ -38,7 +36,6 @@ EXPOSE 3000
 # Fix permissions for non-root K8s execution (user 1001)
 RUN chmod -R a+rX /app
 
-# Run with Node.js + tsx for TypeScript support
-# This gives us Node.js compatibility while running .ts files directly
+# Run with bun for TypeScript support and hot reload in dev
 ENTRYPOINT []
-CMD ["tsx", "packages/gateway/src/index.ts"]
+CMD ["bun", "--watch", "packages/gateway/src/index.ts"]

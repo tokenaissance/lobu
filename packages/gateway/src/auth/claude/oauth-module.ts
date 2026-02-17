@@ -28,8 +28,10 @@ export class ClaudeOAuthModule
   implements ModelProviderModule
 {
   name = "claude-oauth";
-  providerId = "anthropic";
+  providerId = "claude";
   providerDisplayName = "Claude AI";
+  providerIconUrl = "https://www.anthropic.com/favicon.ico";
+  authType = "oauth" as const;
   private oauthClient: ClaudeOAuthClient;
   private publicGatewayUrl: string;
   private queue: IMessageQueue;

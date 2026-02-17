@@ -23,7 +23,71 @@ interface SessionContextData {
   platformInstructions: string;
   networkInstructions: string;
   skillsInstructions: string;
+  workspaceInstructions: string;
   mcpStatus: McpStatus[];
+}
+
+/**
+ * Strip YAML frontmatter from markdown content.
+ * Frontmatter is delimited by --- at the start and end.
+ */
+function stripFrontMatter(content: string): string {
+  if (!content.startsWith("---")) return content;
+  const endIndex = content.indexOf("\n---", 3);
+  if (endIndex === -1) return content;
+  return content.slice(endIndex + "\n---".length).replace(/^\s+/, "");
+}
+
+/**
+ * Provides workspace identity/instruction files (SOUL.md, USER.md, IDENTITY.md).
+ * These define the agent's personality, user context, and identity.
+ * Injected at highest priority since they shape all agent behavior.
+ */
+class WorkspaceFilesInstructionProvider implements InstructionProvider {
+  name = "workspace-files";
+  priority = 5;
+
+  constructor(private agentSettingsStore?: AgentSettingsStore) {}
+
+  async getInstructions(context: InstructionContext): Promise<string> {
+    if (!this.agentSettingsStore || !context.agentId) {
+      return "";
+    }
+
+    try {
+      const settings = await this.agentSettingsStore.getSettings(
+        context.agentId
+      );
+      if (!settings) return "";
+
+      const sections: string[] = [];
+
+      if (settings.identityMd?.trim()) {
+        sections.push(
+          `## Agent Identity\n\n${stripFrontMatter(settings.identityMd)}`
+        );
+      }
+
+      if (settings.soulMd?.trim()) {
+        sections.push(
+          `## Agent Instructions\n\n${stripFrontMatter(settings.soulMd)}`
+        );
+      }
+
+      if (settings.userMd?.trim()) {
+        sections.push(
+          `## User Context\n\n${stripFrontMatter(settings.userMd)}`
+        );
+      }
+
+      if (sections.length === 0) return "";
+
+      return sections.join("\n\n");
+    } catch (error) {
+      logger.error("Failed to get workspace files instructions", { error });
+      return "";
+    }
+  }
 }
 
 /**
@@ -54,18 +118,22 @@ class SkillsInstructionProvider implements InstructionProvider {
         return this.getGenericSkillsInstructions();
       }
 
-      // Build skill instructions from enabled skills
-      const skillInstructions = enabledSkills
+      // Progressive disclosure: inject only metadata (name + description)
+      // to reduce prompt size. Agent reads full SKILL.md on demand.
+      const skillSummaries = enabledSkills
         .map((skill) => {
-          return `## Skill: ${skill.name}\n\n${skill.content}`;
+          const desc = skill.description ? ` - ${skill.description}` : "";
+          return `- **${skill.name}**${desc} (\`${skill.repo}\`)`;
         })
-        .join("\n\n---\n\n");
+        .join("\n");
 
       return `# Enabled Skills
 
-The following skills are enabled for this agent. Follow their instructions when relevant.
+The following skills are installed and available. When a task matches a skill, read the full skill instructions before using it.
 
-${skillInstructions}
+${skillSummaries}
+
+**To read full skill instructions:** \`cat ~/.claude/skills/*/SKILL.md\` or \`npx skills list\` to see installed skill paths, then read the relevant SKILL.md file.
 
 ---
 
@@ -178,6 +246,7 @@ export class InstructionService {
   private platformProviders = new Map<string, InstructionProvider>();
   private mcpConfigService?: McpConfigService;
   private skillsProvider: SkillsInstructionProvider;
+  private workspaceFilesProvider: WorkspaceFilesInstructionProvider;
 
   constructor(
     mcpConfigService?: McpConfigService,
@@ -185,6 +254,9 @@ export class InstructionService {
   ) {
     this.mcpConfigService = mcpConfigService;
     this.skillsProvider = new SkillsInstructionProvider(agentSettingsStore);
+    this.workspaceFilesProvider = new WorkspaceFilesInstructionProvider(
+      agentSettingsStore
+    );
   }
 
   /**
@@ -239,6 +311,18 @@ export class InstructionService {
       logger.error("Failed to get network instructions:", error);
     }
 
+    // Get workspace files instructions (SOUL.md, USER.md, IDENTITY.md)
+    let workspaceInstructions = "";
+    try {
+      workspaceInstructions =
+        await this.workspaceFilesProvider.getInstructions(context);
+      logger.info(
+        `Got workspace instructions (${workspaceInstructions.length} chars)`
+      );
+    } catch (error) {
+      logger.error("Failed to get workspace instructions:", error);
+    }
+
     // Get skills instructions (includes enabled skills from agent settings)
     let skillsInstructions = "";
     try {
@@ -266,6 +350,7 @@ export class InstructionService {
       platformInstructions,
       networkInstructions,
       skillsInstructions,
+      workspaceInstructions,
       mcpStatus,
     };
   }

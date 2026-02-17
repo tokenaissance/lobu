@@ -11,6 +11,7 @@
  */
 
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { moduleRegistry } from "@lobu/core";
 import type { AgentSettingsStore } from "../../auth/settings";
 import { verifySettingsToken } from "../../auth/settings/token-service";
 import type { GitHubAppAuth } from "../../modules/git-filesystem/github-app";
@@ -51,11 +52,23 @@ export function createSettingsPageRoutes(
     const settings = await config.agentSettingsStore.getSettings(
       payload.agentId
     );
+
+    // Build provider metadata from registry for dynamic UI rendering
+    const providers = moduleRegistry.getModelProviderModules().map((m) => ({
+      id: m.providerId,
+      name: m.providerDisplayName,
+      iconUrl: m.providerIconUrl || "",
+      authType: m.authType || "oauth",
+      apiKeyInstructions: m.apiKeyInstructions || "",
+      apiKeyPlaceholder: m.apiKeyPlaceholder || "",
+    }));
+
     return c.html(
       renderSettingsPage(payload, settings, token, {
         githubAppConfigured: !!config.githubAuth,
         githubAppInstallUrl: config.githubAppInstallUrl,
         githubOAuthConfigured: !!config.githubOAuthClientId,
+        providers,
       })
     );
   });

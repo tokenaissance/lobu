@@ -61,10 +61,18 @@ export interface OrchestratorModule<TModuleData = unknown>
 }
 
 export interface ModelProviderModule extends OrchestratorModule {
-  /** Unique identifier for the provider (e.g. "anthropic", "openai") */
+  /** Unique identifier for the provider (e.g. "claude", "chatgpt") */
   providerId: string;
   /** Human-readable name shown in auth prompts (e.g. "Claude AI") */
   providerDisplayName: string;
+  /** Icon URL for settings UI (favicon or CDN) */
+  providerIconUrl?: string;
+  /** Auth type hint for settings UI rendering */
+  authType?: "oauth" | "device-code" | "api-key";
+  /** For api-key providers: instructions shown to user (supports HTML) */
+  apiKeyInstructions?: string;
+  /** For api-key providers: placeholder text in the input field */
+  apiKeyPlaceholder?: string;
   /** Env var names that should be treated as secrets for this provider */
   getSecretEnvVarNames(): string[];
   /** Check if an agent has per-agent credentials for this provider */
@@ -77,6 +85,8 @@ export interface ModelProviderModule extends OrchestratorModule {
   injectSystemKeyFallback(
     envVars: Record<string, string>
   ): Record<string, string>;
+  /** Return Hono app for auth routes, if any */
+  getApp?(): any;
 }
 
 export interface DispatcherContext<TModuleData = unknown> {

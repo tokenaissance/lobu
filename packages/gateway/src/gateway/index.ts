@@ -6,6 +6,8 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
 import type { McpConfigService } from "../auth/mcp/config-service";
+import type { McpProxy } from "../auth/mcp/proxy";
+import type { McpTool } from "../auth/mcp/tool-cache";
 import type { IMessageQueue } from "../infrastructure/queue";
 import type { InteractionService } from "../interactions";
 import { generateDeploymentName } from "../orchestration/base-deployment-manager";
@@ -30,6 +32,7 @@ export class WorkerGateway {
   private instructionService: InstructionService;
   private interactionService: InteractionService;
   private publicGatewayUrl: string;
+  private mcpProxy?: McpProxy;
 
   constructor(
     queue: IMessageQueue,
@@ -37,7 +40,8 @@ export class WorkerGateway {
     sessionManager: ISessionManager,
     mcpConfigService: McpConfigService,
     instructionService: InstructionService,
-    interactionService: InteractionService
+    interactionService: InteractionService,
+    mcpProxy?: McpProxy
   ) {
     this.queue = queue;
     this.publicGatewayUrl = publicGatewayUrl;
@@ -50,6 +54,7 @@ export class WorkerGateway {
     this.mcpConfigService = mcpConfigService;
     this.instructionService = instructionService;
     this.interactionService = interactionService;
+    this.mcpProxy = mcpProxy;
 
     // Listen for interaction responses and forward to workers via SSE
     this.interactionService.on("interaction:responded", (interaction) => {
@@ -263,15 +268,45 @@ export class WorkerGateway {
           ),
         ]);
 
+      // Fetch tool lists for authenticated MCPs
+      let mcpTools: Record<string, McpTool[]> = {};
+      if (this.mcpProxy && contextData.mcpStatus.length > 0) {
+        const authenticatedMcps = contextData.mcpStatus.filter(
+          (mcp) =>
+            (!mcp.requiresAuth || mcp.authenticated) &&
+            (!mcp.requiresInput || mcp.configured)
+        );
+
+        const toolResults = await Promise.allSettled(
+          authenticatedMcps.map(async (mcp) => {
+            const tools = await this.mcpProxy!.fetchToolsForMcp(
+              mcp.id,
+              agentId || userId,
+              auth.tokenData
+            );
+            return { mcpId: mcp.id, tools };
+          })
+        );
+
+        for (const result of toolResults) {
+          if (result.status === "fulfilled" && result.value.tools.length > 0) {
+            mcpTools[result.value.mcpId] = result.value.tools;
+          }
+        }
+      }
+
       logger.info(
-        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${contextData.mcpStatus.length} MCP status entries, ${unansweredInteractions.length} unanswered interactions`
+        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${contextData.workspaceInstructions.length} chars workspace instructions, ${contextData.skillsInstructions.length} chars skills instructions, ${contextData.mcpStatus.length} MCP status entries, ${Object.keys(mcpTools).length} MCP tool lists, ${unansweredInteractions.length} unanswered interactions`
       );
 
       return c.json({
         mcpConfig,
         platformInstructions: contextData.platformInstructions,
         networkInstructions: contextData.networkInstructions,
+        workspaceInstructions: contextData.workspaceInstructions,
+        skillsInstructions: contextData.skillsInstructions,
         mcpStatus: contextData.mcpStatus,
+        mcpTools,
         unansweredInteractions,
       });
     } catch (error) {

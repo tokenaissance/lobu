@@ -75,6 +75,9 @@ const updateConfigRoute = createRoute({
         "application/json": {
           schema: z.object({
             model: z.string().optional(),
+            soulMd: z.string().optional(),
+            userMd: z.string().optional(),
+            identityMd: z.string().optional(),
             networkConfig: z
               .object({
                 allowedDomains: z.array(z.string()).optional(),
@@ -308,6 +311,16 @@ function validateSettings(
 ): Omit<AgentSettings, "updatedAt"> {
   const settings: Omit<AgentSettings, "updatedAt"> = {};
 
+  if (typeof input.soulMd === "string") {
+    settings.soulMd = input.soulMd;
+  }
+  if (typeof input.userMd === "string") {
+    settings.userMd = input.userMd;
+  }
+  if (typeof input.identityMd === "string") {
+    settings.identityMd = input.identityMd;
+  }
+
   if (input.model) {
     const validModels = [
       "claude-sonnet-4",
@@ -315,6 +328,10 @@ function validateSettings(
       "claude-opus-4",
       "claude-haiku-4",
       "claude-haiku-4-5",
+      "openclaw/openai-codex/gpt-5.2-codex",
+      "openclaw/openai-codex/gpt-5.1",
+      "openclaw/openai-codex/gpt-5.1-codex-max",
+      "openclaw/openai-codex/gpt-5.1-codex-mini",
     ];
     if (!validModels.includes(input.model))
       throw new Error(`Invalid model: ${input.model}`);

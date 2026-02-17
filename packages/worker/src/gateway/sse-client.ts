@@ -64,6 +64,7 @@ const AgentOptionsSchema = z
   .passthrough();
 
 const OPENCLAW_RUNTIME_ALIASES = new Set(["openclaw", "pi"]);
+const OPENCLAW_MODEL_PREFIXES = ["openclaw/", "openai-codex/"];
 
 function shouldUseOpenClaw(
   agentOptions?: z.infer<typeof AgentOptionsSchema>
@@ -79,7 +80,7 @@ function shouldUseOpenClaw(
   }
   if (typeof agentOptions.model === "string") {
     const model = agentOptions.model.trim().toLowerCase();
-    if (model.startsWith("openclaw/")) {
+    if (OPENCLAW_MODEL_PREFIXES.some((p) => model.startsWith(p))) {
       return true;
     }
   }

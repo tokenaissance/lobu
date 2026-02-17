@@ -66,6 +66,8 @@ export type {
 
 // Utilities
 export * from "./utils/encryption";
+export { buildMcpToolInstructions } from "./utils/mcp-tool-instructions";
+export type { McpToolDef } from "./utils/mcp-tool-instructions";
 export * from "./utils/env";
 export * from "./utils/error-handler";
 export * from "./utils/json";

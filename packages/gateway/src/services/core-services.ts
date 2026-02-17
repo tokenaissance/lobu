@@ -12,6 +12,7 @@ import { McpInputStore } from "../auth/mcp/input-store";
 import { mcpConfigStore } from "../auth/mcp/mcp-config-store";
 import { McpOAuthModule } from "../auth/mcp/oauth-module";
 import { McpProxy } from "../auth/mcp/proxy";
+import { McpToolCache } from "../auth/mcp/tool-cache";
 import { OAuthDiscoveryService } from "../auth/oauth/discovery";
 import { UserAgentsStore } from "../auth/user-agents-store";
 import {
@@ -19,6 +20,8 @@ import {
   createClaudeOAuthStateStore,
   createMcpOAuthStateStore,
 } from "../auth/oauth/state-store";
+import { ApiKeyProviderModule } from "../auth/api-key-provider-module";
+import { ChatGPTOAuthModule } from "../auth/chatgpt";
 import { AgentSettingsStore } from "../auth/settings";
 import { ChannelBindingService } from "../channels";
 import type { GatewayConfig } from "../config";
@@ -90,7 +93,6 @@ export class CoreServices {
   // ============================================================================
   // OAuth Modules
   // ============================================================================
-  private claudeOAuthModule?: ClaudeOAuthModule;
   private mcpOAuthModule?: McpOAuthModule;
 
   // ============================================================================
@@ -290,16 +292,56 @@ export class CoreServices {
 
     // Register Claude OAuth module
     this.claudeOAuthStateStore = createClaudeOAuthStateStore(redisClient);
-    this.claudeOAuthModule = new ClaudeOAuthModule(
+    const claudeOAuthModule = new ClaudeOAuthModule(
       this.claudeCredentialStore,
       this.claudeOAuthStateStore,
       this.claudeModelPreferenceStore,
       this.queue,
       this.config.mcp.publicGatewayUrl
     );
-    moduleRegistry.register(this.claudeOAuthModule);
+    moduleRegistry.register(claudeOAuthModule);
     logger.info(
-      `✅ Claude OAuth module registered (system token: ${this.claudeOAuthModule.hasSystemKey() ? "available" : "not available"})`
+      `✅ Claude OAuth module registered (system token: ${claudeOAuthModule.hasSystemKey() ? "available" : "not available"})`
+    );
+
+    // Register ChatGPT OAuth module
+    const chatgptOAuthModule = new ChatGPTOAuthModule(this.agentSettingsStore);
+    moduleRegistry.register(chatgptOAuthModule);
+    logger.info(
+      `✅ ChatGPT OAuth module registered (system token: ${chatgptOAuthModule.hasSystemKey() ? "available" : "not available"})`
+    );
+
+    // Register Gemini API-key provider
+    const geminiModule = new ApiKeyProviderModule({
+      providerId: "gemini",
+      providerDisplayName: "Google Gemini",
+      providerIconUrl:
+        "https://www.gstatic.com/lamda/images/gemini_favicon_f069958c85030456e93de685481c559f160ea06b.png",
+      envVarName: "GEMINI_API_KEY",
+      apiKeyInstructions:
+        'Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" class="text-slate-600 hover:underline">Google AI Studio</a>',
+      apiKeyPlaceholder: "AIza...",
+      agentSettingsStore: this.agentSettingsStore,
+    });
+    moduleRegistry.register(geminiModule);
+    logger.info(
+      `✅ Gemini module registered (system token: ${geminiModule.hasSystemKey() ? "available" : "not available"})`
+    );
+
+    // Register NVIDIA NIM API-key provider
+    const nvidiaModule = new ApiKeyProviderModule({
+      providerId: "nvidia",
+      providerDisplayName: "NVIDIA NIM",
+      providerIconUrl: "https://www.nvidia.com/favicon.ico",
+      envVarName: "NVIDIA_API_KEY",
+      apiKeyInstructions:
+        'Get your API key from <a href="https://build.nvidia.com" target="_blank" class="text-slate-600 hover:underline">NVIDIA Build</a>',
+      apiKeyPlaceholder: "nvapi-...",
+      agentSettingsStore: this.agentSettingsStore,
+    });
+    moduleRegistry.register(nvidiaModule);
+    logger.info(
+      `✅ NVIDIA NIM module registered (system token: ${nvidiaModule.hasSystemKey() ? "available" : "not available"})`
     );
   }
 
@@ -367,6 +409,17 @@ export class CoreServices {
     );
     logger.info("Instruction service initialized");
 
+    // Initialize MCP tool cache and proxy (before worker gateway so it can use the proxy)
+    const mcpToolCache = new McpToolCache(redisClient);
+    this.mcpProxy = new McpProxy(
+      this.mcpConfigService,
+      mcpCredentialStore,
+      mcpInputStore,
+      this.queue,
+      mcpToolCache
+    );
+    logger.info("MCP proxy initialized");
+
     // Initialize worker gateway
     if (!this.sessionManager) {
       throw new Error(
@@ -384,18 +437,10 @@ export class CoreServices {
       this.sessionManager,
       this.mcpConfigService,
       this.instructionService,
-      this.interactionService
+      this.interactionService,
+      this.mcpProxy
     );
     logger.info("Worker gateway initialized");
-
-    // Initialize MCP proxy
-    this.mcpProxy = new McpProxy(
-      this.mcpConfigService,
-      mcpCredentialStore,
-      mcpInputStore,
-      this.queue
-    );
-    logger.info("MCP proxy initialized");
 
     // Discover OAuth capabilities for all MCP servers
     logger.info("Discovering OAuth capabilities for MCP servers...");
@@ -508,10 +553,6 @@ export class CoreServices {
     if (!this.interactionService)
       throw new Error("Interaction service not initialized");
     return this.interactionService;
-  }
-
-  getClaudeOAuthModule(): ClaudeOAuthModule | undefined {
-    return this.claudeOAuthModule;
   }
 
   getMcpOAuthModule(): McpOAuthModule | undefined {

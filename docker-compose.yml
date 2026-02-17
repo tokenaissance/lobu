@@ -57,6 +57,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/gateway/src
+          target: /app/packages/gateway/src
+        - action: sync
+          path: ./packages/core/src
+          target: /app/packages/core/src
+        - action: rebuild
+          path: ./packages/gateway/package.json
+        - action: rebuild
+          path: ./packages/core/package.json
 
 networks:
   # Public network with internet access (gateway only)

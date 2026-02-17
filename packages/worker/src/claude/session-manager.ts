@@ -1,7 +1,11 @@
 #!/usr/bin/env bun
 
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
-import { createLogger, type PendingInteraction } from "@lobu/core";
+import {
+  buildMcpToolInstructions,
+  createLogger,
+  type PendingInteraction,
+} from "@lobu/core";
 import { ensureBaseUrl } from "../core/url-utils";
 
 const logger = createLogger("claude-session");
@@ -39,7 +43,10 @@ interface SessionContextResponse {
   mcpConfig?: MCPConfigResponse;
   platformInstructions: string;
   networkInstructions: string;
+  workspaceInstructions?: string;
+  skillsInstructions?: string;
   mcpStatus: McpStatus[];
+  mcpTools?: Record<string, import("@lobu/core").McpToolDef[]>;
   unansweredInteractions: PendingInteraction[];
 }
 
@@ -177,18 +184,27 @@ export async function getSessionContext(): Promise<{
 
     // Build MCP instructions from status data
     const mcpInstructions = buildMcpInstructions(data.mcpStatus);
+    const mcpToolInstructions =
+      data.mcpTools && Object.keys(data.mcpTools).length > 0 && dispatcherUrl
+        ? buildMcpToolInstructions(data.mcpTools, dispatcherUrl)
+        : "";
 
-    // Merge platform + network + MCP instructions
+    // Merge workspace + platform + network + skills + MCP instructions
+    // Workspace instructions (SOUL.md, USER.md, IDENTITY.md) come first
+    // since they define the agent's core identity and behavior
     const gatewayInstructions = [
+      data.workspaceInstructions,
       data.platformInstructions,
       data.networkInstructions,
+      data.skillsInstructions,
       mcpInstructions,
+      mcpToolInstructions,
     ]
       .filter(Boolean)
       .join("\n\n");
 
     logger.info(
-      `Built gateway instructions: platform (${data.platformInstructions.length} chars) + network (${data.networkInstructions.length} chars) + MCP (${mcpInstructions.length} chars)`
+      `Built gateway instructions: workspace (${(data.workspaceInstructions || "").length} chars) + platform (${data.platformInstructions.length} chars) + network (${data.networkInstructions.length} chars) + skills (${(data.skillsInstructions || "").length} chars) + MCP (${mcpInstructions.length} chars)`
     );
 
     return {

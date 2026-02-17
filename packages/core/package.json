@@ -6,6 +6,12 @@
   "description": "Core utilities for Lobu",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

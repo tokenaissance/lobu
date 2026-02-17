@@ -38,3 +38,9 @@ charts/lobu/provider/hetzner/ssh_key.pub
 .github-app-private-key.pem
 debug-voice-urls.js
 docs/
+
+# Redis snapshot
+dump.rdb
+
+# Accidental clipboard artifacts
+pbcopy
