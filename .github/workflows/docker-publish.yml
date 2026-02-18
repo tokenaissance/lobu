@@ -111,10 +111,10 @@ jobs:
           # Only amd64 - Nix installation fails under QEMU arm64 emulation (seccomp BPF issue)
           platforms: linux/amd64
 
-      # - name: Trigger deployment
-      #   if: success() && github.ref == 'refs/heads/main'
-      #   uses: peter-evans/repository-dispatch@v2
-      #   with:
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     event-type: deploy-community
-      #     client-payload: '{"tag": "${{ steps.tag.outputs.tag }}", "ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+      - name: Trigger deployment
+        if: success() && github.ref == 'refs/heads/main'
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: deploy-community
+          client-payload: '{"tag": "${{ steps.tag.outputs.tag }}", "ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'

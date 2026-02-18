@@ -12,7 +12,7 @@ Multi-tenant, sandboxed agent orchestration. Run Claude Code or OpenClaw behind 
 
 **Slack** — Multi-channel/DM agents. [Join community Slack](https://join.slack.com/t/peerbot/shared_invite/zt-391o8tyw2-iyupjTG1xHIz9Og8C7JOnw)
 
-**Telegram** — Personal AI assistants via Grammy long-polling.
+**Telegram** — Personal AI assistants. [Try @lobuaibot](https://t.me/lobuaibot)
 
 **WhatsApp** — Baileys-based integration with self-chat mode for testing.
 
@@ -30,7 +30,7 @@ docker compose up -d
 
 ```bash
 cp .env.example .env   # edit .env
-make deploy            # builds images, deploys Helm chart
+helm upgrade --install lobu charts/lobu/ -f charts/lobu/values.yaml
 ```
 
 ### Local
@@ -93,11 +93,9 @@ flowchart LR
 
 **Dual runtime.** Workers run Claude Code SDK (CLI subprocess) or OpenClaw Pi Agent SDK (embedded npm package), selected per-agent via the `runtime` field or model prefix.
 
+**OpenClaw compatible.** Lobu supports OpenClaw skills, `IDENTITY.md`, `SOUL.md`, and `USER.md` workspace files — the same personality and behavior system that makes OpenClaw agents powerful. Skills from [ClawhHub](https://clawhub.ai/) are fetched from GitHub, cached, and injected as progressive-disclosure instructions.
+
 **Multi-provider auth.** Claude (OAuth), ChatGPT (device-code flow), and API-key providers (Gemini, NVIDIA, etc.) via pluggable `ModelProviderModule`.
-
-**Skills.** Skills from [ClawhHub](https://clawhub.ai/) are fetched from GitHub, cached, and injected as progressive-disclosure instructions. Agents discover and install skills at runtime.
-
-**Workspace instructions.** Per-agent `IDENTITY.md`, `SOUL.md`, `USER.md` files shape personality and behavior.
 
 **Built-in tools.** `AskUserQuestion`, `UploadUserFile`, `ScheduleReminder`, `GetChannelHistory`, `GenerateAudio` (TTS).
 
@@ -125,11 +123,11 @@ This project started in **July 2025** and was first published under [peerbot.ai]
 
 ## Security and Privacy
 
-- **No direct worker egress** — all traffic through gateway proxy (`SECURITY.md#network-egress`)
-- **Secrets stay in gateway** — MCP OAuth, provider creds, `${env:}` substitution (`SECURITY.md#mcp-oauth-and-credentials`)
-- **Defense-in-depth on K8s** — NetworkPolicies, RBAC, gVisor/Kata (`SECURITY.md#kubernetes`)
-- **Nix environments** — reproducible per-session tooling (`SECURITY.md#nix-environments`)
-- **Skills policy enforcement** (`SECURITY.md#skills-and-policy`)
+- **No direct worker egress** — all traffic through gateway proxy ([details](SECURITY.md#network-egress))
+- **Secrets stay in gateway** — MCP OAuth, provider creds, `${env:}` substitution ([details](SECURITY.md#mcp-oauth-and-credentials))
+- **Defense-in-depth on K8s** — NetworkPolicies, RBAC, gVisor/Kata ([details](SECURITY.md#kubernetes))
+- **Nix environments** — reproducible per-session tooling ([details](SECURITY.md#nix-environments))
+- **Skills policy enforcement** ([details](SECURITY.md#skills-and-policy))
 
 ## License
 
