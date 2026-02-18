@@ -174,8 +174,11 @@ export class ChatGPTDeviceCodeClient {
   }
 
   /**
-   * Extract account ID from JWT access token.
-   * Decodes the JWT payload and reads the account ID from the OpenAI auth claim.
+   * Extract account ID from JWT access token (informational only).
+   * Decodes the JWT payload without signature verification because the token
+   * was obtained directly from OpenAI's token endpoint over HTTPS.
+   * The extracted accountId is used only for logging/display, not for
+   * authorization decisions.
    */
   extractAccountId(accessToken: string): string | undefined {
     try {

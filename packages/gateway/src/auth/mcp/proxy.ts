@@ -33,6 +33,7 @@ export class McpProxy {
   private readonly redisClient: any;
   private app: Hono;
   private toolCache?: McpToolCache;
+  private readonly refreshLocks: Map<string, Promise<any>> = new Map();
 
   constructor(
     private readonly configService: McpConfigService,
@@ -417,7 +418,39 @@ export class McpProxy {
     return { httpServer, isPerAgentMcp, credentials, inputValues, agentId };
   }
 
+  /**
+   * Refresh credentials with deduplication to prevent concurrent refresh token exhaustion.
+   * If a refresh is already in progress for the same agent+mcp, waits for that result.
+   */
   private async refreshCredentials(
+    httpServer: any,
+    discoveredOAuth: any,
+    refreshToken: string,
+    agentId: string,
+    mcpId: string
+  ): Promise<{ accessToken: string; tokenType?: string }> {
+    const lockKey = `${agentId}:${mcpId}`;
+    const existing = this.refreshLocks.get(lockKey);
+    if (existing) {
+      logger.info("Waiting for in-flight token refresh", { agentId, mcpId });
+      return existing;
+    }
+
+    const refreshPromise = this.doRefreshCredentials(
+      httpServer,
+      discoveredOAuth,
+      refreshToken,
+      agentId,
+      mcpId
+    ).finally(() => {
+      this.refreshLocks.delete(lockKey);
+    });
+
+    this.refreshLocks.set(lockKey, refreshPromise);
+    return refreshPromise;
+  }
+
+  private async doRefreshCredentials(
     httpServer: any,
     discoveredOAuth: any,
     refreshToken: string,

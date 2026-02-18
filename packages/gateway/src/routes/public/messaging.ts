@@ -192,12 +192,46 @@ export function createMessagingRoutes(
           body.whatsapp = { chat: whatsappChat };
         }
 
-        // Extract files
+        // Extract files with size validation
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+        const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total
+        const MAX_FILE_COUNT = 10;
+
         const fileEntries = formData.getAll("files");
+        if (fileEntries.length > MAX_FILE_COUNT) {
+          return c.json(
+            {
+              success: false,
+              error: `Too many files: ${fileEntries.length} (max ${MAX_FILE_COUNT})`,
+            },
+            400
+          );
+        }
+
         if (fileEntries.length > 0) {
           const fileResults: Array<{ buffer: Buffer; filename: string }> = [];
+          let totalSize = 0;
           for (const entry of fileEntries) {
             if (entry instanceof File) {
+              if (entry.size > MAX_FILE_SIZE) {
+                return c.json(
+                  {
+                    success: false,
+                    error: `File "${entry.name}" exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+                  },
+                  400
+                );
+              }
+              totalSize += entry.size;
+              if (totalSize > MAX_TOTAL_SIZE) {
+                return c.json(
+                  {
+                    success: false,
+                    error: `Total upload size exceeds maximum of ${MAX_TOTAL_SIZE / 1024 / 1024}MB`,
+                  },
+                  400
+                );
+              }
               const arrayBuffer = await entry.arrayBuffer();
               fileResults.push({
                 buffer: Buffer.from(arrayBuffer),

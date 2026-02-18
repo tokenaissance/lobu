@@ -137,6 +137,7 @@ export async function getSessionContext(): Promise<{
       headers: {
         Authorization: `Bearer ${workerToken}`,
       },
+      signal: AbortSignal.timeout(30_000), // 30s timeout
     });
 
     if (!response.ok) {

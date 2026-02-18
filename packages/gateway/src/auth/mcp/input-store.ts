@@ -1,4 +1,4 @@
-import { BaseRedisStore } from "@lobu/core";
+import { BaseRedisStore, decrypt, encrypt } from "@lobu/core";
 import type { IMessageQueue } from "../../infrastructure/queue";
 
 export interface InputValues {
@@ -7,15 +7,49 @@ export interface InputValues {
 
 /**
  * Storage for MCP input credentials (PATs, API keys, etc.)
- * Unlike OAuth tokens, these don't expire so we store them without TTL
+ * Values are encrypted at rest using AES-256-GCM.
+ * Unlike OAuth tokens, these don't expire so we store them without TTL.
  */
 export class McpInputStore extends BaseRedisStore<InputValues> {
+  private encryptionAvailable = false;
+
   constructor(queue: IMessageQueue) {
     super({
       redis: queue.getRedisClient(),
       keyPrefix: "mcp:inputs",
       loggerName: "mcp-input-store",
     });
+
+    // Check if encryption key is configured
+    try {
+      encrypt("test");
+      this.encryptionAvailable = true;
+    } catch {
+      this.logger.warn(
+        "ENCRYPTION_KEY not configured - MCP input credentials will be stored unencrypted"
+      );
+    }
+  }
+
+  protected override serialize(value: InputValues): string {
+    const json = JSON.stringify(value);
+    if (this.encryptionAvailable) {
+      return encrypt(json);
+    }
+    return json;
+  }
+
+  protected override deserialize(data: string): InputValues {
+    // Try decrypting first (encrypted format is hex:hex:hex)
+    if (this.encryptionAvailable && data.includes(":")) {
+      try {
+        const decrypted = decrypt(data);
+        return JSON.parse(decrypted) as InputValues;
+      } catch {
+        // Fall through to plain JSON parse for backwards compatibility
+      }
+    }
+    return JSON.parse(data) as InputValues;
   }
 
   /**

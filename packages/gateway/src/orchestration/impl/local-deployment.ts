@@ -246,6 +246,17 @@ export class LocalDeploymentManager extends BaseDeploymentManager {
     const idleThresholdMinutes = this.config.worker.idleCleanupMinutes;
     const veryOldDays = getVeryOldThresholdDays(this.config);
 
+    // Clean up dead process entries that exited more than 60 seconds ago
+    for (const [name, proc] of this.processes.entries()) {
+      if (
+        (proc.process.exitCode !== null || proc.process.killed) &&
+        now - proc.lastActivity.getTime() > 60_000
+      ) {
+        this.processes.delete(name);
+        logger.debug(`Cleaned up dead process entry: ${name}`);
+      }
+    }
+
     return Array.from(this.processes.entries()).map(
       ([deploymentName, localProcess]) => {
         const replicas =

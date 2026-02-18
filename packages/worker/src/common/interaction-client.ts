@@ -67,6 +67,7 @@ export class InteractionClient {
             metadata: args.metadata,
             blocking: true,
           }),
+          signal: AbortSignal.timeout(30_000),
         }
       );
 
@@ -154,6 +155,7 @@ export class InteractionClient {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ prompts, blocking: false }),
+          signal: AbortSignal.timeout(30_000),
         }
       );
 

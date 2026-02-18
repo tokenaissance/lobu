@@ -404,6 +404,7 @@ export abstract class BaseWorker implements WorkerExecutor {
             headers: {
               Authorization: `Bearer ${workerToken}`,
             },
+            signal: AbortSignal.timeout(60_000), // 60s for file downloads
           }
         );
 

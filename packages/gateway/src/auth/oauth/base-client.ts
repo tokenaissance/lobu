@@ -115,10 +115,9 @@ export abstract class BaseOAuth2Client {
         headers["Content-Type"] = "application/x-www-form-urlencoded";
       }
 
-      this.logger.info(`Request details:`, {
-        headers,
-        body: body, // Log full body to debug
+      this.logger.debug(`Token exchange request`, {
         contentType,
+        tokenUrl,
       });
 
       const response = await fetch(tokenUrl, {
@@ -131,8 +130,6 @@ export abstract class BaseOAuth2Client {
         const errorText = await response.text();
         this.logger.error(`Token exchange failed: ${response.status}`, {
           errorText,
-          requestBody: body,
-          requestHeaders: headers,
         });
         throw new Error(
           `Token exchange failed: ${response.status} ${response.statusText}`

@@ -23,6 +23,7 @@ const logger = createLogger("orchestrator");
 export class DockerDeploymentManager extends BaseDeploymentManager {
   private docker: Docker;
   private gvisorAvailable = false;
+  private activityTimestamps: Map<string, Date> = new Map();
 
   constructor(
     config: OrchestratorConfig,
@@ -134,14 +135,21 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       return containers.map((containerInfo: Docker.ContainerInfo) => {
         const deploymentName = containerInfo.Names[0]?.substring(1) || ""; // Remove leading '/'
 
-        // Get last activity from labels or fallback to creation time
+        // Get last activity from in-memory tracking, labels, or creation time
+        const trackedActivity = this.activityTimestamps.get(deploymentName);
         const lastActivityStr =
           containerInfo.Labels?.["lobu.io/last-activity"] ||
           containerInfo.Labels?.["lobu.io/created"];
 
-        const lastActivity = lastActivityStr
+        const labelActivity = lastActivityStr
           ? new Date(lastActivityStr)
           : new Date(containerInfo.Created * 1000);
+
+        // Use the most recent timestamp from any source
+        const lastActivity =
+          trackedActivity && trackedActivity > labelActivity
+            ? trackedActivity
+            : labelActivity;
         const replicas = containerInfo.State === "running" ? 1 : 0;
         return buildDeploymentInfoSummary({
           deploymentName,
@@ -393,7 +401,24 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       };
 
       const container = await this.docker.createContainer(createOptions);
-      await container.start();
+      try {
+        await container.start();
+      } catch (startError) {
+        // Clean up orphaned container if start fails
+        logger.error(
+          `Failed to start container ${deploymentName}, removing orphaned container`,
+          startError
+        );
+        try {
+          await container.remove({ force: true });
+        } catch (removeError) {
+          logger.error(
+            `Failed to remove orphaned container ${deploymentName}:`,
+            removeError
+          );
+        }
+        throw startError;
+      }
 
       logger.info(`✅ Created and started Docker container: ${deploymentName}`);
     } catch (error) {
@@ -446,6 +471,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
 
       // Remove container
       await container.remove();
+      this.activityTimestamps.delete(deploymentName);
       logger.info(`✅ Removed container: ${deploymentName}`);
     } catch (error) {
       const dockerError = error as { statusCode?: number };
@@ -463,9 +489,10 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
     // for future conversations. Cleanup is done manually or via separate process.
   }
 
-  async updateDeploymentActivity(_deploymentName: string): Promise<void> {
+  async updateDeploymentActivity(deploymentName: string): Promise<void> {
     // Docker doesn't support runtime label updates like K8s annotations
-    // Activity tracking is done via container creation timestamp only
+    // Track activity in-memory for idle cleanup calculations
+    this.activityTimestamps.set(deploymentName, new Date());
   }
 
   protected getDispatcherHost(): string {

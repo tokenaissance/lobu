@@ -208,11 +208,51 @@ export class RedisQueue implements IMessageQueue {
 
       worker.on("failed", (job, err) => {
         logger.error(`Job ${job?.id} failed in queue ${queueName}:`, err);
+
+        // Move to dead letter queue after all retries exhausted
+        if (job && job.attemptsMade >= (job.opts?.attempts ?? 3)) {
+          this.moveToDeadLetterQueue(queueName, job).catch((dlqErr) => {
+            logger.error(`Failed to move job ${job.id} to DLQ:`, dlqErr);
+          });
+        }
       });
 
       this.workers.set(queueName, worker);
       logger.info(`Created worker for queue: ${queueName}`);
     }
+  }
+
+  /**
+   * Move a failed job to the dead letter queue for later investigation/reprocessing
+   */
+  private async moveToDeadLetterQueue(
+    sourceQueue: string,
+    job: any
+  ): Promise<void> {
+    const dlqName = `${sourceQueue}:dlq`;
+    await this.createQueue(dlqName);
+    const dlq = this.queues.get(dlqName);
+    if (!dlq) return;
+
+    await dlq.add(
+      dlqName,
+      {
+        originalQueue: sourceQueue,
+        originalJobId: job.id,
+        data: job.data,
+        failedReason: job.failedReason,
+        attemptsMade: job.attemptsMade,
+        movedAt: new Date().toISOString(),
+      },
+      {
+        removeOnComplete: { age: 7 * 24 * 3600, count: 10000 }, // Keep DLQ jobs for 7 days
+        removeOnFail: false, // Never auto-remove DLQ failures
+      }
+    );
+
+    logger.info(
+      `Moved failed job ${job.id} from ${sourceQueue} to DLQ ${dlqName}`
+    );
   }
 
   async pauseWorker(queueName: string): Promise<void> {
