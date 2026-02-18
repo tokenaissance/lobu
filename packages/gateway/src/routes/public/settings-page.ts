@@ -1429,7 +1429,7 @@ export function renderSettingsPage(
             '<div class="flex items-center justify-between">' +
               '<div class="flex-1 min-w-0">' +
                 '<p class="text-xs font-medium text-gray-800 truncate">' + escapeHtmlJS(skill.name) + '</p>' +
-                '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(skill.id) + '</p>' +
+                (skill.description ? '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(skill.description) + '</p>' : '') +
               '</div>' +
               '<div class="flex items-center gap-2 ml-2">' +
                 '<span class="text-xs text-gray-400">' + formatInstalls(skill.installs) + '</span>' +
@@ -1478,8 +1478,8 @@ export function renderSettingsPage(
 
         return '<div class="flex items-center justify-between p-2 bg-white rounded border border-gray-200">' +
           '<div class="flex-1 min-w-0">' +
-            '<p class="text-xs font-medium text-gray-800 truncate">' + escapeHtmlJS(skill.name) + '</p>' +
-            '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(skill.repo) + '</p>' +
+            '<a href="https://clawhub.ai/skills/' + encodeURIComponent(skill.repo) + '" target="_blank" class="text-xs font-medium text-slate-700 hover:text-slate-900 hover:underline truncate block">' + escapeHtmlJS(skill.name) + '</a>' +
+            (skill.description ? '<p class="text-xs text-gray-500 truncate">' + escapeHtmlJS(skill.description) + '</p>' : '') +
           '</div>' +
           '<div class="flex items-center gap-2 ml-2 flex-shrink-0">' +
             '<button type="button" onclick="toggleSkill(\\'' + escapeHtmlJS(skill.repo) + '\\')" ' +

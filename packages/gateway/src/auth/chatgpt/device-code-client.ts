@@ -8,7 +8,17 @@ const DEVICE_CODE_URL =
 const DEVICE_TOKEN_URL =
   "https://auth.openai.com/api/accounts/deviceauth/token";
 const TOKEN_EXCHANGE_URL = "https://auth.openai.com/oauth/token";
+const DEVICE_REDIRECT_URI = "https://auth.openai.com/deviceauth/callback";
+const OAUTH_SCOPE = process.env.OPENAI_OAUTH_SCOPE || "model.request";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
+const DEVICE_HEADERS = {
+  "Content-Type": "application/json",
+  "User-Agent": "reqwest/0.12.24",
+};
+const TOKEN_HEADERS = {
+  "Content-Type": "application/x-www-form-urlencoded",
+  "User-Agent": "reqwest/0.12.24",
+};
 
 export interface DeviceCodeResponse {
   userCode: string;
@@ -35,10 +45,10 @@ export class ChatGPTDeviceCodeClient {
   async requestDeviceCode(): Promise<DeviceCodeResponse> {
     const response = await fetch(DEVICE_CODE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: DEVICE_HEADERS,
       body: JSON.stringify({
         client_id: CLIENT_ID,
-        scope: "model.request",
+        scope: OAUTH_SCOPE,
       }),
     });
 
@@ -74,7 +84,7 @@ export class ChatGPTDeviceCodeClient {
   ): Promise<DeviceTokenResult | null> {
     const response = await fetch(DEVICE_TOKEN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: DEVICE_HEADERS,
       body: JSON.stringify({
         device_auth_id: deviceAuthId,
         user_code: userCode,
@@ -122,11 +132,14 @@ export class ChatGPTDeviceCodeClient {
   ): Promise<DeviceTokenResult> {
     const response = await fetch(TOKEN_EXCHANGE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: TOKEN_HEADERS,
       body: new URLSearchParams({
         grant_type: "authorization_code",
+        client_id: CLIENT_ID,
         code: authorizationCode,
         code_verifier: codeVerifier,
+        redirect_uri: DEVICE_REDIRECT_URI,
+        scope: OAUTH_SCOPE,
       }).toString(),
     });
 

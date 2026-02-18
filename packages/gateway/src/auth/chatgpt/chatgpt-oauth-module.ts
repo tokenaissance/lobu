@@ -134,7 +134,7 @@ export class ChatGPTOAuthModule
           userCode: result.userCode,
           deviceAuthId: result.deviceAuthId,
           interval: result.interval,
-          verificationUrl: "https://chatgpt.com/verify",
+          verificationUrl: "https://auth.openai.com/codex/device",
         });
       } catch (error) {
         logger.error("Failed to start device code flow", { error });
