@@ -458,8 +458,29 @@ export class MessageConsumer {
   }
 
   /**
+   * Acquire a Redis-based lock for deployment creation.
+   * Prevents concurrent duplicate deployment creation for the same thread.
+   */
+  private async acquireDeploymentLock(
+    deploymentName: string
+  ): Promise<boolean> {
+    const lockKey = `deployment:lock:${deploymentName}`;
+    const redisClient = this.queue.getRedisClient();
+    // SET NX with 60s TTL - standard Redis distributed lock
+    const result = await redisClient.set(lockKey, "1", "EX", 60, "NX");
+    return result === "OK";
+  }
+
+  private async releaseDeploymentLock(deploymentName: string): Promise<void> {
+    const lockKey = `deployment:lock:${deploymentName}`;
+    const redisClient = this.queue.getRedisClient();
+    await redisClient.del(lockKey);
+  }
+
+  /**
    * Ensure worker deployment exists for a thread
    * Uses shared retry utility with linear backoff + jitter
+   * Uses Redis lock to prevent concurrent duplicate deployment creation
    */
   private async ensureWorkerExists(
     deploymentName: string,
@@ -470,13 +491,6 @@ export class MessageConsumer {
   ): Promise<void> {
     return retryWithBackoff(
       async () => {
-        // Check if this is truly a new thread by looking for existing deployment
-        const existingDeployments =
-          await this.deploymentManager.listDeployments();
-        const isNewThread = !existingDeployments.some(
-          (d) => d.deploymentName === deploymentName
-        );
-
         // Ensure traceparent is in platformMetadata for worker deployment
         const dataWithTrace: MessagePayload = {
           ...data,
@@ -486,17 +500,53 @@ export class MessageConsumer {
           },
         };
 
+        // Check if this is truly a new thread by looking for existing deployment
+        const existingDeployments =
+          await this.deploymentManager.listDeployments();
+        const isNewThread = !existingDeployments.some(
+          (d) => d.deploymentName === deploymentName
+        );
+
         if (isNewThread) {
-          logger.info(
-            { traceId, traceparent, conversationId, deploymentName },
-            "New thread - creating deployment"
-          );
-          await this.deploymentManager.createWorkerDeployment(
-            data.userId,
-            conversationId,
-            dataWithTrace
-          );
-          logger.info({ traceId, deploymentName }, "Created deployment");
+          // Acquire lock to prevent concurrent deployment creation
+          const acquired = await this.acquireDeploymentLock(deploymentName);
+          if (!acquired) {
+            logger.info(
+              { traceId, deploymentName },
+              "Another process is creating this deployment, waiting"
+            );
+            // Wait briefly and re-check - the other process should finish soon
+            await new Promise((r) => setTimeout(r, 3000));
+            // Verify it was created
+            const rechecked = await this.deploymentManager.listDeployments();
+            if (rechecked.some((d) => d.deploymentName === deploymentName)) {
+              await this.deploymentManager.scaleDeployment(deploymentName, 1);
+              logger.info(
+                { traceId, deploymentName },
+                "Deployment created by other process, scaled up"
+              );
+              await this.deploymentManager.updateDeploymentActivity(
+                deploymentName
+              );
+              return;
+            }
+            throw new Error("Deployment lock held but deployment not created");
+          }
+
+          try {
+            logger.info(
+              { traceId, traceparent, conversationId, deploymentName },
+              "New thread - creating deployment"
+            );
+            await this.deploymentManager.createWorkerDeployment(
+              data.userId,
+              conversationId,
+              dataWithTrace
+            );
+            logger.info({ traceId, deploymentName }, "Created deployment");
+          } finally {
+            await this.releaseDeploymentLock(deploymentName);
+          }
         } else {
           logger.info(
             { traceId, conversationId, deploymentName },
@@ -508,7 +558,7 @@ export class MessageConsumer {
               { traceId, deploymentName },
               "Scaled existing worker to 1"
             );
-          } catch (_error) {
+          } catch {
             logger.info(
               { traceId, conversationId, deploymentName },
               "Worker doesn't exist, creating it"

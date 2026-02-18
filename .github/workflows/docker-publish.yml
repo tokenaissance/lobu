@@ -115,6 +115,6 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         uses: peter-evans/repository-dispatch@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN_PEERBOT }}
           event-type: deploy-community
           client-payload: '{"tag": "${{ steps.tag.outputs.tag }}", "ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
