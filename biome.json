@@ -122,6 +122,26 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/settings-page-styles.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUselessEscapeInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/settings-input.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUnknownAtRules": "off"
+          }
+        }
+      }
     }
   ]
 }
