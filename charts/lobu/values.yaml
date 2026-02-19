@@ -10,6 +10,8 @@ secrets:
   slackBotToken: ""  # Optional: Slack bot token (if slack.enabled)
   slackSigningSecret: ""  # Optional: Slack signing secret
   slackAppToken: ""  # Optional: Slack app token for Socket Mode
+  slackClientId: ""  # Optional: Slack Client ID (for multi-workspace OAuth distribution)
+  slackClientSecret: ""  # Optional: Slack Client Secret (for multi-workspace OAuth distribution)
   githubToken: ""  # Optional: GitHub token
   githubClientSecret: ""  # Optional: GitHub OAuth Client Secret
   encryptionKey: ""  # Optional: 32-char key for AES-GCM at-rest encryption

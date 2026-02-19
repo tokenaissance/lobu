@@ -69,6 +69,8 @@ SECRET_ARGS=()
 [[ -n "$SLACK_BOT_TOKEN" ]] && SECRET_ARGS+=(--from-literal=slack-bot-token="$SLACK_BOT_TOKEN")
 [[ -n "$SLACK_APP_TOKEN" ]] && SECRET_ARGS+=(--from-literal=slack-app-token="$SLACK_APP_TOKEN")
 [[ -n "$SLACK_SIGNING_SECRET" ]] && SECRET_ARGS+=(--from-literal=slack-signing-secret="$SLACK_SIGNING_SECRET")
+[[ -n "$SLACK_CLIENT_ID" ]] && SECRET_ARGS+=(--from-literal=slack-client-id="$SLACK_CLIENT_ID")
+[[ -n "$SLACK_CLIENT_SECRET" ]] && SECRET_ARGS+=(--from-literal=slack-client-secret="$SLACK_CLIENT_SECRET")
 
 # Claude/Anthropic credentials
 [[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]] && SECRET_ARGS+=(--from-literal=claude-code-oauth-token="$CLAUDE_CODE_OAUTH_TOKEN")

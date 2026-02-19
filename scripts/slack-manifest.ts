@@ -101,6 +101,7 @@ function patchManifestGatewayUrls(
 ): void {
   const base = normalizeBaseUrl(publicGatewayUrl);
   const eventsUrl = `${base}/slack/events`;
+  const oauthCallbackUrl = `${base}/slack/oauth_callback`;
 
   const settings = manifest.settings as Record<string, unknown> | undefined;
   if (settings) {
@@ -125,6 +126,14 @@ function patchManifestGatewayUrls(
         }
       }
     }
+  }
+
+  // Patch OAuth redirect URLs
+  const oauthConfig = manifest.oauth_config as
+    | Record<string, unknown>
+    | undefined;
+  if (oauthConfig) {
+    oauthConfig.redirect_urls = [oauthCallbackUrl];
   }
 }
 

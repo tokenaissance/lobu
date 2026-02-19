@@ -1,9 +1,9 @@
 {
   "display_information": {
-    "name": "Lobu Community",
-    "description": "Enterprise-ready, sandboxed agent orchestration on Slack",
-    "background_color": "#4a154b",
-    "long_description": "Lobu runs coding agents in isolated sandboxes behind a hardened gateway. Hire AI peers to work alongside you in your own environments, with controlled egress and scoped secrets. This is the community Slack app for https://community.lobu.ai."
+    "name": "Lobster (lobu.ai)",
+    "description": "Hire AI peers to work with you, using your environments",
+    "background_color": "#b91c1c",
+    "long_description": "Lobster runs coding agents in isolated sandboxes behind a hardened gateway. Hire AI peers to work alongside you in your own environments, with controlled egress and scoped secrets. Powered by lobu.ai."
   },
   "features": {
     "app_home": {
@@ -12,7 +12,7 @@
       "messages_tab_read_only_enabled": false
     },
     "bot_user": {
-      "display_name": "Lobu",
+      "display_name": "Lobster",
       "always_online": true
     },
     "slash_commands": [
@@ -24,7 +24,7 @@
       }
     ],
     "assistant_view": {
-      "assistant_description": "Run sandboxed coding agents in threads with controlled egress and scoped secrets."
+      "assistant_description": "Hire sandboxed AI coding agents that work alongside you in threads, with controlled egress and scoped secrets."
     }
   },
   "oauth_config": {

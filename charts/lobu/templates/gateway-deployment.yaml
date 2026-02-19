@@ -108,6 +108,18 @@ spec:
                   name: {{ include "lobu.fullname" . }}-secrets
                   key: slack-app-token
                   optional: true
+            - name: SLACK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lobu.fullname" . }}-secrets
+                  key: slack-client-id
+                  optional: true
+            - name: SLACK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lobu.fullname" . }}-secrets
+                  key: slack-client-secret
+                  optional: true
             - name: SLACK_HTTP_MODE
               value: {{ if .Values.slack.socketMode }}"false"{{ else }}"true"{{ end }}
             - name: SLACK_ALLOW_DIRECT_MESSAGES

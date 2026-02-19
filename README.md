@@ -2,6 +2,8 @@
 
 ![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue)
 
+<a href="https://community.lobu.ai/slack/install"><img alt="Add to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcSet="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>
+
 Multi-tenant, sandboxed agent orchestration. Run Claude Code or OpenClaw behind a hardened gateway with MCP proxy, multi-provider auth, and per-context isolation.
 
 **Batteries included.** Lobu bundles sandboxed execution, MCP proxy with OAuth, and network isolation — no external sandbox providers, no third-party MCP gateways. One deployment, everything included.
@@ -10,7 +12,7 @@ Multi-tenant, sandboxed agent orchestration. Run Claude Code or OpenClaw behind 
 
 **REST API** — Programmatic agent creation. [API Docs](https://community.lobu.ai/api/docs)
 
-**Slack** — Multi-channel/DM agents. [Join community Slack](https://join.slack.com/t/peerbot/shared_invite/zt-391o8tyw2-iyupjTG1xHIz9Og8C7JOnw)
+**Slack** — Multi-channel/DM agents. [Add to Slack](https://community.lobu.ai/slack/install) · [Join community Slack](https://join.slack.com/t/peerbot/shared_invite/zt-391o8tyw2-iyupjTG1xHIz9Og8C7JOnw)
 
 **Telegram** — Personal AI assistants. [Try @lobuaibot](https://t.me/lobuaibot)
 
@@ -18,29 +20,27 @@ Multi-tenant, sandboxed agent orchestration. Run Claude Code or OpenClaw behind 
 
 ## Quick Start
 
-### Docker Compose
+### New project (recommended)
 
 ```bash
-cp .env.example .env   # edit .env with your credentials
-make build-worker
-docker compose up -d
+npx create-lobu my-bot
+cd my-bot && docker compose up -d
 ```
 
-### Kubernetes
+The wizard guides you through platform setup (Telegram, Slack, or API-only), credentials, MCP servers, and network configuration.
+
+### Monorepo development
 
 ```bash
-cp .env.example .env   # edit .env
-helm upgrade --install lobu charts/lobu/ -f charts/lobu/values.yaml
+cp .env.example .env    # configure platform credentials
+make setup && make dev
 ```
 
-### Local
+### Deployment modes
 
-```bash
-cp .env.example .env   # edit .env
-make dev
-```
-
-Workers run as child processes. Install `@anthropic-ai/sandbox-runtime` for optional OS-level isolation (`SANDBOX_ENABLED=true`).
+- **Docker Compose** — `docker compose up` (production single-machine)
+- **Kubernetes** — `helm upgrade --install lobu charts/lobu/ -f charts/lobu/values.yaml` (production cluster)
+- **Local** — `cd packages/gateway && bun run dev` (development, workers as child processes)
 
 ## Architecture
 

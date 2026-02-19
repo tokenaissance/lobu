@@ -124,6 +124,8 @@ deploy:
 			--set secrets.slackBotToken="$$SLACK_BOT_TOKEN" \
 			--set secrets.slackSigningSecret="$$SLACK_SIGNING_SECRET" \
 			--set secrets.slackAppToken="$$SLACK_APP_TOKEN" \
+			--set secrets.slackClientId="$$SLACK_CLIENT_ID" \
+			--set secrets.slackClientSecret="$$SLACK_CLIENT_SECRET" \
 			--set secrets.telegramBotToken="$$TELEGRAM_BOT_TOKEN" \
 			--set secrets.claudeCodeOAuthToken="$$CLAUDE_CODE_OAUTH_TOKEN" \
 			--wait \
