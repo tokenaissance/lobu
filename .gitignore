@@ -28,6 +28,8 @@ packages/**/*.d.ts.map
 
 # CLI bin entrypoint is source-controlled (needed for CI publishing)
 !packages/cli/bin/*.js
+# Tailwind config is a JS config file, not a build artifact
+!packages/gateway/tailwind.config.js
 tsconfig.tsbuildinfo
 **/tsconfig.tsbuildinfo
 
