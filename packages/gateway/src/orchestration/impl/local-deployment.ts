@@ -151,7 +151,7 @@ export class LocalDeploymentManager extends BaseDeploymentManager {
           path.join(workspaceDir, "input"),
           path.join(workspaceDir, "output"),
           "/tmp/agent-processes",
-          "/tmp/claude-logs",
+          "/tmp/worker-logs",
         ],
         denyRead: [
           "~/.ssh",

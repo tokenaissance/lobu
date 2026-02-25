@@ -8,6 +8,7 @@ import {
   moduleRegistry,
 } from "@lobu/core";
 import type Redis from "ioredis";
+import type { ProviderCatalogService } from "../auth/provider-catalog";
 import type {
   BaseDeploymentManager,
   OrchestratorConfig,
@@ -43,10 +44,19 @@ export class Orchestrator {
    * Provider modules in the registry carry their own credential stores,
    * so only the Redis client is needed for secret placeholder generation.
    */
-  async injectCoreServices(redisClient?: Redis): Promise<void> {
+  async injectCoreServices(
+    redisClient?: Redis,
+    providerCatalogService?: ProviderCatalogService
+  ): Promise<void> {
     // Inject Redis client into deployment manager for secret placeholder generation
     if (redisClient) {
       this.deploymentManager.setRedisClient(redisClient);
+    }
+
+    // Inject provider catalog service for per-agent provider resolution
+    if (providerCatalogService) {
+      this.deploymentManager.setProviderCatalogService(providerCatalogService);
+      this.queueConsumer.setProviderCatalogService(providerCatalogService);
     }
 
     // Refresh provider modules after gateway/core services have registered them.

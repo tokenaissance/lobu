@@ -15,6 +15,7 @@ export class OpenClawProgressProcessor {
   private verboseLogging = false;
   private finalResult: { text: string; isFinal: boolean } | null = null;
   private hasStreamedText = false;
+  private fatalErrorMessage: string | null = null;
 
   setVerboseLogging(enabled: boolean): void {
     this.verboseLogging = enabled;
@@ -63,6 +64,18 @@ export class OpenClawProgressProcessor {
 
       case "message_end": {
         if (event.message.role !== "assistant") {
+          return false;
+        }
+        const assistantMessage = event.message as {
+          stopReason?: string;
+          errorMessage?: string;
+        };
+        if (
+          assistantMessage.stopReason === "error" &&
+          typeof assistantMessage.errorMessage === "string" &&
+          assistantMessage.errorMessage.trim()
+        ) {
+          this.fatalErrorMessage = assistantMessage.errorMessage.trim();
           return false;
         }
         // If text was already streamed via deltas, skip extraction
@@ -178,6 +191,12 @@ export class OpenClawProgressProcessor {
     return result;
   }
 
+  consumeFatalErrorMessage(): string | null {
+    const result = this.fatalErrorMessage;
+    this.fatalErrorMessage = null;
+    return result;
+  }
+
   getCurrentThinking(): string | null {
     return this.currentThinking || null;
   }
@@ -188,5 +207,6 @@ export class OpenClawProgressProcessor {
     this.currentThinking = "";
     this.finalResult = null;
     this.hasStreamedText = false;
+    this.fatalErrorMessage = null;
   }
 }

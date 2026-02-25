@@ -7,6 +7,7 @@ node_modules
 .env
 .env.*
 .tmp/*
+tmp/
 charts/lobu/values-local.yaml
 
 # Helm dependency files
@@ -37,10 +38,12 @@ charts/lobu/provider/hetzner/ssh_key
 charts/lobu/provider/hetzner/ssh_key.pub
 .github-app-private-key.pem
 debug-voice-urls.js
-docs/
 
 # Redis snapshot
 dump.rdb
+
+# Auto-generated settings CSS
+packages/gateway/src/routes/public/settings-page-styles.ts
 
 # Accidental clipboard artifacts
 pbcopy

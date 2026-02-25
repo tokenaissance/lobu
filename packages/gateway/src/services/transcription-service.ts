@@ -1,18 +1,17 @@
 /**
  * Multi-Provider Audio Service
  *
- * Supports speech-to-text (and future text-to-speech) with providers that support both:
- * - OpenAI (OPENAI_API_KEY) - Whisper for STT, TTS API for speech
- * - Google Gemini (GOOGLE_API_KEY) - Audio input/output
- * - ElevenLabs (ELEVENLABS_API_KEY) - STT and high-quality TTS
+ * Supports speech-to-text and text-to-speech via auth profiles (installed providers):
+ * - OpenAI (chatgpt auth profile) - Whisper for STT, TTS API for speech
+ * - Google Gemini (gemini auth profile) - Audio input/output
+ * - ElevenLabs (elevenlabs auth profile) - STT and high-quality TTS
  *
- * Provider selection:
- * 1. Uses TRANSCRIPTION_PROVIDER env var if set
- * 2. Falls back to first available API key
+ * Provider selection: first installed provider wins (openai → gemini → elevenlabs).
+ * No env vars needed — TTS is a free capability of installed providers.
  */
 
 import { createLogger } from "@lobu/core";
-import type { AgentSettingsStore } from "../auth/settings/agent-settings-store";
+import type { AuthProfilesManager } from "../auth/settings/auth-profiles-manager";
 
 const logger = createLogger("transcription-service");
 
@@ -54,30 +53,41 @@ export interface VoiceOptions {
   speed?: number; // Speech speed (0.5-2.0, default 1.0)
 }
 
-// Map of provider to their API key env var names
-const PROVIDER_API_KEYS: Record<TranscriptionProvider, string> = {
-  openai: "OPENAI_API_KEY",
-  gemini: "GOOGLE_API_KEY",
-  elevenlabs: "ELEVENLABS_API_KEY",
-};
+// Auth profile providerId → TTS provider mapping (single source of truth)
+const TTS_CAPABLE_PROVIDERS: {
+  profileProviderId: string;
+  ttsProvider: TranscriptionProvider;
+  displayName: string;
+}[] = [
+  {
+    profileProviderId: "chatgpt",
+    ttsProvider: "openai",
+    displayName: "OpenAI",
+  },
+  {
+    profileProviderId: "gemini",
+    ttsProvider: "gemini",
+    displayName: "Google Gemini",
+  },
+  {
+    profileProviderId: "elevenlabs",
+    ttsProvider: "elevenlabs",
+    displayName: "ElevenLabs",
+  },
+];
 
-// Provider display names for user-facing messages
-const PROVIDER_NAMES: Record<TranscriptionProvider, string> = {
-  openai: "OpenAI",
-  gemini: "Google Gemini",
-  elevenlabs: "ElevenLabs",
-};
+function displayName(provider: TranscriptionProvider): string {
+  return (
+    TTS_CAPABLE_PROVIDERS.find((p) => p.ttsProvider === provider)
+      ?.displayName ?? provider
+  );
+}
 
 export class TranscriptionService {
-  constructor(private readonly agentSettingsStore: AgentSettingsStore) {}
+  constructor(private readonly authProfilesManager: AuthProfilesManager) {}
 
   /**
    * Transcribe audio buffer to text
-   *
-   * @param audioBuffer - Audio data (typically OGG/Opus from WhatsApp)
-   * @param agentId - Agent ID to look up provider config
-   * @param mimeType - MIME type of audio (default: audio/ogg)
-   * @returns Transcription result or error with available providers
    */
   async transcribe(
     audioBuffer: Buffer,
@@ -87,17 +97,10 @@ export class TranscriptionService {
     const config = await this.getConfig(agentId);
 
     if (!config) {
-      const availableProviders = Object.keys(
-        PROVIDER_API_KEYS
-      ) as TranscriptionProvider[];
-      logger.info("No transcription provider configured", {
-        agentId,
-        availableProviders,
-      });
-      return {
-        error: "No transcription provider configured",
-        availableProviders,
-      };
+      return this.noProviderError(
+        "No transcription provider configured",
+        agentId
+      );
     }
 
     logger.info("Transcribing audio", {
@@ -128,69 +131,36 @@ export class TranscriptionService {
         error: errorMessage,
       });
       return {
-        error: `Transcription failed with ${PROVIDER_NAMES[config.provider]}: ${errorMessage}`,
+        error: `Transcription failed with ${displayName(config.provider)}: ${errorMessage}`,
         availableProviders: [],
       };
     }
   }
 
   /**
-   * Get transcription config for an agent
-   * Returns null if no provider is configured
+   * Get transcription config for an agent by checking installed auth profiles.
+   * First TTS-capable provider with a valid profile wins (openai → gemini → elevenlabs).
    */
   async getConfig(agentId: string): Promise<TranscriptionConfig | null> {
-    const settings = await this.agentSettingsStore.getSettings(agentId);
-    const envVars = settings?.envVars || {};
-
-    // Check explicit provider preference first
-    const preferredProvider = envVars.TRANSCRIPTION_PROVIDER as
-      | TranscriptionProvider
-      | undefined;
-    if (
-      preferredProvider &&
-      PROVIDER_API_KEYS[preferredProvider] &&
-      envVars[PROVIDER_API_KEYS[preferredProvider]]
-    ) {
-      const apiKey = envVars[PROVIDER_API_KEYS[preferredProvider]];
-      return {
-        provider: preferredProvider,
-        apiKey: apiKey!,
-      };
-    }
-
-    // Fall back to first available provider
-    for (const [provider, keyName] of Object.entries(PROVIDER_API_KEYS)) {
-      if (envVars[keyName]) {
-        return {
-          provider: provider as TranscriptionProvider,
-          apiKey: envVars[keyName],
-        };
+    for (const { profileProviderId, ttsProvider } of TTS_CAPABLE_PROVIDERS) {
+      const profile = await this.authProfilesManager.getBestProfile(
+        agentId,
+        profileProviderId
+      );
+      if (profile) {
+        return { provider: ttsProvider, apiKey: profile.credential };
       }
     }
-
     return null;
-  }
-
-  /**
-   * Check if transcription is available for an agent
-   */
-  async isAvailable(agentId: string): Promise<boolean> {
-    const config = await this.getConfig(agentId);
-    return config !== null;
   }
 
   /**
    * Get provider info for documentation/help messages
    */
-  getProviderInfo(): Array<{
-    provider: TranscriptionProvider;
-    name: string;
-    envVar: string;
-  }> {
-    return Object.entries(PROVIDER_API_KEYS).map(([provider, envVar]) => ({
-      provider: provider as TranscriptionProvider,
-      name: PROVIDER_NAMES[provider as TranscriptionProvider],
-      envVar,
+  getProviderInfo(): Array<{ provider: TranscriptionProvider; name: string }> {
+    return TTS_CAPABLE_PROVIDERS.map(({ ttsProvider, displayName }) => ({
+      provider: ttsProvider,
+      name: displayName,
     }));
   }
 
@@ -200,11 +170,6 @@ export class TranscriptionService {
 
   /**
    * Synthesize text to audio
-   *
-   * @param text - Text to convert to speech
-   * @param agentId - Agent ID to look up provider config
-   * @param options - Voice options (voice ID, speed)
-   * @returns Audio buffer or error with available providers
    */
   async synthesize(
     text: string,
@@ -214,17 +179,7 @@ export class TranscriptionService {
     const config = await this.getConfig(agentId);
 
     if (!config) {
-      const availableProviders = Object.keys(
-        PROVIDER_API_KEYS
-      ) as TranscriptionProvider[];
-      logger.info("No audio provider configured for synthesis", {
-        agentId,
-        availableProviders,
-      });
-      return {
-        error: "No audio provider configured",
-        availableProviders,
-      };
+      return this.noProviderError("No audio provider configured", agentId);
     }
 
     logger.info("Synthesizing audio", {
@@ -251,10 +206,16 @@ export class TranscriptionService {
         error: errorMessage,
       });
       return {
-        error: `Synthesis failed with ${PROVIDER_NAMES[config.provider]}: ${errorMessage}`,
+        error: `Synthesis failed with ${displayName(config.provider)}: ${errorMessage}`,
         availableProviders: [],
       };
     }
+  }
+
+  private noProviderError(message: string, agentId: string) {
+    const availableProviders = TTS_CAPABLE_PROVIDERS.map((p) => p.ttsProvider);
+    logger.info(message, { agentId, availableProviders });
+    return { error: message, availableProviders };
   }
 
   // ==========================================================================
@@ -393,7 +354,7 @@ export class TranscriptionService {
       case "openai":
         return this.synthesizeWithOpenAI(text, config.apiKey, options);
       case "gemini":
-        return this.synthesizeWithGemini(text, config.apiKey, options);
+        return this.synthesizeWithGemini(text, config.apiKey);
       case "elevenlabs":
         return this.synthesizeWithElevenLabs(text, config.apiKey, options);
       default:
@@ -440,14 +401,8 @@ export class TranscriptionService {
 
   private async synthesizeWithGemini(
     text: string,
-    apiKey: string,
-    _options: VoiceOptions
+    apiKey: string
   ): Promise<{ audioBuffer: Buffer; mimeType: string }> {
-    // Gemini doesn't have a dedicated TTS API yet, but can generate audio via multimodal
-    // For now, we'll use Google Cloud TTS if GOOGLE_API_KEY is a service account
-    // Otherwise fall back to a simple approach
-
-    // Using Gemini's experimental audio generation
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
       {

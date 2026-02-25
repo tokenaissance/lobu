@@ -6,6 +6,7 @@
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { createLogger } from "@lobu/core";
+import type { ProviderCatalogService } from "../../auth/provider-catalog";
 import type { ProviderStatus } from "../../auth/provider-status";
 import type { AgentSettings, AgentSettingsStore } from "../../auth/settings";
 import { verifySettingsToken } from "../../auth/settings/token-service";
@@ -176,6 +177,7 @@ export interface AgentConfigRoutesConfig {
    * Provider connectivity overrides (e.g., system token means "connected" even if no user credentials are stored).
    */
   providerConnectedOverrides?: Record<string, boolean>;
+  providerCatalogService?: ProviderCatalogService;
   githubAuth?: GitHubAppAuth;
   githubAppInstallUrl?: string;
   githubOAuthClientId?: string;
@@ -348,6 +350,130 @@ export function createAgentConfigRoutes(
     }
   });
 
+  // --- Provider Catalog Endpoints ---
+
+  // GET /providers/catalog
+  app.get("/providers/catalog", async (c): Promise<any> => {
+    const agentId = c.req.param("agentId") || "";
+    const token = c.req.query("token");
+    const payload = verifyToken(token, agentId);
+    if (!payload) return c.json({ error: "Unauthorized" }, 401);
+
+    if (!config.providerCatalogService) {
+      return c.json({ error: "Provider catalog not available" }, 503);
+    }
+
+    const allProviders = config.providerCatalogService.listCatalogProviders();
+    const installed =
+      await config.providerCatalogService.getInstalledProviders(agentId);
+    const installedIds = new Set(installed.map((ip) => ip.providerId));
+
+    const catalog = allProviders.map((p) => ({
+      providerId: p.providerId,
+      name: p.providerDisplayName,
+      iconUrl: p.providerIconUrl || "",
+      authType: p.authType || "api-key",
+      description: p.catalogDescription || "",
+      installed: installedIds.has(p.providerId),
+    }));
+
+    return c.json({ catalog, installedProviders: installed });
+  });
+
+  // POST /providers/install
+  app.post("/providers/install", async (c): Promise<any> => {
+    const agentId = c.req.param("agentId") || "";
+    const token = c.req.query("token");
+    const payload = verifyToken(token, agentId);
+    if (!payload) return c.json({ error: "Unauthorized" }, 401);
+
+    if (!config.providerCatalogService) {
+      return c.json({ error: "Provider catalog not available" }, 503);
+    }
+
+    try {
+      const body = await c.req.json();
+      const { providerId, config: providerConfig } = body;
+      if (!providerId || typeof providerId !== "string") {
+        return c.json({ error: "providerId is required" }, 400);
+      }
+
+      await config.providerCatalogService.installProvider(
+        agentId,
+        providerId.trim(),
+        providerConfig
+      );
+      return c.json({ success: true, agentId });
+    } catch (e) {
+      return c.json(
+        { error: e instanceof Error ? e.message : "Install failed" },
+        400
+      );
+    }
+  });
+
+  // POST /providers/uninstall
+  app.post("/providers/uninstall", async (c): Promise<any> => {
+    const agentId = c.req.param("agentId") || "";
+    const token = c.req.query("token");
+    const payload = verifyToken(token, agentId);
+    if (!payload) return c.json({ error: "Unauthorized" }, 401);
+
+    if (!config.providerCatalogService) {
+      return c.json({ error: "Provider catalog not available" }, 503);
+    }
+
+    try {
+      const body = await c.req.json();
+      const { providerId } = body;
+      if (!providerId || typeof providerId !== "string") {
+        return c.json({ error: "providerId is required" }, 400);
+      }
+
+      await config.providerCatalogService.uninstallProvider(
+        agentId,
+        providerId.trim()
+      );
+      return c.json({ success: true, agentId });
+    } catch (e) {
+      return c.json(
+        { error: e instanceof Error ? e.message : "Uninstall failed" },
+        400
+      );
+    }
+  });
+
+  // PATCH /providers/reorder
+  app.patch("/providers/reorder", async (c): Promise<any> => {
+    const agentId = c.req.param("agentId") || "";
+    const token = c.req.query("token");
+    const payload = verifyToken(token, agentId);
+    if (!payload) return c.json({ error: "Unauthorized" }, 401);
+
+    if (!config.providerCatalogService) {
+      return c.json({ error: "Provider catalog not available" }, 503);
+    }
+
+    try {
+      const body = await c.req.json();
+      const { providerIds } = body;
+      if (!Array.isArray(providerIds)) {
+        return c.json({ error: "providerIds array is required" }, 400);
+      }
+
+      await config.providerCatalogService.reorderProviders(
+        agentId,
+        providerIds.filter((id): id is string => typeof id === "string")
+      );
+      return c.json({ success: true, agentId });
+    } catch (e) {
+      return c.json(
+        { error: e instanceof Error ? e.message : "Reorder failed" },
+        400
+      );
+    }
+  });
+
   return app;
 }
 
@@ -369,16 +495,21 @@ async function validateSettings(
     settings.identityMd = input.identityMd;
   }
 
-  if (input.model) {
-    if (availableModels.size === 0) {
-      throw new Error(
-        "No models are currently available from configured providers."
-      );
+  if (typeof input.model === "string") {
+    const cleanModel = input.model.trim();
+    if (!cleanModel) {
+      settings.model = undefined;
+    } else {
+      if (availableModels.size === 0) {
+        throw new Error(
+          "No models are currently available from configured providers."
+        );
+      }
+      if (!availableModels.has(cleanModel)) {
+        throw new Error(`Invalid model: ${cleanModel}`);
+      }
+      settings.model = cleanModel;
     }
-    if (!availableModels.has(input.model)) {
-      throw new Error(`Invalid model: ${input.model}`);
-    }
-    settings.model = input.model;
   }
 
   if (input.networkConfig) {

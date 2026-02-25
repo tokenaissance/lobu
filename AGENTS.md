@@ -3,20 +3,20 @@
 ### Package Architecture
 - **`packages/core`**: Shared code between gateway and worker (interfaces, utils, types). Any code reused by both must live here.
 - **`packages/gateway`**: Platform-agnostic gateway. Slack code under `src/slack/`. Orchestration under `src/orchestration/`. Future chat platforms (Discord, Teams) will live alongside as separate modules in dispatcher pattern.
-- **`packages/worker`**: Claude-specific logic in `src/claude/`. Worker talks only to gateway and agent (Claude CLI). No Slack/platform knowledge.
+- **`packages/worker`**: Agent execution via OpenClaw runtime in `src/openclaw/`. Worker talks only to gateway and agent. No Slack/platform knowledge.
 
 ### Module Boundaries
 - Gateway: Slack → `src/slack/`, Telegram → `src/telegram/`, orchestration → `src/orchestration/`, future platforms → `src/dispatcher/{platform}/`
-- Worker: Platform-agnostic, Claude logic isolated to `src/claude/`
+- Worker: Platform-agnostic, agent logic isolated to `src/openclaw/`
 - Core: Shared interfaces, utils, types for gateway+worker
 
 ### Repository Layout
 - Monorepo managed by Bun workspaces: `packages/gateway`, `packages/worker`, `packages/core`.
-- Top-level: `Makefile`, `bin/` (CLI/setup), `charts/lobu` (Helm), `workspaces/`, `.env*`.
+- Top-level: `Makefile`, `scripts/` (CLI/setup), `charts/lobu` (Helm), `config/` (biome, knip, etc.), `docker/` (Dockerfiles, compose), `docs/` (CHANGELOG, SECURITY, etc.), `.env*`.
 - TypeScript sources under `packages/*/src`. Tests in `packages/*/src/__tests__` and `packages/core/tests`.
 - **ALWAYS prefer `bun` commands over `npm`**
 - When fixing unused parameter errors, remove the parameter entirely if possible rather than prefixing with underscore
-- Worker prompt delivery: Claude CLI reads prompts from stdin via direct pipe from prompt file (no named pipes used)
+- Worker prompt delivery: prompts are passed to the agent runtime directly (no named pipes used)
 
 ### Architecture
 
@@ -24,6 +24,7 @@
 We currently use WhatsApp and Telegram as messaging platforms (Slack support also available but not configured).
 Telegram code under `packages/gateway/src/telegram/`. Uses Grammy library with long-polling.
 There is also a public endpoint in gateway to trigger running the agent.
+Settings page provider order is drag-sortable via handle, with per-provider model selection inline in each provider row.
 
 #### Orchestration
 - **Deployment modes**: Kubernetes (production), Docker (development), Local (development without Docker)
@@ -87,7 +88,7 @@ The script automatically handles sending the message, waiting for response, and 
 
 ## File Upload Support
 
-File attachments are fully supported in all message contexts (DM, app mentions, assistant threads). Gateway fetches complete message details via Slack API to ensure file metadata is captured, downloads files to worker's input directory, and Claude is instructed about file locations.
+File attachments are fully supported in all message contexts (DM, app mentions, assistant threads). Gateway fetches complete message details via Slack API to ensure file metadata is captured, downloads files to worker's input directory, and the agent is instructed about file locations.
 
 ## Development Mode
 
@@ -115,7 +116,7 @@ cd packages/gateway && bun run dev
 
 Or use Docker Compose for a simpler setup:
 ```bash
-docker compose up
+docker compose -f docker/docker-compose.yml up
 ```
 
 ### Hot Reload
@@ -141,6 +142,7 @@ The `.env` file is the single source of truth for all secrets and configuration.
 ### Local Development
 - Gateway reads `.env` on startup
 - Restart gateway after `.env` changes: `cd packages/gateway && bun run dev`
+- Settings link token TTL defaults to 1 hour; optional dev override: `SETTINGS_TOKEN_TTL_MS` (milliseconds, e.g. `4233600000` for 7 weeks).
 
 ### Kubernetes Deployment
 When `.env` changes, sync secrets to K8s using Sealed Secrets:
@@ -188,15 +190,15 @@ The gateway deployment has a checksum annotation that triggers automatic pod res
 ### Docker Compose (Alternative)
 For running everything in containers:
 ```bash
-docker compose up
+docker compose -f docker/docker-compose.yml up
 ```
 ## Persistent Storage
 
 Worker deployments use persistent volumes for session continuity across scale-to-zero:
 
 1. **Per-Deployment PVC**: Each worker deployment gets its own PersistentVolumeClaim (1 thread = 1 PVC) mounted at `/workspace`
-2. **Session Storage**: Claude SDK sessions are stored in `/workspace/.claude/` (via `HOME=/workspace` environment variable)
-3. **Auto-Resume**: When a worker scales back up, it automatically detects existing sessions in `/workspace/.claude/` and uses Claude CLI's `--continue` flag to resume
+2. **Session Storage**: Agent sessions are stored in `/workspace/` (via `HOME=/workspace` environment variable)
+3. **Auto-Resume**: When a worker scales back up, it automatically detects existing sessions and resumes
 4. **Cleanup**: PVCs are automatically deleted when deployments are cleaned up after thread inactivity
 5. **Docker Mode**: Uses host directory mounts at `./workspaces/{threadId}/` for equivalent persistence
 
@@ -287,7 +289,7 @@ Use the `test-bot.sh` script for easy bot testing. No manual curl commands neede
 **Platform self-testing behavior:**
 - **Slack**: Cannot trigger its own event handlers (Slack filters bot-to-self messages). The test script uses `/api/messaging/send` endpoint which posts via bot token, then gateway receives as normal Slack events.
 - **WhatsApp**: Supports self-chat mode! Set `WHATSAPP_SELF_CHAT=true` and send to the bot's own phone number. The gateway detects self-messages and queues them directly to workers, bypassing event handler filters.
-- **Telegram**: Use `tguser` CLI to send messages as a real user account. Requires `TG_API_ID` and `TG_API_HASH` env vars (stored in `.env`). Bot receives via Grammy long-polling. In groups, @mention is always required; in DMs all messages are processed.
+- **Telegram**: `test-bot.sh` supports Telegram via `TEST_PLATFORM=telegram` and `TEST_CHANNEL=<chat_id|@username>` (or `TELEGRAM_TEST_CHAT_ID`) and sends through `tguser` as a real user account. Requires `TG_API_ID` and `TG_API_HASH` env vars (stored in `.env`). Bot receives via Grammy long-polling. In groups, @mention is always required; in DMs all messages are processed.
 
 ### Basic Test
 ```bash
@@ -303,6 +305,7 @@ Use the `test-bot.sh` script for easy bot testing. No manual curl commands neede
 ### Custom Channel and Timeout
 ```bash
 # Set environment variables
+export TEST_PLATFORM="slack"   # or "whatsapp" or "telegram"
 export TEST_CHANNEL="my-channel"
 export TEST_TIMEOUT=60  # seconds to wait for response
 
@@ -322,7 +325,12 @@ curl -X POST http://localhost:8080/api/messaging/send \
 ```
 
 ### Telegram Test
-Use `tguser` CLI (requires `TG_API_ID` and `TG_API_HASH` from `.env`):
+Use `test-bot.sh`:
+```bash
+TEST_PLATFORM=telegram TEST_CHANNEL=@burembalobubot ./scripts/test-bot.sh "hello test"
+```
+
+Or use `tguser` CLI (requires `TG_API_ID` and `TG_API_HASH` from `.env`):
 ```bash
 tguser send @burembalobubot "hello test"
 ```
@@ -330,5 +338,5 @@ tguser send @burembalobubot "hello test"
 ### Check Logs
 Gateway logs are output to the terminal where it's running. For Docker:
 ```bash
-docker compose logs -f gateway
+docker compose -f docker/docker-compose.yml logs -f gateway
 ```

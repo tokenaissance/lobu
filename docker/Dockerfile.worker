@@ -50,41 +50,33 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/cloudflared
 
 # Create a non-root user with home directory and sudo access
-RUN addgroup --gid 1001 claude && \
-    adduser --system --uid 1001 --ingroup claude --home /home/claude claude && \
-    echo 'claude ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+RUN addgroup --gid 1001 worker && \
+    adduser --system --uid 1001 --ingroup worker --home /home/worker worker && \
+    echo 'worker ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # Install Nix (single-user mode for container simplicity)
 # This allows workers to use nix-shell or nix develop for custom environments
-RUN mkdir -p /nix && chown claude:claude /nix
-USER claude
+RUN mkdir -p /nix && chown worker:worker /nix
+USER worker
 # Create nix.conf with sandbox disabled (required for arm64 QEMU builds)
-RUN mkdir -p /home/claude/.config/nix && \
-    echo 'sandbox = false' > /home/claude/.config/nix/nix.conf
+RUN mkdir -p /home/worker/.config/nix && \
+    echo 'sandbox = false' > /home/worker/.config/nix/nix.conf
 RUN curl -L https://nixos.org/nix/install | sh -s -- --no-daemon
 # Add nixpkgs channel for nix-shell -p to work
-RUN /home/claude/.nix-profile/bin/nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs && \
-    /home/claude/.nix-profile/bin/nix-channel --update
+RUN /home/worker/.nix-profile/bin/nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs && \
+    /home/worker/.nix-profile/bin/nix-channel --update
 USER root
 # Add Nix to PATH and set NIX_PATH for all users
-RUN echo 'export PATH="/home/claude/.nix-profile/bin:$PATH"' >> /etc/profile.d/nix.sh && \
-    echo 'export NIX_PATH="nixpkgs=/home/claude/.nix-defexpr/channels/nixpkgs"' >> /etc/profile.d/nix.sh && \
+RUN echo 'export PATH="/home/worker/.nix-profile/bin:$PATH"' >> /etc/profile.d/nix.sh && \
+    echo 'export NIX_PATH="nixpkgs=/home/worker/.nix-defexpr/channels/nixpkgs"' >> /etc/profile.d/nix.sh && \
     chmod +x /etc/profile.d/nix.sh && \
-    echo 'export PATH="/home/claude/.nix-profile/bin:$PATH"' >> /home/claude/.bashrc && \
-    echo 'export NIX_PATH="nixpkgs=/home/claude/.nix-defexpr/channels/nixpkgs"' >> /home/claude/.bashrc
+    echo 'export PATH="/home/worker/.nix-profile/bin:$PATH"' >> /home/worker/.bashrc && \
+    echo 'export NIX_PATH="nixpkgs=/home/worker/.nix-defexpr/channels/nixpkgs"' >> /home/worker/.bashrc
 
-RUN npm install -g @anthropic-ai/claude-code && \
-    echo "NPM global packages:" && \
-    npm list -g --depth=0 && \
-    echo "Looking for claude binary..." && \
-    which claude && \
-    echo "Testing claude command..." && \
-    claude --version
-
-# Ensure the non-root user can also access bun, claude, and uv
-RUN echo 'export PATH="/home/bun/.bun/bin:$PATH"' >> /home/claude/.bashrc && \
-    echo 'export BUN_INSTALL="/home/bun/.bun"' >> /home/claude/.bashrc && \
-    echo 'export PATH="/root/.cargo/bin:$PATH"' >> /home/claude/.bashrc
+# Ensure the non-root user can also access bun and uv
+RUN echo 'export PATH="/home/bun/.bun/bin:$PATH"' >> /home/worker/.bashrc && \
+    echo 'export BUN_INSTALL="/home/bun/.bun"' >> /home/worker/.bashrc && \
+    echo 'export PATH="/root/.cargo/bin:$PATH"' >> /home/worker/.bashrc
 
 # Create minimal package.json for worker-only workspace
 RUN echo '{ "name": "@lobu/worker-build", "private": true, "workspaces": [ "packages/core", "packages/worker" ] }' > package.json
@@ -123,35 +115,29 @@ WORKDIR /app
 
 # Create workspace directory and set permissions
 RUN mkdir -p /workspace && \
-    chown claude:claude /workspace && \
+    chown worker:worker /workspace && \
     chmod 755 /workspace && \
     # Create dist directories for TypeScript compilation
     mkdir -p /app/packages/core/dist && \
     mkdir -p /app/packages/worker/dist && \
-    # Only chown specific directories that claude needs write access to
-    chown -R claude:claude /app/packages/core/dist && \
-    chown -R claude:claude /app/packages/worker/dist && \
-    chown -R claude:claude /app/packages/worker/scripts 2>/dev/null || true && \
-    chown -R claude:claude /app
+    # Only chown specific directories that worker needs write access to
+    chown -R worker:worker /app/packages/core/dist && \
+    chown -R worker:worker /app/packages/worker/dist && \
+    chown -R worker:worker /app/packages/worker/scripts 2>/dev/null || true && \
+    chown -R worker:worker /app
 
-# Copy .claude/projects directory if it exists
-COPY --chown=claude:claude .claude/ /home/claude/.claude/
-
-# Ensure .claude directory structure exists for claude user and make scripts executable
-RUN mkdir -p /home/claude/.claude/projects && \
-    mkdir -p /home/claude/bin && \
-    chown -R claude:claude /home/claude/.claude && \
-    chown -R claude:claude /home/claude && \
-    chmod -R 755 /home/claude/.claude && \
-    echo 'export PATH="/home/claude/bin:$PATH"' >> /home/claude/.bashrc
+# Ensure worker home directory and bin are set up
+RUN mkdir -p /home/worker/bin && \
+    chown -R worker:worker /home/worker && \
+    echo 'export PATH="/home/worker/bin:$PATH"' >> /home/worker/.bashrc
 
 # Copy the entrypoint script and make it executable
 COPY packages/worker/scripts/worker-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh && \
-    chown claude:claude /app/entrypoint.sh
+    chown worker:worker /app/entrypoint.sh
 
 # Switch to non-root user
-USER claude
+USER worker
 
 # Set working directory to worker
 WORKDIR /app/packages/worker
@@ -159,7 +145,7 @@ WORKDIR /app/packages/worker
 # Set the NODE_ENV as an environment variable
 ENV NODE_ENV=${NODE_ENV}
 
-# Set HOME to /workspace so Claude sessions persist in mounted volume
+# Set HOME to /workspace so agent sessions persist in mounted volume
 ENV HOME=/workspace
 
 ENTRYPOINT ["/app/entrypoint.sh"]

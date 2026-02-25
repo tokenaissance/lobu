@@ -2,7 +2,14 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { createLogger, type PluginsConfig, type ToolsConfig } from "@lobu/core";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import {
+  createLogger,
+  type PluginsConfig,
+  type ToolsConfig,
+  type WorkerTransport,
+} from "@lobu/core";
 import { getModel } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
@@ -11,13 +18,22 @@ import {
   SessionManager,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
-import type { InteractionClient } from "../common/interaction-client";
-import { BaseWorker } from "../core/base-worker";
+import * as Sentry from "@sentry/node";
+import { handleExecutionError } from "../core/error-handler";
+import { listAppDirectories } from "../core/project-scanner";
 import type {
   ProgressUpdate,
   SessionExecutionResult,
   WorkerConfig,
+  WorkerExecutor,
 } from "../core/types";
+import { WorkspaceManager } from "../core/workspace";
+import { HttpWorkerTransport } from "../gateway/gateway-integration";
+import { generateCustomInstructions } from "../instructions/builder";
+import {
+  getApiKeyEnvVarForProvider,
+  getProviderAuthHintFromError,
+} from "../shared/provider-auth-hints";
 import { createOpenClawCustomTools } from "./custom-tools";
 import { OpenClawCoreInstructionProvider } from "./instructions";
 import { loadPlugins } from "./plugin-loader";
@@ -29,29 +45,277 @@ import {
   isToolAllowedByPolicy,
 } from "./tool-policy";
 import { createOpenClawTools } from "./tools";
-import { getProviderAuthHintFromError } from "../shared/provider-auth-hints";
 
-const logger = createLogger("openclaw-worker");
+const logger = createLogger("worker");
 
-export class OpenClawWorker extends BaseWorker {
-  private interactionClient?: InteractionClient;
+/** Hardcoded fallback map for provider base URL env vars. */
+const DEFAULT_PROVIDER_BASE_URL_ENV: Record<string, string> = {
+  anthropic: "ANTHROPIC_BASE_URL",
+  openai: "OPENAI_BASE_URL",
+  "openai-codex": "OPENAI_BASE_URL",
+  google: "GEMINI_API_BASE_URL",
+  nvidia: "NVIDIA_API_BASE_URL",
+  "z-ai": "Z_AI_BASE_URL",
+};
+
+export class OpenClawWorker implements WorkerExecutor {
+  private workspaceManager: WorkspaceManager;
+  public workerTransport: WorkerTransport;
+  private config: WorkerConfig;
   private progressProcessor: OpenClawProgressProcessor;
 
-  constructor(config: WorkerConfig, interactionClient?: InteractionClient) {
-    super(config);
-    this.interactionClient = interactionClient;
+  constructor(config: WorkerConfig) {
+    this.config = config;
+    this.workspaceManager = new WorkspaceManager(config.workspace);
     this.progressProcessor = new OpenClawProgressProcessor();
+
+    // Verify required environment variables
+    const gatewayUrl = process.env.DISPATCHER_URL;
+    const workerToken = process.env.WORKER_TOKEN;
+
+    if (!gatewayUrl || !workerToken) {
+      throw new Error(
+        "DISPATCHER_URL and WORKER_TOKEN environment variables are required"
+      );
+    }
+
+    if (!config.teamId) {
+      throw new Error("teamId is required for worker initialization");
+    }
+    if (!config.conversationId) {
+      throw new Error("conversationId is required for worker initialization");
+    }
+    this.workerTransport = new HttpWorkerTransport({
+      gatewayUrl,
+      workerToken,
+      userId: config.userId,
+      channelId: config.channelId,
+      conversationId: config.conversationId,
+      originalMessageTs: config.responseId,
+      botResponseTs: config.botResponseId,
+      teamId: config.teamId,
+      platform: config.platform,
+    });
   }
 
-  protected getAgentName(): string {
-    return "OpenClaw";
+  /**
+   * Main execution workflow
+   */
+  async execute(): Promise<void> {
+    const executeStartTime = Date.now();
+
+    try {
+      this.progressProcessor.reset();
+
+      logger.info(
+        `🚀 Starting OpenClaw worker for session: ${this.config.sessionKey}`
+      );
+      logger.info(
+        `[TIMING] Worker execute() started at: ${new Date(executeStartTime).toISOString()}`
+      );
+
+      // Decode user prompt
+      const userPrompt = Buffer.from(this.config.userPrompt, "base64").toString(
+        "utf-8"
+      );
+      logger.info(`User prompt: ${userPrompt.substring(0, 100)}...`);
+
+      // Setup workspace
+      logger.info("Setting up workspace...");
+
+      await Sentry.startSpan(
+        {
+          name: "worker.workspace_setup",
+          op: "worker.setup",
+          attributes: {
+            "user.id": this.config.userId,
+            "session.key": this.config.sessionKey,
+          },
+        },
+        async () => {
+          await this.workspaceManager.setupWorkspace(
+            this.config.userId,
+            this.config.sessionKey
+          );
+
+          const { initModuleWorkspace } = await import("../modules/lifecycle");
+          await initModuleWorkspace({
+            workspaceDir: this.workspaceManager.getCurrentWorkingDirectory(),
+            username: this.config.userId,
+            sessionKey: this.config.sessionKey,
+          });
+        }
+      );
+
+      // Setup I/O directories for file handling
+      await this.setupIODirectories();
+
+      // Download input files if any
+      await this.downloadInputFiles();
+
+      // Generate custom instructions
+      let customInstructions = await generateCustomInstructions(
+        new OpenClawCoreInstructionProvider(),
+        {
+          userId: this.config.userId,
+          agentId: this.config.agentId,
+          sessionKey: this.config.sessionKey,
+          workingDirectory: this.workspaceManager.getCurrentWorkingDirectory(),
+          availableProjects: listAppDirectories(
+            this.workspaceManager.getCurrentWorkingDirectory()
+          ),
+        }
+      );
+
+      // Call module onSessionStart hooks to allow modules to modify system prompt
+      try {
+        const { onSessionStart } = await import("../modules/lifecycle");
+        const moduleContext = await onSessionStart({
+          platform: this.config.platform,
+          channelId: this.config.channelId,
+          userId: this.config.userId,
+          conversationId: this.config.conversationId,
+          messageId: this.config.responseId,
+          workingDirectory: this.workspaceManager.getCurrentWorkingDirectory(),
+          customInstructions,
+        });
+        if (moduleContext.customInstructions) {
+          customInstructions = moduleContext.customInstructions;
+        }
+      } catch (error) {
+        logger.error("Failed to call onSessionStart hooks:", error);
+      }
+
+      // Add file I/O instructions AFTER module hooks so they aren't overwritten
+      customInstructions += this.getFileIOInstructions();
+
+      // Execute AI session
+      logger.info(
+        `[TIMING] Starting OpenClaw session at: ${new Date().toISOString()}`
+      );
+      const aiStartTime = Date.now();
+      logger.info(
+        `[TIMING] Total worker startup time: ${aiStartTime - executeStartTime}ms`
+      );
+
+      let firstOutputLogged = false;
+
+      const result = await Sentry.startSpan(
+        {
+          name: "worker.openclaw_execution",
+          op: "ai.inference",
+          attributes: {
+            "user.id": this.config.userId,
+            "session.key": this.config.sessionKey,
+            "conversation.id": this.config.conversationId,
+            agent: "OpenClaw",
+          },
+        },
+        async () => {
+          return await this.runAISession(
+            userPrompt,
+            customInstructions,
+            async (update) => {
+              if (!firstOutputLogged && update.type === "output") {
+                logger.info(
+                  `[TIMING] First OpenClaw output at: ${new Date().toISOString()} (${Date.now() - aiStartTime}ms after start)`
+                );
+                firstOutputLogged = true;
+              }
+
+              if (update.type === "output" && update.data) {
+                const delta =
+                  typeof update.data === "string" ? update.data : null;
+                if (delta) {
+                  await this.workerTransport.sendStreamDelta(delta, false);
+                }
+              } else if (update.type === "status_update") {
+                await this.workerTransport.sendStatusUpdate(
+                  update.data.elapsedSeconds,
+                  update.data.state
+                );
+              }
+            }
+          );
+        }
+      );
+
+      // Collect module data before sending final response
+      const { collectModuleData } = await import("../modules/lifecycle");
+      const moduleData = await collectModuleData({
+        workspaceDir: this.workspaceManager.getCurrentWorkingDirectory(),
+        userId: this.config.userId,
+        conversationId: this.config.conversationId,
+      });
+      this.workerTransport.setModuleData(moduleData);
+
+      // Handle result
+      if (result.success) {
+        const finalResult = this.progressProcessor.getFinalResult();
+        if (finalResult) {
+          logger.info(
+            `📤 Sending final result (${finalResult.text.length} chars) with deduplication flag`
+          );
+          await this.workerTransport.sendStreamDelta(
+            finalResult.text,
+            false,
+            finalResult.isFinal
+          );
+        } else {
+          logger.info(
+            "Session completed successfully - all content already streamed"
+          );
+        }
+        await this.workerTransport.signalDone();
+      } else {
+        const errorMsg = result.error || "Unknown error";
+        const isTimeout = result.exitCode === 124;
+
+        if (isTimeout) {
+          logger.info(
+            `Session timed out (exit code 124) - will be retried automatically, not showing error to user`
+          );
+          throw new Error("SESSION_TIMEOUT");
+        } else {
+          await this.workerTransport.sendStreamDelta(
+            `❌ Session failed: ${errorMsg}`,
+            true,
+            true
+          );
+          await this.workerTransport.signalError(new Error(errorMsg));
+        }
+      }
+
+      logger.info(
+        `Worker completed with ${result.success ? "success" : "failure"}`
+      );
+    } catch (error) {
+      await handleExecutionError(error, this.workerTransport);
+    }
   }
 
-  protected getCoreInstructionProvider(): OpenClawCoreInstructionProvider {
-    return new OpenClawCoreInstructionProvider();
+  async cleanup(): Promise<void> {
+    try {
+      logger.info("Cleaning up worker resources...");
+      logger.info("Worker cleanup completed");
+    } catch (error) {
+      logger.error("Error during cleanup:", error);
+    }
   }
 
-  protected async runAISession(
+  getWorkerTransport(): WorkerTransport | null {
+    return this.workerTransport;
+  }
+
+  private getWorkingDirectory(): string {
+    return this.workspaceManager.getCurrentWorkingDirectory();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI session
+  // ---------------------------------------------------------------------------
+
+  private async runAISession(
     userPrompt: string,
     customInstructions: string,
     onProgress: (update: ProgressUpdate) => Promise<void>
@@ -67,21 +331,62 @@ export class OpenClawWorker extends BaseWorker {
     this.progressProcessor.setVerboseLogging(verboseLogging);
 
     const { provider, modelId } = resolveModelRef(modelRef);
-    const baseUrlOverride = resolveAnthropicBaseUrl(rawOptions);
 
-    ensureAnthropicApiKey();
+    // Dynamic provider base URL from agentOptions.providerBaseUrlMappings
+    let providerBaseUrl: string | undefined;
+    const dynamicMappings = rawOptions.providerBaseUrlMappings as
+      | Record<string, string>
+      | undefined;
+    if (dynamicMappings && typeof dynamicMappings === "object") {
+      const fallbackEnvVar = DEFAULT_PROVIDER_BASE_URL_ENV[provider];
+      if (fallbackEnvVar && dynamicMappings[fallbackEnvVar]) {
+        providerBaseUrl = dynamicMappings[fallbackEnvVar];
+      }
+      for (const [envVar, url] of Object.entries(dynamicMappings)) {
+        if (!process.env[envVar]) {
+          process.env[envVar] = url;
+        }
+      }
+    }
+    if (!providerBaseUrl) {
+      providerBaseUrl =
+        typeof rawOptions.providerBaseUrl === "string"
+          ? rawOptions.providerBaseUrl.trim() || undefined
+          : undefined;
+    }
+    if (!providerBaseUrl) {
+      const baseUrlEnvVar = DEFAULT_PROVIDER_BASE_URL_ENV[provider];
+      if (baseUrlEnvVar && process.env[baseUrlEnvVar]) {
+        providerBaseUrl = process.env[baseUrlEnvVar];
+      }
+    }
 
-    // Set up auth storage with runtime API key overrides
     const authStorage = new AuthStorage();
-    if (process.env.OPENAI_API_KEY) {
-      authStorage.setRuntimeApiKey("openai-codex", process.env.OPENAI_API_KEY);
+
+    // Generic credential injection
+    const credEnvVar = process.env.CREDENTIAL_ENV_VAR_NAME || null;
+    if (credEnvVar && process.env[credEnvVar]) {
+      authStorage.setRuntimeApiKey(provider, process.env[credEnvVar]!);
+      logger.info(`Set runtime API key for ${provider} from ${credEnvVar}`);
+    } else {
+      const fallbackEnvVar = getApiKeyEnvVarForProvider(provider);
+      if (process.env[fallbackEnvVar]) {
+        authStorage.setRuntimeApiKey(provider, process.env[fallbackEnvVar]!);
+        logger.info(
+          `Set runtime API key for ${provider} from fallback ${fallbackEnvVar}`
+        );
+      }
     }
 
     const baseModel = getModel(provider as any, modelId as any) as any;
-    const model =
-      baseUrlOverride && provider.toLowerCase() === "anthropic"
-        ? { ...baseModel, baseUrl: baseUrlOverride }
-        : baseModel;
+    if (!baseModel) {
+      logger.error(
+        `Model not found in registry: provider=${provider}, modelId=${modelId}`
+      );
+    }
+    const model = providerBaseUrl
+      ? { ...baseModel, baseUrl: providerBaseUrl }
+      : baseModel;
 
     const workspaceDir = this.getWorkingDirectory();
     await fs.mkdir(path.join(workspaceDir, ".openclaw"), { recursive: true });
@@ -133,30 +438,31 @@ export class OpenClawWorker extends BaseWorker {
 
     // Fetch session context from gateway
     const context = await getOpenClawSessionContext();
-    const unansweredInteractions = context.unansweredInteractions || [];
-
-    logger.info(
-      `Startup state: ${unansweredInteractions.length} unanswered interactions`
-    );
 
     // Merge gateway instructions into custom instructions
     const instructionParts = [context.gatewayInstructions, customInstructions];
+
+    const cliBackends = process.env.CLI_BACKENDS
+      ? (JSON.parse(process.env.CLI_BACKENDS) as Array<{
+          name: string;
+          command: string;
+          args?: string[];
+        }>)
+      : undefined;
+    if (cliBackends?.length) {
+      const agentList = cliBackends
+        .map(
+          (b) =>
+            `- ${b.name}: \`${b.command} ${(b.args || []).join(" ")} "prompt"\``
+        )
+        .join("\n");
+      instructionParts.push(`## Available Coding Agents\n${agentList}`);
+    }
 
     instructionParts.push(`## Conversation History
 
 You have access to GetChannelHistory to view previous messages in this thread.
 Use it when the user references past discussions or you need context.`);
-
-    // Add pending interaction notes
-    if (unansweredInteractions.length > 0) {
-      logger.info(
-        `Found ${unansweredInteractions.length} unanswered interactions - adding context note`
-      );
-      const pendingNote = this.buildPendingInteractionNote(
-        unansweredInteractions
-      );
-      instructionParts.push(pendingNote);
-    }
 
     const finalInstructions = instructionParts.filter(Boolean).join("\n\n");
 
@@ -165,11 +471,10 @@ Use it when the user references past discussions or you need context.`);
       workerToken,
       channelId: this.config.channelId,
       conversationId: this.config.conversationId,
-      interactionClient: this.interactionClient,
       platform: this.config.platform,
     });
 
-    // Load OpenClaw plugins (tools are captured as raw ToolDefinition — no bridging)
+    // Load OpenClaw plugins
     const pluginsConfig = rawOptions.pluginsConfig as PluginsConfig | undefined;
     const loadedPlugins = await loadPlugins(pluginsConfig);
     const pluginTools = loadedPlugins.flatMap((p) => p.tools);
@@ -199,108 +504,104 @@ Use it when the user references past discussions or you need context.`);
       `Starting OpenClaw session: provider=${provider}, model=${modelId}, tools=${tools.length}, customTools=${customTools.length}`
     );
 
-    const { session } = await createAgentSession({
-      cwd: workspaceDir,
-      model,
-      tools,
-      customTools,
-      sessionManager,
-      settingsManager,
-      authStorage,
-      modelRegistry,
-    });
-
-    // Note: Using default streamFn (not streamSimple) for compatibility
-    // with third-party Anthropic-compatible API proxies
-
-    const basePrompt = session.systemPrompt;
-    session.agent.setSystemPrompt(`${basePrompt}\n\n${finalInstructions}`);
-
-    let doneResolve: (() => void) | undefined;
-    let doneReject: ((err: Error) => void) | undefined;
-    const done = new Promise<void>((resolve, reject) => {
-      doneResolve = resolve;
-      doneReject = reject;
-    });
-
-    // Wire events through progress processor with delta batching
-    let pendingDelta = "";
-    let deltaTimer: Timer | null = null;
-    const DELTA_BATCH_INTERVAL_MS = 150;
-
-    const flushDelta = async () => {
-      if (pendingDelta) {
-        const toSend = pendingDelta;
-        pendingDelta = "";
-        await onProgress({
-          type: "output",
-          data: toSend,
-          timestamp: Date.now(),
-        });
-      }
-      if (deltaTimer) {
-        clearTimeout(deltaTimer);
-        deltaTimer = null;
-      }
-    };
-
-    const scheduleDeltaFlush = () => {
-      if (!deltaTimer) {
-        deltaTimer = setTimeout(() => {
-          flushDelta().catch((err) => {
-            logger.error("Failed to flush delta:", err);
-          });
-        }, DELTA_BATCH_INTERVAL_MS);
-      }
-    };
-
-    session.subscribe((event) => {
-      const hasUpdate = this.progressProcessor.processEvent(event);
-      if (hasUpdate) {
-        const delta = this.progressProcessor.getDelta();
-        if (delta) {
-          pendingDelta += delta;
-          scheduleDeltaFlush();
-        }
-      }
-
-      if (event.type === "agent_end") {
-        flushDelta()
-          .then(() => doneResolve?.())
-          .catch((err) => {
-            logger.error("Failed to flush final delta:", err);
-            doneResolve?.();
-          });
-      }
-    });
-
     // Heartbeat timer to keep connection alive during long API calls
     const HEARTBEAT_INTERVAL_MS = 20000;
     let heartbeatTimer: Timer | null = null;
-    let elapsedTime = 0;
-    let lastHeartbeatTime = Date.now();
-
-    const sendHeartbeat = async () => {
-      const now = Date.now();
-      elapsedTime += now - lastHeartbeatTime;
-      lastHeartbeatTime = now;
-      const seconds = Math.floor(elapsedTime / 1000);
-
-      logger.warn(
-        `⏳ Still running after ${seconds}s - no response from API yet`
-      );
-
-      await onProgress({
-        type: "status_update",
-        data: {
-          elapsedSeconds: seconds,
-          state: "is running..",
-        },
-        timestamp: Date.now(),
-      });
-    };
+    let deltaTimer: Timer | null = null;
 
     try {
+      const { session } = await createAgentSession({
+        cwd: workspaceDir,
+        model,
+        tools,
+        customTools,
+        sessionManager,
+        settingsManager,
+        authStorage,
+        modelRegistry,
+      });
+
+      const basePrompt = session.systemPrompt;
+      session.agent.setSystemPrompt(`${basePrompt}\n\n${finalInstructions}`);
+
+      let doneResolve: (() => void) | undefined;
+      const done = new Promise<void>((resolve) => {
+        doneResolve = resolve;
+      });
+
+      // Wire events through progress processor with delta batching
+      let pendingDelta = "";
+      const DELTA_BATCH_INTERVAL_MS = 150;
+
+      const flushDelta = async () => {
+        if (pendingDelta) {
+          const toSend = pendingDelta;
+          pendingDelta = "";
+          await onProgress({
+            type: "output",
+            data: toSend,
+            timestamp: Date.now(),
+          });
+        }
+        if (deltaTimer) {
+          clearTimeout(deltaTimer);
+          deltaTimer = null;
+        }
+      };
+
+      const scheduleDeltaFlush = () => {
+        if (!deltaTimer) {
+          deltaTimer = setTimeout(() => {
+            flushDelta().catch((err) => {
+              logger.error("Failed to flush delta:", err);
+            });
+          }, DELTA_BATCH_INTERVAL_MS);
+        }
+      };
+
+      session.subscribe((event) => {
+        const hasUpdate = this.progressProcessor.processEvent(event);
+        if (hasUpdate) {
+          const delta = this.progressProcessor.getDelta();
+          if (delta) {
+            pendingDelta += delta;
+            scheduleDeltaFlush();
+          }
+        }
+
+        if (event.type === "agent_end") {
+          flushDelta()
+            .then(() => doneResolve?.())
+            .catch((err) => {
+              logger.error("Failed to flush final delta:", err);
+              doneResolve?.();
+            });
+        }
+      });
+
+      let elapsedTime = 0;
+      let lastHeartbeatTime = Date.now();
+
+      const sendHeartbeat = async () => {
+        const now = Date.now();
+        elapsedTime += now - lastHeartbeatTime;
+        lastHeartbeatTime = now;
+        const seconds = Math.floor(elapsedTime / 1000);
+
+        logger.warn(
+          `⏳ Still running after ${seconds}s - no response from API yet`
+        );
+
+        await onProgress({
+          type: "status_update",
+          data: {
+            elapsedSeconds: seconds,
+            state: "is running..",
+          },
+          timestamp: Date.now(),
+        });
+      };
+
       heartbeatTimer = setInterval(() => {
         sendHeartbeat().catch((err) => {
           logger.error("Failed to send heartbeat:", err);
@@ -310,6 +611,25 @@ Use it when the user references past discussions or you need context.`);
       await session.prompt(userPrompt);
       await done;
       session.dispose();
+
+      const sessionError = this.progressProcessor.consumeFatalErrorMessage();
+      if (sessionError) {
+        const errorWithHint = await this.maybeBuildAuthHintMessage(
+          sessionError,
+          provider,
+          modelId,
+          gatewayUrl,
+          workerToken
+        );
+        return {
+          success: false,
+          exitCode: 1,
+          output: "",
+          error: errorWithHint,
+          sessionKey: this.config.sessionKey,
+        };
+      }
+
       return {
         success: true,
         exitCode: 0,
@@ -317,50 +637,20 @@ Use it when the user references past discussions or you need context.`);
         sessionKey: this.config.sessionKey,
       };
     } catch (error) {
-      session.dispose();
-      doneReject?.(error as Error);
-
       const errorMsg = error instanceof Error ? error.message : String(error);
-
-      const authHint = getProviderAuthHintFromError(errorMsg);
-      if (authHint) {
-        try {
-          const resp = await fetch(`${gatewayUrl}/internal/settings-link`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${workerToken}`,
-            },
-            body: JSON.stringify({
-              reason: `Connect your ${authHint.providerName} account to use ${modelId} models`,
-              prefillEnvVars: [authHint.envVar],
-            }),
-          });
-
-          if (resp.ok) {
-            const { url } = (await resp.json()) as { url: string };
-            const friendlyMsg = `To use ${modelId}, you need to connect your ${authHint.providerName} account.\n\nOpen settings to add your API key: ${url}`;
-            return {
-              success: false,
-              exitCode: 1,
-              output: "",
-              error: friendlyMsg,
-              sessionKey: this.config.sessionKey,
-            };
-          }
-        } catch (linkError) {
-          logger.error(
-            "Failed to generate settings link for missing API key",
-            linkError
-          );
-        }
-      }
+      const errorWithHint = await this.maybeBuildAuthHintMessage(
+        errorMsg,
+        provider,
+        modelId,
+        gatewayUrl,
+        workerToken
+      );
 
       return {
         success: false,
         exitCode: 1,
         output: "",
-        error: errorMsg,
+        error: errorWithHint,
         sessionKey: this.config.sessionKey,
       };
     } finally {
@@ -377,25 +667,147 @@ Use it when the user references past discussions or you need context.`);
     }
   }
 
-  protected async processProgressUpdate(
-    update: ProgressUpdate
-  ): Promise<string | null> {
-    if (typeof update.data === "string") {
-      return update.data;
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private async setupIODirectories(): Promise<void> {
+    const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    const inputDir = path.join(workspaceDir, "input");
+    const outputDir = path.join(workspaceDir, "output");
+    const tempDir = path.join(workspaceDir, "temp");
+
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.mkdir(outputDir, { recursive: true });
+    await fs.mkdir(tempDir, { recursive: true });
+
+    try {
+      const files = await fs.readdir(outputDir);
+      for (const file of files) {
+        await fs.unlink(path.join(outputDir, file)).catch(() => {
+          /* intentionally empty */
+        });
+      }
+    } catch (error) {
+      logger.debug("Could not clear output directory:", error);
     }
-    return null;
+
+    logger.info("I/O directories setup completed");
   }
 
-  protected getFinalResult(): { text: string; isFinal: boolean } | null {
-    return this.progressProcessor.getFinalResult();
+  private async downloadInputFiles(): Promise<void> {
+    const files = (this.config as any).platformMetadata?.files || [];
+    if (files.length === 0) {
+      return;
+    }
+
+    logger.info(`Downloading ${files.length} input files...`);
+    const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    const inputDir = path.join(workspaceDir, "input");
+    const dispatcherUrl = process.env.DISPATCHER_URL!;
+    const workerToken = process.env.WORKER_TOKEN!;
+
+    for (const file of files) {
+      try {
+        logger.info(`Downloading file: ${file.name} (${file.id})`);
+
+        const response = await fetch(
+          `${dispatcherUrl}/internal/files/download?fileId=${file.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${workerToken}`,
+            },
+            signal: AbortSignal.timeout(60_000),
+          }
+        );
+
+        if (!response.ok) {
+          logger.error(
+            `Failed to download file ${file.name}: ${response.statusText}`
+          );
+          continue;
+        }
+
+        const destPath = path.join(inputDir, file.name);
+        const fileStream = Readable.fromWeb(response.body as any);
+        const writeStream = (await import("node:fs")).createWriteStream(
+          destPath
+        );
+
+        await pipeline(fileStream, writeStream);
+        logger.info(`Downloaded: ${file.name} to input directory`);
+      } catch (error) {
+        logger.error(`Error downloading file ${file.name}:`, error);
+      }
+    }
   }
 
-  protected resetProgressState(): void {
-    this.progressProcessor.reset();
+  private getFileIOInstructions(): string {
+    const workspaceDir = this.workspaceManager.getCurrentWorkingDirectory();
+    const files = (this.config as any).platformMetadata?.files || [];
+
+    let userFilesSection = "";
+    if (files.length > 0) {
+      userFilesSection = `
+
+### User-Uploaded Files
+The user has uploaded ${files.length} file(s) for you to analyze:
+${files.map((f: any) => `- \`${workspaceDir}/input/${f.name}\` (${f.mimetype || "unknown type"})`).join("\n")}
+
+**Use these files to answer the user's request.** You can read them with standard commands like \`cat\`, \`less\`, or \`head\`.`;
+    }
+
+    return `
+
+## File Generation & Output
+
+**When to Create Files:**
+Create and show files for any output that helps answer the user's request by using \`UploadUserFile\` tool:
+- **Charts & visualizations**: pie charts, bar graphs, plots, diagrams via \`matplotlib\`
+- **Reports & documents**: analysis reports, summaries, PDFs
+- **Data files**: CSV exports, JSON data, spreadsheets
+- **Code files**: scripts, configurations, examples
+- **Images**: generated images, processed photos, screenshots.${userFilesSection}
+`;
   }
 
-  protected async cleanupSession(_sessionKey: string): Promise<void> {
-    logger.info("Cleanup for OpenClaw session (no-op)");
+  private async maybeBuildAuthHintMessage(
+    errorMessage: string,
+    provider: string,
+    modelId: string,
+    gatewayUrl: string,
+    workerToken: string
+  ): Promise<string> {
+    const authHint = getProviderAuthHintFromError(errorMessage, provider);
+    if (!authHint) {
+      return errorMessage;
+    }
+
+    try {
+      const resp = await fetch(`${gatewayUrl}/internal/settings-link`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${workerToken}`,
+        },
+        body: JSON.stringify({
+          reason: `Connect your ${authHint.providerName} account to use ${modelId} models`,
+          prefillEnvVars: [authHint.envVar],
+        }),
+      });
+
+      if (resp.ok) {
+        const { url } = (await resp.json()) as { url: string };
+        return `To use ${modelId}, you need to connect your ${authHint.providerName} account.\n\nOpen settings to add your API key: ${url}`;
+      }
+    } catch (linkError) {
+      logger.error(
+        "Failed to generate settings link for missing API key",
+        linkError
+      );
+    }
+
+    return errorMessage;
   }
 }
 
@@ -403,12 +815,17 @@ function resolveModelRef(rawModelRef: string): {
   provider: string;
   modelId: string;
 } {
-  const defaultModelRef =
-    process.env.OPENCLAW_DEFAULT_MODEL || "anthropic/claude-opus-4-5";
-  const defaultProvider = process.env.OPENCLAW_DEFAULT_PROVIDER || "anthropic";
+  const defaultModelRef = process.env.AGENT_DEFAULT_MODEL || "";
+  const defaultProvider = process.env.AGENT_DEFAULT_PROVIDER || "";
 
   const normalizedRaw = rawModelRef?.trim();
   const modelRef = normalizedRaw || defaultModelRef;
+
+  if (!modelRef) {
+    throw new Error(
+      "No model configured. Please add a model provider in your settings."
+    );
+  }
 
   const stripped = modelRef.toLowerCase().startsWith("openclaw/")
     ? modelRef.slice("openclaw/".length)
@@ -416,31 +833,17 @@ function resolveModelRef(rawModelRef: string): {
 
   const parts = stripped.split("/").filter(Boolean);
   if (parts.length >= 2) {
-    const provider = parts[0] ?? defaultProvider;
+    const provider = parts[0]!;
     return { provider, modelId: parts.slice(1).join("/") };
   }
 
+  if (!defaultProvider) {
+    throw new Error(
+      `No provider specified for model "${modelRef}". Use "provider/model" format or set AGENT_DEFAULT_PROVIDER.`
+    );
+  }
+
   return { provider: defaultProvider, modelId: stripped };
-}
-
-function resolveAnthropicBaseUrl(
-  options: Record<string, unknown>
-): string | undefined {
-  const raw = options.anthropicBaseUrl ?? process.env.ANTHROPIC_BASE_URL;
-  if (typeof raw !== "string") {
-    return undefined;
-  }
-  const trimmed = raw.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function ensureAnthropicApiKey(): void {
-  // ANTHROPIC_AUTH_TOKEN is the explicit override set by the gateway for this worker.
-  // It takes priority over ANTHROPIC_API_KEY which may be inherited from the shell
-  // (e.g. a Claude Code OAuth token that isn't valid for third-party API proxies).
-  if (process.env.ANTHROPIC_AUTH_TOKEN) {
-    process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_AUTH_TOKEN;
-  }
 }
 
 async function openOrCreateSessionManager(

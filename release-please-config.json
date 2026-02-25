@@ -1,7 +1,7 @@
 {
   "packages": {
     ".": {
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/CHANGELOG.md",
       "release-type": "node",
       "bump-minor-pre-major": false,
       "bump-patch-for-minor-pre-major": false,
@@ -30,14 +30,14 @@
       ]
     },
     "packages/cli": {
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/CHANGELOG.md",
       "release-type": "node",
       "package-name": "create-lobu",
       "include-component-in-tag": true,
       "include-v-in-tag": false
     },
     "packages/worker": {
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/CHANGELOG.md",
       "release-type": "node",
       "package-name": "@lobu/worker",
       "include-component-in-tag": true,

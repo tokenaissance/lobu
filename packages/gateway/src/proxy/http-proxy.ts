@@ -380,7 +380,7 @@ export function startHttpProxy(port: number = 8118): http.Server {
     logger.error("HTTP proxy server error:", err);
   });
 
-  server.listen(port, "0.0.0.0", () => {
+  server.listen(port, "::", () => {
     let mode: string;
     if (isUnrestrictedMode(global.allowedDomains)) {
       mode = "unrestricted";

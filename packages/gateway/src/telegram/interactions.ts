@@ -1,342 +1,165 @@
 /**
- * Telegram interaction renderer.
- * Uses inline keyboards for user interactions.
+ * Telegram interaction renderer (fire-and-forget).
+ * Uses inline keyboards for questions. Button clicks become regular messages.
  */
 
-import {
-  createLogger,
-  type UserInteraction,
-  type UserSuggestion,
-} from "@lobu/core";
+import { createLogger, type UserSuggestion } from "@lobu/core";
 import { type Bot, InlineKeyboard } from "grammy";
-import type { InteractionService } from "../interactions";
-import {
-  APPROVAL_OPTIONS,
-  formatNumberedOptions,
-  isApprovalInteraction,
-  parseOptionResponse,
-} from "../platform/interaction-utils";
-import type { TelegramConfig } from "./config";
+import type { InteractionService, PostedQuestion } from "../interactions";
+import { formatNumberedOptions } from "../platform/interaction-utils";
 
 const logger = createLogger("telegram-interactions");
 
-const INTERACTION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
 // Telegram inline keyboard button text limit
 const MAX_BUTTON_TEXT = 64;
+
+// Auto-cleanup after 1 hour
+const OPTIONS_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * In-memory options map for resolving callback_data → selected option text.
+ * Keyed by short question ID, auto-cleanup after 1h.
+ */
+interface StoredQuestion {
+  options: string[];
+  chatId: number;
+  question: string;
+  createdAt: number;
+}
 
 /**
  * Telegram interaction renderer.
  */
 export class TelegramInteractionRenderer {
-  private pendingInteractions = new Map<
-    string,
-    Array<{
-      interactionId: string;
-      question: string;
-      options: string[];
-      chatId: number;
-    }>
-  >();
-  private interactionTimeouts = new Map<string, NodeJS.Timeout>();
+  private storedQuestions = new Map<string, StoredQuestion>();
+  private cleanupTimer?: NodeJS.Timeout;
 
   constructor(
     private bot: Bot,
-    private interactionService: InteractionService,
-    _config: TelegramConfig
-  ) {}
+    private interactionService: InteractionService
+  ) {
+    // Subscribe to question:created events
+    this.interactionService.on(
+      "question:created",
+      (question: PostedQuestion) => {
+        if (question.teamId !== "telegram") return;
+
+        this.renderQuestion(question).catch((error) => {
+          logger.error("Failed to render question:", error);
+        });
+      }
+    );
+
+    // Periodic cleanup of expired stored questions
+    this.cleanupTimer = setInterval(
+      () => this.cleanupExpired(),
+      OPTIONS_TTL_MS
+    );
+  }
 
   /**
    * Register handler for callback query responses.
-   * Only registers callback_query handler on the bot.
-   * Text-based interaction responses are handled via tryHandleTextResponse()
-   * called from the message handler to avoid consuming message:text events.
    */
   registerCallbackHandler(): void {
-    // Handle inline keyboard button clicks
     this.bot.on("callback_query:data", async (ctx) => {
       const data = ctx.callbackQuery.data;
       await this.handleCallbackQuery(ctx, data);
-    });
-
-    // Subscribe to interaction:created events
-    this.interactionService.on("interaction:created", (interaction) => {
-      if (interaction.teamId !== "telegram") return;
-
-      this.renderInteraction(interaction).catch((error) => {
-        logger.error("Failed to render interaction:", error);
-      });
     });
 
     logger.info("Telegram interaction callback handler registered");
   }
 
   /**
-   * Try to handle a text message as an interaction response.
-   * Returns true if the message was consumed as an interaction response.
-   * Called from the message handler before normal processing.
-   */
-  tryHandleTextResponse(chatId: number, text: string): boolean {
-    const chatKey = String(chatId);
-    const queue = this.pendingInteractions.get(chatKey);
-    if (!queue || queue.length === 0) return false;
-
-    const pending = queue[0];
-    if (!pending) return false;
-
-    const selectedIndex = this.parseResponse(text.trim(), pending.options);
-    if (selectedIndex === null) return false;
-
-    // Fire and forget the resolution
-    this.resolveInteraction(chatKey, queue, selectedIndex).catch((err) => {
-      logger.error({ error: String(err) }, "Failed to resolve interaction");
-    });
-
-    return true;
-  }
-
-  /**
    * Handle callback query from inline keyboard.
+   * Looks up stored options, sends selected text as a regular message.
    */
   private async handleCallbackQuery(ctx: any, data: string): Promise<void> {
-    // Parse callback data: "interact:{interactionId}:{optionIndex}"
-    if (!data.startsWith("interact:")) {
+    // Parse callback data: "q:{shortId}:{optionIdx}"
+    if (!data.startsWith("q:")) {
       await ctx.answerCallbackQuery();
       return;
     }
 
     const parts = data.split(":");
-    const interactionId = parts[1] || "";
+    const shortId = parts[1] || "";
     const optionIndex = parseInt(parts[2] || "0", 10);
 
-    if (!interactionId) {
-      await ctx.answerCallbackQuery();
+    const stored = this.storedQuestions.get(shortId);
+    if (!stored) {
+      await ctx.answerCallbackQuery({ text: "Question expired" });
       return;
     }
 
-    // Find the interaction in any chat queue
-    for (const [chatKey, queue] of this.pendingInteractions) {
-      const pendingIndex = queue.findIndex(
-        (p) => p.interactionId === interactionId
-      );
-      if (pendingIndex === -1) continue;
-
-      const pending = queue[pendingIndex];
-      if (!pending) continue;
-
-      const selectedOption = pending.options[optionIndex];
-      if (!selectedOption) {
-        await ctx.answerCallbackQuery({ text: "Invalid option" });
-        return;
-      }
-
-      try {
-        await this.interactionService.respond(interactionId, {
-          answer: selectedOption,
-        });
-
-        // Remove from queue
-        queue.splice(pendingIndex, 1);
-
-        // Answer callback and update message
-        await ctx.answerCallbackQuery({ text: `Selected: ${selectedOption}` });
-        try {
-          await ctx.editMessageText(
-            `${pending.question}\n\n<b>Selected: ${selectedOption}</b>`,
-            { parse_mode: "HTML" }
-          );
-        } catch {
-          // Ignore edit failures
-        }
-
-        // Show next in queue
-        if (pendingIndex === 0 && queue.length > 0) {
-          const next = queue[0];
-          if (next) {
-            await this.sendInteractionMessage(next.chatId, next);
-          }
-        }
-
-        // Clean up if queue empty
-        if (queue.length === 0) {
-          this.pendingInteractions.delete(chatKey);
-          const timeout = this.interactionTimeouts.get(chatKey);
-          if (timeout) {
-            clearTimeout(timeout);
-            this.interactionTimeouts.delete(chatKey);
-          }
-        }
-
-        logger.info(
-          { interactionId, selectedOption, remainingInQueue: queue.length },
-          "Interaction response recorded"
-        );
-      } catch (err) {
-        logger.error(
-          { error: String(err), interactionId },
-          "Failed to record interaction response"
-        );
-        await ctx.answerCallbackQuery({ text: "Error processing response" });
-      }
+    const selectedOption = stored.options[optionIndex];
+    if (!selectedOption) {
+      await ctx.answerCallbackQuery({ text: "Invalid option" });
       return;
     }
-
-    await ctx.answerCallbackQuery({ text: "Interaction expired" });
-  }
-
-  /**
-   * Resolve an interaction from text response.
-   */
-  private async resolveInteraction(
-    chatKey: string,
-    queue: Array<{
-      interactionId: string;
-      question: string;
-      options: string[];
-      chatId: number;
-    }>,
-    selectedIndex: number
-  ): Promise<void> {
-    const pending = queue[0];
-    if (!pending) return;
-
-    const selectedOption = pending.options[selectedIndex];
-    if (!selectedOption) return;
 
     try {
-      await this.interactionService.respond(pending.interactionId, {
-        answer: selectedOption,
-      });
+      // Answer callback
+      await ctx.answerCallbackQuery({ text: `Selected: ${selectedOption}` });
 
-      queue.shift();
-
-      if (queue.length === 0) {
-        this.pendingInteractions.delete(chatKey);
-        const timeout = this.interactionTimeouts.get(chatKey);
-        if (timeout) {
-          clearTimeout(timeout);
-          this.interactionTimeouts.delete(chatKey);
-        }
-      } else {
-        const next = queue[0];
-        if (next) {
-          await this.sendInteractionMessage(next.chatId, next);
-        }
+      // Update original message to show selection
+      try {
+        await ctx.editMessageText(
+          `${stored.question}\n\n<b>Selected: ${selectedOption}</b>`,
+          { parse_mode: "HTML" }
+        );
+      } catch {
+        // Ignore edit failures
       }
 
+      // Send selected option as a regular message — Telegram message handler picks it up
+      await this.bot.api.sendMessage(stored.chatId, selectedOption);
+
+      // Clean up stored question
+      this.storedQuestions.delete(shortId);
+
       logger.info(
-        {
-          interactionId: pending.interactionId,
-          selectedOption,
-          remainingInQueue: queue.length,
-        },
-        "Interaction response recorded (text)"
+        { shortId, selectedOption, chatId: stored.chatId },
+        "Question answered, sent as regular message"
       );
     } catch (err) {
       logger.error(
-        { error: String(err), interactionId: pending.interactionId },
-        "Failed to record interaction response"
+        { error: String(err), shortId },
+        "Failed to handle question callback"
       );
+      await ctx.answerCallbackQuery({ text: "Error processing response" });
     }
   }
 
   /**
-   * Parse user response to get selected option index.
+   * Render a question with inline keyboard buttons.
    */
-  private parseResponse(text: string, options: string[]): number | null {
-    const selected = parseOptionResponse(text, options);
-    if (selected === null) return null;
-    return options.indexOf(selected);
-  }
-
-  /**
-   * Render a user interaction.
-   */
-  async renderInteraction(interaction: UserInteraction): Promise<void> {
-    const { id, channelId, interactionType, question, options } = interaction;
-
-    const chatId = Number(
-      (interaction as any).platformMetadata?.chatId || channelId
-    );
-    const chatKey = String(chatId);
+  async renderQuestion(question: PostedQuestion): Promise<void> {
+    const chatId = Number(question.channelId);
+    const shortId = question.id.replace("q_", "").substring(0, 8);
 
     logger.info(
-      { interactionId: id, chatId, interactionType },
-      "Rendering interaction"
+      { questionId: question.id, shortId, chatId },
+      "Rendering question"
     );
 
-    // Determine options
-    let effectiveOptions: string[] = [];
-    if (Array.isArray(options) && options.length > 0) {
-      effectiveOptions = options;
-    } else if (isApprovalInteraction(interactionType)) {
-      effectiveOptions = [...APPROVAL_OPTIONS];
-    }
+    // Store options for callback resolution
+    this.storedQuestions.set(shortId, {
+      options: question.options,
+      chatId,
+      question: question.question,
+      createdAt: Date.now(),
+    });
 
-    // Check if this is the first in queue
-    const existingQueue = this.pendingInteractions.get(chatKey);
-    const isFirstInQueue = !existingQueue || existingQueue.length === 0;
-
-    // Store in queue
-    if (effectiveOptions.length > 0) {
-      this.storePendingInteraction(
-        chatKey,
-        id,
-        question,
-        effectiveOptions,
-        chatId
-      );
-    }
-
-    if (!isFirstInQueue) {
-      logger.info(
-        { interactionId: id, chatId, queuePosition: existingQueue!.length },
-        "Interaction queued"
-      );
-      return;
-    }
-
-    // Send interaction message
-    if (effectiveOptions.length > 0) {
-      await this.sendInteractionMessage(chatId, {
-        interactionId: id,
-        question,
-        options: effectiveOptions,
-        chatId,
-      });
-    } else if (interactionType === "form") {
-      await this.bot.api.sendMessage(
-        chatId,
-        `${question}\n\nPlease type your response:`
-      );
-    } else {
-      await this.bot.api.sendMessage(chatId, question);
-    }
-
-    logger.info({ interactionId: id, chatId }, "Interaction rendered");
-  }
-
-  /**
-   * Send interaction message with inline keyboard.
-   */
-  private async sendInteractionMessage(
-    chatId: number,
-    pending: {
-      interactionId: string;
-      question: string;
-      options: string[];
-      chatId: number;
-    }
-  ): Promise<void> {
+    // Build inline keyboard
     const keyboard = new InlineKeyboard();
 
-    for (let i = 0; i < pending.options.length; i++) {
-      const option = pending.options[i]!;
+    for (let i = 0; i < question.options.length; i++) {
+      const option = question.options[i]!;
       const buttonText =
         option.length > MAX_BUTTON_TEXT
           ? `${option.substring(0, MAX_BUTTON_TEXT - 3)}...`
           : option;
-      const callbackData = `interact:${pending.interactionId}:${i}`;
+      // Fits in 64 bytes: "q:" + 8 char shortId + ":" + index
+      const callbackData = `q:${shortId}:${i}`;
 
       keyboard.text(buttonText, callbackData);
 
@@ -347,7 +170,7 @@ export class TelegramInteractionRenderer {
     }
 
     try {
-      await this.bot.api.sendMessage(chatId, pending.question, {
+      await this.bot.api.sendMessage(chatId, question.question, {
         reply_markup: keyboard,
       });
     } catch (err) {
@@ -355,10 +178,14 @@ export class TelegramInteractionRenderer {
         { error: String(err), chatId },
         "Inline keyboard failed, falling back to numbered text"
       );
-      // Fallback to numbered text
-      const message = formatNumberedOptions(pending.question, pending.options);
+      const message = formatNumberedOptions(
+        question.question,
+        question.options
+      );
       await this.bot.api.sendMessage(chatId, message);
     }
+
+    logger.info({ questionId: question.id, chatId }, "Question rendered");
   }
 
   /**
@@ -391,46 +218,23 @@ export class TelegramInteractionRenderer {
   }
 
   /**
-   * Store pending interaction in queue with timeout cleanup.
+   * Cleanup expired stored questions.
    */
-  private storePendingInteraction(
-    chatKey: string,
-    interactionId: string,
-    question: string,
-    options: string[],
-    chatId: number
-  ): void {
-    let queue = this.pendingInteractions.get(chatKey);
-    if (!queue) {
-      queue = [];
-      this.pendingInteractions.set(chatKey, queue);
-    }
-
-    queue.push({ interactionId, question, options, chatId });
-
-    logger.info(
-      { interactionId, chatKey, queueLength: queue.length },
-      "Added interaction to queue"
-    );
-
-    // Reset timeout
-    const existingTimeout = this.interactionTimeouts.get(chatKey);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
-
-    const timeout = setTimeout(() => {
-      const currentQueue = this.pendingInteractions.get(chatKey);
-      if (currentQueue && currentQueue.length > 0) {
-        logger.warn(
-          { chatKey, pendingCount: currentQueue.length },
-          "Interaction queue timed out"
-        );
+  private cleanupExpired(): void {
+    const now = Date.now();
+    for (const [id, stored] of this.storedQuestions) {
+      if (now - stored.createdAt > OPTIONS_TTL_MS) {
+        this.storedQuestions.delete(id);
       }
-      this.pendingInteractions.delete(chatKey);
-      this.interactionTimeouts.delete(chatKey);
-    }, INTERACTION_TIMEOUT_MS);
+    }
+  }
 
-    this.interactionTimeouts.set(chatKey, timeout);
+  /**
+   * Shutdown cleanup.
+   */
+  shutdown(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+    }
   }
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { createLogger } from "@lobu/core";
 import type { ProcessInfo } from "./types";
 
-const logger = createLogger("worker");
+const logger = createLogger("tunnel-manager");
 
 export async function startTunnel(
   info: ProcessInfo,
@@ -30,7 +30,7 @@ export async function startTunnel(
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
-  const logsDir = "/tmp/claude-logs";
+  const logsDir = "/tmp/worker-logs";
   const tunnelLogPath = path.join(logsDir, `${info.id}-tunnel.log`);
   const tunnelLogStream = await import("node:fs").then((fs) =>
     fs.createWriteStream(tunnelLogPath, { flags: "a" })

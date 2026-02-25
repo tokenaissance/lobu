@@ -6,27 +6,40 @@ set -e
 # Or: ./scripts/test-bot.sh (uses default test message)
 #
 # Environment variables:
-#   TEST_PLATFORM   - "slack" or "whatsapp" (default: auto-detect from enabled platforms)
-#   TEST_CHANNEL    - Channel ID (Slack) or phone number (WhatsApp)
+#   TEST_PLATFORM   - "slack", "whatsapp", or "telegram" (default: auto-detect from enabled platforms)
+#   TEST_CHANNEL    - Channel ID (Slack), phone number (WhatsApp), or peer/chat ID (Telegram)
 #   TEST_TIMEOUT    - Timeout in seconds (default: 30)
 #
 # Platform-specific:
 #   Slack: QA_SLACK_CHANNEL, SLACK_BOT_TOKEN
 #   WhatsApp: WHATSAPP_SELF_PHONE (defaults to bot's own number for self-chat)
+#   Telegram: TELEGRAM_TEST_CHAT_ID, TG_API_ID, TG_API_HASH (uses tguser to send as real user)
 
 # Load .env if it exists
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | grep -E 'SLACK_BOT_TOKEN|WHATSAPP_ENABLED|WHATSAPP_SELF_CHAT|QA_SLACK_CHANNEL|TEST_PLATFORM|TEST_CHANNEL' | sed 's/#.*//' | xargs)
+    export $(grep -v '^#' .env | grep -E 'SLACK_BOT_TOKEN|WHATSAPP_ENABLED|WHATSAPP_SELF_CHAT|QA_SLACK_CHANNEL|TELEGRAM_ENABLED|TELEGRAM_TEST_CHAT_ID|TG_API_ID|TG_API_HASH|TEST_PLATFORM|TEST_CHANNEL' | sed 's/#.*//' | xargs)
 fi
 
 # Auto-detect platform if not specified
 if [ -z "$TEST_PLATFORM" ]; then
+    TELEGRAM_CHANNEL="${TEST_CHANNEL:-$TELEGRAM_TEST_CHAT_ID}"
+    TELEGRAM_READY="false"
+    if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_CHANNEL" ] && command -v tguser > /dev/null 2>&1 && [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
+        TELEGRAM_READY="true"
+    fi
+
     if [ "$WHATSAPP_ENABLED" = "true" ]; then
         TEST_PLATFORM="whatsapp"
     elif [ -n "$SLACK_BOT_TOKEN" ]; then
         TEST_PLATFORM="slack"
+    elif [ "$TELEGRAM_READY" = "true" ]; then
+        TEST_PLATFORM="telegram"
+    elif [ "$TELEGRAM_ENABLED" = "true" ]; then
+        # Telegram is enabled but not fully configured for test-bot;
+        # keep telegram selected so validation below explains what's missing.
+        TEST_PLATFORM="telegram"
     else
-        echo "❌ No platform configured. Set TEST_PLATFORM=slack or TEST_PLATFORM=whatsapp"
+        echo "❌ No platform configured. Set TEST_PLATFORM=slack, TEST_PLATFORM=whatsapp, or TEST_PLATFORM=telegram"
         exit 1
     fi
 fi
@@ -61,8 +74,23 @@ case "$TEST_PLATFORM" in
             fi
         fi
         ;;
+    telegram)
+        CHANNEL="${TEST_CHANNEL:-$TELEGRAM_TEST_CHAT_ID}"
+        if [ -z "$CHANNEL" ]; then
+            echo "❌ TEST_CHANNEL or TELEGRAM_TEST_CHAT_ID environment variable is required for Telegram"
+            exit 1
+        fi
+        if ! command -v tguser > /dev/null 2>&1; then
+            echo "❌ tguser is required for Telegram testing but was not found in PATH"
+            exit 1
+        fi
+        if [ -z "$TG_API_ID" ] || [ -z "$TG_API_HASH" ]; then
+            echo "❌ TG_API_ID and TG_API_HASH are required for Telegram testing with tguser"
+            exit 1
+        fi
+        ;;
     *)
-        echo "❌ Unknown platform: $TEST_PLATFORM. Use 'slack' or 'whatsapp'"
+        echo "❌ Unknown platform: $TEST_PLATFORM. Use 'slack', 'whatsapp', or 'telegram'"
         exit 1
         ;;
 esac
@@ -88,6 +116,22 @@ for i in "${!MESSAGES[@]}"; do
     MSG_NUM=$((i + 1))
 
     echo "[$MSG_NUM/${#MESSAGES[@]}] 📤 Sending: $MESSAGE"
+
+    if [ "$TEST_PLATFORM" = "telegram" ]; then
+        TGUSER_OUTPUT=$(TG_API_ID="$TG_API_ID" TG_API_HASH="$TG_API_HASH" tguser send "$CHANNEL" "$MESSAGE" 2>&1) || {
+            echo "   ❌ Failed to send Telegram message $MSG_NUM:"
+            echo "$TGUSER_OUTPUT"
+            exit 1
+        }
+
+        echo "   ✅ Sent via tguser (as your Telegram user account)"
+        if [ -n "$TGUSER_OUTPUT" ]; then
+            echo "      $TGUSER_OUTPUT"
+        fi
+        echo "   📋 Check Telegram chat for bot response"
+        echo ""
+        continue
+    fi
 
     # Escape message for JSON (handle newlines, quotes, backslashes)
     ESCAPED_MESSAGE=$(printf '%s' "$MESSAGE" | jq -Rs .)

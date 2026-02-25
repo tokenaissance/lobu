@@ -63,7 +63,7 @@ const TOOL_DISPLAY_CONFIG: Record<string, ToolDisplayEntry> = {
 /**
  * Look up tool display config, case-insensitively.
  * OpenClaw uses lowercase tool names (bash, read, write, etc.)
- * while Claude SDK uses PascalCase (Bash, Read, Write, etc.).
+ * while some agents use PascalCase (Bash, Read, Write, etc.).
  */
 export function getToolDisplayConfig(
   toolName: string

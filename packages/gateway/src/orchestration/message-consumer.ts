@@ -12,6 +12,7 @@ import {
   SpanStatusCode,
 } from "@lobu/core";
 import * as Sentry from "@sentry/node";
+import type { ProviderCatalogService } from "../auth/provider-catalog";
 import { platformAuthRegistry } from "../auth/platform-auth";
 import type {
   IMessageQueue,
@@ -35,6 +36,7 @@ export class MessageConsumer {
   private config: OrchestratorConfig;
   private isRunning = false;
   private providerModules: ModelProviderModule[];
+  private providerCatalogService?: ProviderCatalogService;
   private systemMessageLimiter?: SystemMessageLimiter;
 
   constructor(
@@ -115,6 +117,22 @@ export class MessageConsumer {
     this.providerModules = providerModules;
   }
 
+  setProviderCatalogService(service: ProviderCatalogService): void {
+    this.providerCatalogService = service;
+  }
+
+  private async getEffectiveProviders(
+    agentId: string
+  ): Promise<ModelProviderModule[]> {
+    if (this.providerCatalogService) {
+      // When the catalog is active, only use explicitly installed providers.
+      // Do NOT fall back to global modules — that would bypass the installable
+      // provider system and pick up providers from env vars the user never chose.
+      return this.providerCatalogService.getInstalledModules(agentId);
+    }
+    return this.providerModules;
+  }
+
   private getSystemMessageLimiter(): SystemMessageLimiter {
     if (!this.systemMessageLimiter) {
       // RedisQueue provides a shared ioredis client.
@@ -183,148 +201,147 @@ export class MessageConsumer {
         );
       }
 
-      // Check if any provider has credentials (system key or per-agent)
+      // Check if the provider for this agent's model has credentials
       // Only gate if there are registered providers to check
-      if (this.providerModules.length > 0) {
-        const hasAnyAuth = await this.hasAnyProviderAuth(data.agentId);
+      const agentModel = data.agentOptions?.model as string | undefined;
 
-        if (!hasAnyAuth) {
-          logger.info(
-            `Agent ${data.agentId} has no credentials for any provider - sending authentication prompt`
-          );
+      // Resolve per-agent installed providers
+      const effectiveProviders = await this.getEffectiveProviders(data.agentId);
 
-          // Prevent resending the same setup/auth prompt in tight loops.
-          // Default: one prompt per (platform, channel, agent) per hour.
-          const parsedThrottleSeconds = Number.parseInt(
-            process.env.AUTH_PROMPT_DEBOUNCE_SECONDS || "3600",
-            10
-          );
-          const throttleSeconds = Number.isFinite(parsedThrottleSeconds)
-            ? parsedThrottleSeconds
-            : 3600;
+      // When no providers are installed at all, block early with a setup prompt
+      const noProvidersInstalled = effectiveProviders.length === 0;
 
-          const parsedLockSeconds = Number.parseInt(
-            process.env.AUTH_PROMPT_LOCK_SECONDS || "30",
-            10
-          );
-          const lockSeconds = Number.isFinite(parsedLockSeconds)
-            ? parsedLockSeconds
-            : 30;
+      if (
+        noProvidersInstalled ||
+        !(await this.hasAnyProviderAuth(
+          data.agentId,
+          agentModel,
+          effectiveProviders
+        ))
+      ) {
+        logger.info(
+          noProvidersInstalled
+            ? `Agent ${data.agentId} has no providers installed - sending setup prompt`
+            : `Agent ${data.agentId} has no credentials for model ${agentModel || "any"} - sending authentication prompt`
+        );
 
-          const dedupeKey = [
-            "auth_required",
-            data.platform,
-            data.channelId,
-            data.agentId,
-          ].join(":");
+        // Prevent resending the same setup/auth prompt in tight loops.
+        // Default: one prompt per (platform, channel, agent) per hour.
+        const parsedThrottleSeconds = Number.parseInt(
+          process.env.AUTH_PROMPT_DEBOUNCE_SECONDS || "3600",
+          10
+        );
+        const throttleSeconds = Number.isFinite(parsedThrottleSeconds)
+          ? parsedThrottleSeconds
+          : 3600;
 
-          let didSend = false;
-          try {
-            didSend = await this.getSystemMessageLimiter().sendOnce(
-              dedupeKey,
-              async () => {
-                // Build list of unauthenticated providers
-                const unauthProviders = await this.getUnauthenticatedProviders(
-                  data.agentId
+        const parsedLockSeconds = Number.parseInt(
+          process.env.AUTH_PROMPT_LOCK_SECONDS || "30",
+          10
+        );
+        const lockSeconds = Number.isFinite(parsedLockSeconds)
+          ? parsedLockSeconds
+          : 30;
+
+        const dedupeKey = [
+          "auth_required",
+          data.platform,
+          data.channelId,
+          data.agentId,
+        ].join(":");
+
+        let didSend = false;
+        try {
+          didSend = await this.getSystemMessageLimiter().sendOnce(
+            dedupeKey,
+            async () => {
+              // Build list of unauthenticated providers
+              const unauthProviders = await this.getUnauthenticatedProviders(
+                data.agentId,
+                agentModel
+              );
+
+              // Use platform auth adapter if available
+              const authAdapter = platformAuthRegistry.get(data.platform);
+              if (authAdapter) {
+                // Platform-specific auth prompt (e.g., WhatsApp numbered list)
+                await authAdapter.sendAuthPrompt(
+                  data.userId,
+                  data.channelId,
+                  data.conversationId,
+                  unauthProviders,
+                  data.platformMetadata
                 );
-
-                // Use platform auth adapter if available
-                const authAdapter = platformAuthRegistry.get(data.platform);
-                if (authAdapter) {
-                  // Platform-specific auth prompt (e.g., WhatsApp numbered list)
-                  await authAdapter.sendAuthPrompt(
-                    data.userId,
-                    data.channelId,
-                    data.conversationId,
-                    unauthProviders,
-                    data.platformMetadata
-                  );
-                  logger.info(
-                    `✅ Sent platform-specific auth prompt for agent ${data.agentId} via ${data.platform} adapter`
-                  );
-                  return;
-                }
-
-                // Fallback: Send Slack-style ephemeral message for platforms without adapter
-                const responseQueue = "thread_response";
-                await this.queue.createQueue(responseQueue);
-                await this.queue.send(responseQueue, {
-                  messageId: data.messageId,
-                  userId: data.userId,
-                  channelId: data.channelId,
-                  conversationId: effectiveConversationId,
-                  platform: data.platform,
-                  platformMetadata: data.platformMetadata,
-                  ephemeral: true,
-                  content: JSON.stringify({
-                    blocks: [
-                      {
-                        type: "section",
-                        text: {
-                          type: "mrkdwn",
-                          text: "🔐 *Authentication Required*\n\nYou need to login with your Claude account to use this bot. Please visit the app home tab to authenticate.",
-                        },
-                      },
-                      {
-                        type: "actions",
-                        elements: [
-                          {
-                            type: "button",
-                            text: {
-                              type: "plain_text",
-                              text: "Login with Claude",
-                            },
-                            style: "primary",
-                            action_id: "claude_auth_start",
-                            value: "start_auth",
-                          },
-                        ],
-                      },
-                    ],
-                  }),
-                  processedMessageIds: [data.messageId],
-                });
                 logger.info(
-                  `✅ Sent Slack-style auth prompt for agent ${data.agentId}`
+                  `✅ Sent platform-specific auth prompt for agent ${data.agentId} via ${data.platform} adapter`
                 );
-              },
-              {
-                sentTtlSeconds: throttleSeconds,
-                lockTtlSeconds: lockSeconds,
-                failOpen: false,
+                return;
               }
-            );
-          } catch (error) {
-            // Treat as processed. Without credentials we can't proceed anyway, and retries can spam.
-            logger.error(
-              {
-                error: error instanceof Error ? error.message : String(error),
-                platform: data.platform,
-                channelId: data.channelId,
-                agentId: data.agentId,
-              },
-              "Failed to send auth prompt"
-            );
-            return;
-          }
 
-          if (!didSend) {
-            logger.info(
-              {
-                dedupeKey,
-                throttleSeconds,
-                lockSeconds,
-                platform: data.platform,
+              // Fallback: Send Slack-style ephemeral message for platforms without adapter
+              const responseQueue = "thread_response";
+              await this.queue.createQueue(responseQueue);
+              await this.queue.send(responseQueue, {
+                messageId: data.messageId,
+                userId: data.userId,
                 channelId: data.channelId,
-                agentId: data.agentId,
-              },
-              "Suppressing repeated auth prompt"
-            );
-            return; // Don't create worker
-          }
+                conversationId: effectiveConversationId,
+                platform: data.platform,
+                platformMetadata: data.platformMetadata,
+                ephemeral: true,
+                content: JSON.stringify({
+                  blocks: [
+                    {
+                      type: "section",
+                      text: {
+                        type: "mrkdwn",
+                        text: "🔐 *Setup Required*\n\nYou need to add a model provider to use this bot. Please visit the settings page to configure.",
+                      },
+                    },
+                  ],
+                }),
+                processedMessageIds: [data.messageId],
+              });
+              logger.info(
+                `✅ Sent Slack-style auth prompt for agent ${data.agentId}`
+              );
+            },
+            {
+              sentTtlSeconds: throttleSeconds,
+              lockTtlSeconds: lockSeconds,
+              failOpen: false,
+            }
+          );
+        } catch (error) {
+          // Treat as processed. Without credentials we can't proceed anyway, and retries can spam.
+          logger.error(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              platform: data.platform,
+              channelId: data.channelId,
+              agentId: data.agentId,
+            },
+            "Failed to send auth prompt"
+          );
+          return;
+        }
 
+        if (!didSend) {
+          logger.info(
+            {
+              dedupeKey,
+              throttleSeconds,
+              lockSeconds,
+              platform: data.platform,
+              channelId: data.channelId,
+              agentId: data.agentId,
+            },
+            "Suppressing repeated auth prompt"
+          );
           return; // Don't create worker
         }
+
+        return; // Don't create worker
       }
 
       const canonicalConversationKey = buildCanonicalConversationKey({
@@ -676,8 +693,42 @@ export class MessageConsumer {
   /**
    * Check if any registered model provider has auth (system key or per-agent credentials)
    */
-  private async hasAnyProviderAuth(agentId: string): Promise<boolean> {
-    for (const provider of this.providerModules) {
+  private async findProviderForModel(
+    model: string,
+    providers?: ModelProviderModule[]
+  ): Promise<ModelProviderModule | undefined> {
+    if (this.providerCatalogService) {
+      return this.providerCatalogService.findProviderForModel(model, providers);
+    }
+    // Fallback when catalog service is not yet injected
+    for (const provider of providers || this.providerModules) {
+      if (!provider.getModelOptions) continue;
+      const options = await provider.getModelOptions("", "");
+      if (options.some((opt) => opt.value === model)) {
+        return provider;
+      }
+    }
+    return undefined;
+  }
+
+  private async hasAnyProviderAuth(
+    agentId: string,
+    model?: string,
+    providers?: ModelProviderModule[]
+  ): Promise<boolean> {
+    const effectiveProviders = providers || this.providerModules;
+    // If a specific model is configured, only check the provider that owns it
+    if (model) {
+      const provider = await this.findProviderForModel(
+        model,
+        effectiveProviders
+      );
+      if (provider) {
+        return provider.hasSystemKey() || provider.hasCredentials(agentId);
+      }
+    }
+    // Fallback: check all effective providers
+    for (const provider of effectiveProviders) {
       if (provider.hasSystemKey()) return true;
       if (await provider.hasCredentials(agentId)) return true;
     }
@@ -688,8 +739,23 @@ export class MessageConsumer {
    * Get list of providers that have no auth for the given agent
    */
   private async getUnauthenticatedProviders(
-    agentId: string
+    agentId: string,
+    model?: string
   ): Promise<Array<{ id: string; name: string }>> {
+    // If a specific model is configured, only report the provider that owns it
+    if (model) {
+      const provider = await this.findProviderForModel(model);
+      if (
+        provider &&
+        !provider.hasSystemKey() &&
+        !(await provider.hasCredentials(agentId))
+      ) {
+        return [
+          { id: provider.providerId, name: provider.providerDisplayName },
+        ];
+      }
+      if (provider) return [];
+    }
     const unauthProviders: Array<{ id: string; name: string }> = [];
     for (const provider of this.providerModules) {
       if (

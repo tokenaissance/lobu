@@ -374,17 +374,6 @@ export class SlackResponseRenderer implements ResponseRenderer {
       return null;
     }
 
-    // Suppress deltas when thread has an active interaction
-    const activeInteractionKey = `interaction:active:${payload.conversationId}`;
-    const activeInteractionId = await this.redis.get(activeInteractionKey);
-
-    if (activeInteractionId) {
-      logger.info(
-        `Suppressing delta for thread ${payload.conversationId} - active interaction`
-      );
-      return null;
-    }
-
     const streamTs = await this.streamSessionManager.handleDelta(
       sessionKey,
       payload.channelId,
@@ -518,17 +507,6 @@ export class SlackResponseRenderer implements ResponseRenderer {
 
   async handleStatusUpdate(payload: ThreadResponsePayload): Promise<void> {
     if (!payload.statusUpdate) return;
-
-    // Don't update status if there's an active interaction
-    const activeInteractionKey = `interaction:active:${payload.conversationId}`;
-    const activeInteractionId = await this.redis.get(activeInteractionKey);
-
-    if (activeInteractionId) {
-      logger.debug(
-        `Skipping status update for thread ${payload.conversationId} - active interaction`
-      );
-      return;
-    }
 
     const statusText = `is ${payload.statusUpdate.state}...`;
     const loadingMessages = [

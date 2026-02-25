@@ -71,6 +71,60 @@ export interface SettingsTokenPayload {
  * Default TTL for settings tokens (1 hour)
  */
 const DEFAULT_TOKEN_TTL_MS = 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const SECOND_MS = 1000;
+
+function formatUnit(value: number, unit: string): string {
+  return `${value} ${unit}${value === 1 ? "" : "s"}`;
+}
+
+/**
+ * Resolve settings token TTL from environment.
+ *
+ * `SETTINGS_TOKEN_TTL_MS` is optional. If not set (or invalid), falls back to 1 hour.
+ */
+export function getSettingsTokenTtlMs(): number {
+  const raw = process.env.SETTINGS_TOKEN_TTL_MS;
+  if (!raw || raw.trim().length === 0) {
+    return DEFAULT_TOKEN_TTL_MS;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    logger.warn(
+      { rawValue: raw },
+      "Invalid SETTINGS_TOKEN_TTL_MS; using default 1 hour"
+    );
+    return DEFAULT_TOKEN_TTL_MS;
+  }
+
+  return parsed;
+}
+
+/**
+ * Human-readable settings token TTL for user-facing messages.
+ */
+export function formatSettingsTokenTtl(
+  ttlMs = getSettingsTokenTtlMs()
+): string {
+  if (ttlMs >= WEEK_MS && ttlMs % WEEK_MS === 0) {
+    return formatUnit(ttlMs / WEEK_MS, "week");
+  }
+  if (ttlMs >= DAY_MS && ttlMs % DAY_MS === 0) {
+    return formatUnit(ttlMs / DAY_MS, "day");
+  }
+  if (ttlMs >= HOUR_MS && ttlMs % HOUR_MS === 0) {
+    return formatUnit(ttlMs / HOUR_MS, "hour");
+  }
+  if (ttlMs >= MINUTE_MS && ttlMs % MINUTE_MS === 0) {
+    return formatUnit(ttlMs / MINUTE_MS, "minute");
+  }
+  const seconds = Math.max(1, Math.round(ttlMs / SECOND_MS));
+  return formatUnit(seconds, "second");
+}
 
 /**
  * Options for generating settings tokens
@@ -109,12 +163,12 @@ export function generateSettingsToken(
   agentId: string,
   userId: string,
   platform: string,
-  options: SettingsTokenOptions | number = DEFAULT_TOKEN_TTL_MS
+  options: SettingsTokenOptions | number = {}
 ): string {
   // Handle backwards compatibility: if options is a number, treat as ttlMs
   const opts: SettingsTokenOptions =
     typeof options === "number" ? { ttlMs: options } : options;
-  const ttlMs = opts.ttlMs ?? DEFAULT_TOKEN_TTL_MS;
+  const ttlMs = opts.ttlMs ?? getSettingsTokenTtlMs();
 
   const payload: SettingsTokenPayload = {
     agentId,

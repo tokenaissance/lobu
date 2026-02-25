@@ -4,12 +4,12 @@ import {
   createLogger,
   type InstructionProvider,
   moduleRegistry,
-  type UserInteraction,
   type UserSuggestion,
 } from "@lobu/core";
 import { App, type AppOptions, ExpressReceiver, LogLevel } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
 import type { NextFunction, Request, Response } from "express";
+import { CommandDispatcher } from "../commands/command-dispatcher";
 import type { MessagePayload } from "../infrastructure/queue/queue-producer";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import {
@@ -20,7 +20,6 @@ import {
 } from "../platform/platform-factory";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import { resolveSpace } from "../spaces";
-import { CommandDispatcher } from "../commands/command-dispatcher";
 import type { AgentOptions, SlackPlatformConfig } from "./config";
 import { SlackEventHandlers } from "./event-router";
 import { SlackFileHandler } from "./file-handler";
@@ -206,8 +205,22 @@ export class SlackPlatform implements PlatformAdapter {
       this.installationStore
     );
 
-    // Create interaction renderer
     const interactionService = services.getInteractionService();
+
+    // Initialize event handlers first (needed by interaction renderer)
+    this.eventHandlers = new SlackEventHandlers(
+      this.app,
+      services.getQueueProducer(),
+      {
+        slack: this.config.slack,
+        agentOptions: this.agentOptions,
+        sessionTimeoutMinutes: this.sessionTimeoutMinutes,
+      },
+      moduleRegistry,
+      services.getSessionManager()
+    );
+
+    // Create interaction renderer (needs messageHandler from event handlers)
     this.interactionRenderer = new SlackInteractionRenderer(
       this.app.client,
       interactionService
@@ -215,7 +228,6 @@ export class SlackPlatform implements PlatformAdapter {
     logger.info("✅ Slack interaction renderer initialized");
 
     // Register beforeCreate hook to stop streams BEFORE interaction is created
-    // This ensures interaction message appears after stream stops, not mixed in
     interactionService.setBeforeCreateHook(
       async (userId: string, conversationId: string) => {
         logger.info(
@@ -231,26 +243,8 @@ export class SlackPlatform implements PlatformAdapter {
 
     // Register interaction button handlers
     const { registerInteractionHandlers } = await import("./interactions");
-    registerInteractionHandlers(
-      this.app,
-      interactionService,
-      this.interactionRenderer
-    );
+    registerInteractionHandlers(this.app, this.eventHandlers.messageHandler);
     logger.info("✅ Interaction button handlers registered");
-
-    // Initialize event handlers
-    this.eventHandlers = new SlackEventHandlers(
-      this.app,
-      services.getQueueProducer(),
-      {
-        slack: this.config.slack,
-        agentOptions: this.agentOptions,
-        sessionTimeoutMinutes: this.sessionTimeoutMinutes,
-      },
-      moduleRegistry,
-      services.getSessionManager(),
-      interactionService
-    );
 
     // Wire up channel binding service for agent routing
     const channelBindingService = services.getChannelBindingService();
@@ -383,15 +377,6 @@ export class SlackPlatform implements PlatformAdapter {
     }
 
     return metadata;
-  }
-
-  /**
-   * Render blocking interaction (ephemeral message)
-   */
-  async renderInteraction(interaction: UserInteraction): Promise<void> {
-    if (this.interactionRenderer) {
-      await this.interactionRenderer.renderInteraction(interaction);
-    }
   }
 
   /**

@@ -204,6 +204,16 @@ function setupServer(
     logger.info("MCP discovery routes enabled at :8080/internal/mcp/*");
   }
 
+  // Skills discovery routes (worker skills search helper endpoints)
+  {
+    const {
+      createSkillsDiscoveryRoutes,
+    } = require("../routes/internal/skills-discovery");
+    const skillsDiscoveryRouter = createSkillsDiscoveryRoutes();
+    app.route("", skillsDiscoveryRouter);
+    logger.info("Skills discovery routes enabled at :8080/internal/skills/*");
+  }
+
   // Audio routes (TTS synthesis for workers)
   if (coreServices) {
     const transcriptionService = coreServices.getTranscriptionService();
@@ -243,12 +253,7 @@ function setupServer(
     if (queueProducer && sessionMgr && interactionSvc) {
       // Agent API (Hono with OpenAPI docs)
       const { createAgentApi } = require("../routes/public/agent");
-      const agentApi = createAgentApi(
-        queueProducer,
-        sessionMgr,
-        interactionSvc,
-        publicUrl
-      );
+      const agentApi = createAgentApi(queueProducer, sessionMgr, publicUrl);
       app.route("", agentApi);
       logger.info(
         "Agent API enabled at :8080/api/v1/agents/* with docs at :8080/api/docs"
@@ -339,6 +344,7 @@ function setupServer(
         providerStores:
           Object.keys(providerStores).length > 0 ? providerStores : undefined,
         providerConnectedOverrides,
+        providerCatalogService: coreServices.getProviderCatalogService(),
         githubAuth,
         githubAppInstallUrl,
         githubOAuthClientId: process.env.GITHUB_CLIENT_ID,
@@ -921,7 +927,8 @@ export async function startGateway(
 
   // Inject core services into orchestrator (provider modules carry their own credential stores)
   await orchestrator.injectCoreServices(
-    coreServices.getQueue().getRedisClient()
+    coreServices.getQueue().getRedisClient(),
+    coreServices.getProviderCatalogService()
   );
   logger.info("Orchestrator configured with core services");
 

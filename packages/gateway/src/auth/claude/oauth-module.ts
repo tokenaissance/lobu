@@ -14,7 +14,11 @@ import {
   renderOAuthErrorPage,
   renderOAuthSuccessPage,
 } from "../oauth-templates";
-import type { ClaudeCredentialStore } from "./credential-store";
+import {
+  type AuthProfilesManager,
+  createAuthProfileLabel,
+} from "../settings/auth-profiles-manager";
+import type { ClaudeCredentials } from "./credential-store";
 import type { ClaudeModelPreferenceStore } from "./model-preference-store";
 
 const logger = createLogger("claude-oauth-module");
@@ -30,16 +34,24 @@ export class ClaudeOAuthModule
 {
   name = "claude-oauth";
   providerId = "claude";
-  providerDisplayName = "Claude AI";
+  providerDisplayName = "Claude";
   providerIconUrl = "https://www.anthropic.com/favicon.ico";
   authType = "oauth" as const;
+  supportedAuthTypes: ("oauth" | "device-code" | "api-key")[] = [
+    "oauth",
+    "api-key",
+  ];
+  apiKeyInstructions =
+    'Enter your <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-600 underline">Anthropic API key</a>:';
+  apiKeyPlaceholder = "sk-ant-...";
   private oauthClient: ClaudeOAuthClient;
   private publicGatewayUrl: string;
   private queue: IMessageQueue;
   private app: Hono;
+  private authProfilesManager: AuthProfilesManager;
 
   constructor(
-    private credentialStore: ClaudeCredentialStore,
+    authProfilesManager: AuthProfilesManager,
     private stateStore: ClaudeOAuthStateStore,
     private modelPreferenceStore: ClaudeModelPreferenceStore,
     queue: IMessageQueue,
@@ -48,6 +60,7 @@ export class ClaudeOAuthModule
     super();
 
     this.oauthClient = new ClaudeOAuthClient();
+    this.authProfilesManager = authProfilesManager;
     this.queue = queue;
     this.publicGatewayUrl = publicGatewayUrl;
     this.app = new Hono();
@@ -69,28 +82,53 @@ export class ClaudeOAuthModule
     ];
   }
 
+  getCredentialEnvVarName(): string {
+    return "CLAUDE_CODE_OAUTH_TOKEN";
+  }
+
+  getUpstreamConfig(): { slug: string; upstreamBaseUrl: string } {
+    return { slug: "anthropic", upstreamBaseUrl: "https://api.anthropic.com" };
+  }
+
   async hasCredentials(agentId: string): Promise<boolean> {
-    return this.credentialStore.hasCredentials(agentId);
+    return this.authProfilesManager.hasProviderProfiles(
+      agentId,
+      this.providerId
+    );
   }
 
   hasSystemKey(): boolean {
+    // Only check keys explicitly set in .env — not ANTHROPIC_API_KEY which
+    // can be leaked into the shell env by Claude Code or other tools.
     return !!(
-      process.env.ANTHROPIC_API_KEY ||
-      process.env.ANTHROPIC_AUTH_TOKEN ||
-      process.env.CLAUDE_CODE_OAUTH_TOKEN
+      process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_CODE_OAUTH_TOKEN
     );
   }
 
   getProxyBaseUrlMappings(proxyUrl: string): Record<string, string> {
-    return { ANTHROPIC_BASE_URL: proxyUrl };
+    return { ANTHROPIC_BASE_URL: `${proxyUrl}/anthropic` };
+  }
+
+  catalogDescription = "Anthropic's Claude AI with OAuth authentication";
+
+  getCliBackendConfig() {
+    return {
+      name: "claude-code",
+      command: "npx",
+      args: ["-y", "acpx@latest", "claude", "--print"],
+      modelArg: "--model",
+      sessionArg: "--session",
+    };
   }
 
   injectSystemKeyFallback(
     envVars: Record<string, string>
   ): Record<string, string> {
     if (!envVars.ANTHROPIC_API_KEY && !envVars.CLAUDE_CODE_OAUTH_TOKEN) {
+      // Prefer ANTHROPIC_AUTH_TOKEN (explicit user config in .env) over
+      // ANTHROPIC_API_KEY (which may be injected by Claude Code's shell env).
       const systemApiKey =
-        process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN;
+        process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
       const systemOAuthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
 
       if (systemApiKey) {
@@ -118,26 +156,34 @@ export class ClaudeOAuthModule
     agentId: string,
     envVars: Record<string, string>
   ): Promise<Record<string, string>> {
-    // Try to get space's credentials
-    const credentials = await this.credentialStore.getCredentials(agentId);
+    const profile = await this.authProfilesManager.getBestProfile(
+      agentId,
+      this.providerId
+    );
 
-    if (credentials) {
-      // Space has OAuth credentials - use their token
-      logger.info(`Injecting OAuth token for space ${agentId}`);
-      envVars.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
-    } else {
-      logger.debug(`No credentials for space ${agentId}, using system token`);
-      // System token (if any) will already be in envVars from base deployment
+    if (profile?.credential) {
+      logger.info(`Injecting ${profile.authType} profile for space ${agentId}`);
+      if (profile.authType === "oauth") {
+        envVars.CLAUDE_CODE_OAUTH_TOKEN = profile.credential;
+      } else {
+        envVars.ANTHROPIC_API_KEY = profile.credential;
+      }
     }
 
-    // Inject user's model preference if set (still user-scoped)
+    // Inject model preference: user-scoped preference > .env config > module default
     const modelPreference =
       await this.modelPreferenceStore.getModelPreference(userId);
-    if (modelPreference) {
-      logger.info(
-        `Injecting model preference for ${userId}: ${modelPreference}`
-      );
-      envVars.AGENT_DEFAULT_MODEL = modelPreference;
+    const effectiveModel =
+      modelPreference ||
+      process.env.AGENT_DEFAULT_MODEL ||
+      ClaudeOAuthModule.FALLBACK_MODELS[0]?.id;
+    if (effectiveModel) {
+      if (modelPreference) {
+        logger.info(
+          `Injecting model preference for ${userId}: ${modelPreference}`
+        );
+      }
+      envVars.AGENT_DEFAULT_MODEL = effectiveModel;
     }
 
     return envVars;
@@ -147,17 +193,15 @@ export class ClaudeOAuthModule
     agentId: string,
     userId: string
   ): Promise<ModelOption[]> {
-    const [availableModels, preferredModel, hasSpaceCredentials] =
-      await Promise.all([
-        this.modelPreferenceStore.getAvailableModels(),
-        this.modelPreferenceStore.getModelPreference(userId),
-        this.credentialStore.hasCredentials(agentId),
-      ]);
+    const availableModels = await this.fetchClaudeModels(agentId);
+    if (availableModels.length === 0) return [];
+
+    const preferredModel =
+      await this.modelPreferenceStore.getModelPreference(userId);
     logger.debug("Building Claude model options", {
       agentId,
       userId,
       preferredModel,
-      hasSpaceCredentials,
     });
     const defaultModel =
       preferredModel ||
@@ -173,11 +217,9 @@ export class ClaudeOAuthModule
     };
 
     const defaultEntry = availableModels.find((m) => m.id === defaultModel);
-    addOption(
-      defaultModel,
-      defaultEntry?.display_name ||
-        `Claude ${defaultModel.replace(/^claude-/, "")}`
-    );
+    if (defaultEntry) {
+      addOption(defaultModel, defaultEntry.display_name || defaultModel);
+    }
 
     for (const model of availableModels) {
       addOption(model.id, model.display_name || model.id);
@@ -234,6 +276,33 @@ export class ClaudeOAuthModule
     // Logout endpoint
     this.app.post("/logout", (c) => this.handleLogout(c));
 
+    // Save API key (alternative to OAuth)
+    this.app.post("/save-key", async (c) => {
+      try {
+        const body = await c.req.json();
+        const { agentId, apiKey } = body;
+
+        if (!agentId || !apiKey) {
+          return c.json({ error: "Missing agentId or apiKey" }, 400);
+        }
+
+        await this.authProfilesManager.upsertProfile({
+          agentId,
+          provider: this.providerId,
+          credential: apiKey,
+          authType: "api-key",
+          label: createAuthProfileLabel(this.providerDisplayName, apiKey),
+          makePrimary: true,
+        });
+
+        logger.info(`Claude API key saved for agent ${agentId}`);
+        return c.json({ success: true });
+      } catch (error) {
+        logger.error("Failed to save Claude API key", { error });
+        return c.json({ error: "Failed to save API key" }, 500);
+      }
+    });
+
     logger.info("Claude OAuth routes configured");
   }
 
@@ -264,9 +333,11 @@ export class ClaudeOAuthModule
     }>
   > {
     try {
-      const hasCredentials = await this.credentialStore.hasCredentials(agentId);
-      const availableModels =
-        await this.modelPreferenceStore.getAvailableModels();
+      const hasCredentials = await this.authProfilesManager.hasProviderProfiles(
+        agentId,
+        this.providerId
+      );
+      const availableModels = await this.fetchClaudeModels(agentId);
       const currentModel =
         await this.modelPreferenceStore.getModelPreference(userId);
 
@@ -290,7 +361,7 @@ export class ClaudeOAuthModule
       return [
         {
           id: "claude",
-          name: "Claude AI",
+          name: "Claude",
           isAuthenticated,
           loginUrl,
           logoutUrl,
@@ -317,7 +388,10 @@ export class ClaudeOAuthModule
     context: any
   ): Promise<boolean> {
     if (actionId === "claude_logout") {
-      await this.credentialStore.deleteCredentials(agentId);
+      await this.authProfilesManager.deleteProviderProfiles(
+        agentId,
+        this.providerId
+      );
       logger.info(`Space ${agentId} logged out from Claude`);
 
       // Update home tab
@@ -538,7 +612,7 @@ export class ClaudeOAuthModule
       );
 
       // Store credentials using agentId for multi-tenant isolation
-      await this.credentialStore.setCredentials(stateData.agentId, credentials);
+      await this.saveClaudeCredentials(stateData.agentId, credentials);
       logger.info(`OAuth successful for space ${stateData.agentId} via modal`);
 
       // Parse login context to determine where to send success message
@@ -686,7 +760,7 @@ export class ClaudeOAuthModule
       );
 
       // Store credentials using agentId for multi-tenant isolation
-      await this.credentialStore.setCredentials(stateData.agentId, credentials);
+      await this.saveClaudeCredentials(stateData.agentId, credentials);
 
       logger.info(`OAuth successful for space ${stateData.agentId}`);
 
@@ -723,12 +797,141 @@ export class ClaudeOAuthModule
     }
 
     try {
-      await this.credentialStore.deleteCredentials(agentId);
+      await this.authProfilesManager.deleteProviderProfiles(
+        agentId,
+        this.providerId
+      );
       logger.info(`Space ${agentId} logged out from Claude`);
       return c.json({ success: true });
     } catch (error) {
       logger.error("Failed to logout", { error, agentId });
       return c.json({ error: "Failed to logout" }, 500);
     }
+  }
+
+  async setCredentials(agentId: string, credentials: unknown): Promise<void> {
+    await this.saveClaudeCredentials(agentId, credentials as ClaudeCredentials);
+  }
+
+  async deleteCredentials(agentId: string): Promise<void> {
+    await this.authProfilesManager.deleteProviderProfiles(
+      agentId,
+      this.providerId
+    );
+  }
+
+  private async saveClaudeCredentials(
+    agentId: string,
+    credentials: ClaudeCredentials
+  ): Promise<void> {
+    await this.authProfilesManager.upsertProfile({
+      agentId,
+      provider: this.providerId,
+      credential: credentials.accessToken,
+      authType: "oauth",
+      label: createAuthProfileLabel(
+        this.providerDisplayName,
+        credentials.accessToken
+      ),
+      metadata: {
+        refreshToken: credentials.refreshToken,
+        expiresAt: credentials.expiresAt,
+      },
+      makePrimary: true,
+    });
+  }
+
+  private static readonly FALLBACK_MODELS: Array<{
+    id: string;
+    display_name: string;
+    type: string;
+  }> = [
+    {
+      id: "claude-sonnet-4-20250514",
+      display_name: "Claude Sonnet 4",
+      type: "model",
+    },
+    {
+      id: "claude-opus-4-20250514",
+      display_name: "Claude Opus 4",
+      type: "model",
+    },
+    {
+      id: "claude-haiku-3-5-20241022",
+      display_name: "Claude Haiku 3.5",
+      type: "model",
+    },
+  ];
+
+  private async fetchClaudeModels(
+    agentId: string
+  ): Promise<Array<{ id: string; display_name: string; type: string }>> {
+    const profile = await this.authProfilesManager.getBestProfile(
+      agentId,
+      this.providerId
+    );
+
+    const oauthToken =
+      profile?.authType === "oauth" ? profile.credential : undefined;
+    const apiKey =
+      profile?.authType !== "oauth"
+        ? profile?.credential
+        : process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "anthropic-version": "2023-06-01",
+    };
+    if (oauthToken) {
+      headers.Authorization = `Bearer ${oauthToken}`;
+    } else if (apiKey) {
+      headers["x-api-key"] = apiKey;
+    } else {
+      return ClaudeOAuthModule.FALLBACK_MODELS;
+    }
+
+    const response = await fetch("https://api.anthropic.com/v1/models", {
+      headers,
+    }).catch((err) => {
+      logger.warn(
+        { error: err?.message, agentId },
+        "fetchClaudeModels: fetch failed"
+      );
+      return null;
+    });
+
+    if (!response || !response.ok) {
+      logger.warn(
+        {
+          agentId,
+          status: response?.status,
+          hasOauth: !!oauthToken,
+          hasApiKey: !!apiKey,
+        },
+        "fetchClaudeModels: non-ok response, using fallback models"
+      );
+      return ClaudeOAuthModule.FALLBACK_MODELS;
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: Array<{ id?: string; display_name?: string; type?: string }>;
+    };
+
+    const models = (payload.data || [])
+      .map((item) => {
+        const id = item.id?.trim();
+        if (!id) return null;
+        return {
+          id,
+          display_name: item.display_name || id,
+          type: item.type || "model",
+        };
+      })
+      .filter(
+        (item): item is { id: string; display_name: string; type: string } =>
+          Boolean(item)
+      );
+
+    return models.length > 0 ? models : ClaudeOAuthModule.FALLBACK_MODELS;
   }
 }

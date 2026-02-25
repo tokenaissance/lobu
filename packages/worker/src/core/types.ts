@@ -13,7 +13,7 @@ import type { WorkerTransport } from "@lobu/core";
 
 /**
  * Interface for worker executors
- * Allows different implementations (Claude, GPT, etc.)
+ * Allows different agent implementations
  */
 export interface WorkerExecutor {
   /**

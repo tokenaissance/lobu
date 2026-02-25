@@ -2,7 +2,6 @@ import {
   buildMcpToolInstructions,
   createLogger,
   type McpToolDef,
-  type PendingInteraction,
 } from "@lobu/core";
 import { ensureBaseUrl } from "../core/url-utils";
 
@@ -20,9 +19,9 @@ interface McpStatus {
 interface SessionContextResponse {
   platformInstructions: string;
   networkInstructions: string;
+  skillsInstructions: string;
   mcpStatus: McpStatus[];
   mcpTools?: Record<string, McpToolDef[]>;
-  unansweredInteractions: PendingInteraction[];
 }
 
 function buildMcpInstructions(mcpStatus: McpStatus[]): string {
@@ -61,19 +60,18 @@ function buildMcpInstructions(mcpStatus: McpStatus[]): string {
 
 /**
  * Fetch session context from gateway for OpenClaw worker.
- * Returns gateway instructions and unanswered interactions.
+ * Returns gateway instructions.
  * Skips MCP server config (OpenClaw doesn't use Claude SDK's MCP format).
  */
 export async function getOpenClawSessionContext(): Promise<{
   gatewayInstructions: string;
-  unansweredInteractions: PendingInteraction[];
 }> {
   const dispatcherUrl = process.env.DISPATCHER_URL;
   const workerToken = process.env.WORKER_TOKEN;
 
   if (!dispatcherUrl || !workerToken) {
     logger.warn("Missing dispatcher URL or worker token for session context");
-    return { gatewayInstructions: "", unansweredInteractions: [] };
+    return { gatewayInstructions: "" };
   }
 
   try {
@@ -91,7 +89,7 @@ export async function getOpenClawSessionContext(): Promise<{
       logger.warn("Gateway returned non-success status for session context", {
         status: response.status,
       });
-      return { gatewayInstructions: "", unansweredInteractions: [] };
+      return { gatewayInstructions: "" };
     }
 
     const data = (await response.json()) as SessionContextResponse;
@@ -109,6 +107,7 @@ export async function getOpenClawSessionContext(): Promise<{
     const gatewayInstructions = [
       data.platformInstructions,
       data.networkInstructions,
+      data.skillsInstructions,
       mcpInstructions,
       mcpToolInstructions,
     ]
@@ -116,15 +115,12 @@ export async function getOpenClawSessionContext(): Promise<{
       .join("\n\n");
 
     logger.info(
-      `Built gateway instructions: platform (${data.platformInstructions.length} chars) + network (${data.networkInstructions.length} chars) + MCP (${mcpInstructions.length} chars)`
+      `Built gateway instructions: platform (${data.platformInstructions.length} chars) + network (${data.networkInstructions.length} chars) + skills (${(data.skillsInstructions || "").length} chars) + MCP (${mcpInstructions.length} chars)`
     );
 
-    return {
-      gatewayInstructions,
-      unansweredInteractions: data.unansweredInteractions || [],
-    };
+    return { gatewayInstructions };
   } catch (error) {
     logger.error("Failed to fetch session context from gateway", { error });
-    return { gatewayInstructions: "", unansweredInteractions: [] };
+    return { gatewayInstructions: "" };
   }
 }

@@ -7,8 +7,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "dev": "bun --watch src/index.ts",
+    "generate:css": "bun run scripts/generate-css.ts",
+    "build": "bun run generate:css && tsc",
+    "dev": "bun run generate:css && bun --watch src/index.ts",
     "start": "cd ../core && bun run build && cd ../gateway && bun src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"

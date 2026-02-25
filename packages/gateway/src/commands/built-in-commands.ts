@@ -4,7 +4,11 @@ import {
   createLogger,
 } from "@lobu/core";
 import type { AgentSettingsStore } from "../auth/settings";
-import { buildSettingsUrl, generateSettingsToken } from "../auth/settings";
+import {
+  buildSettingsUrl,
+  formatSettingsTokenTtl,
+  generateSettingsToken,
+} from "../auth/settings";
 
 const logger = createLogger("built-in-commands");
 
@@ -37,8 +41,9 @@ export function registerBuiltInCommands(
         ctx.platform
       );
       const settingsUrl = buildSettingsUrl(token);
+      const ttlLabel = formatSettingsTokenTtl();
       await ctx.reply(
-        `Here's your settings link (valid for 1 hour):\n${settingsUrl}\n\nUse this page to configure your agent's model, network access, git repository, and more.`
+        `Here's your settings link (valid for ${ttlLabel}):\n${settingsUrl}\n\nUse this page to configure your agent's model, network access, git repository, and more.`
       );
     },
   });

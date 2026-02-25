@@ -6,6 +6,10 @@ import {
 } from "@lobu/core";
 import { Hono } from "hono";
 import type { AgentSettingsStore } from "../settings/agent-settings-store";
+import {
+  AuthProfilesManager,
+  createAuthProfileLabel,
+} from "../settings/auth-profiles-manager";
 import { ChatGPTDeviceCodeClient } from "./device-code-client";
 
 const logger = createLogger("chatgpt-oauth-module");
@@ -24,12 +28,22 @@ export class ChatGPTOAuthModule
   providerDisplayName = "ChatGPT";
   providerIconUrl = "https://chatgpt.com/favicon.ico";
   authType = "device-code" as const;
+  supportedAuthTypes: ("oauth" | "device-code" | "api-key")[] = [
+    "device-code",
+    "api-key",
+  ];
+  apiKeyInstructions =
+    'Enter your <a href="https://platform.openai.com/api-keys" target="_blank" class="text-slate-600 underline">OpenAI API key</a>:';
+  apiKeyPlaceholder = "sk-...";
+  catalogDescription = "OpenAI's ChatGPT with device code authentication";
   private deviceCodeClient: ChatGPTDeviceCodeClient;
   private app: Hono;
+  private authProfilesManager: AuthProfilesManager;
 
   constructor(private agentSettingsStore: AgentSettingsStore) {
     super();
     this.deviceCodeClient = new ChatGPTDeviceCodeClient();
+    this.authProfilesManager = new AuthProfilesManager(this.agentSettingsStore);
     this.app = new Hono();
     this.setupRoutes();
   }
@@ -41,22 +55,42 @@ export class ChatGPTOAuthModule
   // ---- ModelProviderModule methods ----
 
   getSecretEnvVarNames(): string[] {
-    // Token lives in envVars, no special placeholder handling needed
-    return [];
+    return ["OPENAI_API_KEY"];
+  }
+
+  getCredentialEnvVarName(): string {
+    return "OPENAI_API_KEY";
+  }
+
+  getUpstreamConfig(): { slug: string; upstreamBaseUrl: string } {
+    return {
+      slug: "openai-codex",
+      upstreamBaseUrl: "https://chatgpt.com/backend-api",
+    };
   }
 
   async hasCredentials(agentId: string): Promise<boolean> {
-    const settings = await this.agentSettingsStore.getSettings(agentId);
-    return !!settings?.envVars?.OPENAI_API_KEY;
+    return this.authProfilesManager.hasProviderProfiles(
+      agentId,
+      this.providerId
+    );
   }
 
   hasSystemKey(): boolean {
     return !!process.env.OPENAI_API_KEY;
   }
 
-  getProxyBaseUrlMappings(): Record<string, string> {
-    // No proxy — worker talks directly to chatgpt.com
-    return {};
+  getProxyBaseUrlMappings(proxyUrl: string): Record<string, string> {
+    return { OPENAI_BASE_URL: `${proxyUrl}/openai-codex` };
+  }
+
+  getCliBackendConfig() {
+    return {
+      name: "codex",
+      command: "npx",
+      args: ["-y", "acpx@latest", "codex", "--quiet"],
+      modelArg: "--model",
+    };
   }
 
   injectSystemKeyFallback(
@@ -71,19 +105,41 @@ export class ChatGPTOAuthModule
     return envVars;
   }
 
-  async getModelOptions(): Promise<ModelOption[]> {
-    return [
-      { value: "openclaw/openai-codex/gpt-5.2-codex", label: "GPT-5.2 Codex" },
-      { value: "openclaw/openai-codex/gpt-5.1", label: "GPT-5.1" },
-      {
-        value: "openclaw/openai-codex/gpt-5.1-codex-max",
-        label: "GPT-5.1 Codex Max",
+  async getModelOptions(
+    agentId: string,
+    _userId: string
+  ): Promise<ModelOption[]> {
+    const token = await this.getCredential(agentId);
+    if (!token) return [];
+
+    const response = await fetch("https://chatgpt.com/backend-api/models", {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
       },
-      {
-        value: "openclaw/openai-codex/gpt-5.1-codex-mini",
-        label: "GPT-5.1 Codex Mini",
-      },
-    ];
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      models?: Array<{
+        slug?: string;
+        title?: string;
+      }>;
+    };
+
+    return (payload.models || [])
+      .map((model) => {
+        const slug = model.slug?.trim();
+        if (!slug) return null;
+        return {
+          value: `openclaw/openai-codex/${slug}`,
+          label: model.title?.trim() || slug,
+        } satisfies ModelOption;
+      })
+      .filter((item): item is ModelOption => Boolean(item));
   }
 
   /**
@@ -96,8 +152,11 @@ export class ChatGPTOAuthModule
     envVars: Record<string, string>
   ): Promise<Record<string, string>> {
     if (!envVars.OPENAI_API_KEY) {
-      const settings = await this.agentSettingsStore.getSettings(agentId);
-      const token = settings?.envVars?.OPENAI_API_KEY;
+      const profile = await this.authProfilesManager.getBestProfile(
+        agentId,
+        this.providerId
+      );
+      const token = profile?.credential;
       if (token) {
         logger.info(`Injecting OPENAI_API_KEY for agent ${agentId}`);
         envVars.OPENAI_API_KEY = token;
@@ -184,14 +243,22 @@ export class ChatGPTOAuthModule
           return c.json({ status: "pending" });
         }
 
-        // Save token to agent settings envVars
-        const settings = await this.agentSettingsStore.getSettings(agentId);
-        const existingEnvVars = settings?.envVars || {};
-        await this.agentSettingsStore.updateSettings(agentId, {
-          envVars: {
-            ...existingEnvVars,
-            OPENAI_API_KEY: result.accessToken,
+        await this.authProfilesManager.upsertProfile({
+          agentId,
+          provider: this.providerId,
+          credential: result.accessToken,
+          authType: "device-code",
+          label: createAuthProfileLabel(
+            this.providerDisplayName,
+            result.accessToken,
+            result.accountId
+          ),
+          metadata: {
+            accountId: result.accountId,
+            refreshToken: result.refreshToken,
+            expiresAt: Date.now() + result.expiresIn * 1000,
           },
+          makePrimary: true,
         });
 
         logger.info(`ChatGPT token saved for agent ${agentId}`);
@@ -206,6 +273,33 @@ export class ChatGPTOAuthModule
       }
     });
 
+    // Save API key (alternative to device code)
+    this.app.post("/save-key", async (c) => {
+      try {
+        const body = await c.req.json();
+        const { agentId, apiKey } = body;
+
+        if (!agentId || !apiKey) {
+          return c.json({ error: "Missing agentId or apiKey" }, 400);
+        }
+
+        await this.authProfilesManager.upsertProfile({
+          agentId,
+          provider: this.providerId,
+          credential: apiKey,
+          authType: "api-key",
+          label: createAuthProfileLabel(this.providerDisplayName, apiKey),
+          makePrimary: true,
+        });
+
+        logger.info(`ChatGPT API key saved for agent ${agentId}`);
+        return c.json({ success: true });
+      } catch (error) {
+        logger.error("Failed to save ChatGPT API key", { error });
+        return c.json({ error: "Failed to save API key" }, 500);
+      }
+    });
+
     // Logout - remove token
     this.app.post("/logout", async (c) => {
       try {
@@ -216,14 +310,11 @@ export class ChatGPTOAuthModule
           return c.json({ error: "Missing agentId" }, 400);
         }
 
-        const settings = await this.agentSettingsStore.getSettings(agentId);
-        if (settings?.envVars?.OPENAI_API_KEY) {
-          const { OPENAI_API_KEY: _, ...remainingEnvVars } = settings.envVars;
-          await this.agentSettingsStore.updateSettings(agentId, {
-            envVars: remainingEnvVars,
-          });
-          logger.info(`ChatGPT token removed for agent ${agentId}`);
-        }
+        await this.authProfilesManager.deleteProviderProfiles(
+          agentId,
+          this.providerId
+        );
+        logger.info(`ChatGPT token removed for agent ${agentId}`);
 
         return c.json({ success: true });
       } catch (error) {
@@ -237,5 +328,17 @@ export class ChatGPTOAuthModule
 
   registerEndpoints(_app: any): void {
     logger.info("ChatGPT auth endpoints registered via module system");
+  }
+
+  private async getCredential(agentId: string): Promise<string | null> {
+    const profile = await this.authProfilesManager.getBestProfile(
+      agentId,
+      this.providerId
+    );
+    if (profile?.credential) {
+      return profile.credential;
+    }
+
+    return process.env.OPENAI_API_KEY || null;
   }
 }

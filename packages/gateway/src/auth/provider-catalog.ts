@@ -1,0 +1,175 @@
+import {
+  createLogger,
+  type InstalledProvider,
+  type ModelProviderModule,
+  moduleRegistry,
+} from "@lobu/core";
+import type { AgentSettingsStore } from "./settings/agent-settings-store";
+import type { AuthProfilesManager } from "./settings/auth-profiles-manager";
+
+const logger = createLogger("provider-catalog");
+
+/**
+ * ProviderCatalogService wraps the module registry to provide
+ * per-agent provider install/uninstall/reorder operations.
+ *
+ * Providers are registered globally in the module registry,
+ * but each agent chooses which providers to install from the catalog.
+ */
+export class ProviderCatalogService {
+  constructor(
+    private agentSettingsStore: AgentSettingsStore,
+    private authProfilesManager: AuthProfilesManager
+  ) {}
+
+  /**
+   * List all catalog-visible providers from the module registry.
+   */
+  listCatalogProviders(): ModelProviderModule[] {
+    return moduleRegistry
+      .getModelProviderModules()
+      .filter((m) => m.catalogVisible !== false);
+  }
+
+  /**
+   * Resolve an agent's installedProviders to their module instances.
+   * Returns modules in the agent's install order.
+   */
+  async getInstalledModules(agentId: string): Promise<ModelProviderModule[]> {
+    const settings = await this.agentSettingsStore.getSettings(agentId);
+    const installed = settings?.installedProviders || [];
+    if (installed.length === 0) return [];
+
+    const allModules = moduleRegistry.getModelProviderModules();
+    const moduleMap = new Map(allModules.map((m) => [m.providerId, m]));
+
+    return installed
+      .map((ip) => moduleMap.get(ip.providerId))
+      .filter((m): m is ModelProviderModule => m !== undefined);
+  }
+
+  /**
+   * Get raw installed provider entries for an agent.
+   */
+  async getInstalledProviders(agentId: string): Promise<InstalledProvider[]> {
+    const settings = await this.agentSettingsStore.getSettings(agentId);
+    return settings?.installedProviders || [];
+  }
+
+  /**
+   * Install a provider for an agent. Appends to the end of the list.
+   */
+  async installProvider(
+    agentId: string,
+    providerId: string,
+    config?: InstalledProvider["config"]
+  ): Promise<void> {
+    const allModules = moduleRegistry.getModelProviderModules();
+    const module = allModules.find((m) => m.providerId === providerId);
+    if (!module) {
+      throw new Error(`Unknown provider: ${providerId}`);
+    }
+
+    const settings = await this.agentSettingsStore.getSettings(agentId);
+    const installed = settings?.installedProviders || [];
+
+    if (installed.some((ip) => ip.providerId === providerId)) {
+      logger.info(
+        `Provider ${providerId} already installed for agent ${agentId}`
+      );
+      return;
+    }
+
+    const entry: InstalledProvider = {
+      providerId,
+      installedAt: Date.now(),
+      ...(config ? { config } : {}),
+    };
+
+    await this.agentSettingsStore.updateSettings(agentId, {
+      installedProviders: [...installed, entry],
+    });
+
+    logger.info(`Installed provider ${providerId} for agent ${agentId}`);
+  }
+
+  /**
+   * Uninstall a provider from an agent. Also cleans up auth profiles.
+   */
+  async uninstallProvider(agentId: string, providerId: string): Promise<void> {
+    const settings = await this.agentSettingsStore.getSettings(agentId);
+    const installed = settings?.installedProviders || [];
+
+    const filtered = installed.filter((ip) => ip.providerId !== providerId);
+    if (filtered.length === installed.length) {
+      logger.info(
+        `Provider ${providerId} not installed for agent ${agentId}, nothing to uninstall`
+      );
+      return;
+    }
+
+    // Clean up auth profiles for this provider
+    await this.authProfilesManager.deleteProviderProfiles(agentId, providerId);
+
+    await this.agentSettingsStore.updateSettings(agentId, {
+      installedProviders: filtered,
+    });
+
+    logger.info(`Uninstalled provider ${providerId} for agent ${agentId}`);
+  }
+
+  /**
+   * Find the provider module whose model options include the given model string.
+   */
+  async findProviderForModel(
+    model: string,
+    providers?: ModelProviderModule[]
+  ): Promise<ModelProviderModule | undefined> {
+    const candidates = providers || moduleRegistry.getModelProviderModules();
+    for (const provider of candidates) {
+      if (!provider.getModelOptions) continue;
+      const options = await provider.getModelOptions("", "");
+      if (options.some((opt) => opt.value === model)) {
+        return provider;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Reorder installed providers. The orderedIds must contain
+   * exactly the same provider IDs as currently installed.
+   */
+  async reorderProviders(agentId: string, orderedIds: string[]): Promise<void> {
+    const settings = await this.agentSettingsStore.getSettings(agentId);
+    const installed = settings?.installedProviders || [];
+
+    const installedMap = new Map(installed.map((ip) => [ip.providerId, ip]));
+
+    // Validate all ordered IDs exist in installed
+    for (const id of orderedIds) {
+      if (!installedMap.has(id)) {
+        throw new Error(`Provider ${id} is not installed`);
+      }
+    }
+
+    const reordered = orderedIds
+      .map((id) => installedMap.get(id))
+      .filter((ip): ip is InstalledProvider => ip !== undefined);
+
+    // Append any installed providers not in orderedIds (shouldn't happen but safety)
+    for (const ip of installed) {
+      if (!orderedIds.includes(ip.providerId)) {
+        reordered.push(ip);
+      }
+    }
+
+    await this.agentSettingsStore.updateSettings(agentId, {
+      installedProviders: reordered,
+    });
+
+    logger.info(
+      `Reordered providers for agent ${agentId}: ${orderedIds.join(", ")}`
+    );
+  }
+}

@@ -13,7 +13,7 @@ import type {
   ProcessManagerInstance,
 } from "./types";
 
-const logger = createLogger("worker");
+const logger = createLogger("process-manager");
 
 // ============================================================================
 // PROCESS MANAGER INSTANCE STATE
@@ -38,7 +38,7 @@ function setProcessManagerInstance(
 class ProcessManager implements ProcessManagerApi {
   private processes: Map<string, ProcessInfo> = new Map();
   private processDir = "/tmp/agent-processes";
-  private logsDir = "/tmp/claude-logs";
+  private logsDir = "/tmp/worker-logs";
 
   constructor() {
     this.init();

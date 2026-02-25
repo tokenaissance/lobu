@@ -20,6 +20,7 @@ import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import {
   type AgentSettingsStore,
   buildSettingsUrl,
+  formatSettingsTokenTtl,
   generateSettingsToken,
 } from "../../auth/settings";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
@@ -184,7 +185,6 @@ export class WhatsAppMessageHandler {
     if (settings.model) {
       mergedOptions.model = settings.model;
     }
-
     // Pass additional settings through agentOptions for worker to use
     if (settings.networkConfig) {
       mergedOptions.networkConfig = settings.networkConfig;
@@ -801,9 +801,10 @@ export class WhatsAppMessageHandler {
       try {
         const token = generateSettingsToken(agentId, userId, "whatsapp");
         const settingsUrl = buildSettingsUrl(token);
+        const ttlLabel = formatSettingsTokenTtl();
 
         await this.client.sendMessage(context.chatJid, {
-          text: `Here's your settings link (valid for 1 hour):\n${settingsUrl}\n\nUse this page to configure your agent's model, network access, git repository, and more.`,
+          text: `Here's your settings link (valid for ${ttlLabel}):\n${settingsUrl}\n\nUse this page to configure your agent's model, network access, git repository, and more.`,
         });
         logger.info(`Sent settings link to user ${userId}`);
       } catch (error) {

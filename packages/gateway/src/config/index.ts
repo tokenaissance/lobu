@@ -220,7 +220,8 @@ export function buildGatewayConfig(): GatewayConfig {
     },
     anthropicProxy: {
       enabled: true,
-      anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL,
+      anthropicBaseUrl:
+        process.env.SECRET_PROXY_UPSTREAM_URL || process.env.ANTHROPIC_BASE_URL,
     },
     orchestration: {
       queues: {

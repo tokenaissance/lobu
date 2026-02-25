@@ -4,6 +4,7 @@ const PROVIDER_API_KEY_ENV_VARS: Record<string, string> = {
   google: "GOOGLE_API_KEY",
   mistral: "MISTRAL_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
+  "z-ai": "Z_AI_API_KEY",
 };
 
 function sanitizeProviderToken(value: string): string {
@@ -30,19 +31,29 @@ export function getApiKeyEnvVarForProvider(providerName: string): string {
 }
 
 export function getProviderAuthHintFromError(
-  errorMessage: string
+  errorMessage: string,
+  defaultProvider?: string
 ): { providerName: string; envVar: string } | null {
-  const needsAuthSetup = /No API key found|Authentication failed/i.test(
-    errorMessage
-  );
+  const needsAuthSetup =
+    /No API key found|Authentication failed|invalid x-api-key|invalid api[-\s]?key|authentication_error|incorrect api key/i.test(
+      errorMessage
+    );
   if (!needsAuthSetup) {
     return null;
   }
 
-  const providerMatch = errorMessage.match(
-    /(?:No API key found for|Authentication failed for)\s+([A-Za-z0-9._-]+)/i
+  const explicitProviderMatch = errorMessage.match(
+    /(?:No API key found for|Authentication failed for)\s+"?([A-Za-z0-9_-]+)/i
   );
-  const providerName = providerMatch?.[1]?.toLowerCase() || "provider";
+  const jsonProviderMatch = errorMessage.match(
+    /"provider"\s*:\s*"([A-Za-z0-9._-]+)"/i
+  );
+  const fallbackProvider = defaultProvider?.trim().toLowerCase();
+  const providerName =
+    explicitProviderMatch?.[1]?.toLowerCase() ||
+    jsonProviderMatch?.[1]?.toLowerCase() ||
+    fallbackProvider ||
+    "provider";
 
   return {
     providerName,

@@ -7,6 +7,7 @@ import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 import {
   buildSettingsUrl,
+  formatSettingsTokenTtl,
   generateSettingsToken,
 } from "../../auth/settings/token-service";
 import { resolveSpace } from "../../spaces";
@@ -325,14 +326,15 @@ export class ActionHandler {
         isGroup: false,
       });
 
-      // Generate settings token (1 hour TTL)
+      // Generate settings token (configured TTL, default 1 hour)
       const token = generateSettingsToken(agentId, userId, "slack");
       const settingsUrl = buildSettingsUrl(token);
+      const ttlLabel = formatSettingsTokenTtl();
 
       // Send DM with settings link
       await client.chat.postMessage({
         channel: userId, // DM to user
-        text: `Here's your settings link (expires in 1 hour):\n${settingsUrl}`,
+        text: `Here's your settings link (expires in ${ttlLabel}):\n${settingsUrl}`,
         blocks: [
           {
             type: "section",
@@ -357,7 +359,7 @@ export class ActionHandler {
             elements: [
               {
                 type: "mrkdwn",
-                text: "_This link expires in 1 hour. Click the button above or copy the URL._",
+                text: `_This link expires in ${ttlLabel}. Click the button above or copy the URL._`,
               } as any,
             ],
           },

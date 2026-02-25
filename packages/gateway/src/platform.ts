@@ -3,12 +3,10 @@
 import type {
   CommandRegistry,
   InstructionProvider,
-  UserInteraction,
   UserSuggestion,
 } from "@lobu/core";
 import type { AdminStatusCache } from "./auth/admin-status-cache";
 import type { AgentMetadataStore } from "./auth/agent-metadata-store";
-import type { ClaudeCredentialStore } from "./auth/claude/credential-store";
 import type { ClaudeModelPreferenceStore } from "./auth/claude/model-preference-store";
 import type { McpProxy } from "./auth/mcp/proxy";
 import type { ClaudeOAuthStateStore } from "./auth/oauth/state-store";
@@ -38,7 +36,6 @@ export interface CoreServices {
   getSecretProxy(): SecretProxy | undefined;
   getWorkerGateway(): WorkerGateway | undefined;
   getMcpProxy(): McpProxy | undefined;
-  getClaudeCredentialStore(): ClaudeCredentialStore | undefined;
   getClaudeModelPreferenceStore(): ClaudeModelPreferenceStore | undefined;
   getClaudeOAuthStateStore(): ClaudeOAuthStateStore | undefined;
   getPublicGatewayUrl(): string;
@@ -118,14 +115,6 @@ export interface PlatformAdapter {
     channelId: string,
     platformMetadata: Record<string, any>
   ): Record<string, string>;
-
-  /**
-   * Render a blocking user interaction (e.g., approval request, question)
-   * Platform should display this as an ephemeral message and set thread status to "waiting"
-   *
-   * @param interaction - The interaction to render
-   */
-  renderInteraction?(interaction: UserInteraction): Promise<void>;
 
   /**
    * Render non-blocking suggestions

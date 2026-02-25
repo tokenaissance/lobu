@@ -9,6 +9,7 @@ import { createLogger, verifyWorkerToken } from "@lobu/core";
 import { Hono } from "hono";
 import {
   buildSettingsUrl,
+  getSettingsTokenTtlMs,
   generateSettingsToken,
   type PrefillMcpServer,
   type PrefillSkill,
@@ -109,8 +110,8 @@ export function createSettingsLinkRoutes(): Hono<WorkerContext> {
         prefillNixPackagesCount: prefillNixPackages?.length || 0,
       });
 
-      // Generate token with 1 hour TTL and optional message/prefill
-      const ttlMs = 60 * 60 * 1000; // 1 hour
+      // Generate token with configured TTL (defaults to 1 hour)
+      const ttlMs = getSettingsTokenTtlMs();
       const token = generateSettingsToken(agentId, userId, platform, {
         ttlMs,
         message,

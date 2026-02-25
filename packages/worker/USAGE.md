@@ -50,9 +50,9 @@ These variables are automatically set by the Gateway when deploying worker conta
 ### `HOME`
 **Description**: Home directory for worker processes
 **Format**: Absolute path
-**Default**: `/workspace` (to persist Claude CLI sessions)
+**Default**: `/workspace` (to persist agent sessions)
 **Set by**: Gateway orchestrator
-**Used by**: Claude CLI session storage (`.claude/` directory)
+**Used by**: Agent session storage
 
 ### `HOSTNAME`
 **Description**: Container hostname (fallback for DEPLOYMENT_NAME)
@@ -103,31 +103,6 @@ These variables are automatically set by the Gateway when deploying worker conta
 **Set by**: Gateway orchestrator
 **Used by**: Database authentication
 
-## Claude Configuration (Optional Overrides)
-
-These can be set in the Gateway configuration and will be passed to workers:
-
-### `CLAUDE_ALLOWED_TOOLS`
-**Description**: Comma-separated list of allowed Claude Code tools
-**Format**: Tool names separated by commas
-**Example**: `bash,read,write,edit`
-**Set by**: Gateway orchestrator (from gateway config)
-**Used by**: Tool filtering in Claude CLI
-
-### `CLAUDE_DISALLOWED_TOOLS`
-**Description**: Comma-separated list of disallowed Claude Code tools
-**Format**: Tool names separated by commas
-**Example**: `exec,rm`
-**Set by**: Gateway orchestrator (from gateway config)
-**Used by**: Tool filtering in Claude CLI
-
-### `CLAUDE_TIMEOUT_MINUTES`
-**Description**: Maximum execution time for Claude tasks
-**Format**: Integer (minutes)
-**Example**: `30`
-**Set by**: Gateway orchestrator (from gateway config)
-**Used by**: Task timeout enforcement
-
 ## MCP Configuration
 
 ### `MCP_PROCESS_MANAGER_PORT`
@@ -164,8 +139,8 @@ These are used internally by the worker and should **never** be manually configu
 
 ### `ANTHROPIC_API_KEY` (Internal Use Only)
 **Description**: Set internally to WORKER_TOKEN for Anthropic proxy authentication
-**Set by**: Worker SDK adapter
-**Used by**: Claude Code CLI authentication to gateway's Anthropic proxy
+**Set by**: Worker initialization
+**Used by**: Agent authentication to gateway's Anthropic proxy
 **Warning**: This is NOT a real Anthropic API key - it's the worker authentication token
 
 ## Container Runtime Variables
@@ -199,8 +174,6 @@ HOME=/workspace
 
 ### Optional Gateway-Passed Variables:
 ```bash
-CLAUDE_ALLOWED_TOOLS=bash,read,write,edit
-CLAUDE_TIMEOUT_MINUTES=30
 DEBUG=1  # Development only
 ```
 

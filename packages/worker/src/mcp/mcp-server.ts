@@ -14,7 +14,7 @@ import type {
   ResourceParams,
 } from "./types";
 
-const logger = createLogger("worker");
+const logger = createLogger("mcp-server");
 
 export function createMCPServer(manager: ProcessManagerApi): McpServer {
   const server = new McpServer({
@@ -137,7 +137,7 @@ export function createMCPServer(manager: ProcessManagerApi): McpServer {
             let tunnelLogs = "";
             try {
               const tunnelLogPath = path.join(
-                "/tmp/claude-logs",
+                "/tmp/worker-logs",
                 `${id}-tunnel.log`
               );
               if (existsSync(tunnelLogPath)) {
@@ -162,7 +162,7 @@ export function createMCPServer(manager: ProcessManagerApi): McpServer {
             let tunnelLogs = "";
             try {
               const tunnelLogPath = path.join(
-                "/tmp/claude-logs",
+                "/tmp/worker-logs",
                 `${id}-tunnel.log`
               );
               if (existsSync(tunnelLogPath)) {

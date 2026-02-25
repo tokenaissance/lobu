@@ -7,6 +7,7 @@ import { createLogger } from "@lobu/core";
 import type { AuthProvider, PlatformAuthAdapter } from "../auth/platform-auth";
 import {
   buildSettingsUrl,
+  formatSettingsTokenTtl,
   generateSettingsToken,
 } from "../auth/settings/token-service";
 import type { BaileysClient } from "./connection/baileys-client";
@@ -37,25 +38,20 @@ export class WhatsAppAuthAdapter implements PlatformAuthAdapter {
     const chatJid = (platformMetadata?.jid as string) || channelId;
     const agentId = (platformMetadata?.agentId as string) || channelId;
 
-    // Generate settings token (1 hour TTL)
+    // Generate settings token (configured TTL, default 1 hour)
     const token = generateSettingsToken(agentId, userId, "whatsapp");
     const settingsUrl = buildSettingsUrl(token);
+    const ttlLabel = formatSettingsTokenTtl();
 
     const message = [
       "*Setup Required*",
       "",
-      "Configure your bot using this link:",
+      "You need to add a model provider to use this bot.",
+      "Configure it using this link:",
       "",
       settingsUrl,
       "",
-      "You can set up:",
-      "- Claude authentication",
-      "- MCP servers",
-      "- Network access",
-      "- Git repository",
-      "- And more...",
-      "",
-      "_Link expires in 1 hour._",
+      `_Link expires in ${ttlLabel}._`,
     ].join("\n");
 
     try {

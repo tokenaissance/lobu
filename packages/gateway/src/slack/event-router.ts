@@ -10,10 +10,9 @@ import type {
   View,
 } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
-import type { QueueProducer } from "../infrastructure/queue";
-import type { InteractionService } from "../interactions";
-import type { ISessionManager } from "../session";
 import type { CommandDispatcher } from "../commands/command-dispatcher";
+import type { QueueProducer } from "../infrastructure/queue";
+import type { ISessionManager } from "../session";
 
 const logger = createLogger("slack-events");
 
@@ -32,7 +31,7 @@ import { isSelfGeneratedEvent } from "./utils";
  * This is the main orchestrator that delegates to specialized handlers
  */
 export class SlackEventHandlers {
-  private messageHandler: MessageHandler;
+  messageHandler: MessageHandler;
   private actionHandler: ActionHandler;
   private shortcutCommandHandler: ShortcutCommandHandler;
   private sessionManager: ISessionManager;
@@ -43,8 +42,7 @@ export class SlackEventHandlers {
     queueProducer: QueueProducer,
     config: MessageHandlerConfig,
     private moduleRegistry: IModuleRegistry,
-    sessionManager: ISessionManager,
-    interactionService: InteractionService
+    sessionManager: ISessionManager
   ) {
     this.config = config;
     this.sessionManager = sessionManager;
@@ -54,8 +52,7 @@ export class SlackEventHandlers {
       queueProducer,
       config,
       this.sessionManager,
-      app.client,
-      interactionService
+      app.client
     );
     this.actionHandler = new ActionHandler(
       this.messageHandler,

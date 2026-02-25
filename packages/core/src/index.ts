@@ -2,18 +2,20 @@
 
 // Shared exports for @lobu/core consumers (gateway, worker, external tools)
 
+export type { CommandContext, CommandDefinition } from "./command-registry";
+// Command registry
+export { CommandRegistry } from "./command-registry";
 export * from "./constants";
-
 // Errors & logging
 export * from "./errors";
 export * from "./logger";
 
-// Command registry
-export { CommandRegistry } from "./command-registry";
-export type { CommandContext, CommandDefinition } from "./command-registry";
-
 // Module system
-export type { ActionButton, ModuleSessionContext } from "./modules";
+export type {
+  ActionButton,
+  ModuleSessionContext,
+  ProviderUpstreamConfig,
+} from "./modules";
 export * from "./modules";
 export type { OtelConfig, Span, Tracer } from "./otel";
 // OpenTelemetry tracing (Tempo integration)
@@ -33,6 +35,14 @@ export {
   withChildSpan,
   withSpan,
 } from "./otel";
+// Plugin types
+export type {
+  PluginConfig,
+  PluginManifest,
+  PluginSlot,
+  PluginsConfig,
+  ProviderRegistration,
+} from "./plugin-types";
 // Redis & worker helpers
 export * from "./redis/base-store";
 // Observability
@@ -42,38 +52,26 @@ export { extractTraceId, generateTraceId } from "./trace";
 export type {
   AgentMcpConfig,
   AgentOptions,
+  AuthProfile,
+  CliBackendConfig,
   ConversationMessage,
-  FieldSchema,
   GitConfig,
   HistoryMessage,
+  InstalledProvider,
   InstructionContext,
   InstructionProvider,
-  InteractionOptions,
-  InteractionType,
   LogLevel,
   McpServerConfig,
   NetworkConfig,
   NixConfig,
-  PendingInteraction,
   SessionContext,
   SkillConfig,
   SkillsConfig,
   SuggestedPrompt,
   ThreadResponsePayload,
   ToolsConfig,
-  UserInteraction,
-  UserInteractionResponse,
   UserSuggestion,
 } from "./types";
-
-// Plugin types
-export type {
-  PluginConfig,
-  PluginManifest,
-  PluginSlot,
-  PluginsConfig,
-  ProviderRegistration,
-} from "./plugin-types";
 
 // Utilities
 export * from "./utils/encryption";

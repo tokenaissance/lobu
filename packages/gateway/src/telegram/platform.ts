@@ -3,15 +3,15 @@
  */
 
 import {
-  type AgentOptions as CoreAgentOptions,
   type CommandRegistry,
+  type AgentOptions as CoreAgentOptions,
   createLogger,
-  type UserInteraction,
   type UserSuggestion,
 } from "@lobu/core";
 import { Bot } from "grammy";
 import type { Hono } from "hono";
 import { platformAuthRegistry } from "../auth/platform-auth";
+import { CommandDispatcher } from "../commands/command-dispatcher";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import {
   type AgentOptions as FactoryAgentOptions,
@@ -20,7 +20,6 @@ import {
   platformFactoryRegistry,
 } from "../platform/platform-factory";
 import type { ResponseRenderer } from "../platform/response-renderer";
-import { CommandDispatcher } from "../commands/command-dispatcher";
 import { TelegramAuthAdapter } from "./auth-adapter";
 import type { TelegramConfig } from "./config";
 import { shouldUseWebhook, TELEGRAM_WEBHOOK_PATH } from "./config";
@@ -92,29 +91,11 @@ export class TelegramPlatform implements PlatformAdapter {
     // Create interaction renderer
     this.interactionRenderer = new TelegramInteractionRenderer(
       this.bot,
-      services.getInteractionService(),
-      this.config.telegram
-    );
-
-    // Register beforeCreate hook
-    const interactionService = services.getInteractionService();
-    interactionService.setBeforeCreateHook(
-      async (userId: string, conversationId: string) => {
-        logger.info(
-          { userId, conversationId },
-          "Stopping stream before interaction"
-        );
-        // Telegram edit-based streaming - no-op needed, the interaction will just appear
-      }
+      services.getInteractionService()
     );
 
     // Register interaction callback handler
     this.interactionRenderer.registerCallbackHandler();
-
-    // Wire interaction renderer to message handler for text-based responses
-    if (this.messageHandler) {
-      this.messageHandler.setInteractionRenderer(this.interactionRenderer);
-    }
 
     // Create and register auth adapter
     const publicGatewayUrl = services.getPublicGatewayUrl();
@@ -307,12 +288,6 @@ export class TelegramPlatform implements PlatformAdapter {
       conversation_id: conversationId,
       is_group: String(platformMetadata?.isGroup || false),
     };
-  }
-
-  async renderInteraction(interaction: UserInteraction): Promise<void> {
-    if (this.interactionRenderer) {
-      await this.interactionRenderer.renderInteraction(interaction);
-    }
   }
 
   async renderSuggestion(suggestion: UserSuggestion): Promise<void> {

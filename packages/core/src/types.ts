@@ -1,3 +1,57 @@
+// ============================================================================
+// Provider Catalog Types
+// ============================================================================
+
+/**
+ * Represents a provider installed for a specific agent.
+ * Stored in AgentSettings.installedProviders as an ordered array (index 0 = primary).
+ */
+export interface InstalledProvider {
+  providerId: string; // "claude", "chatgpt", "gemini", "z-ai"
+  installedAt: number;
+  config?: {
+    baseUrl?: string; // override upstream (e.g. z.ai proxy)
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * CLI backend configuration for pi-agent integration.
+ * Providers can ship CLI tools that pi-agent invokes as backends.
+ */
+export interface CliBackendConfig {
+  name: string; // "claude-code", "codex"
+  command: string; // "/usr/local/bin/claude"
+  args?: string[];
+  env?: Record<string, string>;
+  modelArg?: string; // "--model"
+  sessionArg?: string; // "--session"
+}
+
+// ============================================================================
+// Auth Profile Types
+// ============================================================================
+
+/**
+ * Unified authentication profile for any model provider.
+ * Stored in AgentSettings.authProfiles as an ordered array (index 0 = primary).
+ */
+export interface AuthProfile {
+  id: string; // UUID
+  provider: string; // "anthropic", "openai-codex", "gemini", "nvidia"
+  model: string; // Full model ref: "openclaw/openai-codex/gpt-5.2-codex"
+  credential: string; // API key or OAuth access token
+  label: string; // "user@gmail.com", "sk-ant-...1234"
+  authType: "oauth" | "device-code" | "api-key";
+  metadata?: {
+    email?: string;
+    expiresAt?: number;
+    refreshToken?: string;
+    accountId?: string;
+  };
+  createdAt: number;
+}
+
 export interface SessionContext {
   // Core identifiers
   platform: string; // Platform identifier (e.g., "slack", "discord", "teams")
@@ -295,94 +349,6 @@ export interface ThreadResponsePayload {
 // ============================================================================
 // User Interaction Types
 // ============================================================================
-
-/**
- * Form field schema for inline inputs
- */
-export interface FieldSchema {
-  type: "text" | "select" | "textarea" | "number" | "checkbox" | "multiselect";
-  label?: string; // Defaults to capitalized field name
-  placeholder?: string;
-  options?: string[]; // For select/multiselect
-  required?: boolean;
-  default?: any;
-}
-
-/**
- * Interaction options - determines UX pattern (all inline, no modals):
- * - string[] → Simple radio buttons (inline, auto-submit on selection)
- * - Record<string, FieldSchema> → Single inline form with submit button
- * - Record<string, Record<string, FieldSchema>> → Multi-section form (inline section buttons + forms)
- */
-export type InteractionOptions =
-  | string[]
-  | Record<string, FieldSchema>
-  | Record<string, Record<string, FieldSchema>>;
-
-/**
- * User response to an interaction
- * Format depends on interaction type:
- * - Simple radio: { answer: string }
- * - Single form: { formData: Record<string, any> }
- * - Multi-section form: { formData: Record<sectionName, Record<fieldName, value>> }
- */
-export interface UserInteractionResponse {
-  answer?: string; // For simple radio button responses
-  formData?: Record<string, any>; // For single form or multi-section form (nested by section)
-  timestamp: number;
-}
-
-/**
- * Interaction type classification
- */
-export type InteractionType =
-  | "plan_approval"
-  | "tool_approval"
-  | "question"
-  | "form";
-
-/**
- * Blocking user interaction - agent waits for response
- */
-export interface UserInteraction {
-  id: string;
-  userId: string;
-  conversationId: string;
-  channelId: string;
-  teamId?: string;
-
-  blocking: true; // Always true - distinguishes from suggestions
-
-  interactionType: InteractionType; // Type of interaction for recovery/context
-
-  question: string; // The question or prompt to display
-  options: InteractionOptions; // Determines UX pattern (radio/single-form/multi-section)
-
-  metadata?: any; // Optional metadata for tracking/context
-
-  status: "pending" | "responded" | "expired";
-  response?: UserInteractionResponse;
-  createdAt: number;
-  expiresAt: number;
-  respondedAt?: number;
-  respondedByUserId?: string; // Who actually clicked/submitted (may differ from userId)
-
-  // Active section for multi-section forms
-  activeSection?: string;
-  // Partial data (for multi-section workflows before final submit)
-  partialData?: Record<string, Record<string, any>>;
-}
-
-/**
- * Pending interaction state for worker startup recovery
- * Note: Only contains unanswered interactions (those still in pending set)
- */
-export interface PendingInteraction {
-  id: string;
-  type: InteractionType;
-  question: string;
-  createdAt: number;
-}
 
 /**
  * Suggested prompt for user

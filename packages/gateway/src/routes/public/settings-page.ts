@@ -2,9 +2,9 @@
  * Settings Page HTML Templates (Alpine.js + Pre-compiled Tailwind CSS)
  */
 
+import type { ModelOption } from "@lobu/core";
 import type { AgentSettings } from "../../auth/settings";
 import type { SettingsTokenPayload } from "../../auth/settings/token-service";
-import type { ModelOption } from "@lobu/core";
 import { platformRegistry } from "../../platform";
 import { settingsPageCSS } from "./settings-page-styles";
 
@@ -63,8 +63,10 @@ export interface ProviderMeta {
   name: string;
   iconUrl: string;
   authType: "oauth" | "device-code" | "api-key";
+  supportedAuthTypes: ("oauth" | "device-code" | "api-key")[];
   apiKeyInstructions: string;
   apiKeyPlaceholder: string;
+  catalogDescription?: string;
 }
 
 export interface SettingsPageOptions {
@@ -72,6 +74,7 @@ export interface SettingsPageOptions {
   githubAppInstallUrl?: string;
   githubOAuthConfigured?: boolean;
   providers?: ProviderMeta[];
+  catalogProviders?: ProviderMeta[];
   providerModelOptions?: Record<string, ModelOption[]>;
 }
 
@@ -85,45 +88,16 @@ export function renderSettingsPage(
   const githubAppConfigured = options?.githubAppConfigured ?? false;
   const githubAppInstallUrl = options?.githubAppInstallUrl ?? "";
   const githubOAuthConfigured = options?.githubOAuthConfigured ?? false;
-  const providers: ProviderMeta[] = options?.providers ?? [
-    {
-      id: "claude",
-      name: "Claude",
-      iconUrl: "https://www.anthropic.com/favicon.ico",
-      authType: "oauth",
-      apiKeyInstructions: "",
-      apiKeyPlaceholder: "",
-    },
-    {
-      id: "chatgpt",
-      name: "ChatGPT",
-      iconUrl: "https://chatgpt.com/favicon.ico",
-      authType: "device-code",
-      apiKeyInstructions: "",
-      apiKeyPlaceholder: "",
-    },
-  ];
+  // Installed providers (already resolved in order by settings.ts)
+  const providers: ProviderMeta[] = options?.providers ?? [];
+
+  // Catalog providers (available but not installed)
+  const catalogProviders: ProviderMeta[] = options?.catalogProviders ?? [];
 
   const providerModelOptions: Record<string, ModelOption[]> =
     options?.providerModelOptions || {};
 
-  const modelOptionGroupsHtml = providers
-    .map((provider) => {
-      const opts = providerModelOptions[provider.id] || [];
-      if (!opts.length) {
-        return "";
-      }
-      const optionsHtml = opts
-        .map(
-          (opt) =>
-            `<option value="${escapeHtml(opt.value)}" ${
-              s.model === opt.value ? "selected" : ""
-            }>${escapeHtml(opt.label)}</option>`
-        )
-        .join("");
-      return `<optgroup label="${escapeHtml(provider.name)}">${optionsHtml}</optgroup>`;
-    })
-    .join("");
+  const providerOrder = providers.map((p) => p.id);
 
   const envVarsValue = (() => {
     const existingEnvVars = s.envVars || {};
@@ -141,8 +115,29 @@ export function renderSettingsPage(
     githubAppConfigured,
     githubAppInstallUrl,
     PROVIDERS: Object.fromEntries(
-      providers.map((p) => [p.id, { name: p.name, authType: p.authType }])
+      providers.map((p) => [
+        p.id,
+        {
+          name: p.name,
+          authType: p.authType,
+          supportedAuthTypes: p.supportedAuthTypes,
+          apiKeyInstructions: p.apiKeyInstructions,
+          apiKeyPlaceholder: p.apiKeyPlaceholder,
+        },
+      ])
     ),
+    providerOrder,
+    providerModels: providerModelOptions,
+    catalogProviders: catalogProviders.map((p) => ({
+      id: p.id,
+      name: p.name,
+      iconUrl: p.iconUrl,
+      authType: p.authType,
+      supportedAuthTypes: p.supportedAuthTypes,
+      description: p.catalogDescription || "",
+      apiKeyInstructions: p.apiKeyInstructions,
+      apiKeyPlaceholder: p.apiKeyPlaceholder,
+    })),
     initialSkills: s.skillsConfig?.skills || [],
     initialMcpServers: s.mcpServers || {},
     prefillSkills: payload.prefillSkills || [],
@@ -244,85 +239,268 @@ export function renderSettingsPage(
 
     <form @submit.prevent="saveSettings()" @keydown.enter="if ($event.target.tagName !== 'TEXTAREA' && $event.target.type !== 'submit') $event.preventDefault()" class="space-y-3">
       <!-- Model Selection -->
-      <div class="bg-gray-50 rounded-lg p-3" x-data="{ open: false }">
+      <div class="bg-gray-50 rounded-lg p-3" x-data="{ open: ${providers.length === 0 ? "true" : "false"} }">
         <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" @click="open = !open">
           <span>&#129302;</span>
           Model
           <span class="ml-auto text-xs text-gray-400 transition-transform" :class="open ? '' : 'rotate-[-90deg]'">&#9660;</span>
         </h3>
         <div x-show="open" x-transition class="pt-3">
+          <div id="provider-list">
+          ${
+            providers.length === 0
+              ? `<div class="text-center py-6 text-gray-500">
+              <p class="text-sm font-medium text-gray-700 mb-1">No model providers configured</p>
+              <p class="text-xs">Add a provider below to get started.</p>
+            </div>`
+              : ""
+          }
           ${providers
             .map(
               (p, i) => `
-      <div class="${i > 0 ? "mt-3 pt-3 border-t border-gray-200" : ""}">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
+      <div id="provider-card-${escapeHtml(p.id)}"
+        class="${i > 0 ? "mt-3 pt-3 border-t border-gray-200" : ""}">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-3 min-w-0">
+            <label class="inline-flex items-center cursor-pointer" title="Set as primary provider">
+              <input type="radio" name="primaryProvider" value="${escapeHtml(p.id)}" x-model="primaryProvider"
+                class="w-4 h-4 accent-slate-600 cursor-pointer">
+            </label>
             <img src="${escapeHtml(p.iconUrl)}" alt="${escapeHtml(p.name)}" class="w-5 h-5 rounded">
-            <div>
+            <div class="min-w-0">
               <p class="text-sm font-medium text-gray-800">${escapeHtml(p.name)}</p>
               <p class="text-xs"
                 :class="providerState['${p.id}']?.connected ? (providerState['${p.id}']?.userConnected ? 'text-emerald-600' : 'text-amber-600') : 'text-gray-500'"
                 x-text="providerState['${p.id}']?.status || 'Checking...'"></p>
             </div>
           </div>
-          <button type="button" @click="providerState['${p.id}']?.userConnected ? disconnectProvider('${p.id}') : connectProvider('${p.id}')"
-            class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
-            :class="providerState['${p.id}']?.userConnected ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'"
-            x-text="providerState['${p.id}']?.userConnected ? 'Disconnect' : 'Connect'">
-          </button>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <div x-show="providerState['${p.id}']?.connected" x-transition class="sm:flex-none relative"
+              @click.outside="providerState['${p.id}'].showModelDropdown = false">
+              <input type="text"
+                x-model="providerState['${p.id}'].modelQuery"
+                @focus="providerState['${p.id}'].showModelDropdown = true"
+                @input="providerState['${p.id}'].showModelDropdown = true; providerState['${p.id}'].selectedModel = $event.target.value"
+                @keydown.escape="providerState['${p.id}'].showModelDropdown = false"
+                @keydown.enter.prevent="providerState['${p.id}'].showModelDropdown = false"
+                :placeholder="providerState['${p.id}'].selectedModel || 'Auto model'"
+                aria-label="${escapeHtml(p.name)} model"
+                class="w-36 sm:w-44 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none bg-white placeholder-gray-500">
+              <div x-show="providerState['${p.id}'].showModelDropdown" x-transition
+                class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <button type="button"
+                  @click="providerState['${p.id}'].selectedModel = ''; providerState['${p.id}'].modelQuery = ''; providerState['${p.id}'].showModelDropdown = false"
+                  class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 text-gray-500">
+                  Auto model
+                </button>
+                <template x-for="opt in (providerModels['${p.id}'] || []).filter(o => !providerState['${p.id}'].modelQuery || o.label.toLowerCase().includes(providerState['${p.id}'].modelQuery.toLowerCase()) || o.value.toLowerCase().includes(providerState['${p.id}'].modelQuery.toLowerCase()))" :key="opt.value">
+                  <button type="button"
+                    @click="providerState['${p.id}'].selectedModel = opt.value; providerState['${p.id}'].modelQuery = opt.label; providerState['${p.id}'].showModelDropdown = false"
+                    class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 text-gray-800"
+                    x-text="opt.label">
+                  </button>
+                </template>
+              </div>
+            </div>
+            <button type="button" @click="providerState['${p.id}']?.userConnected ? disconnectProvider('${p.id}') : connectProvider('${p.id}')"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
+              :class="providerState['${p.id}']?.userConnected ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'"
+              x-text="providerState['${p.id}']?.userConnected ? 'Disconnect' : 'Connect'">
+            </button>
+            <button type="button" @click="uninstallProvider('${p.id}')"
+              title="Remove ${escapeHtml(p.name)}"
+              class="p-1.5 text-xs rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </div>
         </div>
-        ${
-          p.authType === "oauth"
-            ? `<!-- Code input -->
-        <div x-show="providerState['${p.id}']?.showCodeInput" x-transition class="mt-3 pt-3 border-t border-gray-200">
-          <p class="text-xs text-gray-600 mb-2">Paste the authentication code from ${escapeHtml(p.name)}:</p>
-          <div class="flex gap-2">
-            <input type="text" x-model="providerState['${p.id}'].code" placeholder="CODE#STATE" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-            <button type="button" @click="submitOAuthCode('${p.id}')" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
-              Submit
-            </button>
-          </div>
-          <p class="text-xs text-gray-400 mt-1">Format: CODE#STATE (copy the entire code shown after login)</p>
-        </div>`
-            : ""
-        }
-        ${
-          p.authType === "device-code"
-            ? `<!-- Device code flow -->
-        <div x-show="providerState['${p.id}']?.showDeviceCode" x-transition class="mt-3 pt-3 border-t border-gray-200">
-          <div class="text-center">
-            <p class="text-xs text-gray-600 mb-2">Enter this code at the verification page:</p>
-            <p class="text-2xl font-mono font-bold text-slate-800 mb-2" x-text="providerState['${p.id}']?.userCode || ''"></p>
-            <a :href="providerState['${p.id}']?.verificationUrl || 'https://auth.openai.com/codex/device'" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all mb-2">
-              Open Verification Page
-            </a>
-            <p class="text-xs text-gray-400" x-text="providerState['${p.id}']?.pollStatus || 'Waiting for authorization...'"></p>
-          </div>
-        </div>`
-            : ""
-        }
-        ${
-          p.authType === "api-key"
-            ? `<!-- API key input -->
-        <div x-show="providerState['${p.id}']?.showApiKeyInput" x-transition class="mt-3 pt-3 border-t border-gray-200">
-          <p class="text-xs text-gray-600 mb-2">${p.apiKeyInstructions}</p>
-          <div class="flex gap-2">
-            <input type="password" x-model="providerState['${p.id}'].apiKey" placeholder="${escapeHtml(p.apiKeyPlaceholder)}" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-            <button type="button" @click="submitApiKey('${p.id}')" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
-              Save
-            </button>
-          </div>
-        </div>`
-            : ""
-        }
+        ${(() => {
+          const authTypes = p.supportedAuthTypes || [p.authType];
+          const hasMultiAuth = authTypes.length > 1;
+          const hasApiKey = authTypes.includes("api-key");
+          const hasOAuth = authTypes.includes("oauth");
+          const hasDeviceCode = authTypes.includes("device-code");
+
+          // Build tab bar + content panels
+          let html = `<!-- Auth flow (${authTypes.join(", ")}) -->
+        <div x-show="providerState['${p.id}']?.showAuthFlow" x-transition class="mt-3 pt-3 border-t border-gray-200">`;
+
+          if (hasMultiAuth) {
+            // Tab bar
+            html += `
+          <div class="flex gap-1 mb-3 border-b border-gray-200">`;
+            for (const at of authTypes) {
+              const label =
+                at === "api-key"
+                  ? "API Key"
+                  : at === "device-code"
+                    ? "Device Auth"
+                    : "Login";
+              html += `
+            <button type="button" @click="providerState['${p.id}'].activeAuthTab = '${at}'"
+              class="px-3 py-1.5 text-xs font-medium rounded-t-lg transition-all border-b-2 -mb-px"
+              :class="providerState['${p.id}']?.activeAuthTab === '${at}' ? 'border-slate-600 text-slate-800 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'">${label}</button>`;
+            }
+            html += `
+          </div>`;
+          }
+
+          // OAuth code input panel
+          if (hasOAuth) {
+            const showCond = hasMultiAuth
+              ? `providerState['${p.id}']?.activeAuthTab === 'oauth' && providerState['${p.id}']?.showCodeInput`
+              : `providerState['${p.id}']?.showCodeInput`;
+            html += `
+          <div x-show="${showCond}" x-transition>
+            <p class="text-xs text-gray-600 mb-2">Paste the authentication code from ${escapeHtml(p.name)}:</p>
+            <div class="flex gap-2">
+              <input type="text" x-model="providerState['${p.id}'].code" placeholder="CODE#STATE" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+              <button type="button" @click="submitOAuthCode('${p.id}')" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
+                Submit
+              </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">Format: CODE#STATE (copy the entire code shown after login)</p>
+          </div>`;
+          }
+
+          // Device code panel
+          if (hasDeviceCode) {
+            const showCond = hasMultiAuth
+              ? `providerState['${p.id}']?.activeAuthTab === 'device-code' && providerState['${p.id}']?.showDeviceCode`
+              : `providerState['${p.id}']?.showDeviceCode`;
+            html += `
+          <div x-show="${showCond}" x-transition>
+            <div class="text-center">
+              <p class="text-xs text-gray-600 mb-2">Enter this code at the verification page:</p>
+              <p class="text-2xl font-mono font-bold text-slate-800 mb-2" x-text="providerState['${p.id}']?.userCode || ''"></p>
+              <a :href="providerState['${p.id}']?.verificationUrl || 'https://auth.openai.com/codex/device'" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all mb-2">
+                Login
+              </a>
+              <p class="text-xs text-gray-400" x-text="providerState['${p.id}']?.pollStatus || 'Waiting for authorization...'"></p>
+            </div>
+          </div>`;
+          }
+
+          // API key panel
+          if (hasApiKey) {
+            const showCond = hasMultiAuth
+              ? `providerState['${p.id}']?.activeAuthTab === 'api-key'`
+              : `providerState['${p.id}']?.showApiKeyInput`;
+            html += `
+          <div x-show="${showCond}" x-transition>
+            <p class="text-xs text-gray-600 mb-2">${p.apiKeyInstructions}</p>
+            <div class="flex gap-2">
+              <input type="password" x-model="providerState['${p.id}'].apiKey" placeholder="${escapeHtml(p.apiKeyPlaceholder)}" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+              <button type="button" @click="submitApiKey('${p.id}')" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
+                Save
+              </button>
+            </div>
+          </div>`;
+          }
+
+          html += `
+        </div>`;
+          return html;
+        })()}
       </div>`
             )
             .join("")}
-          <label class="block text-xs font-medium text-gray-700 mt-3 pt-3 border-t border-gray-200 mb-1">Model</label>
-          <select id="model" name="model" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-            <option value="">Default</option>
-            ${modelOptionGroupsHtml}
-          </select>
+          </div>
+
+          <!-- Add Provider Catalog -->
+          <div class="mt-3 pt-3 border-t border-gray-200" x-show="catalogProviders.length > 0">
+            <div class="relative">
+              <button type="button" @click="showCatalog = !showCatalog"
+                class="w-full px-3 py-2 text-xs font-medium rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                Add Provider
+              </button>
+              <div x-show="showCatalog" @click.away="showCatalog = false" x-transition
+                class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <template x-for="cp in catalogProviders" :key="cp.id">
+                  <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    @click="addProvider(cp.id)">
+                    <div class="flex items-center gap-2">
+                      <img :src="cp.iconUrl" :alt="cp.name" class="w-4 h-4 rounded">
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-medium text-gray-800" x-text="cp.name"></p>
+                        <p class="text-xs text-gray-500 truncate" x-text="cp.description"></p>
+                      </div>
+                      <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500" x-text="cp.authType"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pending Provider Auth (shown during add flow) -->
+          <div x-show="pendingProvider" x-transition class="mt-3 pt-3 border-t border-gray-200">
+            <div class="bg-white border border-slate-200 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <img :src="pendingProvider?.iconUrl || ''" :alt="pendingProvider?.name || ''" class="w-5 h-5 rounded">
+                  <p class="text-sm font-medium text-gray-800" x-text="'Connect ' + (pendingProvider?.name || '')"></p>
+                </div>
+                <button type="button" @click="cancelPendingProvider()"
+                  class="px-2 py-1 text-xs font-medium rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all">
+                  Cancel
+                </button>
+              </div>
+
+              <!-- Tab bar for multi-auth pending providers -->
+              <template x-if="pendingProvider && (pendingProvider.supportedAuthTypes || [pendingProvider.authType]).length > 1">
+                <div class="flex gap-1 mb-3 border-b border-gray-200">
+                  <template x-for="at in (pendingProvider.supportedAuthTypes || [pendingProvider.authType])" :key="at">
+                    <button type="button" @click="providerState[pendingProvider.id].activeAuthTab = at; if (at !== 'api-key') connectProvider(pendingProvider.id)"
+                      class="px-3 py-1.5 text-xs font-medium rounded-t-lg transition-all border-b-2 -mb-px"
+                      :class="providerState[pendingProvider.id]?.activeAuthTab === at ? 'border-slate-600 text-slate-800 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                      x-text="at === 'api-key' ? 'API Key' : at === 'device-code' ? 'Device Auth' : 'Login'">
+                    </button>
+                  </template>
+                </div>
+              </template>
+
+              <!-- API Key input for pending provider -->
+              <template x-if="pendingProvider && (providerState[pendingProvider.id]?.activeAuthTab === 'api-key' || ((pendingProvider.supportedAuthTypes || [pendingProvider.authType]).length === 1 && pendingProvider.authType === 'api-key'))">
+                <div>
+                  <p class="text-xs text-gray-600 mb-2" x-html="pendingProvider.apiKeyInstructions || 'Enter your API key:'"></p>
+                  <div class="flex gap-2">
+                    <input type="password" x-model="providerState[pendingProvider.id].apiKey" :placeholder="pendingProvider.apiKeyPlaceholder || 'API key'" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+                    <button type="button" @click="submitApiKey(pendingProvider.id)" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- OAuth code input for pending provider -->
+              <template x-if="pendingProvider && providerState[pendingProvider.id]?.activeAuthTab !== 'api-key' && (providerState[pendingProvider.id]?.showCodeInput || ((pendingProvider.supportedAuthTypes || [pendingProvider.authType]).length === 1 && pendingProvider.authType === 'oauth'))">
+                <div>
+                  <p class="text-xs text-gray-600 mb-2" x-text="'Paste the authentication code from ' + pendingProvider.name + ':'"></p>
+                  <div class="flex gap-2">
+                    <input type="text" x-model="providerState[pendingProvider.id].code" placeholder="CODE#STATE" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+                    <button type="button" @click="submitOAuthCode(pendingProvider.id)" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
+                      Submit
+                    </button>
+                  </div>
+                  <p class="text-xs text-gray-400 mt-1">Format: CODE#STATE (copy the entire code shown after login)</p>
+                </div>
+              </template>
+
+              <!-- Device code flow for pending provider -->
+              <template x-if="pendingProvider && providerState[pendingProvider.id]?.activeAuthTab !== 'api-key' && (providerState[pendingProvider.id]?.showDeviceCode || ((pendingProvider.supportedAuthTypes || [pendingProvider.authType]).length === 1 && pendingProvider.authType === 'device-code'))">
+                <div class="text-center">
+                  <p class="text-xs text-gray-600 mb-2">Enter this code at the verification page:</p>
+                  <p class="text-2xl font-mono font-bold text-slate-800 mb-2" x-text="providerState[pendingProvider.id].userCode || ''"></p>
+                  <a :href="providerState[pendingProvider.id].verificationUrl || '#'" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all mb-2">
+                    Login
+                  </a>
+                  <p class="text-xs text-gray-400" x-text="providerState[pendingProvider.id].pollStatus || 'Waiting for authorization...'"></p>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -373,182 +551,181 @@ export function renderSettingsPage(
         </div>
       </div>
 
-      <!-- Skills Section -->
-      <div class="bg-gray-50 rounded-lg p-3" x-data="{ open: false }">
-        <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" @click="open = !open">
-          <span>&#128736;</span>
-          Skills
-          <span x-show="skillsLoading" class="animate-spin text-slate-600">&#8635;</span>
-          <span class="ml-auto text-xs text-gray-400 transition-transform" :class="open ? '' : 'rotate-[-90deg]'">&#9660;</span>
-        </h3>
-        <div x-show="open" x-transition class="pt-3 space-y-3">
-          <!-- Skills Error -->
-          <div x-show="skillsError" x-transition class="bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs" x-text="skillsError"></div>
-
-          <!-- Enabled Skills List -->
-          <div class="space-y-2">
-            <template x-if="skills.length === 0">
-              <p class="text-xs text-gray-500">No skills configured yet.</p>
-            </template>
-            <template x-for="skill in skills" :key="skill.repo">
-              <div class="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                <div class="flex-1 min-w-0">
-                  <a :href="'https://clawhub.ai/skills/' + encodeURIComponent(skill.repo)" target="_blank" class="text-xs font-medium text-slate-700 hover:text-slate-900 hover:underline truncate block" x-text="skill.name"></a>
-                  <p x-show="skill.description" class="text-xs text-gray-500 truncate" x-text="skill.description"></p>
-                </div>
-                <div class="flex items-center gap-2 ml-2 flex-shrink-0">
-                  <button type="button" @click="toggleSkill(skill.repo)"
-                    class="px-2 py-1 text-xs rounded"
-                    :class="skill.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'"
-                    x-text="skill.enabled ? 'Enabled' : 'Disabled'"></button>
-                  <button type="button" @click="removeSkill(skill.repo)" class="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">Remove</button>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- Add Skill Section -->
-          <div class="border-t border-gray-200 pt-3">
-            <p class="text-xs font-medium text-gray-600 mb-2">Add Skills</p>
-
-            <!-- Search Input -->
-            <div class="relative mb-2">
-              <input type="text" x-model="skillSearch" @input.debounce.300ms="searchSkills()" @focus="if (skillSearch.trim()) skillSearchVisible = true" placeholder="Search skills from ClawHub..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-              <div x-show="skillSearchVisible" @click.away="skillSearchVisible = false" class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                <template x-for="result in skillSearchResults" :key="result.id">
-                  <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" @click="addSkillFromSearch(result.id)">
-                    <div class="flex items-center justify-between">
-                      <div class="flex-1 min-w-0">
-                        <p class="text-xs font-medium text-gray-800 truncate" x-text="result.name"></p>
-                        <p x-show="result.description" class="text-xs text-gray-500 truncate" x-text="result.description"></p>
-                      </div>
-                      <div class="flex items-center gap-2 ml-2">
-                        <span class="text-xs text-gray-400" x-text="formatInstalls(result.installs)"></span>
-                        <span class="text-xs" :class="skills.some(function(sk) { return sk.repo === result.id }) ? 'text-green-600' : 'text-slate-600'" x-text="skills.some(function(sk) { return sk.repo === result.id }) ? 'Added' : '+ Add'"></span>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-                <template x-if="skillSearchResults.length === 0 && skillSearchVisible">
-                  <div class="p-2 text-xs text-gray-500">No skills found</div>
-                </template>
-              </div>
-            </div>
-
-            <!-- Quick Add: Curated Skills -->
-            <div class="mb-2">
-              <p class="text-xs text-gray-500 mb-1">Quick add popular skills:</p>
-              <div class="flex flex-wrap gap-1">
-                <template x-for="cs in curatedSkills" :key="cs.repo">
-                  <button type="button" @click="addSkillFromChip(cs.repo)"
-                    class="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-800"
-                    :class="skills.some(function(sk) { return sk.repo === cs.repo }) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200'"
-                    :disabled="skills.some(function(sk) { return sk.repo === cs.repo })"
-                    :title="skills.some(function(sk) { return sk.repo === cs.repo }) ? 'Already added' : cs.description"
-                    x-text="cs.name"></button>
-                </template>
-              </div>
-            </div>
-
-            <!-- Manual Entry -->
-            <div class="flex gap-2">
-              <input type="text" x-model="customSkillRepo" placeholder="Or enter slug: skill-name" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-              <button type="button" @click="if (customSkillRepo.trim()) { addSkill(customSkillRepo.trim()); customSkillRepo = ''; }" class="px-3 py-2 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
-                Add
-              </button>
-            </div>
-            <p class="text-xs text-gray-400 mt-1">Skills from <a href="https://clawhub.ai/skills" target="_blank" class="text-slate-600 hover:underline">ClawHub</a> extend your agent's capabilities.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- External Integrations (MCP) Section -->
-      <div class="bg-gray-50 rounded-lg p-3" x-data="{ open: false }">
+      <!-- Integrations Section (Skills + MCP) -->
+      <div class="bg-gray-50 rounded-lg p-3" x-data="{ open: false, skillsOpen: false, mcpOpen: false }">
         <h3 class="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none" @click="open = !open">
           <span>&#128268;</span>
-          External Integrations (MCP)
-          <span x-show="mcpsLoading" class="animate-spin text-slate-600">&#8635;</span>
+          Integrations
+          <span x-show="skillsLoading || mcpsLoading" class="animate-spin text-slate-600">&#8635;</span>
           <span class="ml-auto text-xs text-gray-400 transition-transform" :class="open ? '' : 'rotate-[-90deg]'">&#9660;</span>
         </h3>
         <div x-show="open" x-transition class="pt-3 space-y-3">
-          <!-- MCPs Error -->
-          <div x-show="mcpsError" x-transition class="bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs" x-text="mcpsError"></div>
 
-          <!-- Enabled MCPs List -->
-          <div class="space-y-2">
-            <template x-if="mcpServerIds.length === 0">
-              <p class="text-xs text-gray-500">No MCP servers configured yet.</p>
-            </template>
-            <template x-for="mcpId in mcpServerIds" :key="mcpId">
-              <div class="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                <div class="flex-1 min-w-0">
-                  <p class="text-xs font-medium text-gray-800 truncate" x-text="mcpId"></p>
-                  <p x-show="getMcpDescription(mcpId)" class="text-xs text-gray-500 truncate" x-text="getMcpDescription(mcpId)"></p>
-                </div>
-                <div class="flex items-center gap-2 ml-2 flex-shrink-0">
-                  <button type="button" @click="toggleMcp(mcpId)"
-                    class="px-2 py-1 text-xs rounded"
-                    :class="mcpServers[mcpId]?.enabled !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'"
-                    x-text="mcpServers[mcpId]?.enabled !== false ? 'Enabled' : 'Disabled'"></button>
-                  <button type="button" @click="removeMcp(mcpId)" class="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">Remove</button>
-                </div>
-              </div>
-            </template>
-          </div>
+          <!-- Skills Sub-Section -->
+          <div class="bg-white rounded-lg border border-gray-200 p-3">
+            <h4 class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none" @click="skillsOpen = !skillsOpen">
+              <span>&#128736;</span>
+              Skills
+              <span x-show="skills.length > 0" class="text-xs text-gray-400" x-text="'(' + skills.length + ')'"></span>
+              <span class="ml-auto text-xs text-gray-400 transition-transform" :class="skillsOpen ? '' : 'rotate-[-90deg]'">&#9660;</span>
+            </h4>
+            <div x-show="skillsOpen" x-transition class="pt-2 space-y-2">
+              <!-- Skills Error -->
+              <div x-show="skillsError" x-transition class="bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs" x-text="skillsError"></div>
 
-          <!-- Add MCP Section -->
-          <div class="border-t border-gray-200 pt-3">
-            <p class="text-xs font-medium text-gray-600 mb-2">Add Integrations</p>
-
-            <!-- Search Input -->
-            <div class="relative mb-2">
-              <input type="text" x-model="mcpSearch" @input.debounce.300ms="searchMcps()" @focus="if (mcpSearch.trim()) mcpSearchVisible = true" placeholder="Search MCP servers..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-              <div x-show="mcpSearchVisible" @click.away="mcpSearchVisible = false" class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                <template x-for="result in mcpSearchResults" :key="result.id">
-                  <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" @click="addMcpFromSearch(result.id)">
-                    <div class="flex items-center justify-between">
-                      <div class="flex-1 min-w-0">
-                        <p class="text-xs font-medium text-gray-800 truncate" x-text="result.name"></p>
-                        <p class="text-xs text-gray-500 truncate" x-text="result.description"></p>
-                      </div>
-                      <div class="flex items-center gap-2 ml-2">
-                        <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="result.type"></span>
-                        <span class="text-xs" :class="mcpServers.hasOwnProperty(result.id) ? 'text-green-600' : 'text-slate-600'" x-text="mcpServers.hasOwnProperty(result.id) ? 'Added' : '+ Add'"></span>
-                      </div>
+              <!-- Enabled Skills List -->
+              <div class="space-y-2">
+                <template x-if="skills.length === 0">
+                  <p class="text-xs text-gray-500">No skills configured yet.</p>
+                </template>
+                <template x-for="skill in skills" :key="skill.repo">
+                  <div class="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-100">
+                    <div class="flex-1 min-w-0">
+                      <a :href="'https://clawhub.ai/skills/' + encodeURIComponent(skill.repo)" target="_blank" class="text-xs font-medium text-slate-700 hover:text-slate-900 hover:underline truncate block" x-text="skill.name"></a>
+                      <p x-show="skill.description" class="text-xs text-gray-500 truncate" x-text="skill.description"></p>
+                    </div>
+                    <div class="flex items-center gap-2 ml-2 flex-shrink-0">
+                      <button type="button" @click="toggleSkill(skill.repo)"
+                        class="px-2 py-1 text-xs rounded"
+                        :class="skill.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'"
+                        x-text="skill.enabled ? 'Enabled' : 'Disabled'"></button>
+                      <button type="button" @click="removeSkill(skill.repo)" class="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">Remove</button>
                     </div>
                   </div>
                 </template>
-                <template x-if="mcpSearchResults.length === 0 && mcpSearchVisible">
-                  <div class="p-2 text-xs text-gray-500">No MCPs found</div>
-                </template>
+              </div>
+
+              <!-- Add Skill Section -->
+              <div class="border-t border-gray-100 pt-2">
+                <!-- Search Input -->
+                <div class="relative mb-2">
+                  <input type="text" x-model="skillSearch" @input.debounce.300ms="searchSkills()" @focus="if (skillSearch.trim()) skillSearchVisible = true" placeholder="Search skills from ClawHub..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+                  <div x-show="skillSearchVisible" @click.away="skillSearchVisible = false" class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <template x-for="result in skillSearchResults" :key="result.id">
+                      <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" @click="addSkillFromSearch(result.id)">
+                        <div class="flex items-center justify-between">
+                          <div class="flex-1 min-w-0">
+                            <p class="text-xs font-medium text-gray-800 truncate" x-text="result.name"></p>
+                            <p x-show="result.description" class="text-xs text-gray-500 truncate" x-text="result.description"></p>
+                          </div>
+                          <div class="flex items-center gap-2 ml-2">
+                            <span class="text-xs text-gray-400" x-text="formatInstalls(result.installs)"></span>
+                            <span class="text-xs" :class="skills.some(function(sk) { return sk.repo === result.id }) ? 'text-green-600' : 'text-slate-600'" x-text="skills.some(function(sk) { return sk.repo === result.id }) ? 'Added' : '+ Add'"></span>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <template x-if="skillSearchResults.length === 0 && skillSearchVisible">
+                      <div class="p-2 text-xs text-gray-500">No skills found</div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Quick Add: Curated Skills (only when no skills configured) -->
+                <div class="mb-2" x-show="skills.length === 0">
+                  <div class="flex flex-wrap gap-1">
+                    <template x-for="cs in curatedSkills" :key="cs.repo">
+                      <button type="button" @click="addSkillFromChip(cs.repo)"
+                        class="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-800"
+                        :class="skills.some(function(sk) { return sk.repo === cs.repo }) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200'"
+                        :disabled="skills.some(function(sk) { return sk.repo === cs.repo })"
+                        :title="skills.some(function(sk) { return sk.repo === cs.repo }) ? 'Already added' : cs.description"
+                        x-text="cs.name"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <p class="text-xs text-gray-400 mt-1">Skills from <a href="https://clawhub.ai/skills" target="_blank" class="text-slate-600 hover:underline">ClawHub</a> extend your agent's capabilities.</p>
               </div>
             </div>
-
-            <!-- Quick Add: Curated MCPs -->
-            <div class="mb-2">
-              <p class="text-xs text-gray-500 mb-1">Quick add popular MCPs:</p>
-              <div class="flex flex-wrap gap-1">
-                <template x-for="cm in curatedMcps" :key="cm.id">
-                  <button type="button" @click="addMcpFromChip(cm.id)"
-                    class="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-800"
-                    :class="mcpServers.hasOwnProperty(cm.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200'"
-                    :disabled="mcpServers.hasOwnProperty(cm.id)"
-                    :title="mcpServers.hasOwnProperty(cm.id) ? 'Already added' : cm.description"
-                    x-text="cm.name"></button>
-                </template>
-              </div>
-            </div>
-
-            <!-- Manual Entry -->
-            <div class="space-y-2">
-              <input type="text" x-model="customMcpId" placeholder="MCP ID (e.g., my-custom-mcp)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-              <input type="text" x-model="customMcpUrl" placeholder="URL (e.g., https://mcp.example.com/sse)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
-              <button type="button" @click="if (customMcpId.trim()) { addMcp(customMcpId.trim(), customMcpUrl.trim() || null); customMcpId = ''; customMcpUrl = ''; }" class="px-3 py-2 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
-                Add Custom MCP
-              </button>
-            </div>
-            <p class="text-xs text-gray-400 mt-1">MCP servers extend Claude's capabilities with external tools and data sources.</p>
           </div>
+
+          <!-- MCP Servers Sub-Section -->
+          <div class="bg-white rounded-lg border border-gray-200 p-3">
+            <h4 class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none" @click="mcpOpen = !mcpOpen">
+              <span>&#9889;</span>
+              MCP Servers
+              <span x-show="mcpServerIds.length > 0" class="text-xs text-gray-400" x-text="'(' + mcpServerIds.length + ')'"></span>
+              <span class="ml-auto text-xs text-gray-400 transition-transform" :class="mcpOpen ? '' : 'rotate-[-90deg]'">&#9660;</span>
+            </h4>
+            <div x-show="mcpOpen" x-transition class="pt-2 space-y-2">
+              <!-- MCPs Error -->
+              <div x-show="mcpsError" x-transition class="bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs" x-text="mcpsError"></div>
+
+              <!-- Enabled MCPs List -->
+              <div class="space-y-2">
+                <template x-if="mcpServerIds.length === 0">
+                  <p class="text-xs text-gray-500">No MCP servers configured yet.</p>
+                </template>
+                <template x-for="mcpId in mcpServerIds" :key="mcpId">
+                  <div class="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-100">
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs font-medium text-gray-800 truncate" x-text="mcpId"></p>
+                      <p x-show="getMcpDescription(mcpId)" class="text-xs text-gray-500 truncate" x-text="getMcpDescription(mcpId)"></p>
+                    </div>
+                    <div class="flex items-center gap-2 ml-2 flex-shrink-0">
+                      <button type="button" @click="toggleMcp(mcpId)"
+                        class="px-2 py-1 text-xs rounded"
+                        :class="mcpServers[mcpId]?.enabled !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'"
+                        x-text="mcpServers[mcpId]?.enabled !== false ? 'Enabled' : 'Disabled'"></button>
+                      <button type="button" @click="removeMcp(mcpId)" class="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">Remove</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Add MCP Section -->
+              <div class="border-t border-gray-100 pt-2">
+                <!-- Search Input -->
+                <div class="relative mb-2">
+                  <input type="text" x-model="mcpSearch" @input.debounce.300ms="searchMcps()" @focus="if (mcpSearch.trim()) mcpSearchVisible = true" placeholder="Search MCP servers..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+                  <div x-show="mcpSearchVisible" @click.away="mcpSearchVisible = false" class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <template x-for="result in mcpSearchResults" :key="result.id">
+                      <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" @click="addMcpFromSearch(result.id)">
+                        <div class="flex items-center justify-between">
+                          <div class="flex-1 min-w-0">
+                            <p class="text-xs font-medium text-gray-800 truncate" x-text="result.name"></p>
+                            <p class="text-xs text-gray-500 truncate" x-text="result.description"></p>
+                          </div>
+                          <div class="flex items-center gap-2 ml-2">
+                            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600" x-text="result.type"></span>
+                            <span class="text-xs" :class="mcpServers.hasOwnProperty(result.id) ? 'text-green-600' : 'text-slate-600'" x-text="mcpServers.hasOwnProperty(result.id) ? 'Added' : '+ Add'"></span>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <template x-if="mcpSearchResults.length === 0 && mcpSearchVisible">
+                      <div class="p-2 text-xs text-gray-500">No MCPs found</div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Quick Add: Curated MCPs (only when no MCPs configured) -->
+                <div class="mb-2" x-show="mcpServerIds.length === 0">
+                  <div class="flex flex-wrap gap-1">
+                    <template x-for="cm in curatedMcps" :key="cm.id">
+                      <button type="button" @click="addMcpFromChip(cm.id)"
+                        class="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-800"
+                        :class="mcpServers.hasOwnProperty(cm.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200'"
+                        :disabled="mcpServers.hasOwnProperty(cm.id)"
+                        :title="mcpServers.hasOwnProperty(cm.id) ? 'Already added' : cm.description"
+                        x-text="cm.name"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Manual Entry -->
+                <div class="flex gap-2 items-center">
+                  <input type="text" x-model="customMcpUrl" placeholder="https://mcp.example.com/sse" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+                  <button type="button" @click="if (customMcpUrl.trim()) { var id = mcpIdFromUrl(customMcpUrl.trim()); addMcp(id, customMcpUrl.trim()); customMcpUrl = ''; }" class="px-3 py-2 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all flex-shrink-0">
+                    Add
+                  </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">MCP servers extend your agent's capabilities with external tools and data sources.</p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -859,7 +1036,15 @@ export function renderSettingsPage(
 
         // Providers
         providerState: {},
-        chatgptPollTimer: null,
+        providerOrder: Array.isArray(__STATE__.providerOrder)
+          ? __STATE__.providerOrder.slice()
+          : [],
+        primaryProvider: '',
+        providerModels: __STATE__.providerModels || {},
+        catalogProviders: __STATE__.catalogProviders || [],
+        showCatalog: false,
+        pendingProvider: null,
+        deviceCodePollTimer: null,
 
         // GitHub
         githubUser: null,
@@ -901,7 +1086,6 @@ export function renderSettingsPage(
         mcpsLoading: false,
         mcpsError: '',
         curatedMcps: [],
-        customMcpId: '',
         customMcpUrl: '',
 
         // Schedules
@@ -918,24 +1102,41 @@ export function renderSettingsPage(
         },
 
         init() {
+          var providerIds = this.providerOrder.length
+            ? this.providerOrder.slice()
+            : Object.keys(this.PROVIDERS);
+          this.providerOrder = providerIds.filter(function(pid) {
+            return !!__STATE__.PROVIDERS[pid];
+          });
+
           // Initialize provider state
-          for (var pid in this.PROVIDERS) {
+          for (var i = 0; i < this.providerOrder.length; i++) {
+            var pid = this.providerOrder[i];
+            var selectedModel = '';
+            var pInfo = this.PROVIDERS[pid] || {};
+            var authTypes = pInfo.supportedAuthTypes || [pInfo.authType || 'oauth'];
             this.providerState[pid] = {
               status: 'Checking...',
               connected: false,
               userConnected: false,
               systemConnected: false,
+              showAuthFlow: false,
               showCodeInput: false,
               showDeviceCode: false,
               showApiKeyInput: false,
+              activeAuthTab: authTypes[0] || 'oauth',
               code: '',
               apiKey: '',
               userCode: '',
               verificationUrl: '',
               pollStatus: 'Waiting for authorization...',
-              deviceAuthId: ''
+              deviceAuthId: '',
+              selectedModel: selectedModel,
+              modelQuery: '',
+              showModelDropdown: false
             };
           }
+          this.primaryProvider = this.providerOrder.length ? this.providerOrder[0] : '';
 
           // Check for github_connected query param
           var urlParams = new URLSearchParams(window.location.search);
@@ -973,6 +1174,15 @@ export function renderSettingsPage(
           return text.slice(0, maxLength - 3) + '...';
         },
 
+        mcpIdFromUrl(url) {
+          try {
+            var hostname = new URL(url).hostname;
+            return hostname.replace(/./g, '-');
+          } catch (e) {
+            return url.replace(/[^a-zA-Z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+          }
+        },
+
         formatTimeRemaining(scheduledFor) {
           var scheduledDate = new Date(scheduledFor);
           var now = new Date();
@@ -997,6 +1207,106 @@ export function renderSettingsPage(
           return '/api/v1/agents/' + encodeURIComponent(this.agentId) + path + '?token=' + encodeURIComponent(this.token);
         },
 
+        // === Provider Install/Uninstall ===
+        addProvider(providerId) {
+          var cp = this.catalogProviders.find(function(c) { return c.id === providerId; });
+          if (!cp) return;
+
+          this.showCatalog = false;
+          this.pendingProvider = cp;
+
+          var authTypes = cp.supportedAuthTypes || [cp.authType];
+          var primaryAuth = authTypes[0] || cp.authType;
+
+          // Initialize temporary provider state for the auth flow
+          this.providerState[providerId] = {
+            status: 'Connecting...',
+            connected: false,
+            userConnected: false,
+            systemConnected: false,
+            showAuthFlow: true,
+            showCodeInput: false,
+            showDeviceCode: false,
+            showApiKeyInput: false,
+            activeAuthTab: primaryAuth,
+            code: '',
+            apiKey: '',
+            userCode: '',
+            verificationUrl: '',
+            pollStatus: '',
+            deviceAuthId: '',
+            selectedModel: '',
+            modelQuery: '',
+            showModelDropdown: false
+          };
+
+          // Start the auth flow based on primary authType
+          if (primaryAuth === 'api-key') {
+            this.providerState[providerId].showApiKeyInput = true;
+            this.providerState[providerId].status = 'Enter your API key...';
+          } else if (primaryAuth === 'device-code') {
+            this.connectDeviceCode(providerId);
+          } else {
+            // OAuth
+            window.open('/api/v1/oauth/providers/' + providerId + '/login?token=' + encodeURIComponent(this.token), '_blank');
+            this.providerState[providerId].showCodeInput = true;
+            this.providerState[providerId].status = 'Waiting for code...';
+          }
+        },
+
+        cancelPendingProvider() {
+          if (this.pendingProvider) {
+            var pid = this.pendingProvider.id;
+            if (this.deviceCodePollTimer) {
+              clearInterval(this.deviceCodePollTimer);
+              this.deviceCodePollTimer = null;
+            }
+            delete this.providerState[pid];
+            this.pendingProvider = null;
+          }
+        },
+
+        async installAndReload(providerId, message) {
+          try {
+            var resp = await fetch(this.apiUrl('/config/providers/install'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ providerId: providerId })
+            });
+            if (resp.ok) {
+              this.successMsg = message || 'Provider added and connected!';
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setTimeout(function() { window.location.reload(); }, 800);
+            } else {
+              var data = await resp.json().catch(function() { return {}; });
+              this.errorMsg = data.error || 'Failed to install provider';
+            }
+          } catch (e) {
+            this.errorMsg = e.message || 'Failed to install provider';
+          }
+        },
+
+        async uninstallProvider(providerId) {
+          if (!confirm('Remove ' + (this.PROVIDERS[providerId]?.name || providerId) + '? This will also remove saved credentials.')) return;
+          try {
+            var resp = await fetch(this.apiUrl('/config/providers/uninstall'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ providerId: providerId })
+            });
+            if (resp.ok) {
+              this.successMsg = 'Provider removed! Refreshing...';
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setTimeout(function() { window.location.reload(); }, 800);
+            } else {
+              var data = await resp.json().catch(function() { return {}; });
+              this.errorMsg = data.error || 'Failed to remove provider';
+            }
+          } catch (e) {
+            this.errorMsg = e.message || 'Failed to remove provider';
+          }
+        },
+
         // === Form Submission ===
         async saveSettings() {
           this.saving = true;
@@ -1005,9 +1315,24 @@ export function renderSettingsPage(
 
           var settings = {};
 
-          // Model
-          var model = document.getElementById('model').value;
-          if (model) settings.model = model;
+          // Reorder installed providers via catalog API (primary provider first)
+          if (this.providerOrder.length > 0 && this.primaryProvider) {
+            try {
+              var orderedIds = [this.primaryProvider].concat(
+                this.providerOrder.filter(function(pid) { return pid !== this.primaryProvider; }.bind(this))
+              );
+              await fetch(this.apiUrl('/config/providers/reorder'), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ providerIds: orderedIds })
+              });
+            } catch (e) {
+              // Non-fatal: continue saving other settings
+            }
+          }
+
+          // Always clear explicit model override so provider order controls routing.
+          settings.model = '';
 
           // Workspace files
           settings.identityMd = document.getElementById('identityMd').value;
@@ -1130,27 +1455,42 @@ export function renderSettingsPage(
           var info = this.PROVIDERS[provider];
           if (!info) return;
 
-          if (info.authType === 'device-code') {
+          var ps = this.providerState[provider];
+          if (!ps) return;
+
+          var authTypes = info.supportedAuthTypes || [info.authType || 'oauth'];
+          var hasMultiAuth = authTypes.length > 1;
+
+          // Show the auth flow container
+          ps.showAuthFlow = true;
+
+          // Determine which auth tab to activate
+          var activeTab = hasMultiAuth ? (ps.activeAuthTab || authTypes[0]) : info.authType;
+
+          if (activeTab === 'api-key') {
+            ps.activeAuthTab = 'api-key';
+            ps.showApiKeyInput = true;
+            ps.status = 'Enter your API key...';
+            return;
+          }
+
+          if (activeTab === 'device-code') {
+            ps.activeAuthTab = 'device-code';
             this.connectDeviceCode(provider);
             return;
           }
 
-          if (info.authType === 'api-key') {
-            this.providerState[provider].showApiKeyInput = true;
-            this.providerState[provider].status = 'Enter your API key...';
-            return;
-          }
-
           // OAuth flow
+          ps.activeAuthTab = 'oauth';
           window.open('/api/v1/oauth/providers/' + provider + '/login?token=' + encodeURIComponent(this.token), '_blank');
-          this.providerState[provider].showCodeInput = true;
-          this.providerState[provider].status = 'Waiting for code...';
+          ps.showCodeInput = true;
+          ps.status = 'Waiting for code...';
         },
 
         async submitOAuthCode(provider) {
           var code = (this.providerState[provider].code || '').trim();
           if (!code) {
-            alert('Please enter the authentication code');
+            this.errorMsg = 'Please enter the authentication code';
             return;
           }
 
@@ -1165,14 +1505,23 @@ export function renderSettingsPage(
 
             if (resp.ok) {
               this.providerState[provider].showCodeInput = false;
+              this.providerState[provider].showAuthFlow = false;
               this.providerState[provider].code = '';
+
+              // If this is a pending add flow, install the provider then reload
+              if (this.pendingProvider && this.pendingProvider.id === provider) {
+                this.pendingProvider = null;
+                await this.installAndReload(provider, 'Provider added and connected!');
+                return;
+              }
+
               this.updateProviderStatus(provider, true, true, false);
               this.successMsg = 'Connected to ' + (this.PROVIDERS[provider]?.name || provider) + '!';
             } else {
               throw new Error(result.error || 'Failed to verify code');
             }
           } catch (e) {
-            alert('Error: ' + e.message);
+            this.errorMsg = e.message;
           }
         },
 
@@ -1191,14 +1540,23 @@ export function renderSettingsPage(
 
             if (resp.ok) {
               this.providerState[provider].showApiKeyInput = false;
+              this.providerState[provider].showAuthFlow = false;
               this.providerState[provider].apiKey = '';
+
+              // If this is a pending add flow, install the provider then reload
+              if (this.pendingProvider && this.pendingProvider.id === provider) {
+                this.pendingProvider = null;
+                await this.installAndReload(provider, 'Provider added and connected!');
+                return;
+              }
+
               this.updateProviderStatus(provider, true, true, false);
               this.successMsg = 'Connected to ' + (this.PROVIDERS[provider]?.name || provider) + '!';
             } else {
               throw new Error(result.error || 'Failed to save API key');
             }
           } catch (e) {
-            alert('Error: ' + e.message);
+            this.errorMsg = e.message;
           }
         },
 
@@ -1221,7 +1579,7 @@ export function renderSettingsPage(
 
             var interval = Math.max((data.interval || 5) * 1000, 3000);
             var self = this;
-            this.chatgptPollTimer = setInterval(function() {
+            this.deviceCodePollTimer = setInterval(function() {
               self.pollDeviceCodeToken(provider);
             }, interval);
 
@@ -1245,14 +1603,23 @@ export function renderSettingsPage(
             var data = await resp.json();
 
             if (data.status === 'success') {
-              clearInterval(this.chatgptPollTimer);
-              this.chatgptPollTimer = null;
+              clearInterval(this.deviceCodePollTimer);
+              this.deviceCodePollTimer = null;
               ps.showDeviceCode = false;
+              ps.showAuthFlow = false;
+
+              // If this is a pending add flow, install the provider then reload
+              if (this.pendingProvider && this.pendingProvider.id === provider) {
+                this.pendingProvider = null;
+                await this.installAndReload(provider, 'Provider added and connected!');
+                return;
+              }
+
               this.updateProviderStatus(provider, true, true, false);
               this.successMsg = 'Connected to ' + (this.PROVIDERS[provider]?.name || provider) + '!';
             } else if (data.error) {
-              clearInterval(this.chatgptPollTimer);
-              this.chatgptPollTimer = null;
+              clearInterval(this.deviceCodePollTimer);
+              this.deviceCodePollTimer = null;
               ps.pollStatus = 'Error: ' + data.error;
             }
           } catch (e) {
@@ -1265,14 +1632,22 @@ export function renderSettingsPage(
           var name = info?.name || provider;
           if (!confirm('Disconnect from ' + name + '? You will need to reconnect to use this provider.')) return;
 
-          if (info?.authType === 'device-code' || info?.authType === 'api-key') {
-            await fetch('/api/v1/auth/' + provider + '/logout', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ agentId: this.agentId })
-            });
-          } else {
+          // All providers have /logout on their auth app; try that first, fall back to OAuth route
+          var resp = await fetch('/api/v1/auth/' + provider + '/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: this.agentId })
+          });
+          if (!resp.ok && info?.authType === 'oauth') {
             await fetch('/api/v1/oauth/providers/' + provider + '/logout?token=' + encodeURIComponent(this.token), { method: 'POST' });
+          }
+          // Reset auth flow state
+          var ps = this.providerState[provider];
+          if (ps) {
+            ps.showAuthFlow = false;
+            ps.showCodeInput = false;
+            ps.showDeviceCode = false;
+            ps.showApiKeyInput = false;
           }
           this.checkProviders();
         },
@@ -1723,7 +2098,6 @@ export function renderSettingsPage(
 
             if (resp.ok) {
               this.mcpServers = updatedMcpServers;
-              this.customMcpId = '';
               this.customMcpUrl = '';
             } else {
               var result = await resp.json();

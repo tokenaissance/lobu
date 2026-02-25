@@ -1,6 +1,15 @@
-import { BaseModule, createLogger, type ModelProviderModule } from "@lobu/core";
+import {
+  BaseModule,
+  createLogger,
+  type ModelOption,
+  type ModelProviderModule,
+} from "@lobu/core";
 import { Hono } from "hono";
 import type { AgentSettingsStore } from "./settings/agent-settings-store";
+import {
+  AuthProfilesManager,
+  createAuthProfileLabel,
+} from "./settings/auth-profiles-manager";
 
 const logger = createLogger("api-key-provider");
 
@@ -12,6 +21,12 @@ export interface ApiKeyProviderConfig {
   apiKeyInstructions: string;
   apiKeyPlaceholder: string;
   systemEnvVarName?: string;
+  /** Provider slug for proxy path routing (e.g. "gemini") */
+  slug?: string;
+  /** Upstream base URL for proxy forwarding (e.g. "https://generativelanguage.googleapis.com") */
+  upstreamBaseUrl?: string;
+  /** Explicit base URL env var name (defaults to envVarName with _KEY replaced by _BASE_URL) */
+  baseUrlEnvVarName?: string;
   agentSettingsStore: AgentSettingsStore;
 }
 
@@ -34,7 +49,11 @@ export class ApiKeyProviderModule
 
   private envVarName: string;
   private systemEnvVarName: string;
+  private slug?: string;
+  private upstreamBaseUrl?: string;
+  private baseUrlEnvVarName: string;
   private agentSettingsStore: AgentSettingsStore;
+  private authProfilesManager: AuthProfilesManager;
   private app: Hono;
 
   constructor(config: ApiKeyProviderConfig) {
@@ -45,9 +64,15 @@ export class ApiKeyProviderModule
     this.providerIconUrl = config.providerIconUrl;
     this.envVarName = config.envVarName;
     this.systemEnvVarName = config.systemEnvVarName || config.envVarName;
+    this.slug = config.slug || config.providerId;
+    this.upstreamBaseUrl = config.upstreamBaseUrl;
+    this.baseUrlEnvVarName =
+      config.baseUrlEnvVarName ||
+      config.envVarName.replace("_KEY", "_BASE_URL");
     this.apiKeyInstructions = config.apiKeyInstructions;
     this.apiKeyPlaceholder = config.apiKeyPlaceholder;
     this.agentSettingsStore = config.agentSettingsStore;
+    this.authProfilesManager = new AuthProfilesManager(this.agentSettingsStore);
     this.app = new Hono();
     this.setupRoutes();
   }
@@ -57,20 +82,32 @@ export class ApiKeyProviderModule
   }
 
   getSecretEnvVarNames(): string[] {
-    return [];
+    return [this.envVarName];
+  }
+
+  getCredentialEnvVarName(): string {
+    return this.envVarName;
+  }
+
+  getUpstreamConfig(): { slug: string; upstreamBaseUrl: string } | null {
+    if (!this.slug || !this.upstreamBaseUrl) return null;
+    return { slug: this.slug, upstreamBaseUrl: this.upstreamBaseUrl };
   }
 
   async hasCredentials(agentId: string): Promise<boolean> {
-    const settings = await this.agentSettingsStore.getSettings(agentId);
-    return !!settings?.envVars?.[this.envVarName];
+    return this.authProfilesManager.hasProviderProfiles(
+      agentId,
+      this.providerId
+    );
   }
 
   hasSystemKey(): boolean {
     return !!process.env[this.systemEnvVarName];
   }
 
-  getProxyBaseUrlMappings(): Record<string, string> {
-    return {};
+  getProxyBaseUrlMappings(proxyUrl: string): Record<string, string> {
+    if (!this.slug) return {};
+    return { [this.baseUrlEnvVarName]: `${proxyUrl}/${this.slug}` };
   }
 
   injectSystemKeyFallback(
@@ -91,16 +128,36 @@ export class ApiKeyProviderModule
     envVars: Record<string, string>
   ): Promise<Record<string, string>> {
     if (!envVars[this.envVarName]) {
-      const settings = await this.agentSettingsStore.getSettings(agentId);
-      const key = settings?.envVars?.[this.envVarName];
-      if (key) {
+      const profile = await this.authProfilesManager.getBestProfile(
+        agentId,
+        this.providerId
+      );
+      if (profile?.credential) {
         logger.info(
           `Injecting ${this.envVarName} for agent ${agentId} (${this.providerId})`
         );
-        envVars[this.envVarName] = key;
+        envVars[this.envVarName] = profile.credential;
       }
     }
     return envVars;
+  }
+
+  async getModelOptions(
+    agentId: string,
+    _userId: string
+  ): Promise<ModelOption[]> {
+    const key = await this.getCredential(agentId);
+    if (!key) return [];
+
+    if (this.providerId === "gemini") {
+      return this.fetchGeminiModels(key);
+    }
+
+    if (this.providerId === "nvidia") {
+      return this.fetchNvidiaModels(key);
+    }
+
+    return [];
   }
 
   getApp(): Hono {
@@ -118,13 +175,13 @@ export class ApiKeyProviderModule
           return c.json({ error: "Missing agentId or apiKey" }, 400);
         }
 
-        const settings = await this.agentSettingsStore.getSettings(agentId);
-        const existingEnvVars = settings?.envVars || {};
-        await this.agentSettingsStore.updateSettings(agentId, {
-          envVars: {
-            ...existingEnvVars,
-            [this.envVarName]: apiKey,
-          },
+        await this.authProfilesManager.upsertProfile({
+          agentId,
+          provider: this.providerId,
+          credential: apiKey,
+          authType: "api-key",
+          label: createAuthProfileLabel(this.providerDisplayName, apiKey),
+          makePrimary: true,
         });
 
         logger.info(
@@ -149,17 +206,13 @@ export class ApiKeyProviderModule
           return c.json({ error: "Missing agentId" }, 400);
         }
 
-        const settings = await this.agentSettingsStore.getSettings(agentId);
-        if (settings?.envVars?.[this.envVarName]) {
-          const { [this.envVarName]: _, ...remainingEnvVars } =
-            settings.envVars;
-          await this.agentSettingsStore.updateSettings(agentId, {
-            envVars: remainingEnvVars,
-          });
-          logger.info(
-            `${this.providerDisplayName} API key removed for agent ${agentId}`
-          );
-        }
+        await this.authProfilesManager.deleteProviderProfiles(
+          agentId,
+          this.providerId
+        );
+        logger.info(
+          `${this.providerDisplayName} API key removed for agent ${agentId}`
+        );
 
         return c.json({ success: true });
       } catch (error) {
@@ -177,5 +230,68 @@ export class ApiKeyProviderModule
     logger.info(
       `${this.providerDisplayName} API key endpoints registered via module system`
     );
+  }
+
+  private async getCredential(agentId: string): Promise<string | null> {
+    const profile = await this.authProfilesManager.getBestProfile(
+      agentId,
+      this.providerId
+    );
+    if (profile?.credential) {
+      return profile.credential;
+    }
+    return process.env[this.systemEnvVarName] || null;
+  }
+
+  private async fetchGeminiModels(apiKey: string): Promise<ModelOption[]> {
+    const url = new URL(
+      "https://generativelanguage.googleapis.com/v1beta/models"
+    );
+    url.searchParams.set("key", apiKey);
+
+    const response = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+    }).catch(() => null);
+    if (!response || !response.ok) return [];
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      models?: Array<{ name?: string; displayName?: string }>;
+    };
+
+    return (payload.models || [])
+      .map((model) => {
+        const raw = model.name?.replace(/^models\//, "").trim();
+        if (!raw) return null;
+        return {
+          value: `openclaw/gemini/${raw}`,
+          label: model.displayName || raw,
+        } satisfies ModelOption;
+      })
+      .filter((item): item is ModelOption => Boolean(item));
+  }
+
+  private async fetchNvidiaModels(apiKey: string): Promise<ModelOption[]> {
+    const response = await fetch("https://integrate.api.nvidia.com/v1/models", {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+    }).catch(() => null);
+    if (!response || !response.ok) return [];
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: Array<{ id?: string }>;
+    };
+
+    return (payload.data || [])
+      .map((model) => {
+        const id = model.id?.trim();
+        if (!id) return null;
+        return {
+          value: `openclaw/nvidia/${id}`,
+          label: id,
+        } satisfies ModelOption;
+      })
+      .filter((item): item is ModelOption => Boolean(item));
   }
 }

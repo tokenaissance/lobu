@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'packages/**'
-      - 'Dockerfile.*'
+      - 'docker/Dockerfile.*'
       - '.github/workflows/docker-publish.yml'
       - 'charts/lobu/**'
   release:
@@ -73,7 +73,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.gateway
+          file: ./docker/Dockerfile.gateway
           push: true
           tags: ${{ steps.meta-gateway.outputs.tags }}
           cache-from: |
@@ -99,7 +99,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.worker
+          file: ./docker/Dockerfile.worker
           push: true
           tags: ${{ steps.meta-worker-base.outputs.tags }}
           cache-from: |

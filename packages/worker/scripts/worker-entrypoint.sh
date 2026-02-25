@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Container entrypoint script for Claude Worker
+# Container entrypoint script for Lobu Worker
 echo "🚀 Starting Lobu Worker..."
 
 # Function to handle cleanup on exit
@@ -73,31 +73,30 @@ git config --global safe.directory '*'
 # In development mode, ensure core package can find its dependencies
 # The packages/ dir is mounted as a volume which may contain node_modules from host
 if [ "${NODE_ENV}" = "development" ]; then
-    # Remove any existing node_modules that aren't symlinks
+    # Remove any existing node_modules that aren't symlinks (non-fatal on read-only rootfs)
     if [ -e "/app/packages/core/node_modules" ] && [ ! -L "/app/packages/core/node_modules" ]; then
         echo "🗑️  Removing host node_modules from /app/packages/core/"
-        rm -rf /app/packages/core/node_modules
+        rm -rf /app/packages/core/node_modules 2>/dev/null || true
     fi
     if [ ! -e "/app/packages/core/node_modules" ]; then
         echo "🔗 Creating symlink for core package dependencies..."
-        ln -sf /app/node_modules /app/packages/core/node_modules
-        echo "✅ Symlink created: /app/packages/core/node_modules -> /app/node_modules"
+        ln -sf /app/node_modules /app/packages/core/node_modules 2>/dev/null || true
     fi
 
-    # Also for worker package if needed
+    # Also for worker package if needed (non-fatal on read-only rootfs)
     if [ -e "/app/packages/worker/node_modules" ] && [ ! -L "/app/packages/worker/node_modules" ]; then
-        rm -rf /app/packages/worker/node_modules
+        rm -rf /app/packages/worker/node_modules 2>/dev/null || true
     fi
     if [ ! -e "/app/packages/worker/node_modules" ]; then
-        ln -sf /app/node_modules /app/packages/worker/node_modules
+        ln -sf /app/node_modules /app/packages/worker/node_modules 2>/dev/null || true
     fi
 fi
 
 # Source Nix profile if installed (non-interactive shells don't source /etc/profile.d)
-if [ -f /home/claude/.nix-profile/etc/profile.d/nix.sh ]; then
-    . /home/claude/.nix-profile/etc/profile.d/nix.sh
+if [ -f /home/worker/.nix-profile/etc/profile.d/nix.sh ]; then
+    . /home/worker/.nix-profile/etc/profile.d/nix.sh
     # Set NIX_PATH for nix-shell -p to find nixpkgs
-    export NIX_PATH="nixpkgs=/home/claude/.nix-defexpr/channels/nixpkgs"
+    export NIX_PATH="nixpkgs=/home/worker/.nix-defexpr/channels/nixpkgs"
 fi
 
 # Docker fallback: persist Nix store on workspace PVC via symlinks
@@ -166,7 +165,7 @@ activate_nix_env() {
 }
 
 # Start the worker process
-echo "🚀 Executing Claude Worker..."
+echo "🚀 Executing Worker..."
 # Check if we're already in the worker directory
 if [ "$(pwd)" != "/app/packages/worker" ]; then
     cd /app/packages/worker || { echo "❌ Failed to cd to /app/packages/worker"; exit 1; }

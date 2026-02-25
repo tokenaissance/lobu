@@ -8,6 +8,7 @@ import type { Bot } from "grammy";
 import type { AuthProvider, PlatformAuthAdapter } from "../auth/platform-auth";
 import {
   buildSettingsUrl,
+  formatSettingsTokenTtl,
   generateSettingsToken,
 } from "../auth/settings/token-service";
 
@@ -37,22 +38,17 @@ export class TelegramAuthAdapter implements PlatformAuthAdapter {
 
     const token = generateSettingsToken(agentId, userId, "telegram");
     const settingsUrl = buildSettingsUrl(token);
+    const ttlLabel = formatSettingsTokenTtl();
 
     const message = [
       "<b>Setup Required</b>",
       "",
-      "Configure your bot using this link:",
+      "You need to add a model provider to use this bot.",
+      "Configure it using this link:",
       "",
       settingsUrl,
       "",
-      "You can set up:",
-      "- Claude authentication",
-      "- MCP servers",
-      "- Network access",
-      "- Git repository",
-      "- And more...",
-      "",
-      "<i>Link expires in 1 hour.</i>",
+      `<i>Link expires in ${ttlLabel}.</i>`,
     ].join("\n");
 
     try {

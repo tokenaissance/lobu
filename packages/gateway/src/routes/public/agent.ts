@@ -15,7 +15,6 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { QueueProducer } from "../../infrastructure/queue/queue-producer";
-import type { InteractionService } from "../../interactions";
 import type { ISessionManager, ThreadSession } from "../../session";
 
 const logger = createLogger("agent-api");
@@ -97,7 +96,6 @@ const CreateAgentResponseSchema = z.object({
   expiresAt: z.number(),
   sseUrl: z.string(),
   messagesUrl: z.string(),
-  interactionsUrl: z.string(),
   execUrl: z.string(),
 });
 
@@ -128,11 +126,6 @@ const ExecResponseSchema = z.object({
   eventsUrl: z.string(),
 });
 
-const InteractionResponseRequestSchema = z.object({
-  answer: z.string().optional(),
-  formData: z.record(z.string(), z.string()).optional(),
-});
-
 const AgentStatusResponseSchema = z.object({
   success: z.boolean(),
   agent: z.object({
@@ -155,17 +148,11 @@ const SuccessResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
   agentId: z.string().optional(),
-  interactionId: z.string().optional(),
 });
 
 // Path parameters
 const AgentIdParamSchema = z.object({
   agentId: z.string(),
-});
-
-const InteractionIdParamSchema = z.object({
-  agentId: z.string(),
-  interactionId: z.string(),
 });
 
 const ExecIdParamSchema = z.object({
@@ -554,48 +541,6 @@ const execEventsRoute = createRoute({
   },
 });
 
-const interactionResponseRoute = createRoute({
-  method: "post",
-  path: "/api/v1/agents/{agentId}/interactions/{interactionId}",
-  tags: ["Agent Messages"],
-  summary: "Respond to an interaction",
-  security: [{ bearerAuth: [] }],
-  request: {
-    params: InteractionIdParamSchema,
-    body: {
-      content: {
-        "application/json": { schema: InteractionResponseRequestSchema },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "Response submitted",
-      content: { "application/json": { schema: SuccessResponseSchema } },
-    },
-    400: {
-      description: "Invalid request",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-    401: {
-      description: "Unauthorized",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-    403: {
-      description: "Forbidden",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-    404: {
-      description: "Not found",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-    410: {
-      description: "Expired",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
 // =============================================================================
 // Create OpenAPI Hono App
 // =============================================================================
@@ -603,7 +548,6 @@ const interactionResponseRoute = createRoute({
 export function createAgentApi(
   queueProducer: QueueProducer,
   sessionManager: ISessionManager,
-  interactionService: InteractionService,
   publicGatewayUrl: string
 ): OpenAPIHono {
   const app = new OpenAPIHono();
@@ -736,7 +680,6 @@ export function createAgentApi(
         expiresAt,
         sseUrl: `${baseUrl}/api/v1/agents/${agentId}/events`,
         messagesUrl: `${baseUrl}/api/v1/agents/${agentId}/messages`,
-        interactionsUrl: `${baseUrl}/api/v1/agents/${agentId}/interactions`,
         execUrl: `${baseUrl}/api/v1/agents/${agentId}/exec`,
       },
       201
@@ -1067,52 +1010,6 @@ export function createAgentApi(
         await stream.sleep(1000);
       }
     });
-  });
-
-  // POST /api/v1/agents/:agentId/interactions/:interactionId
-  app.openapi(interactionResponseRoute, async (c): Promise<any> => {
-    const { agentId, interactionId } = c.req.valid("param");
-    const tokenData = await authenticateAgent(c, agentId);
-    if (!tokenData) {
-      return c.json({ success: false, error: "Unauthorized" }, 401);
-    }
-
-    const body = c.req.valid("json");
-    const { answer, formData } = body;
-
-    if (!answer && !formData) {
-      return c.json(
-        { success: false, error: "Provide 'answer' or 'formData'" },
-        400
-      );
-    }
-
-    const interaction = await interactionService.getInteraction(interactionId);
-    if (!interaction) {
-      return c.json({ success: false, error: "Interaction not found" }, 404);
-    }
-
-    if (
-      interaction.conversationId !== agentId &&
-      interaction.conversationId !== tokenData.conversationId
-    ) {
-      return c.json(
-        { success: false, error: "Interaction does not belong to this agent" },
-        403
-      );
-    }
-
-    if (interaction.status === "responded") {
-      return c.json({ success: false, error: "Already responded" }, 400);
-    }
-
-    if (interaction.expiresAt < Date.now()) {
-      return c.json({ success: false, error: "Interaction expired" }, 410);
-    }
-
-    await interactionService.respond(interactionId, { answer, formData });
-
-    return c.json({ success: true, interactionId });
   });
 
   logger.info("Hono Agent API routes registered");

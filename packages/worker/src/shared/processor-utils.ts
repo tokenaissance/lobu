@@ -12,7 +12,7 @@ export function formatMcpToolName(toolName: string): string {
 
 /**
  * Format tool execution for user-friendly display in bullet lists.
- * Shared between Claude and OpenClaw processors.
+ * Shared across agent processors.
  */
 export function formatToolExecution(
   toolName: string,

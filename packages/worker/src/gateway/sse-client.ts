@@ -11,7 +11,6 @@ import {
   SpanStatusCode,
 } from "@lobu/core";
 import { z } from "zod";
-import { InteractionClient } from "../common/interaction-client";
 import type { WorkerConfig, WorkerExecutor } from "../core/types";
 import { HttpWorkerTransport } from "./gateway-integration";
 import { MessageBatcher } from "./message-batcher";
@@ -63,30 +62,6 @@ const AgentOptionsSchema = z
   })
   .passthrough();
 
-const OPENCLAW_RUNTIME_ALIASES = new Set(["openclaw", "pi"]);
-const OPENCLAW_MODEL_PREFIXES = ["openclaw/", "openai-codex/"];
-
-function shouldUseOpenClaw(
-  agentOptions?: z.infer<typeof AgentOptionsSchema>
-): boolean {
-  if (!agentOptions) {
-    return false;
-  }
-  if (typeof agentOptions.runtime === "string") {
-    const runtime = agentOptions.runtime.trim().toLowerCase();
-    if (runtime && OPENCLAW_RUNTIME_ALIASES.has(runtime)) {
-      return true;
-    }
-  }
-  if (typeof agentOptions.model === "string") {
-    const model = agentOptions.model.trim().toLowerCase();
-    if (OPENCLAW_MODEL_PREFIXES.some((p) => model.startsWith(p))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 const JobEventSchema = z.object({
   payload: z.object({
     botId: z.string(),
@@ -103,15 +78,6 @@ const JobEventSchema = z.object({
     teamId: z.string().optional(), // Optional for WhatsApp (top-level) and Slack (in platformMetadata)
   }),
   processedIds: z.array(z.string()).optional(),
-});
-
-const InteractionEventSchema = z.object({
-  interactionId: z.string(),
-  response: z.object({
-    answer: z.string().optional(),
-    formData: z.record(z.string(), z.any()).optional(),
-    timestamp: z.number(),
-  }),
 });
 
 /**
@@ -132,7 +98,6 @@ export class GatewayClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private messageBatcher: MessageBatcher;
-  private interactionClient: InteractionClient;
   private eventErrorCount = 0;
   private eventErrorThreshold = 10;
 
@@ -148,8 +113,6 @@ export class GatewayClient {
     this.deploymentName = deploymentName;
     // Get initial traceId from environment (set by deployment)
     this.currentTraceId = process.env.TRACE_ID;
-
-    this.interactionClient = new InteractionClient(dispatcherUrl, workerToken);
 
     this.messageBatcher = new MessageBatcher({
       onBatchReady: async (messages) => {
@@ -376,47 +339,6 @@ export class GatewayClient {
             parseError
           );
           logger.debug(`Raw job data: ${data}`);
-        }
-        return;
-      }
-
-      if (eventType === "interaction") {
-        try {
-          logger.info(`[SSE-CLIENT] 📨 Raw interaction event data: ${data}`);
-          const parsedData = JSON.parse(data);
-          const validationResult = InteractionEventSchema.safeParse(parsedData);
-
-          if (!validationResult.success) {
-            logger.error(
-              `[SSE-CLIENT] ❌ Invalid interaction event data:`,
-              validationResult.error.format()
-            );
-            logger.error(`[SSE-CLIENT] Raw interaction data: ${data}`);
-            throw new Error(
-              `Interaction event validation failed: ${validationResult.error.message}`
-            );
-          }
-
-          const { interactionId, response } = validationResult.data;
-          logger.info(
-            `[SSE-CLIENT] ✅ Received interaction response for ${interactionId}, response: ${JSON.stringify(response)}`
-          );
-          logger.info(
-            `[SSE-CLIENT] 🔄 Forwarding to InteractionClient.handleInteractionResponse`
-          );
-          this.interactionClient.handleInteractionResponse(
-            interactionId,
-            response
-          );
-          logger.info(
-            `[SSE-CLIENT] ✅ Successfully forwarded interaction ${interactionId} to InteractionClient`
-          );
-        } catch (parseError) {
-          logger.error(
-            `[SSE-CLIENT] ❌ Failed to parse or validate interaction event data:`,
-            parseError
-          );
-          logger.error(`[SSE-CLIENT] Raw interaction data: ${data}`);
         }
         return;
       }
@@ -676,8 +598,6 @@ export class GatewayClient {
     message: QueuedMessage,
     processedIds?: string[]
   ): Promise<void> {
-    const useOpenClaw = shouldUseOpenClaw(message.payload.agentOptions);
-
     // Get traceparent for distributed tracing
     const traceparent =
       (message.payload.platformMetadata?.traceparent as string) ||
@@ -720,19 +640,8 @@ export class GatewayClient {
       );
 
       // Worker will decide whether to continue session based on workspace state
-      if (useOpenClaw) {
-        const { OpenClawWorker } = await import("../openclaw/worker");
-        this.currentWorker = new OpenClawWorker(
-          workerConfig,
-          this.interactionClient
-        );
-      } else {
-        const { ClaudeWorker } = await import("../claude/worker");
-        this.currentWorker = new ClaudeWorker(
-          workerConfig,
-          this.interactionClient
-        );
-      }
+      const { OpenClawWorker } = await import("../openclaw/worker");
+      this.currentWorker = new OpenClawWorker(workerConfig);
 
       const workerTransport = this.currentWorker.getWorkerTransport();
 

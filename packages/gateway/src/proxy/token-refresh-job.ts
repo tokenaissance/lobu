@@ -1,8 +1,7 @@
 import { createLogger } from "@lobu/core";
 import type Redis from "ioredis";
-import type { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import { ClaudeOAuthClient } from "../auth/oauth/claude-client";
-import type { AgentSettingsStore } from "../auth/settings/agent-settings-store";
+import type { AuthProfilesManager } from "../auth/settings/auth-profiles-manager";
 import { updateSecretValue } from "./secret-proxy";
 
 const logger = createLogger("token-refresh-job");
@@ -11,14 +10,15 @@ const REFRESH_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 const EXPIRY_BUFFER_MS = 5 * 60 * 1000; // Refresh tokens expiring within 5 minutes
 
 /**
- * Background job that proactively refreshes OAuth tokens before they expire.
+ * Background job that proactively refreshes Claude OAuth tokens before they expire.
  *
  * On each tick:
- * 1. Scans ClaudeCredentialStore for tokens expiring soon
- * 2. Refreshes via ClaudeOAuthClient
- * 3. Updates ClaudeCredentialStore with new credentials
- * 4. Syncs new access token to AgentSettingsStore.envVars
- * 5. Updates active Redis placeholder mappings so the proxy serves fresh tokens
+ * 1. Scans authProfiles for Claude OAuth tokens expiring soon
+ * 2. Refreshes via Claude OAuth client
+ * 3. Updates authProfiles with new credentials
+ * 4. Updates active Redis placeholder mappings so the proxy serves fresh tokens
+ *
+ * TODO: Generalize to all OAuth providers when more providers support refresh tokens.
  */
 export class TokenRefreshJob {
   private timer: Timer | null = null;
@@ -26,8 +26,7 @@ export class TokenRefreshJob {
   private refreshLocks = new Map<string, Promise<void>>();
 
   constructor(
-    private credentialStore: ClaudeCredentialStore,
-    private agentSettingsStore: AgentSettingsStore,
+    private authProfilesManager: AuthProfilesManager,
     private redis: Redis
   ) {
     this.oauthClient = new ClaudeOAuthClient();
@@ -52,8 +51,7 @@ export class TokenRefreshJob {
   }
 
   private async tick(): Promise<void> {
-    // Scan for all claude:credential:* keys
-    const pattern = "claude:credential:*";
+    const pattern = "agent:settings:*";
     let cursor = "0";
     do {
       const [next, keys] = await this.redis.scan(
@@ -65,7 +63,7 @@ export class TokenRefreshJob {
       );
       cursor = next;
       for (const key of keys) {
-        const agentId = key.replace("claude:credential:", "");
+        const agentId = key.replace("agent:settings:", "");
         await this.maybeRefresh(agentId);
       }
     } while (cursor !== "0");
@@ -89,32 +87,47 @@ export class TokenRefreshJob {
   }
 
   private async doRefresh(agentId: string): Promise<void> {
-    const credentials = await this.credentialStore.getCredentials(agentId);
-    if (!credentials || !credentials.refreshToken) return;
+    const profiles = await this.authProfilesManager.getProviderProfiles(
+      agentId,
+      "claude"
+    );
+    const oauthProfile = profiles.find(
+      (profile) =>
+        profile.authType === "oauth" && !!profile.metadata?.refreshToken
+    );
 
-    const isExpiring = credentials.expiresAt <= Date.now() + EXPIRY_BUFFER_MS;
+    if (!oauthProfile?.metadata?.refreshToken) return;
+
+    const expiresAt = oauthProfile.metadata.expiresAt || 0;
+    const isExpiring = expiresAt <= Date.now() + EXPIRY_BUFFER_MS;
     if (!isExpiring) return;
 
-    logger.info(`Refreshing token for agent ${agentId}`, {
-      expiresAt: new Date(credentials.expiresAt).toISOString(),
-    });
+    logger.info(
+      `Refreshing Claude token for agent ${agentId} profile ${oauthProfile.id}`,
+      { expiresAt: new Date(expiresAt).toISOString() }
+    );
 
     try {
       const newCredentials = await this.oauthClient.refreshToken(
-        credentials.refreshToken
+        oauthProfile.metadata.refreshToken
       );
 
-      // 1. Update credential store
-      await this.credentialStore.setCredentials(agentId, newCredentials);
+      await this.authProfilesManager.upsertProfile({
+        agentId,
+        id: oauthProfile.id,
+        provider: oauthProfile.provider,
+        credential: newCredentials.accessToken,
+        authType: "oauth",
+        label: oauthProfile.label,
+        model: oauthProfile.model,
+        metadata: {
+          ...oauthProfile.metadata,
+          refreshToken: newCredentials.refreshToken,
+          expiresAt: newCredentials.expiresAt,
+        },
+        makePrimary: false,
+      });
 
-      // 2. Sync to agent settings envVars
-      const settings = await this.agentSettingsStore.getSettings(agentId);
-      if (settings?.envVars) {
-        settings.envVars.CLAUDE_CODE_OAUTH_TOKEN = newCredentials.accessToken;
-        await this.agentSettingsStore.saveSettings(agentId, settings);
-      }
-
-      // 3. Update active placeholder mappings
       const updated = await updateSecretValue(
         this.redis,
         agentId,
@@ -122,19 +135,14 @@ export class TokenRefreshJob {
         newCredentials.accessToken
       );
 
-      logger.info(`Token refreshed for agent ${agentId}`, {
+      logger.info(`Token refreshed for agent ${agentId} (claude)`, {
         updatedPlaceholders: updated,
       });
     } catch (error) {
-      logger.error(`Failed to refresh token for agent ${agentId}`, { error });
-
-      // Delete invalid credentials on refresh failure
-      try {
-        await this.credentialStore.deleteCredentials(agentId);
-        logger.info(`Deleted invalid credentials for agent ${agentId}`);
-      } catch (deleteError) {
-        logger.error(`Failed to delete invalid credentials`, { deleteError });
-      }
+      logger.error(`Failed to refresh Claude token for agent ${agentId}`, {
+        error,
+        profileId: oauthProfile.id,
+      });
     }
   }
 }

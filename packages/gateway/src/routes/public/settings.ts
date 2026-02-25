@@ -12,10 +12,11 @@
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { moduleRegistry } from "@lobu/core";
+import { collectProviderModelOptions } from "../../auth/provider-model-options";
 import type { AgentSettingsStore } from "../../auth/settings";
 import { verifySettingsToken } from "../../auth/settings/token-service";
 import type { GitHubAppAuth } from "../../modules/git-filesystem/github-app";
-import { collectProviderModelOptions } from "../../auth/provider-model-options";
+import type { ProviderMeta } from "./settings-page";
 import { renderErrorPage, renderSettingsPage } from "./settings-page";
 
 export interface SettingsPageConfig {
@@ -23,6 +24,24 @@ export interface SettingsPageConfig {
   githubAuth?: GitHubAppAuth;
   githubAppInstallUrl?: string;
   githubOAuthClientId?: string;
+}
+
+function buildProviderMeta(
+  m: ReturnType<typeof moduleRegistry.getModelProviderModules>[number]
+): ProviderMeta {
+  return {
+    id: m.providerId,
+    name: m.providerDisplayName,
+    iconUrl: m.providerIconUrl || "",
+    authType: (m.authType || "oauth") as ProviderMeta["authType"],
+    supportedAuthTypes:
+      (m.supportedAuthTypes as ProviderMeta["supportedAuthTypes"]) || [
+        m.authType || "oauth",
+      ],
+    apiKeyInstructions: m.apiKeyInstructions || "",
+    apiKeyPlaceholder: m.apiKeyPlaceholder || "",
+    catalogDescription: m.catalogDescription || "",
+  };
 }
 
 export function createSettingsPageRoutes(
@@ -54,15 +73,25 @@ export function createSettingsPageRoutes(
       payload.agentId
     );
 
-    // Build provider metadata from registry for dynamic UI rendering
-    const providers = moduleRegistry.getModelProviderModules().map((m) => ({
-      id: m.providerId,
-      name: m.providerDisplayName,
-      iconUrl: m.providerIconUrl || "",
-      authType: m.authType || "oauth",
-      apiKeyInstructions: m.apiKeyInstructions || "",
-      apiKeyPlaceholder: m.apiKeyPlaceholder || "",
-    }));
+    // Build provider metadata from registry
+    const allModules = moduleRegistry.getModelProviderModules();
+    const allProviderMeta = allModules
+      .filter((m) => m.catalogVisible !== false)
+      .map(buildProviderMeta);
+
+    // Resolve installed providers in order
+    const installedIds = (settings?.installedProviders || []).map(
+      (ip) => ip.providerId
+    );
+    const installedSet = new Set(installedIds);
+    const installedProviders = installedIds
+      .map((id) => allProviderMeta.find((p) => p.id === id))
+      .filter((p): p is ProviderMeta => p !== undefined);
+
+    // Catalog providers = all that are not installed
+    const catalogProviders = allProviderMeta.filter(
+      (p) => !installedSet.has(p.id)
+    );
 
     const providerModelOptions = await collectProviderModelOptions(
       payload.agentId,
@@ -74,7 +103,8 @@ export function createSettingsPageRoutes(
         githubAppConfigured: !!config.githubAuth,
         githubAppInstallUrl: config.githubAppInstallUrl,
         githubOAuthConfigured: !!config.githubOAuthClientId,
-        providers,
+        providers: installedProviders,
+        catalogProviders,
         providerModelOptions,
       })
     );

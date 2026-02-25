@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Sync .env values to Helm values.yaml
-# Usage: ./bin/sync-env-to-values.sh [values-file] [environment]
+# Usage: ./scripts/sync-env-to-values.sh [values-file] [environment]
 
 ENV_FILE=".env"
 

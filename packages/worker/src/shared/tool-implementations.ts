@@ -3,11 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createLogger } from "@lobu/core";
 import FormData from "form-data";
-import type { InteractionClient } from "../common/interaction-client";
-import {
-  createMcpDiscoveryClient,
-  formatSearchResults,
-} from "../common/mcp-discovery-client";
+import { createMcpDiscoveryClient } from "../common/mcp-discovery-client";
 
 const logger = createLogger("shared-tools");
 
@@ -226,36 +222,30 @@ export async function uploadUserFile(
 // ============================================================================
 
 export async function askUserQuestion(
-  interactionClient: InteractionClient,
+  gw: GatewayParams,
   args: { question: string; options: unknown }
 ): Promise<TextResult> {
   return withErrorHandling("AskUserQuestion", async () => {
     logger.info(`AskUserQuestion: ${args.question}`);
 
-    const response = await interactionClient.askUser({
-      interactionType: "question",
-      question: args.question,
-      options: args.options as any,
-    });
+    const { error } = await gatewayFetch<{ id: string }>(
+      gw,
+      "/internal/interactions/create",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          interactionType: "question",
+          question: args.question,
+          options: args.options,
+        }),
+      },
+      "Failed to post question"
+    );
+    if (error) return error;
 
-    if (response.answer) {
-      logger.info(`User selected: ${response.answer}`);
-      return textResult(
-        `User selected: ${response.answer}\n\nYou can now proceed based on this choice.`
-      );
-    }
-
-    if (response.formData) {
-      logger.info(
-        `User submitted form data: ${JSON.stringify(response.formData)}`
-      );
-      const formattedData = JSON.stringify(response.formData, null, 2);
-      return textResult(
-        `User submitted:\n\`\`\`json\n${formattedData}\n\`\`\`\n\nYou can now proceed with this configuration.`
-      );
-    }
-
-    return textResult("User did not respond within the timeout period.");
+    return textResult(
+      "Question posted with buttons. Your session will end now. The user's answer will arrive as your next message."
+    );
   });
 }
 
@@ -405,44 +395,185 @@ export async function listReminders(gw: GatewayParams): Promise<TextResult> {
 }
 
 // ============================================================================
-// SearchMcpServers
+// SearchExtensions (unified search for skills + MCP servers)
 // ============================================================================
 
-export async function searchMcpServers(
+interface ExtensionResult {
+  id: string;
+  name: string;
+  description: string;
+  type: "skill" | "mcp";
+  source: string;
+}
+
+async function searchSkillsFromGateway(
   gw: GatewayParams,
-  args: { query: string; limit?: number }
-): Promise<TextResult> {
-  return withErrorHandling("SearchMcpServers", async () => {
+  query: string,
+  limit: number
+): Promise<ExtensionResult[]> {
+  try {
+    const response = await fetch(
+      `${gw.gatewayUrl}/internal/skills/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+      { headers: { Authorization: `Bearer ${gw.workerToken}` } }
+    );
+    if (!response.ok) return [];
+    const data = (await response.json()) as {
+      results: Array<{ id: string; name: string; source: string }>;
+    };
+    return data.results.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: "",
+      type: "skill" as const,
+      source: s.source || "clawhub",
+    }));
+  } catch (error) {
+    logger.error("Failed to search skills from gateway:", error);
+    return [];
+  }
+}
+
+async function searchMcpsFromGateway(
+  gw: GatewayParams,
+  query: string,
+  limit: number
+): Promise<ExtensionResult[]> {
+  try {
     const mcpClient = createMcpDiscoveryClient(gw.gatewayUrl, gw.workerToken);
-    const results = await mcpClient.search(args.query, args.limit || 5);
+    const results = await mcpClient.search(query, limit);
+    return results.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description || "",
+      type: "mcp" as const,
+      source: r.source || "mcp-registry",
+    }));
+  } catch (error) {
+    logger.error("Failed to search MCPs:", error);
+    return [];
+  }
+}
+
+function formatExtensionResults(results: ExtensionResult[]): string {
+  return results
+    .map(
+      (item, index) =>
+        `${index + 1}. [${item.type.toUpperCase()}] ${item.name} (${item.id})\n   ${item.description || "No description"}\n   source: ${item.source}`
+    )
+    .join("\n\n");
+}
+
+export async function searchExtensions(
+  gw: GatewayParams,
+  args: { query: string; type?: "skill" | "mcp"; limit?: number }
+): Promise<TextResult> {
+  return withErrorHandling("SearchExtensions", async () => {
+    const limit = Math.min(args.limit || 5, 10);
+    const searchType = args.type;
+
+    let results: ExtensionResult[];
+
+    if (searchType === "skill") {
+      results = await searchSkillsFromGateway(gw, args.query, limit);
+    } else if (searchType === "mcp") {
+      results = await searchMcpsFromGateway(gw, args.query, limit);
+    } else {
+      const [skills, mcps] = await Promise.all([
+        searchSkillsFromGateway(gw, args.query, limit),
+        searchMcpsFromGateway(gw, args.query, limit),
+      ]);
+      results = [...skills, ...mcps].slice(0, limit);
+    }
+
     if (!results.length) {
       return textResult(
-        `No MCP servers found for "${args.query}". Try a broader query.`
+        `No extensions found for "${args.query}". Try a broader query.`
       );
     }
 
     return textResult(
-      `Found ${Math.min(results.length, 5)} MCP candidate(s):\n\n${formatSearchResults(results)}\n\n` +
-        `Ask the user which one they want, then call InstallMcpServer with the selected mcpId.`
+      `Found ${results.length} extension(s):\n\n${formatExtensionResults(results)}\n\n` +
+        `Ask the user which one they want, then call InstallExtension with the selected id and type.`
     );
   });
 }
 
 // ============================================================================
-// InstallMcpServer
+// InstallExtension (unified install for skills + MCP servers)
 // ============================================================================
 
-export async function installMcpServer(
+export async function installExtension(
   gw: GatewayParams,
-  args: { mcpId: string; reason?: string }
+  args: {
+    id: string;
+    type: "skill" | "mcp";
+    reason?: string;
+    envVars?: string[];
+    nixPackages?: string[];
+  }
 ): Promise<TextResult> {
-  return withErrorHandling("InstallMcpServer", async () => {
-    const mcpClient = createMcpDiscoveryClient(gw.gatewayUrl, gw.workerToken);
-    const result = await mcpClient.install(args.mcpId, args.reason);
+  return withErrorHandling("InstallExtension", async () => {
+    if (args.type === "mcp") {
+      const mcpClient = createMcpDiscoveryClient(gw.gatewayUrl, gw.workerToken);
+      const mcp = await mcpClient.getById(args.id);
+      const reason =
+        args.reason ||
+        `Install MCP server "${mcp.name}" so it can be used in this agent`;
+
+      const body: Record<string, unknown> = {
+        reason,
+        prefillMcpServers: [mcp.prefillMcpServer],
+      };
+      if (args.envVars?.length) body.prefillEnvVars = args.envVars;
+      if (args.nixPackages?.length) body.prefillNixPackages = args.nixPackages;
+
+      interface SettingsLinkResult {
+        url: string;
+        expiresAt: string;
+      }
+
+      const { data, error } = await gatewayFetch<SettingsLinkResult>(
+        gw,
+        "/internal/settings-link",
+        { method: "POST", body: JSON.stringify(body) },
+        "Failed to generate install link"
+      );
+      if (error) return error;
+
+      return textResult(
+        `Install link generated for MCP server "${mcp.name}" (${mcp.id}).\n\n` +
+          `URL: ${data!.url}\n\n` +
+          `Ask the user to open the link and confirm installation.`
+      );
+    }
+
+    // type === "skill"
+    const reason = args.reason || `Install skill "${args.id}" for this agent`;
+
+    const body: Record<string, unknown> = {
+      reason,
+      prefillSkills: [{ repo: args.id }],
+    };
+    if (args.envVars?.length) body.prefillEnvVars = args.envVars;
+    if (args.nixPackages?.length) body.prefillNixPackages = args.nixPackages;
+
+    interface SettingsLinkResult {
+      url: string;
+      expiresAt: string;
+    }
+
+    const { data, error } = await gatewayFetch<SettingsLinkResult>(
+      gw,
+      "/internal/settings-link",
+      { method: "POST", body: JSON.stringify(body) },
+      "Failed to generate install link"
+    );
+    if (error) return error;
+
     return textResult(
-      `Install link generated for ${result.mcp.name} (${result.mcp.id}).\n\n` +
-        `URL: ${result.url}\n\n` +
-        `Ask the user to open the link and explicitly confirm installation.`
+      `Install link generated for skill "${args.id}".\n\n` +
+        `URL: ${data!.url}\n\n` +
+        `Ask the user to open the link and confirm installation.`
     );
   });
 }

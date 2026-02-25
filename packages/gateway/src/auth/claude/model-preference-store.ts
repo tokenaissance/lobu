@@ -49,24 +49,4 @@ export class ClaudeModelPreferenceStore extends BaseRedisStore<string> {
   protected override deserialize(data: string): string {
     return data; // Return as plain string
   }
-
-  public async getAvailableModels(): Promise<any[]> {
-    return [
-      {
-        id: "claude-sonnet-4-5",
-        display_name: "Claude Sonnet 4.5",
-        type: "model",
-      },
-      {
-        id: "claude-haiku-4-5",
-        display_name: "Claude Haiku 4.5",
-        type: "model",
-      },
-      {
-        id: "claude-opus-4-1",
-        display_name: "Claude Opus 4.1",
-        type: "model",
-      },
-    ];
-  }
 }

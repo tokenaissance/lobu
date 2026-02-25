@@ -14,6 +14,8 @@ import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { AgentSettingsStore } from "../../auth/settings";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChannelBindingService } from "../../channels";
+import type { CommandDispatcher } from "../../commands/command-dispatcher";
+import { createTelegramReply } from "../../commands/command-reply-adapters";
 import type {
   MessagePayload,
   QueueProducer,
@@ -21,10 +23,7 @@ import type {
 import { generateAgentSelectorToken } from "../../routes/public/agent-selector-page";
 import type { ISessionManager } from "../../session";
 import { resolveSpace } from "../../spaces";
-import type { CommandDispatcher } from "../../commands/command-dispatcher";
-import { createTelegramReply } from "../../commands/command-reply-adapters";
 import type { TelegramConfig } from "../config";
-import type { TelegramInteractionRenderer } from "../interactions";
 import { isGroupChat, type TelegramContext } from "../types";
 
 const logger = createLogger("telegram-message-handler");
@@ -54,7 +53,6 @@ export class TelegramMessageHandler {
   private historyCleanupTimer?: NodeJS.Timeout;
   private channelBindingService?: ChannelBindingService;
   private agentSettingsStore?: AgentSettingsStore;
-  private interactionRenderer?: TelegramInteractionRenderer;
   private userAgentsStore?: UserAgentsStore;
   private agentMetadataStore?: AgentMetadataStore;
   private adminStatusCache?: AdminStatusCache;
@@ -75,10 +73,6 @@ export class TelegramMessageHandler {
 
   setAgentSettingsStore(store: AgentSettingsStore): void {
     this.agentSettingsStore = store;
-  }
-
-  setInteractionRenderer(renderer: TelegramInteractionRenderer): void {
-    this.interactionRenderer = renderer;
   }
 
   setUserAgentsStore(store: UserAgentsStore): void {
@@ -241,15 +235,6 @@ export class TelegramMessageHandler {
       },
       "Processing message"
     );
-
-    // Check if this is a response to a pending interaction
-    if (this.interactionRenderer?.tryHandleTextResponse(chatId, body)) {
-      logger.info(
-        { messageId, chatId },
-        "Message handled as interaction response"
-      );
-      return;
-    }
 
     // Authorization check
     if (!this.isAllowedSender(senderId)) {

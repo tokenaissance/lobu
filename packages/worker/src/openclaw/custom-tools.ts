@@ -1,8 +1,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { type TSchema, Type } from "@sinclair/typebox";
 import type { Static } from "@sinclair/typebox";
-import type { InteractionClient } from "../common/interaction-client";
+import { type TSchema, Type } from "@sinclair/typebox";
 import type { GatewayParams, TextResult } from "../shared/tool-implementations";
 import {
   askUserQuestion,
@@ -10,10 +9,10 @@ import {
   generateAudio,
   getChannelHistory,
   getSettingsLink,
-  installMcpServer,
+  installExtension,
   listReminders,
   scheduleReminder,
-  searchMcpServers,
+  searchExtensions,
   uploadUserFile,
 } from "../shared/tool-implementations";
 
@@ -50,7 +49,6 @@ export function createOpenClawCustomTools(params: {
   workerToken: string;
   channelId: string;
   conversationId: string;
-  interactionClient?: InteractionClient;
   platform?: string;
 }): ToolDefinition[] {
   const gw: GatewayParams = {
@@ -132,37 +130,60 @@ export function createOpenClawCustomTools(params: {
     }),
 
     defineTool({
-      name: "SearchMcpServers",
+      name: "SearchExtensions",
       description:
-        "Search for installable remote MCP servers. Returns up to 5 candidates.",
+        "Search for installable extensions (skills, MCP servers, or both). Returns candidates from ClawHub (skills) and MCP registry. Use this to help users find and discover new capabilities.",
       parameters: Type.Object({
         query: Type.String({
-          description: "What to search for (e.g., 'gmail', 'notion', 'github')",
+          description:
+            "What to search for (e.g., 'gmail', 'pdf', 'github', 'browser')",
         }),
+        type: Type.Optional(
+          Type.Union([Type.Literal("skill"), Type.Literal("mcp")], {
+            description:
+              'Filter by type: "skill" for ClawHub skills only, "mcp" for MCP servers only. Omit to search both.',
+          })
+        ),
         limit: Type.Optional(
           Type.Number({
-            description: "Maximum candidates to return (default 5, max 5)",
+            description: "Maximum results to return (default 5, max 10)",
           })
         ),
       }),
-      run: (args) => searchMcpServers(gw, args),
+      run: (args) => searchExtensions(gw, args),
     }),
 
     defineTool({
-      name: "InstallMcpServer",
+      name: "InstallExtension",
       description:
-        "Generate a settings link that pre-fills one selected MCP server for explicit user confirmation.",
+        "Generate a settings link that pre-fills one selected extension (skill or MCP server) for explicit user confirmation. Supports bundling extra env vars or nix packages into the same link.",
       parameters: Type.Object({
-        mcpId: Type.String({
-          description: "MCP ID from SearchMcpServers results",
+        id: Type.String({
+          description:
+            "Extension ID from SearchExtensions results (skill slug or MCP ID)",
+        }),
+        type: Type.Union([Type.Literal("skill"), Type.Literal("mcp")], {
+          description: 'Extension type: "skill" or "mcp"',
         }),
         reason: Type.Optional(
           Type.String({
             description: "Optional user-facing reason for this installation",
           })
         ),
+        envVars: Type.Optional(
+          Type.Array(Type.String(), {
+            description:
+              "Optional environment variable names to bundle into the install link",
+          })
+        ),
+        nixPackages: Type.Optional(
+          Type.Array(Type.String(), {
+            description:
+              "Optional nix packages to bundle into the install link",
+          })
+        ),
       }),
-      run: (args) => installMcpServer(gw, args),
+      run: (args) => installExtension(gw, args),
     }),
 
     defineTool({
@@ -288,28 +309,22 @@ export function createOpenClawCustomTools(params: {
       }),
       run: (args) => getChannelHistory(gw, args),
     }),
-  ];
 
-  if (params.interactionClient) {
-    const client = params.interactionClient;
-    tools.push(
-      defineTool({
-        name: "AskUserQuestion",
-        description:
-          "Ask the user a question with options. Supports simple buttons or modal forms.",
-        parameters: Type.Object({
-          question: Type.String({
-            description: "The question to ask the user",
-          }),
-          options: Type.Any({
-            description:
-              "Either an array of button labels, or a form schema object/array",
-          }),
+    defineTool({
+      name: "AskUserQuestion",
+      description:
+        "Posts a question with button options to the user. Session ends after posting. The user's response will arrive as a new message in the next session.",
+      parameters: Type.Object({
+        question: Type.String({
+          description: "The question to ask the user",
         }),
-        run: (args) => askUserQuestion(client, args),
-      })
-    );
-  }
+        options: Type.Array(Type.String(), {
+          description: "Array of button labels for the user to choose from",
+        }),
+      }),
+      run: (args) => askUserQuestion(gw, args),
+    }),
+  ];
 
   return tools;
 }

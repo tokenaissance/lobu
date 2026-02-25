@@ -17,8 +17,8 @@ services:
   # Build worker image that orchestrator will use
   worker:
     build:
-      context: .
-      dockerfile: Dockerfile.worker
+      context: ..
+      dockerfile: docker/Dockerfile.worker
       args:
         NODE_ENV: production
     image: lobu-worker:latest
@@ -29,22 +29,30 @@ services:
 
   gateway:
     build:
-      context: .
-      dockerfile: Dockerfile.gateway
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
     image: lobu-gateway:latest
     environment:
       # Docker context overrides (gateway loads mounted .env file via dotenv)
-      NODE_ENV: docker
+      NODE_ENV: development
       DEPLOYMENT_MODE: docker
       QUEUE_URL: redis://redis:6379
       LOBU_MCP_SERVERS_URL: ${LOBU_MCP_SERVERS_URL:-examples/mcp/oauth.json}
+      # Host project path for worker bind mounts (Docker-in-Docker)
+      LOBU_DEV_PROJECT_PATH: ${PWD}
     volumes:
       # Mount Docker socket
       - /var/run/docker.sock:/var/run/docker.sock
       # Mount .env so gateway can load it via dotenv (avoids ARG_MAX with large vars)
-      - ./.env:/app/.env:ro
+      - ../.env:/app/.env:ro
       # Mount MCP config for live editing
-      - ./examples:/app/examples:ro
+      - ../examples:/app/examples:ro
+      # Mount source for hot reload (bun --watch detects changes)
+      - ../packages/core/src:/app/packages/core/src
+      - ../packages/gateway/src:/app/packages/gateway/src
+      # Mount worker source so spawned worker containers get latest code
+      - ../packages/worker/src:/app/packages/worker/src
+      - ../packages/worker/scripts:/app/packages/worker/scripts
     ports:
       - "8080:8080"
       - "8118:8118" # HTTP proxy for workers
@@ -58,15 +66,15 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./packages/gateway/src
+          path: ../packages/gateway/src
           target: /app/packages/gateway/src
         - action: sync
-          path: ./packages/core/src
+          path: ../packages/core/src
           target: /app/packages/core/src
         - action: rebuild
-          path: ./packages/gateway/package.json
+          path: ../packages/gateway/package.json
         - action: rebuild
-          path: ./packages/core/package.json
+          path: ../packages/core/package.json
 
 networks:
   # Public network with internet access (gateway only)

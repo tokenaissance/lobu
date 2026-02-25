@@ -5,7 +5,6 @@ import { AdminStatusCache } from "../auth/admin-status-cache";
 import { AgentMetadataStore } from "../auth/agent-metadata-store";
 import { ApiKeyProviderModule } from "../auth/api-key-provider-module";
 import { ChatGPTOAuthModule } from "../auth/chatgpt";
-import { ClaudeCredentialStore } from "../auth/claude/credential-store";
 import { ClaudeModelPreferenceStore } from "../auth/claude/model-preference-store";
 import { ClaudeOAuthModule } from "../auth/claude/oauth-module";
 import { McpConfigService } from "../auth/mcp/config-service";
@@ -21,9 +20,11 @@ import {
   createClaudeOAuthStateStore,
   createMcpOAuthStateStore,
 } from "../auth/oauth/state-store";
-import { AgentSettingsStore } from "../auth/settings";
+import { ProviderCatalogService } from "../auth/provider-catalog";
+import { AgentSettingsStore, AuthProfilesManager } from "../auth/settings";
 import { UserAgentsStore } from "../auth/user-agents-store";
 import { ChannelBindingService } from "../channels";
+import { registerBuiltInCommands } from "../commands/built-in-commands";
 import type { GatewayConfig } from "../config";
 import { WorkerGateway } from "../gateway";
 import type { IMessageQueue } from "../infrastructure/queue";
@@ -41,7 +42,6 @@ import {
 import { networkConfigStore } from "../proxy/network-config-store";
 import { SecretProxy } from "../proxy/secret-proxy";
 import { TokenRefreshJob } from "../proxy/token-refresh-job";
-import { registerBuiltInCommands } from "../commands/built-in-commands";
 import { InstructionService } from "./instruction-service";
 import { RedisSessionStore, SessionManager } from "./session-manager";
 import { TranscriptionService } from "./transcription-service";
@@ -79,7 +79,7 @@ export class CoreServices {
   // ============================================================================
   // Claude Services
   // ============================================================================
-  private claudeCredentialStore?: ClaudeCredentialStore;
+  private authProfilesManager?: AuthProfilesManager;
   private claudeModelPreferenceStore?: ClaudeModelPreferenceStore;
   private claudeOAuthStateStore?: ClaudeOAuthStateStore;
   private secretProxy?: SecretProxy;
@@ -110,6 +110,11 @@ export class CoreServices {
   private userAgentsStore?: UserAgentsStore;
   private agentMetadataStore?: AgentMetadataStore;
   private adminStatusCache?: AdminStatusCache;
+
+  // ============================================================================
+  // Provider Catalog
+  // ============================================================================
+  private providerCatalogService?: ProviderCatalogService;
 
   // ============================================================================
   // Command Registry
@@ -237,7 +242,7 @@ export class CoreServices {
     this.sessionManager = new SessionManager(sessionStore);
     logger.info("✅ Session manager initialized");
 
-    this.interactionService = new InteractionService(redisClient);
+    this.interactionService = new InteractionService();
     logger.info("✅ Interaction service initialized");
 
     // Initialize per-deployment config stores (Redis-backed)
@@ -248,9 +253,6 @@ export class CoreServices {
     // Initialize agent configuration stores
     this.agentSettingsStore = new AgentSettingsStore(redisClient);
     this.channelBindingService = new ChannelBindingService(redisClient);
-    this.transcriptionService = new TranscriptionService(
-      this.agentSettingsStore
-    );
     this.userAgentsStore = new UserAgentsStore(redisClient);
     this.agentMetadataStore = new AgentMetadataStore(redisClient);
     this.adminStatusCache = new AdminStatusCache(redisClient);
@@ -270,40 +272,68 @@ export class CoreServices {
 
     const redisClient = this.queue.getRedisClient();
 
-    // Initialize credential and preference stores
-    this.claudeCredentialStore = new ClaudeCredentialStore(redisClient);
+    if (!this.agentSettingsStore) {
+      throw new Error(
+        "Agent settings store must be initialized before Claude services"
+      );
+    }
+
+    // Initialize auth profile and preference stores
+    this.authProfilesManager = new AuthProfilesManager(this.agentSettingsStore);
+    this.transcriptionService = new TranscriptionService(
+      this.authProfilesManager
+    );
     this.claudeModelPreferenceStore = new ClaudeModelPreferenceStore(
       redisClient
     );
-    logger.info("✅ Claude credential & preference stores initialized");
+    logger.info("✅ Auth profile & Claude preference stores initialized");
 
-    // Initialize secret injection proxy
+    // Initialize secret injection proxy (will be finalized after provider modules are registered)
     this.secretProxy = new SecretProxy({
       defaultUpstreamUrl:
         this.config.anthropicProxy.anthropicBaseUrl ||
         "https://api.anthropic.com",
     });
     this.secretProxy.initialize(redisClient);
-    logger.info("✅ Secret proxy initialized");
+    logger.info(
+      `✅ Secret proxy initialized (upstream: ${this.config.anthropicProxy.anthropicBaseUrl || "https://api.anthropic.com"})`
+    );
 
     // Start background token refresh job
-    if (!this.agentSettingsStore) {
+    if (!this.authProfilesManager) {
       throw new Error(
-        "Agent settings store must be initialized before Claude services"
+        "Auth profiles manager must be initialized before Claude services"
       );
     }
     this.tokenRefreshJob = new TokenRefreshJob(
-      this.claudeCredentialStore,
-      this.agentSettingsStore,
+      this.authProfilesManager,
       redisClient
     );
     this.tokenRefreshJob.start();
     logger.info("✅ Token refresh job started");
 
+    // Register NVIDIA NIM API-key provider
+    const nvidiaModule = new ApiKeyProviderModule({
+      providerId: "nvidia",
+      providerDisplayName: "NVIDIA NIM (free)",
+      providerIconUrl: "https://www.nvidia.com/favicon.ico",
+      envVarName: "NVIDIA_API_KEY",
+      slug: "nvidia",
+      upstreamBaseUrl: "https://integrate.api.nvidia.com",
+      apiKeyInstructions:
+        'Get your API key from <a href="https://build.nvidia.com" target="_blank" class="text-slate-600 hover:underline">NVIDIA Build</a>',
+      apiKeyPlaceholder: "nvapi-...",
+      agentSettingsStore: this.agentSettingsStore,
+    });
+    moduleRegistry.register(nvidiaModule);
+    logger.info(
+      `✅ NVIDIA NIM module registered (system token: ${nvidiaModule.hasSystemKey() ? "available" : "not available"})`
+    );
+
     // Register Claude OAuth module
     this.claudeOAuthStateStore = createClaudeOAuthStateStore(redisClient);
     const claudeOAuthModule = new ClaudeOAuthModule(
-      this.claudeCredentialStore,
+      this.authProfilesManager,
       this.claudeOAuthStateStore,
       this.claudeModelPreferenceStore,
       this.queue,
@@ -328,6 +358,8 @@ export class CoreServices {
       providerIconUrl:
         "https://www.gstatic.com/lamda/images/gemini_favicon_f069958c85030456e93de685481c559f160ea06b.png",
       envVarName: "GEMINI_API_KEY",
+      slug: "gemini",
+      upstreamBaseUrl: "https://generativelanguage.googleapis.com",
       apiKeyInstructions:
         'Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" class="text-slate-600 hover:underline">Google AI Studio</a>',
       apiKeyPlaceholder: "AIza...",
@@ -338,21 +370,59 @@ export class CoreServices {
       `✅ Gemini module registered (system token: ${geminiModule.hasSystemKey() ? "available" : "not available"})`
     );
 
-    // Register NVIDIA NIM API-key provider
-    const nvidiaModule = new ApiKeyProviderModule({
-      providerId: "nvidia",
-      providerDisplayName: "NVIDIA NIM",
-      providerIconUrl: "https://www.nvidia.com/favicon.ico",
-      envVarName: "NVIDIA_API_KEY",
+    // Register z.ai API-key provider
+    const zaiModule = new ApiKeyProviderModule({
+      providerId: "z-ai",
+      providerDisplayName: "z.ai",
+      providerIconUrl: "https://z.ai/apple-touch-icon.png",
+      envVarName: "Z_AI_API_KEY",
+      slug: "z-ai",
+      upstreamBaseUrl: "https://api.z.ai",
       apiKeyInstructions:
-        'Get your API key from <a href="https://build.nvidia.com" target="_blank" class="text-slate-600 hover:underline">NVIDIA Build</a>',
-      apiKeyPlaceholder: "nvapi-...",
+        'Get your API key from <a href="https://z.ai" target="_blank" class="text-slate-600 hover:underline">z.ai</a>',
+      apiKeyPlaceholder: "zai-...",
       agentSettingsStore: this.agentSettingsStore,
     });
-    moduleRegistry.register(nvidiaModule);
+    moduleRegistry.register(zaiModule);
     logger.info(
-      `✅ NVIDIA NIM module registered (system token: ${nvidiaModule.hasSystemKey() ? "available" : "not available"})`
+      `✅ z.ai module registered (system token: ${zaiModule.hasSystemKey() ? "available" : "not available"})`
     );
+
+    // Register ElevenLabs API-key provider
+    const elevenlabsModule = new ApiKeyProviderModule({
+      providerId: "elevenlabs",
+      providerDisplayName: "ElevenLabs",
+      providerIconUrl: "https://elevenlabs.io/favicon.ico",
+      envVarName: "ELEVENLABS_API_KEY",
+      slug: "elevenlabs",
+      upstreamBaseUrl: "https://api.elevenlabs.io",
+      apiKeyInstructions:
+        'Get your API key from <a href="https://elevenlabs.io/app/api-keys" target="_blank" class="text-slate-600 hover:underline">ElevenLabs</a>',
+      apiKeyPlaceholder: "sk_...",
+      agentSettingsStore: this.agentSettingsStore,
+    });
+    moduleRegistry.register(elevenlabsModule);
+    logger.info(
+      `✅ ElevenLabs module registered (system token: ${elevenlabsModule.hasSystemKey() ? "available" : "not available"})`
+    );
+
+    // Initialize provider catalog service
+    this.providerCatalogService = new ProviderCatalogService(
+      this.agentSettingsStore,
+      this.authProfilesManager
+    );
+    logger.info("✅ Provider catalog service initialized");
+
+    // Register provider upstream configs with the secret proxy for path-based routing
+    if (this.secretProxy) {
+      for (const provider of moduleRegistry.getModelProviderModules()) {
+        const upstream = provider.getUpstreamConfig?.();
+        if (upstream) {
+          this.secretProxy.registerUpstream(upstream);
+        }
+      }
+      logger.info("✅ Provider upstreams registered with secret proxy");
+    }
   }
 
   // ============================================================================
@@ -437,18 +507,12 @@ export class CoreServices {
         "Session manager must be initialized before worker gateway"
       );
     }
-    if (!this.interactionService) {
-      throw new Error(
-        "Interaction service must be initialized before worker gateway"
-      );
-    }
     this.workerGateway = new WorkerGateway(
       this.queue,
       this.config.mcp.publicGatewayUrl,
       this.sessionManager,
       this.mcpConfigService,
       this.instructionService,
-      this.interactionService,
       this.mcpProxy
     );
     logger.info("Worker gateway initialized");
@@ -552,10 +616,6 @@ export class CoreServices {
     return this.mcpProxy;
   }
 
-  getClaudeCredentialStore(): ClaudeCredentialStore | undefined {
-    return this.claudeCredentialStore;
-  }
-
   getClaudeModelPreferenceStore(): ClaudeModelPreferenceStore | undefined {
     return this.claudeModelPreferenceStore;
   }
@@ -634,5 +694,11 @@ export class CoreServices {
     if (!this.commandRegistry)
       throw new Error("Command registry not initialized");
     return this.commandRegistry;
+  }
+
+  getProviderCatalogService(): ProviderCatalogService {
+    if (!this.providerCatalogService)
+      throw new Error("Provider catalog service not initialized");
+    return this.providerCatalogService;
   }
 }

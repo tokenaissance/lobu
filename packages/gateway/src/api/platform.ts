@@ -7,11 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  createLogger,
-  type InstructionProvider,
-  type UserInteraction,
-} from "@lobu/core";
+import { createLogger, type InstructionProvider } from "@lobu/core";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import { broadcastToAgent } from "../routes/public/agent";
@@ -54,13 +50,12 @@ export class ApiPlatform implements PlatformAdapter {
     // Create response renderer for routing worker responses to SSE clients
     this.responseRenderer = new ApiResponseRenderer();
 
-    // Subscribe to interaction events to handle tool approvals
+    // Subscribe to question events to broadcast to SSE clients
     const interactionService = services.getInteractionService();
-    interactionService.on("interaction:created", (interaction) => {
-      // Only handle API platform interactions
-      if (interaction.teamId === "api") {
-        this.handleToolApproval(interaction).catch((error) => {
-          logger.error("Failed to handle tool approval:", error);
+    interactionService.on("question:created", (question: any) => {
+      if (question.teamId === "api") {
+        this.handleQuestion(question).catch((error) => {
+          logger.error("Failed to handle question:", error);
         });
       }
     });
@@ -123,37 +118,24 @@ export class ApiPlatform implements PlatformAdapter {
   }
 
   /**
-   * Handle tool approval requests by sending them via SSE
+   * Handle question by broadcasting to SSE clients
    */
-  private async handleToolApproval(
-    interaction: UserInteraction
-  ): Promise<void> {
-    const agentId = interaction.conversationId;
+  private async handleQuestion(question: any): Promise<void> {
+    const agentId = question.conversationId;
     if (!agentId) {
-      logger.warn("No agent ID found for tool approval interaction");
+      logger.warn("No agent ID found for question");
       return;
     }
 
-    // Send tool approval request to SSE clients
-    broadcastToAgent(agentId, "tool_approval", {
-      type: "tool_approval",
-      interactionId: interaction.id,
-      interactionType: interaction.interactionType,
-      question: interaction.question,
-      options: interaction.options,
-      expiresAt: interaction.expiresAt,
+    broadcastToAgent(agentId, "question", {
+      type: "question",
+      questionId: question.id,
+      question: question.question,
+      options: question.options,
       timestamp: Date.now(),
     });
 
-    logger.info(`Sent tool approval to agent ${agentId}: ${interaction.id}`);
-  }
-
-  /**
-   * API platform doesn't render interactions via platform UI
-   * Instead, interactions are sent via SSE to the client
-   */
-  async renderInteraction(): Promise<void> {
-    // Interactions are handled via SSE in the response renderer
+    logger.info(`Sent question to agent ${agentId}: ${question.id}`);
   }
 
   /**

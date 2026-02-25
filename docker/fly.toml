@@ -2,7 +2,7 @@ app = "lobu-gateway"
 primary_region = "ams"
 
 [build]
-  dockerfile = "Dockerfile.gateway"
+  dockerfile = "docker/Dockerfile.gateway"
 
 [processes]
   app = "bun packages/gateway/src/index.ts"

@@ -165,6 +165,7 @@ export abstract class BaseDeploymentManager {
   protected config: OrchestratorConfig;
   protected moduleEnvVarsBuilder?: ModuleEnvVarsBuilder;
   protected providerModules: ModelProviderModule[];
+  protected providerCatalogService?: import("../auth/provider-catalog").ProviderCatalogService;
   protected redisClient?: Redis;
 
   constructor(
@@ -190,6 +191,12 @@ export abstract class BaseDeploymentManager {
    */
   setProviderModules(providerModules: ModelProviderModule[]): void {
     this.providerModules = providerModules;
+  }
+
+  setProviderCatalogService(
+    service: import("../auth/provider-catalog").ProviderCatalogService
+  ): void {
+    this.providerCatalogService = service;
   }
 
   /**
@@ -441,7 +448,8 @@ export abstract class BaseDeploymentManager {
       CONVERSATION_ID: conversationId,
       WORKER_TOKEN: workerToken,
       DISPATCHER_URL: this.getDispatcherUrl(),
-      NODE_ENV: "production",
+      NODE_ENV:
+        process.env.DEPLOYMENT_MODE === "docker" ? "development" : "production",
       DEBUG: "1",
       HTTP_PROXY: proxyUrl,
       HTTPS_PROXY: proxyUrl,
@@ -510,13 +518,19 @@ export abstract class BaseDeploymentManager {
       if (!value || !isSecretEnvVar(key, this.providerModules)) continue;
       if (key === "WORKER_TOKEN") continue;
       try {
-        const placeholder = await generatePlaceholder(
+        let placeholder = await generatePlaceholder(
           this.redisClient,
           agentId,
           key,
           value,
           deploymentName
         );
+        // Prefix OAuth placeholders so the agent runtime detects OAuth mode
+        // from the token format (sk-ant-oat01-*) and adds the correct headers,
+        // while the proxy still swaps the placeholder for the real token.
+        if (/OAUTH_TOKEN/i.test(key)) {
+          placeholder = `sk-ant-oat01-${placeholder}`;
+        }
         envVars[key] = placeholder;
         hasSecrets = true;
       } catch (error) {
@@ -623,8 +637,11 @@ export abstract class BaseDeploymentManager {
       );
     }
 
-    // Inject system key fallback from registered model provider modules
-    for (const provider of this.providerModules) {
+    // Resolve per-agent installed providers (catalog-only when active, no global fallback)
+    const effectiveProviders = this.providerCatalogService
+      ? await this.providerCatalogService.getInstalledModules(agentId)
+      : this.providerModules;
+    for (const provider of effectiveProviders) {
       envVars = provider.injectSystemKeyFallback(envVars);
     }
 
@@ -633,6 +650,110 @@ export abstract class BaseDeploymentManager {
       agentId,
       deploymentName
     );
+
+    // Inject provider metadata into agentOptions so the worker can configure
+    // the SDK generically without hardcoded provider checks.
+    // Determine primary provider from the model in agentOptions.
+    const agentModel = validated.agentOptions?.model as string | undefined;
+    let primaryProvider: ModelProviderModule | undefined;
+
+    if (
+      agentModel &&
+      effectiveProviders.length > 0 &&
+      this.providerCatalogService
+    ) {
+      primaryProvider = await this.providerCatalogService.findProviderForModel(
+        agentModel,
+        effectiveProviders
+      );
+    }
+
+    // When no explicit model is set (auto mode), detect the primary provider
+    // from installed providers order (first with credentials = primary).
+    if (!primaryProvider && effectiveProviders.length > 0) {
+      for (const candidate of effectiveProviders) {
+        if (
+          candidate.hasSystemKey() ||
+          (await candidate.hasCredentials(agentId))
+        ) {
+          primaryProvider = candidate;
+          break;
+        }
+      }
+    }
+
+    if (primaryProvider) {
+      const proxyBaseUrl = `${this.getDispatcherUrl()}/api/proxy`;
+      const mappings = primaryProvider.getProxyBaseUrlMappings(proxyBaseUrl);
+      const providerBaseUrl = Object.values(mappings)[0];
+      if (providerBaseUrl) {
+        validated.agentOptions = {
+          ...validated.agentOptions,
+          providerBaseUrl,
+        };
+      }
+      // Pass credential env var name as a container env var so the worker
+      // can read it from process.env (agentOptions in job payload is separate
+      // from the env vars set on the container).
+      envVars.CREDENTIAL_ENV_VAR_NAME =
+        primaryProvider.getCredentialEnvVarName();
+
+      // Set default provider slug so the worker can resolve models in auto mode
+      const upstream = primaryProvider.getUpstreamConfig?.();
+      if (upstream?.slug) {
+        envVars.AGENT_DEFAULT_PROVIDER = upstream.slug;
+      }
+    }
+
+    // Build full provider base URL mappings for all installed providers
+    const proxyBaseUrl = `${this.getDispatcherUrl()}/api/proxy`;
+    const providerBaseUrlMappings: Record<string, string> = {};
+    for (const provider of effectiveProviders) {
+      const mappings = provider.getProxyBaseUrlMappings(proxyBaseUrl);
+      Object.assign(providerBaseUrlMappings, mappings);
+    }
+    if (Object.keys(providerBaseUrlMappings).length > 0) {
+      validated.agentOptions = {
+        ...validated.agentOptions,
+        providerBaseUrlMappings,
+      };
+    }
+
+    // Build CLI backend configs from installed providers and pass as env var
+    // (agentOptions in the job payload is sent via SSE before this method runs,
+    // so we must use a container env var for the worker to pick it up)
+    const cliBackends: Array<{
+      providerId: string;
+      name: string;
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+      modelArg?: string;
+      sessionArg?: string;
+    }> = [];
+    for (const provider of effectiveProviders) {
+      const config = provider.getCliBackendConfig?.();
+      if (config) {
+        cliBackends.push({ providerId: provider.providerId, ...config });
+      }
+    }
+    if (cliBackends.length > 0) {
+      envVars.CLI_BACKENDS = JSON.stringify(cliBackends);
+
+      // Auto-add npm registry domains so npx can download CLI packages
+      const NPM_DOMAINS = ["registry.npmjs.org", "registry.npmmirror.com"];
+      const currentConfig =
+        (await networkConfigStore.get(deploymentName)) ?? {};
+      const existing = currentConfig.allowedDomains || [];
+      const toAdd = NPM_DOMAINS.filter((d) => !existing.includes(d));
+      if (toAdd.length > 0) {
+        currentConfig.allowedDomains = [...existing, ...toAdd];
+        await networkConfigStore.set(deploymentName, currentConfig);
+        logger.info(
+          `Added npm registry domains to network allowlist for ${deploymentName}: ${toAdd.join(", ")}`
+        );
+      }
+    }
 
     return envVars;
   }

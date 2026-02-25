@@ -5,18 +5,17 @@ import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { AgentSettingsStore } from "../../auth/settings";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChannelBindingService } from "../../channels";
+import type { CommandDispatcher } from "../../commands/command-dispatcher";
+import { createSlackThreadReply } from "../../commands/command-reply-adapters";
 import type {
   MessagePayload,
   QueueProducer,
 } from "../../infrastructure/queue/queue-producer";
-import type { InteractionService } from "../../interactions";
 import { generateAgentSelectorToken } from "../../routes/public/agent-selector-page";
 import type { TranscriptionService } from "../../services/transcription-service";
 import type { ISessionManager, ThreadSession } from "../../session";
 import { generateSessionKey } from "../../session";
 import { resolveSpace } from "../../spaces";
-import type { CommandDispatcher } from "../../commands/command-dispatcher";
-import { createSlackThreadReply } from "../../commands/command-reply-adapters";
 import type { MessageHandlerConfig } from "../config";
 import type { SlackContext, SlackMessageEvent } from "../types";
 
@@ -36,8 +35,7 @@ export class MessageHandler {
     private queueProducer: QueueProducer,
     private config: MessageHandlerConfig,
     private sessionManager: ISessionManager,
-    private slackClient: WebClient,
-    private interactionService: InteractionService
+    private slackClient: WebClient
   ) {}
 
   /**
@@ -233,7 +231,6 @@ export class MessageHandler {
     if (settings.model) {
       mergedOptions.model = settings.model;
     }
-
     // Pass additional settings through agentOptions for worker to use
     if (settings.networkConfig) {
       mergedOptions.networkConfig = settings.networkConfig;
@@ -489,30 +486,6 @@ export class MessageHandler {
 
     try {
       const conversationId = normalizedThreadTs;
-
-      // Cancel any pending interactions for this thread when a new message arrives
-      // This prevents the worker from being stuck waiting for interaction responses
-      const pendingInteractionIds =
-        await this.interactionService.getPendingInteractions(conversationId);
-      if (pendingInteractionIds.length > 0) {
-        logger.info(
-          `Cancelling ${pendingInteractionIds.length} pending interaction(s) for conversation ${conversationId} due to new user message`
-        );
-
-        for (const interactionId of pendingInteractionIds) {
-          try {
-            // Auto-respond with a cancellation message
-            await this.interactionService.respond(
-              interactionId,
-              { answer: "[Cancelled - user sent a new message]" },
-              context.userId
-            );
-            logger.info(`Cancelled pending interaction ${interactionId}`);
-          } catch (err) {
-            logger.error(`Failed to cancel interaction ${interactionId}:`, err);
-          }
-        }
-      }
 
       // Create thread session with turn count
       const threadSession: ThreadSession = {

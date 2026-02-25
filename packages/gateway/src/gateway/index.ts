@@ -9,8 +9,6 @@ import type { McpConfigService } from "../auth/mcp/config-service";
 import type { McpProxy } from "../auth/mcp/proxy";
 import type { McpTool } from "../auth/mcp/tool-cache";
 import type { IMessageQueue } from "../infrastructure/queue";
-import type { InteractionService } from "../interactions";
-import { generateDeploymentName } from "../orchestration/base-deployment-manager";
 import type { InstructionService } from "../services/instruction-service";
 import type { ISessionManager } from "../session";
 import { type SSEWriter, WorkerConnectionManager } from "./connection-manager";
@@ -30,7 +28,6 @@ export class WorkerGateway {
   private queue: IMessageQueue;
   private mcpConfigService: McpConfigService;
   private instructionService: InstructionService;
-  private interactionService: InteractionService;
   private publicGatewayUrl: string;
   private mcpProxy?: McpProxy;
 
@@ -40,7 +37,6 @@ export class WorkerGateway {
     sessionManager: ISessionManager,
     mcpConfigService: McpConfigService,
     instructionService: InstructionService,
-    interactionService: InteractionService,
     mcpProxy?: McpProxy
   ) {
     this.queue = queue;
@@ -53,15 +49,7 @@ export class WorkerGateway {
     );
     this.mcpConfigService = mcpConfigService;
     this.instructionService = instructionService;
-    this.interactionService = interactionService;
     this.mcpProxy = mcpProxy;
-
-    // Listen for interaction responses and forward to workers via SSE
-    this.interactionService.on("interaction:responded", (interaction) => {
-      this.handleInteractionResponse(interaction).catch((error) => {
-        logger.error("Error handling interaction response:", error);
-      });
-    });
 
     // Setup Hono app
     this.app = new Hono();
@@ -150,12 +138,6 @@ export class WorkerGateway {
       // Register BullMQ worker for this deployment
       await this.jobRouter.registerWorker(deploymentName);
       await this.jobRouter.resumeWorker(deploymentName);
-
-      // Send any pending interaction responses
-      await this.sendPendingInteractionResponses(
-        conversationId,
-        deploymentName
-      );
 
       // Handle client disconnect
       sseWriter.onClose(() => {
@@ -251,22 +233,18 @@ export class WorkerGateway {
         availableProjects: [],
       };
 
-      // Fetch MCP config, session context, and pending interactions in parallel
-      const [mcpConfig, contextData, unansweredInteractions] =
-        await Promise.all([
-          this.mcpConfigService.getWorkerConfig({
-            baseUrl,
-            workerToken: auth.token,
-            deploymentName,
-          }),
-          this.instructionService.getSessionContext(
-            platform || "unknown",
-            instructionContext
-          ),
-          this.interactionService.getPendingUnansweredInteractions(
-            conversationId
-          ),
-        ]);
+      // Fetch MCP config and session context in parallel
+      const [mcpConfig, contextData] = await Promise.all([
+        this.mcpConfigService.getWorkerConfig({
+          baseUrl,
+          workerToken: auth.token,
+          deploymentName,
+        }),
+        this.instructionService.getSessionContext(
+          platform || "unknown",
+          instructionContext
+        ),
+      ]);
 
       // Fetch tool lists for authenticated MCPs
       const mcpTools: Record<string, McpTool[]> = {};
@@ -301,7 +279,7 @@ export class WorkerGateway {
         contextData.workspaceFiles.userMd,
       ].filter(Boolean).length;
       logger.info(
-        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${wsFileCount} workspace files, ${contextData.enabledSkills.length} enabled skills, ${contextData.skillsInstructions.length} chars skills instructions, ${contextData.mcpStatus.length} MCP status entries, ${Object.keys(mcpTools).length} MCP tool lists, ${unansweredInteractions.length} unanswered interactions`
+        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${wsFileCount} workspace files, ${contextData.enabledSkills.length} enabled skills, ${contextData.skillsInstructions.length} chars skills instructions, ${contextData.mcpStatus.length} MCP status entries, ${Object.keys(mcpTools).length} MCP tool lists`
       );
 
       return c.json({
@@ -313,7 +291,6 @@ export class WorkerGateway {
         skillsInstructions: contextData.skillsInstructions,
         mcpStatus: contextData.mcpStatus,
         mcpTools,
-        unansweredInteractions,
       });
     } catch (error) {
       logger.error("Failed to generate session context", { error });
@@ -359,123 +336,6 @@ export class WorkerGateway {
    */
   getActiveConnections(): string[] {
     return this.connectionManager.getActiveConnections();
-  }
-
-  /**
-   * Handle interaction response and send to worker via SSE
-   */
-  private async handleInteractionResponse(interaction: any): Promise<void> {
-    const deploymentName = generateDeploymentName({
-      userId: interaction.userId,
-      channelId: interaction.channelId,
-      conversationId: interaction.conversationId,
-    });
-    const connection = this.connectionManager.getConnection(deploymentName);
-
-    if (!connection) {
-      logger.warn(
-        `No worker connection found for interaction ${interaction.id} (deployment: ${deploymentName}), storing in Redis`
-      );
-      await this.storeInteractionResponse(interaction);
-      return;
-    }
-
-    const success = this.connectionManager.sendSSE(
-      connection.writer,
-      "interaction",
-      {
-        interactionId: interaction.id,
-        interactionType: interaction.interactionType,
-        response: interaction.response,
-      }
-    );
-
-    if (success) {
-      logger.info(
-        `✅ Sent interaction response ${interaction.id} to worker ${deploymentName}`
-      );
-    } else {
-      logger.error(
-        `❌ Failed to send interaction response ${interaction.id} to worker ${deploymentName} - storing in Redis`
-      );
-      await this.storeInteractionResponse(interaction);
-    }
-  }
-
-  /**
-   * Store interaction response in Redis for later retrieval
-   */
-  private async storeInteractionResponse(interaction: any): Promise<void> {
-    if (!this.interactionService) return;
-
-    const key = `interaction:response:${interaction.conversationId}:${interaction.id}`;
-    const response = {
-      interactionId: interaction.id,
-      response: interaction.response,
-    };
-
-    const redis = (this.interactionService as any).redis;
-    await redis.set(key, JSON.stringify(response), "EX", 3600);
-
-    logger.info(
-      `Stored interaction response ${interaction.id} in Redis for later delivery`
-    );
-  }
-
-  /**
-   * Send any pending interaction responses on reconnect
-   */
-  private async sendPendingInteractionResponses(
-    conversationId: string,
-    deploymentName: string
-  ): Promise<void> {
-    if (!this.interactionService) return;
-
-    const redis = (this.interactionService as any).redis;
-    const pattern = `interaction:response:${conversationId}:*`;
-    const keys = await redis.keys(pattern);
-
-    if (keys.length === 0) return;
-
-    logger.info(
-      `Found ${keys.length} pending interaction responses for conversation ${conversationId}`
-    );
-
-    const connection = this.connectionManager.getConnection(deploymentName);
-    if (!connection) {
-      logger.warn(
-        `No connection found for ${deploymentName} to send pending responses`
-      );
-      return;
-    }
-
-    for (const key of keys) {
-      const data = await redis.get(key);
-      if (!data) continue;
-
-      try {
-        const responseData = JSON.parse(data);
-
-        const success = this.connectionManager.sendSSE(
-          connection.writer,
-          "interaction",
-          responseData
-        );
-
-        if (success) {
-          logger.info(
-            `✅ Sent pending interaction response ${responseData.interactionId}`
-          );
-          await redis.del(key);
-        } else {
-          logger.warn(
-            `Failed to send pending response ${responseData.interactionId}, will retry on next reconnect`
-          );
-        }
-      } catch (error) {
-        logger.error(`Error sending pending interaction response:`, error);
-      }
-    }
   }
 
   /**

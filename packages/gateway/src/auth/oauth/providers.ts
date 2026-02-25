@@ -38,14 +38,14 @@ export interface OAuthProviderConfig {
 }
 
 /**
- * Claude AI OAuth Configuration
+ * Claude OAuth Configuration
  * - Public client (no client secret)
  * - Uses PKCE for security
  * - Requires browser-like headers (anti-bot protection)
  */
 export const CLAUDE_PROVIDER: OAuthProviderConfig = {
   id: "claude",
-  name: "Claude AI",
+  name: "Claude",
   clientId: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
   authUrl: "https://claude.ai/oauth/authorize",
   tokenUrl: "https://console.anthropic.com/v1/oauth/token",

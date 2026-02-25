@@ -1,4 +1,4 @@
-import { createLogger } from "@lobu/core";
+import { createLogger, type ProviderUpstreamConfig } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type Redis from "ioredis";
@@ -17,6 +17,7 @@ export interface SecretMapping {
 
 export interface SecretProxyConfig {
   defaultUpstreamUrl: string;
+  providerUpstreams?: ProviderUpstreamConfig[];
 }
 
 /**
@@ -33,15 +34,34 @@ export class SecretProxy {
   private app: Hono;
   private redis!: Redis;
   private config: SecretProxyConfig;
+  private slugMap: Map<string, string>;
 
   constructor(config: SecretProxyConfig) {
     this.config = config;
+    this.slugMap = new Map();
+    for (const upstream of config.providerUpstreams ?? []) {
+      this.slugMap.set(upstream.slug, upstream.upstreamBaseUrl);
+      logger.info(
+        `Registered provider upstream: ${upstream.slug} -> ${upstream.upstreamBaseUrl}`
+      );
+    }
     this.app = new Hono();
     this.setupRoutes();
   }
 
   initialize(redis: Redis): void {
     this.redis = redis;
+  }
+
+  /**
+   * Register a provider upstream for slug-based routing.
+   * Called after provider modules are initialized.
+   */
+  registerUpstream(upstream: ProviderUpstreamConfig): void {
+    this.slugMap.set(upstream.slug, upstream.upstreamBaseUrl);
+    logger.info(
+      `Registered provider upstream: ${upstream.slug} -> ${upstream.upstreamBaseUrl}`
+    );
   }
 
   getApp(): Hono {
@@ -71,9 +91,13 @@ export class SecretProxy {
 
   /**
    * Resolve a placeholder token to its real value via Redis.
+   * Handles both plain (`lobu_secret_<uuid>`) and prefixed
+   * (`sk-ant-oat01-lobu_secret_<uuid>`) placeholders.
    */
   private async resolveSecret(placeholder: string): Promise<string | null> {
-    const uuid = placeholder.slice(PLACEHOLDER_PREFIX.length);
+    const prefixIdx = placeholder.indexOf(PLACEHOLDER_PREFIX);
+    if (prefixIdx === -1) return null;
+    const uuid = placeholder.slice(prefixIdx + PLACEHOLDER_PREFIX.length);
     const key = `${REDIS_KEY_PREFIX}${uuid}`;
     const raw = await this.redis.get(key);
     if (!raw) return null;
@@ -86,24 +110,38 @@ export class SecretProxy {
   }
 
   /**
-   * If the value starts with the placeholder prefix, swap it for the real secret.
+   * If the value contains the placeholder prefix, swap it for the real secret.
    * Returns the value unchanged if it's not a placeholder.
    */
   private async swap(value: string): Promise<string> {
-    if (!value.startsWith(PLACEHOLDER_PREFIX)) return value;
-    const real = await this.resolveSecret(value);
-    if (!real) {
+    if (!value.includes(PLACEHOLDER_PREFIX)) return value;
+    const resolved = await this.resolveSecret(value);
+    if (!resolved) {
       logger.warn("Failed to resolve secret placeholder");
       return value;
     }
-    return real;
+    return resolved;
   }
 
   private async forward(c: Context): Promise<Response> {
-    // Build upstream URL — strip the proxy mount prefix
+    // Build upstream URL — strip the proxy mount prefix and resolve provider slug
     const url = new URL(c.req.url);
-    const path = url.pathname.replace(/^\/api\/proxy/, "");
-    const upstream = `${this.config.defaultUpstreamUrl}${path}${url.search}`;
+    const rawPath = url.pathname.replace(/^\/api\/proxy/, "");
+
+    // Try slug-based routing: /api/proxy/{slug}/rest/of/path
+    let upstreamBaseUrl = this.config.defaultUpstreamUrl;
+    let forwardPath = rawPath;
+    const slugMatch = rawPath.match(/^\/([^/]+)(\/.*)?$/);
+    if (slugMatch) {
+      const candidateSlug = slugMatch[1]!;
+      const resolved = this.slugMap.get(candidateSlug);
+      if (resolved) {
+        upstreamBaseUrl = resolved;
+        forwardPath = slugMatch[2] || "";
+      }
+    }
+
+    const upstream = `${upstreamBaseUrl}${forwardPath}${url.search}`;
 
     // Copy request body for non-GET/HEAD
     const method = c.req.method;
@@ -144,6 +182,17 @@ export class SecretProxy {
     logger.info(`Forwarding to upstream: ${method} ${upstream}`);
 
     const response = await fetch(upstream, { method, headers, body });
+
+    if (!response.ok) {
+      // Read body for error details (clone to avoid consuming the stream)
+      const errBody = await response
+        .clone()
+        .text()
+        .catch(() => "");
+      logger.warn(
+        `Upstream returned ${response.status} for ${method} ${upstream}: ${errBody.slice(0, 300)}`
+      );
+    }
 
     // Build response headers (skip hop-by-hop)
     const responseHeaders = new Headers();

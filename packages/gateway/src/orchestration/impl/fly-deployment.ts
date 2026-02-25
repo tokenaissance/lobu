@@ -434,8 +434,31 @@ export class FlyDeploymentManager extends BaseDeploymentManager {
 
   private normalizeWorkerEnvForFly(envVars: Record<string, string>): void {
     envVars.DISPATCHER_URL = this.dispatcherUrl;
-    delete envVars.HTTP_PROXY;
-    delete envVars.HTTPS_PROXY;
+
+    // Workers must always go through the gateway proxy for network access.
+    // Use Fly private networking (<app>.internal) so the proxy port doesn't
+    // need to be publicly exposed.
+    const proxyPort = process.env.WORKER_PROXY_PORT || "8118";
+    const gatewayApp = (process.env.FLY_APP_NAME || "lobu-gateway").trim();
+    const proxyHost = `${gatewayApp}.internal`;
+    const proxyUrl = envVars.HTTP_PROXY || "";
+
+    if (proxyUrl) {
+      try {
+        const parsed = new URL(proxyUrl);
+        parsed.hostname = proxyHost;
+        parsed.port = proxyPort;
+        envVars.HTTP_PROXY = parsed.toString().replace(/\/+$/, "");
+        envVars.HTTPS_PROXY = envVars.HTTP_PROXY;
+      } catch {
+        envVars.HTTP_PROXY = `http://${proxyHost}:${proxyPort}`;
+        envVars.HTTPS_PROXY = envVars.HTTP_PROXY;
+      }
+    } else {
+      envVars.HTTP_PROXY = `http://${proxyHost}:${proxyPort}`;
+      envVars.HTTPS_PROXY = envVars.HTTP_PROXY;
+    }
+
     envVars.NO_PROXY = this.mergeNoProxy(envVars.NO_PROXY || "");
   }
 

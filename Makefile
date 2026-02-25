@@ -28,7 +28,7 @@ build-packages:
 
 # Start dev environment with Docker Compose Watch
 dev:
-	docker compose watch
+	docker compose -f docker/docker-compose.yml watch
 
 # Setup development environment (run once)
 setup:
@@ -37,7 +37,7 @@ setup:
 # Build the worker image
 build-worker:
 	@echo "📦 Building worker image..."
-	@docker build -t lobu-worker:latest -f Dockerfile.worker --build-arg NODE_ENV=development .
+	@docker build -t lobu-worker:latest -t buremba/lobu-worker-base:latest -f docker/Dockerfile.worker --build-arg NODE_ENV=development .
 
 # Catch-all target to prevent errors when passing arguments
 %:
@@ -79,14 +79,14 @@ deploy:
 		VALUES_FILE="charts/lobu/values-local.yaml"; \
 		echo "🔄 Creating $$VALUES_FILE from .env and base values.yaml..."; \
 		cp "charts/lobu/values.yaml" "$$VALUES_FILE"; \
-		./bin/sync-env-to-values.sh local; \
+		./scripts/sync-env-to-values.sh local; \
 	fi; \
 	echo "🎯 Deploying using $$VALUES_FILE"; \
 	echo "🚀 Building and deploying to K8s..."; \
 	if [ -z "$$GITHUB_ACTIONS" ]; then \
 		echo "📦 Building Docker images..."; \
-		docker build -f Dockerfile.gateway -t lobu-gateway:latest .; \
-		docker build -f Dockerfile.worker -t lobu-worker:latest .; \
+		docker build -f docker/Dockerfile.gateway -t lobu-gateway:latest .; \
+		docker build -f docker/Dockerfile.worker -t lobu-worker:latest .; \
 	else \
 		echo "📦 Using pre-built Docker images from registry..."; \
 	fi; \

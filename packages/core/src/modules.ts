@@ -1,4 +1,5 @@
 import { createLogger } from "./logger";
+import type { CliBackendConfig } from "./types";
 
 const logger = createLogger("modules");
 
@@ -65,6 +66,11 @@ export interface OrchestratorModule<TModuleData = unknown>
   getContainerAddress(): string;
 }
 
+export interface ProviderUpstreamConfig {
+  slug: string; // "anthropic", "openai-codex", "gemini"
+  upstreamBaseUrl: string; // "https://api.anthropic.com"
+}
+
 export interface ModelProviderModule extends OrchestratorModule {
   /** Unique identifier for the provider (e.g. "claude", "chatgpt") */
   providerId: string;
@@ -74,12 +80,22 @@ export interface ModelProviderModule extends OrchestratorModule {
   providerIconUrl?: string;
   /** Auth type hint for settings UI rendering */
   authType?: "oauth" | "device-code" | "api-key";
+  /** Multiple auth types supported by this provider (e.g. ["oauth", "api-key"]) */
+  supportedAuthTypes?: ("oauth" | "device-code" | "api-key")[];
   /** For api-key providers: instructions shown to user (supports HTML) */
   apiKeyInstructions?: string;
   /** For api-key providers: placeholder text in the input field */
   apiKeyPlaceholder?: string;
+  /** Short description for the provider catalog UI */
+  catalogDescription?: string;
+  /** Whether to show this provider in the catalog (default true) */
+  catalogVisible?: boolean;
   /** Env var names that should be treated as secrets for this provider */
   getSecretEnvVarNames(): string[];
+  /** Env var name the SDK expects for the API credential (e.g. "ANTHROPIC_API_KEY") */
+  getCredentialEnvVarName(): string;
+  /** Proxy routing config: slug + upstream base URL. Null if provider doesn't use proxy. */
+  getUpstreamConfig?(): ProviderUpstreamConfig | null;
   /** Check if an agent has per-agent credentials for this provider */
   hasCredentials(agentId: string): Promise<boolean>;
   /** Check if a system-level key is available (e.g. from process.env) */
@@ -94,6 +110,8 @@ export interface ModelProviderModule extends OrchestratorModule {
   getApp?(): any;
   /** Return model list exposed to UI */
   getModelOptions?(agentId: string, userId: string): Promise<ModelOption[]>;
+  /** CLI tool config for pi-agent integration. Null if no CLI backend. */
+  getCliBackendConfig?(): CliBackendConfig | null;
 }
 
 export interface DispatcherContext<TModuleData = unknown> {

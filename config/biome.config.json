@@ -3,7 +3,7 @@
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": true
+    "useIgnoreFile": false
   },
   "files": {
     "ignoreUnknown": false,
@@ -11,9 +11,11 @@
       "**",
       "!**/test/fixtures/",
       "!**/charts/lobu/templates/",
-      "!**/packages/**/*/workspaces/",
-      "!**/dist/",
-      "!**/node_modules/"
+      "!**/packages/**/*/workspaces/**",
+      "!**/workspaces/**",
+      "!**/.claude/debug/**",
+      "!**/dist/**",
+      "!**/node_modules/**"
     ]
   },
   "formatter": {

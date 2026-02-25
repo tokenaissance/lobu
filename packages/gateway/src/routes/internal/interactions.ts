@@ -41,7 +41,7 @@ export function createInteractionRoutes(
   };
 
   /**
-   * Create a blocking interaction
+   * Post a question with button options (non-blocking)
    * POST /internal/interactions/create
    */
   router.post(
@@ -51,34 +51,23 @@ export function createInteractionRoutes(
       try {
         const worker = c.get("worker");
         const { userId, conversationId, channelId, teamId } = worker;
-        const { interactionType, question, options, metadata } =
-          await c.req.json();
+        const { question, options } = await c.req.json();
 
-        if (!interactionType) {
-          return c.json({ error: "interactionType is required" }, 400);
-        }
+        logger.info(`Posting question for conversation ${conversationId}`);
 
-        logger.info(
-          `Creating ${interactionType} interaction for conversation ${conversationId}`
-        );
-
-        const interaction = await interactionService.createInteraction(
+        const posted = await interactionService.postQuestion(
           userId,
           conversationId,
           channelId,
           teamId,
-          {
-            interactionType,
-            question,
-            options,
-            metadata,
-          }
+          question,
+          options || []
         );
 
-        return c.json({ id: interaction.id });
+        return c.json({ id: posted.id, status: "posted" });
       } catch (error) {
-        logger.error("Failed to create interaction:", error);
-        return c.json({ error: "Failed to create interaction" }, 500);
+        logger.error("Failed to post question:", error);
+        return c.json({ error: "Failed to post question" }, 500);
       }
     }
   );

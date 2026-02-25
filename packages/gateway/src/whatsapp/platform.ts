@@ -5,7 +5,6 @@
 import {
   type AgentOptions as CoreAgentOptions,
   createLogger,
-  type UserInteraction,
   type UserSuggestion,
 } from "@lobu/core";
 import { platformAuthRegistry } from "../auth/platform-auth";
@@ -92,27 +91,11 @@ export class WhatsAppPlatform implements PlatformAdapter {
       this.messageHandler?.storeOutgoingMessage(chatJid, text);
     });
 
-    // Create interaction renderer
+    // Create interaction renderer (subscribes to question:created events)
     this.interactionRenderer = new WhatsAppInteractionRenderer(
       this.client,
-      services.getInteractionService(),
-      this.config.whatsapp
+      services.getInteractionService()
     );
-
-    // Register beforeCreate hook to stop streams before interaction
-    const interactionService = services.getInteractionService();
-    interactionService.setBeforeCreateHook(
-      async (userId: string, conversationId: string) => {
-        logger.info(
-          { userId, conversationId },
-          "Stopping stream before interaction"
-        );
-        // WhatsApp doesn't have streaming, so this is a no-op
-      }
-    );
-
-    // Register interaction button handler
-    this.interactionRenderer.registerButtonHandler();
 
     // Create and register auth adapter
     const publicGatewayUrl = services.getPublicGatewayUrl();
@@ -240,15 +223,6 @@ export class WhatsAppPlatform implements PlatformAdapter {
       conversation_id: conversationId,
       is_group: String(platformMetadata?.isGroup || false),
     };
-  }
-
-  /**
-   * Render a blocking user interaction.
-   */
-  async renderInteraction(interaction: UserInteraction): Promise<void> {
-    if (this.interactionRenderer) {
-      await this.interactionRenderer.renderInteraction(interaction);
-    }
   }
 
   /**
