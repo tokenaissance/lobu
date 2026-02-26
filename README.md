@@ -69,7 +69,7 @@ flowchart LR
   GW -->|scoped tokens| MCP[MCP Servers]
 ```
 
-## Built-in Agent Tools
+## Capabilities
 
 Every Lobu agent comes equipped with a suite of tools for autonomous execution and persistence:
 
@@ -95,7 +95,7 @@ Every Lobu agent comes equipped with a suite of tools for autonomous execution a
 
 **Multi-provider auth.** Claude (OAuth), ChatGPT (device-code flow), and API-key providers (Gemini, NVIDIA, etc.) via pluggable `ModelProviderModule`.
 
-## Enterprise & Implementation
+## Support & Consultancy
 
 Lobu is designed for high-stakes, persistent agents. While the platform is open-source, the true value of an agent lies in its **soul, identity, and integration**.
 
