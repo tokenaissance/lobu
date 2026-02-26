@@ -9,7 +9,7 @@
 ---
 
 > [!TIP]
-> **Launch your agents with the Lobu team.** Whether you're looking to automate support, empower your employees with persistent AI, or need enterprise-grade infrastructure maintenance, we can help. [🗓️ **Book an Agent Strategy Call**](https://cal.com/lobu-ai/strategy)
+> **Launch your agents with the Lobu team.** Whether you're looking to automate support, empower your employees with persistent AI, or need enterprise-grade infrastructure maintenance, we can help. [🗓️ **Book an Agent Strategy Call**](https://calendar.app.google/LwAk3ecptkJQaYr87)
 
 ---
 
@@ -114,7 +114,7 @@ If you want to deploy agents for your organization but need expert implementatio
 *   **Custom Tooling & Skills** — We build specialized MCP servers, Nix-powered runtimes, and OpenClaw skills tailored to your business needs.
 
 > [!TIP]
-> **Need help architecting your agent workforce?** [🗓️ **Book a Strategy Call**](https://cal.com/lobu-ai/strategy)
+> **Need help architecting your agent workforce?** [🗓️ **Book a Strategy Call**](https://calendar.app.google/LwAk3ecptkJQaYr87)
 
 ## How Lobu Differs
 
