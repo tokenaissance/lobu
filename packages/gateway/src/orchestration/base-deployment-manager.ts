@@ -703,6 +703,14 @@ export abstract class BaseDeploymentManager {
         },
         "Selected primary provider"
       );
+
+      // In auto-mode (no explicit model), clear any AGENT_DEFAULT_MODEL that
+      // other modules may have injected so the worker uses the primary
+      // provider's own default model instead of a mismatched one.
+      if (!agentModel) {
+        delete envVars.AGENT_DEFAULT_MODEL;
+      }
+
       const proxyBaseUrl = `${this.getDispatcherUrl()}/api/proxy`;
       const mappings = primaryProvider.getProxyBaseUrlMappings(proxyBaseUrl);
       const providerBaseUrl = Object.values(mappings)[0];
