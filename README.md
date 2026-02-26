@@ -1,6 +1,6 @@
 # Lobu
 
-[![Strategy Call](https://img.shields.io/badge/Strategy_Call-Book_Now-success?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/LwAk3ecptkJQaYr87)
+[![Talk to Founder](https://img.shields.io/badge/Talk_to_Founder-Book_Now-success?style=for-the-badge&logo=googlecalendar&logoColor=white)](https://calendar.app.google/LwAk3ecptkJQaYr87)
 
 **Lobu** is a platform for deploying **persistent, autonomous agents**. It provides a unified gateway for programmatic agent creation and multi-platform access (Slack, Telegram, WhatsApp), backed by a hardened, sandboxed execution environment.
 
@@ -83,6 +83,7 @@ Every Lobu agent comes equipped with a suite of tools for autonomous execution a
 | **File & Media Delivery** | Share reports, charts, or generated voice messages. | `UploadUserFile`, `GenerateAudio` |
 | **Self-Expansion** | Search and dynamically install new skills or MCP servers. | `SearchExtensions`, `InstallExtension` |
 | **Managed MCP Proxy** | Securely connect to any MCP server with OAuth. | [MCP Proxy](docs/SECURITY.md#mcp-oauth-and-credentials) |
+| **Advanced Capabilities** | Extend agent abilities with web browsing, headless UI interaction, and specialized utilities via Nix packages or external MCP servers. | `bash` (Nix), `SearchExtensions`, `InstallExtension` (MCP) |
 
 ### Key Concepts
 
@@ -113,7 +114,7 @@ If you want to deploy agents for your organization but need expert implementatio
 **Expert Implementation.** I'm a second-time technical founder. Previously, I founded [rakam.io](https://rakam.io), an enterprise analytics PaaS acquired by [LiveRamp](https://liveramp.com) (NYSE: RAMP). I focus on building secure, scalable infrastructure for autonomous agents.
 
 > [!TIP]
-> **Need help architecting your agent workforce?** [🗓️ **Book a Strategy Call**](https://calendar.app.google/LwAk3ecptkJQaYr87) or [reach out on **X/Twitter**](https://x.com/bu7emba).
+> **Need help architecting your agent workforce?** [🗓️ **Talk to Founder**](https://calendar.app.google/LwAk3ecptkJQaYr87) or [reach out on **X/Twitter**](https://x.com/bu7emba).
 
 ## How Lobu Differs
 
