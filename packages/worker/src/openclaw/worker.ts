@@ -413,7 +413,8 @@ export class OpenClawWorker implements WorkerExecutor {
 
     const sessionManager = await openOrCreateSessionManager(
       sessionFile,
-      workspaceDir
+      workspaceDir,
+      provider
     );
     const settingsManager = SettingsManager.inMemory();
 
@@ -879,10 +880,41 @@ function resolveModelRef(rawModelRef: string): {
 
 async function openOrCreateSessionManager(
   sessionFile: string,
-  workspaceDir: string
+  workspaceDir: string,
+  currentProvider?: string
 ): Promise<SessionManager> {
   try {
     await fs.stat(sessionFile);
+
+    // Check if the provider changed since the last session.
+    // If so, discard the old session so the new model doesn't inherit
+    // stale identity / context from the previous provider.
+    if (currentProvider) {
+      const raw = await fs.readFile(sessionFile, "utf-8");
+      const firstModelChange = raw
+        .split("\n")
+        .find((line) => line.includes('"type":"model_change"'));
+      if (firstModelChange) {
+        try {
+          const entry = JSON.parse(firstModelChange);
+          if (entry.provider && entry.provider !== currentProvider) {
+            logger.info(
+              `Provider changed (${entry.provider} → ${currentProvider}), clearing stale session`
+            );
+            await fs.unlink(sessionFile);
+            const sm = SessionManager.create(
+              workspaceDir,
+              path.dirname(sessionFile)
+            );
+            sm.setSessionFile(sessionFile);
+            return sm;
+          }
+        } catch {
+          // ignore parse errors, just open normally
+        }
+      }
+    }
+
     return SessionManager.open(sessionFile);
   } catch {
     const sessionManager = SessionManager.create(
