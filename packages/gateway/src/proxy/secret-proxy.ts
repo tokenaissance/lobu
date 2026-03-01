@@ -1,8 +1,9 @@
-import { createLogger, type ProviderUpstreamConfig } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type Redis from "ioredis";
 import type { AuthProfilesManager } from "../auth/settings/auth-profiles-manager";
+import type { ProviderUpstreamConfig } from "../modules/module-system";
 
 const logger = createLogger("secret-proxy");
 

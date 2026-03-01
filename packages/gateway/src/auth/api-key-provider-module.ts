@@ -1,4 +1,4 @@
-import type { ModelOption } from "@lobu/core";
+import type { ModelOption } from "../modules/module-system";
 import { BaseProviderModule } from "./base-provider-module";
 import type { AgentSettingsStore } from "./settings/agent-settings-store";
 import { AuthProfilesManager } from "./settings/auth-profiles-manager";

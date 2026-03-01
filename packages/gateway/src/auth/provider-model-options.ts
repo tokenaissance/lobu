@@ -1,5 +1,8 @@
-import type { ModelOption } from "@lobu/core";
-import { createLogger, moduleRegistry } from "@lobu/core";
+import { createLogger } from "@lobu/core";
+import {
+  getModelProviderModules,
+  type ModelOption,
+} from "../modules/module-system";
 
 const logger = createLogger("provider-model-options");
 
@@ -7,7 +10,7 @@ export async function collectProviderModelOptions(
   agentId: string,
   userId: string
 ): Promise<Record<string, ModelOption[]>> {
-  const modules = moduleRegistry.getModelProviderModules();
+  const modules = getModelProviderModules();
 
   const results: Record<string, ModelOption[]> = {};
 

@@ -1,4 +1,4 @@
-import { moduleRegistry } from "@lobu/core";
+import { getOrchestratorModules } from "../modules/module-system";
 import { platformRegistry } from "../platform";
 import type {
   DeploymentInfo,
@@ -24,7 +24,7 @@ export async function buildModuleEnvVars(
 ): Promise<Record<string, string>> {
   let envVars = { ...baseEnv };
 
-  const orchestratorModules = moduleRegistry.getOrchestratorModules();
+  const orchestratorModules = getOrchestratorModules();
   for (const module of orchestratorModules) {
     if (module.buildEnvVars) {
       envVars = await module.buildEnvVars(agentId, envVars);

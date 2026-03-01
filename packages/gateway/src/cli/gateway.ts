@@ -9,6 +9,7 @@ import { apiReference } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import type { GatewayConfig } from "../config";
+import { getModelProviderModules } from "../modules/module-system";
 import {
   getAllRoutes,
   registerAutoOpenApiRoutes,
@@ -123,13 +124,13 @@ function setupServer(
   }
 
   // Register module endpoints
-  const { moduleRegistry } = require("@lobu/core");
-  if (moduleRegistry.registerHonoEndpoints) {
-    moduleRegistry.registerHonoEndpoints(app);
+  const { moduleRegistry: coreModuleRegistry } = require("@lobu/core");
+  if (coreModuleRegistry.registerHonoEndpoints) {
+    coreModuleRegistry.registerHonoEndpoints(app);
   } else {
     // Create express-like adapter for module registry
     const expressApp = createExpressAdapter(app);
-    moduleRegistry.registerEndpoints(expressApp);
+    coreModuleRegistry.registerEndpoints(expressApp);
   }
   logger.info("Module endpoints registered");
 
@@ -294,7 +295,7 @@ function setupServer(
     const registeredProviders: string[] = [];
 
     // Dynamically mount model provider auth routes
-    const providerModules = moduleRegistry.getModelProviderModules();
+    const providerModules = getModelProviderModules();
     for (const mod of providerModules) {
       if (mod.getApp) {
         authRouter.route(`/${mod.providerId}`, mod.getApp());

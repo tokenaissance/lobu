@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 
-import type { IModuleRegistry } from "@lobu/core";
 import { createLogger } from "@lobu/core";
 import type { App } from "@slack/bolt";
 import type {
@@ -12,6 +11,7 @@ import type {
 import type { WebClient } from "@slack/web-api";
 import type { CommandDispatcher } from "../commands/command-dispatcher";
 import type { QueueProducer } from "../infrastructure/queue";
+import type { IGatewayModuleRegistry } from "../modules/module-system";
 import type { ISessionManager } from "../session";
 
 const logger = createLogger("slack-events");
@@ -41,7 +41,7 @@ export class SlackEventHandlers {
     private app: App,
     queueProducer: QueueProducer,
     config: MessageHandlerConfig,
-    private moduleRegistry: IModuleRegistry,
+    private moduleRegistry: IGatewayModuleRegistry,
     sessionManager: ISessionManager
   ) {
     this.config = config;

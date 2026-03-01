@@ -1,6 +1,7 @@
-import { createLogger, decrypt, type ModelOption } from "@lobu/core";
+import { createLogger, decrypt } from "@lobu/core";
 import type { Context } from "hono";
 import type { IMessageQueue } from "../../infrastructure/queue";
+import type { ModelOption } from "../../modules/module-system";
 import { BaseProviderModule } from "../base-provider-module";
 import { ClaudeOAuthClient } from "../oauth/claude-client";
 import type { ClaudeOAuthStateStore } from "../oauth/state-store";

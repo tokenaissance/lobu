@@ -34,6 +34,7 @@ import {
   type RedisQueueConfig,
 } from "../infrastructure/queue";
 import { InteractionService } from "../interactions";
+import { getModelProviderModules } from "../modules/module-system";
 import {
   ScheduledWakeupService,
   setScheduledWakeupService,
@@ -423,7 +424,7 @@ export class CoreServices {
     // Register provider upstream configs with the secret proxy for path-based routing
     if (this.secretProxy) {
       this.secretProxy.setAuthProfilesManager(this.authProfilesManager);
-      for (const provider of moduleRegistry.getModelProviderModules()) {
+      for (const provider of getModelProviderModules()) {
         const upstream = provider.getUpstreamConfig?.();
         if (upstream) {
           this.secretProxy.registerUpstream(upstream, provider.providerId);

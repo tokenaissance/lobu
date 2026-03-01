@@ -1,4 +1,5 @@
-import { createLogger, type ModelOption } from "@lobu/core";
+import { createLogger } from "@lobu/core";
+import type { ModelOption } from "../../modules/module-system";
 import type { AgentMetadataStore } from "../agent-metadata-store";
 import { BaseProviderModule } from "../base-provider-module";
 import type { AgentSettingsStore } from "../settings/agent-settings-store";

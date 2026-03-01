@@ -1,6 +1,6 @@
 import { URL } from "node:url";
-import type { ModelProviderModule } from "@lobu/core";
 import { createLogger, ErrorCode, OrchestratorError } from "@lobu/core";
+import type { ModelProviderModule } from "../../modules/module-system";
 import {
   BaseDeploymentManager,
   type DeploymentInfo,

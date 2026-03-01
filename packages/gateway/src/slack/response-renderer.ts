@@ -4,7 +4,6 @@
  * and Slack-specific status indicators.
  */
 
-import type { IModuleRegistry } from "@lobu/core";
 import { AsyncLock, createLogger, DEFAULTS, REDIS_KEYS } from "@lobu/core";
 import type { AnyBlock } from "@slack/types";
 import { WebClient } from "@slack/web-api";
@@ -13,6 +12,7 @@ import type {
   IMessageQueue,
   ThreadResponsePayload,
 } from "../infrastructure/queue";
+import type { IGatewayModuleRegistry } from "../modules/module-system";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import {
   type ModuleButton,
@@ -311,7 +311,7 @@ export class SlackResponseRenderer implements ResponseRenderer {
   constructor(
     queue: IMessageQueue,
     private slackClient: WebClient,
-    private moduleRegistry: IModuleRegistry,
+    private moduleRegistry: IGatewayModuleRegistry,
     installationStore?: SlackInstallationStore
   ) {
     this.redis = queue.getRedisClient();

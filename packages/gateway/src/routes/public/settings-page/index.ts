@@ -4,13 +4,13 @@
  * Orchestrates the settings page by composing sections and Alpine.js app.
  */
 
-import type { ModelOption } from "@lobu/core";
 import type { AgentMetadata } from "../../../auth/agent-metadata-store";
 import type { AgentSettings } from "../../../auth/settings";
 import {
   SETTINGS_TOKEN_HASH_PARAM,
   type SettingsTokenPayload,
 } from "../../../auth/settings/token-service";
+import type { ModelOption } from "../../../modules/module-system";
 import { platformRegistry } from "../../../platform";
 import { settingsPageCSS } from "../settings-page-styles";
 import { renderAlpineApp } from "./alpine-app";

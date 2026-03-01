@@ -3,7 +3,6 @@
 import {
   createLogger,
   type InstructionProvider,
-  moduleRegistry,
   type UserSuggestion,
 } from "@lobu/core";
 import { App, type AppOptions, ExpressReceiver, LogLevel } from "@slack/bolt";
@@ -11,6 +10,7 @@ import { WebClient } from "@slack/web-api";
 import type { NextFunction, Request, Response } from "express";
 import { CommandDispatcher } from "../commands/command-dispatcher";
 import type { MessagePayload } from "../infrastructure/queue/queue-producer";
+import { gatewayModuleRegistry } from "../modules/module-system";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import {
   type AgentOptions as FactoryAgentOptions,
@@ -201,7 +201,7 @@ export class SlackPlatform implements PlatformAdapter {
     this.responseRenderer = new SlackResponseRenderer(
       services.getQueue(),
       this.app.client,
-      moduleRegistry,
+      gatewayModuleRegistry,
       this.installationStore
     );
 
@@ -216,7 +216,7 @@ export class SlackPlatform implements PlatformAdapter {
         agentOptions: this.agentOptions,
         sessionTimeoutMinutes: this.sessionTimeoutMinutes,
       },
-      moduleRegistry,
+      gatewayModuleRegistry,
       services.getSessionManager()
     );
 

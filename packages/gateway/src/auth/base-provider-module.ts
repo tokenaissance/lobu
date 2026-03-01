@@ -1,10 +1,10 @@
+import { createLogger } from "@lobu/core";
+import { Hono } from "hono";
 import {
   BaseModule,
-  createLogger,
   type ModelProviderModule,
   type ProviderUpstreamConfig,
-} from "@lobu/core";
-import { Hono } from "hono";
+} from "../modules/module-system";
 import {
   type AuthProfilesManager,
   createAuthProfileLabel,

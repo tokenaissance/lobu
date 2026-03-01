@@ -10,7 +10,7 @@
  */
 
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { createLogger, moduleRegistry } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import type {
   AgentMetadata,
   AgentMetadataStore,
@@ -20,6 +20,7 @@ import type { AgentSettingsStore } from "../../auth/settings";
 import { verifySettingsToken } from "../../auth/settings/token-service";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChannelBindingService } from "../../channels";
+import { getModelProviderModules } from "../../modules/module-system";
 import {
   clearSettingsSessionCookie,
   setSettingsSessionCookie,
@@ -43,7 +44,7 @@ export interface SettingsPageConfig {
 }
 
 function buildProviderMeta(
-  m: ReturnType<typeof moduleRegistry.getModelProviderModules>[number]
+  m: ReturnType<typeof getModelProviderModules>[number]
 ): ProviderMeta {
   return {
     id: m.providerId,
@@ -156,7 +157,7 @@ export function createSettingsPageRoutes(
     ]);
 
     // Build provider metadata from registry
-    const allModules = moduleRegistry.getModelProviderModules();
+    const allModules = getModelProviderModules();
     const allProviderMeta = allModules
       .filter((m) => m.catalogVisible !== false)
       .map(buildProviderMeta);

@@ -2,7 +2,6 @@ import { createLogger } from "@lobu/core";
 
 const logger = createLogger("dispatcher");
 
-import type { IModuleRegistry } from "@lobu/core";
 import type { AnyBlock } from "@slack/types";
 import type { WebClient } from "@slack/web-api";
 import {
@@ -10,6 +9,7 @@ import {
   formatSettingsTokenTtl,
   generateSettingsToken,
 } from "../../auth/settings/token-service";
+import type { IGatewayModuleRegistry } from "../../modules/module-system";
 import { resolveSpace } from "../../spaces";
 import type { SlackActionBody, SlackContext } from "../types";
 import type { MessageHandler } from "./messages";
@@ -215,7 +215,7 @@ async function handleBlockkitForm(
 export class ActionHandler {
   constructor(
     private messageHandler: MessageHandler,
-    private moduleRegistry: IModuleRegistry
+    private moduleRegistry: IGatewayModuleRegistry
   ) {}
 
   /**

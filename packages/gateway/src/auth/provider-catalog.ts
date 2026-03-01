@@ -1,9 +1,8 @@
+import { createLogger, type InstalledProvider } from "@lobu/core";
 import {
-  createLogger,
-  type InstalledProvider,
+  getModelProviderModules,
   type ModelProviderModule,
-  moduleRegistry,
-} from "@lobu/core";
+} from "../modules/module-system";
 import type { AgentSettingsStore } from "./settings/agent-settings-store";
 import type { AuthProfilesManager } from "./settings/auth-profiles-manager";
 
@@ -26,9 +25,7 @@ export class ProviderCatalogService {
    * List all catalog-visible providers from the module registry.
    */
   listCatalogProviders(): ModelProviderModule[] {
-    return moduleRegistry
-      .getModelProviderModules()
-      .filter((m) => m.catalogVisible !== false);
+    return getModelProviderModules().filter((m) => m.catalogVisible !== false);
   }
 
   /**
@@ -40,7 +37,7 @@ export class ProviderCatalogService {
     const installed = settings?.installedProviders || [];
     if (installed.length === 0) return [];
 
-    const allModules = moduleRegistry.getModelProviderModules();
+    const allModules = getModelProviderModules();
     const moduleMap = new Map(allModules.map((m) => [m.providerId, m]));
 
     return installed
@@ -64,7 +61,7 @@ export class ProviderCatalogService {
     providerId: string,
     config?: InstalledProvider["config"]
   ): Promise<void> {
-    const allModules = moduleRegistry.getModelProviderModules();
+    const allModules = getModelProviderModules();
     const module = allModules.find((m) => m.providerId === providerId);
     if (!module) {
       throw new Error(`Unknown provider: ${providerId}`);
@@ -125,7 +122,7 @@ export class ProviderCatalogService {
     model: string,
     providers?: ModelProviderModule[]
   ): Promise<ModelProviderModule | undefined> {
-    const candidates = providers || moduleRegistry.getModelProviderModules();
+    const candidates = providers || getModelProviderModules();
     for (const provider of candidates) {
       if (!provider.getModelOptions) continue;
       const options = await provider.getModelOptions("", "");

@@ -3,10 +3,10 @@ import {
   createChildSpan,
   createLogger,
   ErrorCode,
-  type ModelProviderModule,
   OrchestratorError,
   SpanStatusCode,
 } from "@lobu/core";
+import type { ModelProviderModule } from "../../../modules/module-system";
 import {
   BaseDeploymentManager,
   type DeploymentInfo,

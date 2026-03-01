@@ -5,8 +5,6 @@ import {
   extractTraceId,
   generateTraceId,
   getTraceparent,
-  type ModelProviderModule,
-  moduleRegistry,
   OrchestratorError,
   retryWithBackoff,
   SpanStatusCode,
@@ -20,6 +18,10 @@ import type {
 } from "../infrastructure/queue";
 import { RedisQueue, type RedisQueueConfig } from "../infrastructure/queue";
 import { SystemMessageLimiter } from "../infrastructure/redis/system-message-limiter";
+import {
+  getModelProviderModules,
+  type ModelProviderModule,
+} from "../modules/module-system";
 import {
   type BaseDeploymentManager,
   buildCanonicalConversationKey,
@@ -45,7 +47,7 @@ export class MessageConsumer {
   ) {
     this.config = config;
     this.deploymentManager = deploymentManager;
-    this.providerModules = moduleRegistry.getModelProviderModules();
+    this.providerModules = getModelProviderModules();
 
     // Parse Redis connection string
     const url = new URL(config.queues.connectionString);

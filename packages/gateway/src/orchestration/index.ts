@@ -2,13 +2,13 @@ export * from "./base-deployment-manager";
 export * from "./deployment-utils";
 export * from "./impl";
 
-import {
-  createLogger,
-  type ModelProviderModule,
-  moduleRegistry,
-} from "@lobu/core";
+import { createLogger, moduleRegistry } from "@lobu/core";
 import type Redis from "ioredis";
 import type { ProviderCatalogService } from "../auth/provider-catalog";
+import {
+  getModelProviderModules,
+  type ModelProviderModule,
+} from "../modules/module-system";
 import type { GrantStore } from "../permissions/grant-store";
 import type {
   BaseDeploymentManager,
@@ -66,7 +66,7 @@ export class Orchestrator {
     }
 
     // Refresh provider modules after gateway/core services have registered them.
-    const providerModules = moduleRegistry.getModelProviderModules();
+    const providerModules = getModelProviderModules();
     this.deploymentManager.setProviderModules(providerModules);
     this.queueConsumer.setProviderModules(providerModules);
     logger.info(
@@ -80,8 +80,7 @@ export class Orchestrator {
     config: OrchestratorConfig
   ): BaseDeploymentManager {
     const deploymentMode = process.env.DEPLOYMENT_MODE;
-    const providerModules: ModelProviderModule[] =
-      moduleRegistry.getModelProviderModules();
+    const providerModules: ModelProviderModule[] = getModelProviderModules();
 
     if (deploymentMode === "docker") {
       if (!this.isDockerAvailable()) {
@@ -199,7 +198,7 @@ export class Orchestrator {
 
       // Module registration can happen during initAll(); refresh providers
       // so deployment/message processing uses the latest auth modules.
-      const providerModules = moduleRegistry.getModelProviderModules();
+      const providerModules = getModelProviderModules();
       this.deploymentManager.setProviderModules(providerModules);
       this.queueConsumer.setProviderModules(providerModules);
       logger.info(

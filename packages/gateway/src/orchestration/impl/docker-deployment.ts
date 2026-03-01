@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ModelProviderModule } from "@lobu/core";
 import { createLogger, ErrorCode, OrchestratorError } from "@lobu/core";
 import Docker from "dockerode";
+import type { ModelProviderModule } from "../../modules/module-system";
 import {
   BaseDeploymentManager,
   type DeploymentInfo,

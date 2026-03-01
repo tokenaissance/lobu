@@ -4,12 +4,12 @@ import {
   ErrorCode,
   extractTraceId,
   generateWorkerToken,
-  type ModelProviderModule,
   OrchestratorError,
 } from "@lobu/core";
 import type Redis from "ioredis";
 import { mcpConfigStore } from "../auth/mcp/mcp-config-store";
 import type { MessagePayload } from "../infrastructure/queue/queue-producer";
+import type { ModelProviderModule } from "../modules/module-system";
 import type { GrantStore } from "../permissions/grant-store";
 import {
   deleteSecretMappings,
