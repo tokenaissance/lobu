@@ -9,7 +9,7 @@ import {
   formatSettingsTokenTtl,
   generateSettingsToken,
 } from "../../auth/settings/token-service";
-import type { IGatewayModuleRegistry } from "../../modules/module-system";
+import type { DispatcherModuleSource } from "../../modules/module-system";
 import { resolveSpace } from "../../spaces";
 import type { SlackActionBody, SlackContext } from "../types";
 import type { MessageHandler } from "./messages";
@@ -215,7 +215,7 @@ async function handleBlockkitForm(
 export class ActionHandler {
   constructor(
     private messageHandler: MessageHandler,
-    private moduleRegistry: IGatewayModuleRegistry
+    private moduleRegistry: DispatcherModuleSource
   ) {}
 
   /**

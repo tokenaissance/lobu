@@ -10,6 +10,7 @@ import type { ThreadResponsePayload } from "../infrastructure/queue";
 import { chunkMessage, delay } from "../platform/renderer-utils";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import type { TelegramConfig } from "./config";
+import { TelegramBlockBuilder } from "./converters/block-builder";
 import { convertMarkdownToTelegramHtml } from "./converters/markdown";
 
 const logger = createLogger("telegram-response-renderer");
@@ -44,6 +45,7 @@ interface StreamState {
 export class TelegramResponseRenderer implements ResponseRenderer {
   private streams = new Map<string, StreamState>();
   private storeOutgoingCallback?: StoreOutgoingMessageCallback;
+  private blockBuilder = new TelegramBlockBuilder();
 
   constructor(
     private bot: Bot,
@@ -233,7 +235,7 @@ export class TelegramResponseRenderer implements ResponseRenderer {
     stream: StreamState,
     traceId?: string
   ): Promise<void> {
-    const html = convertMarkdownToTelegramHtml(stream.buffer);
+    const { html, replyMarkup } = this.blockBuilder.build(stream.buffer);
 
     if (html.length <= this.config.messageChunkSize) {
       // Single chunk - edit existing message
@@ -244,6 +246,7 @@ export class TelegramResponseRenderer implements ResponseRenderer {
           html,
           {
             parse_mode: "HTML",
+            reply_markup: replyMarkup,
           }
         );
       } catch (err) {
@@ -298,11 +301,14 @@ export class TelegramResponseRenderer implements ResponseRenderer {
       }
     }
 
+    const lastIdx = plainChunks.length - 1;
     for (let i = 1; i < plainChunks.length; i++) {
+      const isLast = i === lastIdx;
       try {
         const chunkHtml = convertMarkdownToTelegramHtml(plainChunks[i]!);
         await this.bot.api.sendMessage(stream.chatId, chunkHtml, {
           parse_mode: "HTML",
+          ...(isLast && replyMarkup ? { reply_markup: replyMarkup } : {}),
         });
       } catch {
         // Fall back to plain text
@@ -315,7 +321,7 @@ export class TelegramResponseRenderer implements ResponseRenderer {
           );
         }
       }
-      if (i < plainChunks.length - 1) {
+      if (i < lastIdx) {
         await delay(500);
       }
     }

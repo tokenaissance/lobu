@@ -3,4 +3,5 @@ export interface ModuleButton {
   action_id: string;
   style?: "primary" | "danger";
   value?: string;
+  url?: string;
 }

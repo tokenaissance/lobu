@@ -4,6 +4,7 @@
  * and Slack-specific status indicators.
  */
 
+import { createHash } from "node:crypto";
 import { AsyncLock, createLogger, DEFAULTS, REDIS_KEYS } from "@lobu/core";
 import type { AnyBlock } from "@slack/types";
 import { WebClient } from "@slack/web-api";
@@ -12,7 +13,8 @@ import type {
   IMessageQueue,
   ThreadResponsePayload,
 } from "../infrastructure/queue";
-import type { IGatewayModuleRegistry } from "../modules/module-system";
+import type { DispatcherModuleSource } from "../modules/module-system";
+import { extractSettingsLinkButtons } from "../platform/link-buttons";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import {
   type ModuleButton,
@@ -311,7 +313,7 @@ export class SlackResponseRenderer implements ResponseRenderer {
   constructor(
     queue: IMessageQueue,
     private slackClient: WebClient,
-    private moduleRegistry: IGatewayModuleRegistry,
+    private moduleRegistry: DispatcherModuleSource,
     installationStore?: SlackInstallationStore
   ) {
     this.redis = queue.getRedisClient();
@@ -587,7 +589,16 @@ export class SlackResponseRenderer implements ResponseRenderer {
 
     const { processedContent, actionButtons: codeBlockButtons } =
       extractCodeBlockActions(content);
-    const text = convertMarkdownToSlack(processedContent);
+    const { processedContent: finalContent, linkButtons } =
+      extractSettingsLinkButtons(processedContent);
+    const text = convertMarkdownToSlack(finalContent);
+
+    const settingsButtons: ModuleButton[] = linkButtons.map((btn) => ({
+      text: btn.text,
+      action_id: `settings_link_${createHash("sha256").update(btn.url).digest("hex").substring(0, 8)}`,
+      url: btn.url,
+      style: "primary" as const,
+    }));
 
     const moduleButtons = await this.getModuleActionButtons(
       data.userId,
@@ -596,7 +607,11 @@ export class SlackResponseRenderer implements ResponseRenderer {
       data.moduleData
     );
 
-    const allActionButtons = [...codeBlockButtons, ...moduleButtons];
+    const allActionButtons = [
+      ...codeBlockButtons,
+      ...settingsButtons,
+      ...moduleButtons,
+    ];
 
     const result = this.blockBuilder.buildBlocks(text, {
       actionButtons: allActionButtons,

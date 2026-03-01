@@ -1,7 +1,5 @@
 /**
  * Settings Page HTML Templates (Alpine.js + Pre-compiled Tailwind CSS)
- *
- * Orchestrates the settings page by composing sections and Alpine.js app.
  */
 
 import type { AgentMetadata } from "../../../auth/agent-metadata-store";
@@ -11,10 +9,12 @@ import {
   type SettingsTokenPayload,
 } from "../../../auth/settings/token-service";
 import type { ModelOption } from "../../../modules/module-system";
-import { platformRegistry } from "../../../platform";
 import { settingsPageCSS } from "../settings-page-styles";
 import { renderAlpineApp } from "./alpine-app";
 import {
+  escapeHtml,
+  formatUserId,
+  getPlatformDisplay,
   renderHeaderSection,
   renderInstructionsSection,
   renderIntegrationsSection,
@@ -27,65 +27,7 @@ import {
   renderSecretsSection,
   renderSubmitButton,
   renderVerboseLoggingSection,
-  type SectionHelpers,
 } from "./sections";
-
-// ─── Shared Utility Functions ───────────────────────────────────────────────
-
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-/**
- * Format userId for display - handles phone numbers and platform-specific IDs
- */
-export function formatUserId(userId: string): string {
-  if (userId.startsWith("+")) {
-    return userId;
-  }
-  if (userId.includes("@")) {
-    const parts = userId.split("@");
-    const id = parts[0] || "";
-    const domain = parts[1] || "";
-    if (domain === "lid") {
-      return `ID: ${id.slice(0, 8)}...`;
-    }
-    if (domain === "s.whatsapp.net") {
-      return `+${id}`;
-    }
-    return userId;
-  }
-  return userId;
-}
-
-/**
- * Get platform display info from the registry, with fallback for unknown platforms
- */
-export function getPlatformDisplay(platform: string): {
-  icon: string;
-  name: string;
-} {
-  const adapter = platformRegistry.get(platform);
-  if (adapter?.getDisplayInfo) {
-    const info = adapter.getDisplayInfo();
-    const icon = info.icon.includes('class="')
-      ? info.icon.replace('class="', 'class="w-4 h-4 inline-block ')
-      : info.icon.replace("<svg", '<svg class="w-4 h-4 inline-block"');
-    return { icon, name: info.name };
-  }
-
-  return {
-    icon: '<svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>',
-    name: platform || "API",
-  };
-}
-
-// ─── Interfaces ─────────────────────────────────────────────────────────────
 
 export interface ProviderMeta {
   id: string;
@@ -113,16 +55,6 @@ export interface SettingsPageOptions {
   /** Whether the token has a channelId (for post-delete behavior) */
   hasChannelId?: boolean;
 }
-
-// ─── Section Helpers ────────────────────────────────────────────────────────
-
-const sectionHelpers: SectionHelpers = {
-  escapeHtml,
-  formatUserId,
-  getPlatformDisplay,
-};
-
-// ─── Main Settings Page ─────────────────────────────────────────────────────
 
 export function renderSettingsPage(
   payload: SettingsTokenPayload,
@@ -232,8 +164,6 @@ export function renderSettingsPage(
     userMd: s.userMd || "",
   };
 
-  const h = sectionHelpers;
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -246,15 +176,15 @@ export function renderSettingsPage(
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 p-4" x-data="settingsApp()" x-cloak>
   <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-2xl p-6">
-${renderHeaderSection(payload, showSwitcher, agents, h)}
+${renderHeaderSection(payload, showSwitcher, agents)}
 
     <div x-show="successMsg" x-transition class="bg-green-100 text-green-800 px-3 py-2 rounded-lg mb-4 text-center text-sm" x-text="successMsg"></div>
     <div x-show="errorMsg" x-transition class="bg-red-100 text-red-800 px-3 py-2 rounded-lg mb-4 text-center text-sm" x-text="errorMsg"></div>
-    ${renderMessageBanner(payload, h)}
+    ${renderMessageBanner(payload)}
 ${renderPrefillBanner()}
 
     <form @submit.prevent="saveSettings()" @keydown.enter="if ($event.target.tagName !== 'TEXTAREA' && $event.target.type !== 'submit') $event.preventDefault()" class="space-y-3">
-${renderProviderSection(providers, h)}
+${renderProviderSection(providers)}
 
 ${renderInstructionsSection()}
 

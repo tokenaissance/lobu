@@ -1,17 +1,49 @@
 /**
  * Settings Page HTML Section Generators
- *
- * Each function produces an HTML string for a section of the settings page.
  */
 
 import type { SettingsTokenPayload } from "../../../auth/settings/token-service";
+import { platformRegistry } from "../../../platform";
 import type { ProviderMeta } from "./index";
 
-// Re-use shared helpers via parameter injection to avoid circular deps
-export interface SectionHelpers {
-  escapeHtml: (text: string) => string;
-  formatUserId: (userId: string) => string;
-  getPlatformDisplay: (platform: string) => { icon: string; name: string };
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+export function formatUserId(userId: string): string {
+  if (userId.startsWith("+")) return userId;
+  if (userId.includes("@")) {
+    const parts = userId.split("@");
+    const id = parts[0] || "";
+    const domain = parts[1] || "";
+    if (domain === "lid") return `ID: ${id.slice(0, 8)}...`;
+    if (domain === "s.whatsapp.net") return `+${id}`;
+    return userId;
+  }
+  return userId;
+}
+
+export function getPlatformDisplay(platform: string): {
+  icon: string;
+  name: string;
+} {
+  const adapter = platformRegistry.get(platform);
+  if (adapter?.getDisplayInfo) {
+    const info = adapter.getDisplayInfo();
+    const icon = info.icon.includes('class="')
+      ? info.icon.replace('class="', 'class="w-4 h-4 inline-block ')
+      : info.icon.replace("<svg", '<svg class="w-4 h-4 inline-block"');
+    return { icon, name: info.name };
+  }
+  return {
+    icon: '<svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>',
+    name: platform || "API",
+  };
 }
 
 // ─── Header / Agent Identity ────────────────────────────────────────────────
@@ -19,11 +51,10 @@ export interface SectionHelpers {
 export function renderHeaderSection(
   payload: SettingsTokenPayload,
   showSwitcher: boolean,
-  agents: { agentId: string; name: string; isWorkspaceAgent?: boolean }[],
-  h: SectionHelpers
+  agents: { agentId: string; name: string; isWorkspaceAgent?: boolean }[]
 ): string {
   const switcherContent = showSwitcher
-    ? `          <button type="button" @click="switcherOpen = !switcherOpen" class="inline-flex items-center gap-1.5 text-xl font-bold text-slate-900 hover:text-slate-700 transition-colors" title="${h.escapeHtml(payload.agentId || "")}">
+    ? `          <button type="button" @click="switcherOpen = !switcherOpen" class="inline-flex items-center gap-1.5 text-xl font-bold text-slate-900 hover:text-slate-700 transition-colors" title="${escapeHtml(payload.agentId || "")}">
             <span x-text="agentName || 'Agent Settings'"></span>
             <svg class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
           </button>
@@ -32,9 +63,9 @@ export function renderHeaderSection(
 ${agents
   .map(
     (agent) => `
-              <div class="w-full flex items-center justify-between px-3 py-2 text-left ${agent.agentId !== payload.agentId ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50"} transition-colors border-b border-slate-100 last:border-b-0"${agent.agentId !== payload.agentId ? ` @click="switching = true; switchAgent('${h.escapeHtml(agent.agentId)}')"` : ""}>
+              <div class="w-full flex items-center justify-between px-3 py-2 text-left ${agent.agentId !== payload.agentId ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50"} transition-colors border-b border-slate-100 last:border-b-0"${agent.agentId !== payload.agentId ? ` @click="switching = true; switchAgent('${escapeHtml(agent.agentId)}')"` : ""}>
                 <div class="min-w-0">
-                  <p class="text-sm font-medium text-gray-800" title="${h.escapeHtml(agent.agentId)}">${h.escapeHtml(agent.name)}${agent.isWorkspaceAgent ? ' <span class="text-xs text-slate-500">(workspace)</span>' : ""}</p>
+                  <p class="text-sm font-medium text-gray-800" title="${escapeHtml(agent.agentId)}">${escapeHtml(agent.name)}${agent.isWorkspaceAgent ? ' <span class="text-xs text-slate-500">(workspace)</span>' : ""}</p>
                 </div>
                 ${
                   agent.agentId === payload.agentId
@@ -79,7 +110,7 @@ ${agents
             </div>
           </div>`
     : `          <div class="inline-flex items-center gap-2">
-            <h1 class="text-xl font-bold text-slate-900" x-text="agentName || 'Agent Settings'" title="${h.escapeHtml(payload.agentId || "")}"></h1>
+            <h1 class="text-xl font-bold text-slate-900" x-text="agentName || 'Agent Settings'" title="${escapeHtml(payload.agentId || "")}"></h1>
             <button type="button" @click="editingIdentity = true" class="p-1 text-slate-400 hover:text-slate-600 transition-colors" title="Edit">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
             </button>
@@ -96,7 +127,7 @@ ${agents
 ${switcherContent}
         </div>
         <p x-show="!editingIdentity && agentDescription" class="text-xs text-gray-500 mt-0.5" x-text="agentDescription"></p>
-        <p class="text-xs text-gray-500 mt-1">${h.getPlatformDisplay(payload.platform).icon} ${h.escapeHtml(h.formatUserId(payload.userId))}</p>
+        <p class="text-xs text-gray-500 mt-1">${getPlatformDisplay(payload.platform).icon} ${escapeHtml(formatUserId(payload.userId))}</p>
       </div>
 
       <!-- Inline identity edit -->
@@ -117,14 +148,14 @@ ${switcherContent}
 
       <!-- Delete confirmation -->
       <div x-show="showDeleteConfirm" x-transition class="mt-2 space-y-2">
-        <p class="text-xs text-gray-600 text-center">Type <strong class="font-mono">${h.escapeHtml(payload.agentId || "")}</strong> to confirm deletion:</p>
-        <input type="text" x-model="deleteConfirmText" placeholder="${h.escapeHtml(payload.agentId || "")}"
+        <p class="text-xs text-gray-600 text-center">Type <strong class="font-mono">${escapeHtml(payload.agentId || "")}</strong> to confirm deletion:</p>
+        <input type="text" x-model="deleteConfirmText" placeholder="${escapeHtml(payload.agentId || "")}"
           class="w-full px-3 py-2 border border-red-200 rounded-lg text-xs font-mono focus:border-red-400 focus:ring-1 focus:ring-red-200 outline-none"
-          @keydown.enter.prevent="if (deleteConfirmText === '${h.escapeHtml(payload.agentId || "")}') deleteAgent()">
+          @keydown.enter.prevent="if (deleteConfirmText === '${escapeHtml(payload.agentId || "")}') deleteAgent()">
         <div class="flex gap-2">
           <button type="button" @click="showDeleteConfirm = false; deleteConfirmText = ''"
             class="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all">Cancel</button>
-          <button type="button" @click="deleteAgent()" :disabled="deleteConfirmText !== '${h.escapeHtml(payload.agentId || "")}' || deleting"
+          <button type="button" @click="deleteAgent()" :disabled="deleteConfirmText !== '${escapeHtml(payload.agentId || "")}' || deleting"
             class="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all disabled:opacity-60"
             x-text="deleting ? 'Deleting...' : 'Delete'"></button>
         </div>
@@ -134,15 +165,12 @@ ${switcherContent}
 
 // ─── Messages & Prefill Banner ──────────────────────────────────────────────
 
-export function renderMessageBanner(
-  payload: SettingsTokenPayload,
-  h: SectionHelpers
-): string {
+export function renderMessageBanner(payload: SettingsTokenPayload): string {
   return payload.message
     ? `<div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg mb-4 text-sm">
       <div class="flex items-start gap-2">
         <span class="text-lg">&#128161;</span>
-        <div>${h.escapeHtml(payload.message)}</div>
+        <div>${escapeHtml(payload.message)}</div>
       </div>
     </div>`
     : "";
@@ -232,10 +260,7 @@ export function renderPrefillBanner(): string {
 
 // ─── Model Selection / Providers Section ────────────────────────────────────
 
-export function renderProviderSection(
-  providers: ProviderMeta[],
-  h: SectionHelpers
-): string {
+export function renderProviderSection(providers: ProviderMeta[]): string {
   const emptyState =
     providers.length === 0
       ? `<div class="text-center py-6 text-gray-500">
@@ -247,18 +272,18 @@ export function renderProviderSection(
   const providerCards = providers
     .map(
       (p, i) => `
-      <div id="provider-card-${h.escapeHtml(p.id)}"
+      <div id="provider-card-${escapeHtml(p.id)}"
         class="${i > 0 ? "mt-3 pt-3 border-t border-gray-200" : ""}">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-3 min-w-0">
             <label class="inline-flex items-center cursor-pointer" title="Set as primary provider">
-              <input type="radio" name="primaryProvider" value="${h.escapeHtml(p.id)}" x-model="primaryProvider"
+              <input type="radio" name="primaryProvider" value="${escapeHtml(p.id)}" x-model="primaryProvider"
                 class="w-4 h-4 accent-slate-600 cursor-pointer">
             </label>
-            <img src="${h.escapeHtml(p.iconUrl)}" alt="${h.escapeHtml(p.name)}" class="w-5 h-5 rounded">
+            <img src="${escapeHtml(p.iconUrl)}" alt="${escapeHtml(p.name)}" class="w-5 h-5 rounded">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <p class="text-sm font-medium text-gray-800">${h.escapeHtml(p.name)}</p>
+                <p class="text-sm font-medium text-gray-800">${escapeHtml(p.name)}</p>
               </div>
               <p class="text-xs"
                 :class="providerState['${p.id}']?.connected ? (providerState['${p.id}']?.userConnected ? 'text-emerald-600' : 'text-amber-600') : 'text-gray-500'"
@@ -275,7 +300,7 @@ export function renderProviderSection(
                 @keydown.escape="providerState['${p.id}'].showModelDropdown = false"
                 @keydown.enter.prevent="providerState['${p.id}'].showModelDropdown = false"
                 :placeholder="providerState['${p.id}'].selectedModel || 'Auto model'"
-                aria-label="${h.escapeHtml(p.name)} model"
+                aria-label="${escapeHtml(p.name)} model"
                 class="w-36 sm:w-44 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none bg-white placeholder-gray-500">
               <div x-show="providerState['${p.id}'].showModelDropdown" x-transition
                 class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -301,13 +326,13 @@ export function renderProviderSection(
               </button>
             </template>
             <button type="button" @click="uninstallProvider('${p.id}')"
-              title="Remove ${h.escapeHtml(p.name)}"
+              title="Remove ${escapeHtml(p.name)}"
               class="p-1.5 text-xs rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
           </div>
         </div>
-        ${renderProviderAuthFlow(p, h)}
+        ${renderProviderAuthFlow(p)}
       </div>`
     )
     .join("");
@@ -333,7 +358,7 @@ export function renderProviderSection(
       </div>`;
 }
 
-function renderProviderAuthFlow(p: ProviderMeta, h: SectionHelpers): string {
+function renderProviderAuthFlow(p: ProviderMeta): string {
   const authTypes = p.supportedAuthTypes || [p.authType];
   const hasMultiAuth = authTypes.length > 1;
   const hasApiKey = authTypes.includes("api-key");
@@ -370,10 +395,10 @@ function renderProviderAuthFlow(p: ProviderMeta, h: SectionHelpers): string {
 						          <div x-show="${showCond}" x-transition>
 						            <div class="mb-3 text-center">
 						              <a :href="'/api/v1/oauth/providers/${p.id}/login'" target="_blank" class="inline-block px-4 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
-						                Login with ${h.escapeHtml(p.name)}
+						                Login with ${escapeHtml(p.name)}
 						              </a>
 						            </div>
-						            <p class="text-xs text-gray-600 mb-2">Paste the authentication code from ${h.escapeHtml(p.name)}:</p>
+						            <p class="text-xs text-gray-600 mb-2">Paste the authentication code from ${escapeHtml(p.name)}:</p>
 						            <div class="flex gap-2">
 						              <input type="text" x-model="providerState['${p.id}'].code" placeholder="CODE#STATE" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
 						              <button type="button" @click="submitOAuthCode('${p.id}')" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
@@ -409,7 +434,7 @@ function renderProviderAuthFlow(p: ProviderMeta, h: SectionHelpers): string {
           <div x-show="${showCond}" x-transition>
             <p class="text-xs text-gray-600 mb-2">${p.apiKeyInstructions}</p>
             <div class="flex gap-2">
-              <input type="password" x-model="providerState['${p.id}'].apiKey" placeholder="${h.escapeHtml(p.apiKeyPlaceholder)}" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
+              <input type="password" x-model="providerState['${p.id}'].apiKey" placeholder="${escapeHtml(p.apiKeyPlaceholder)}" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none">
               <button type="button" @click="submitApiKey('${p.id}')" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all">
                 Save
               </button>

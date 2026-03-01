@@ -145,8 +145,8 @@ export class SlackBlockBuilder {
   ): void {
     // Validate buttons
     const validButtons = buttons.filter((btn) => {
-      if (!btn.text || !btn.action_id) {
-        logger.warn("Invalid button: missing text or action_id", btn);
+      if (!btn.text || (!btn.action_id && !btn.url)) {
+        logger.warn("Invalid button: missing text or action_id/url", btn);
         return false;
       }
       return true;
@@ -162,13 +162,24 @@ export class SlackBlockBuilder {
     }
 
     // Convert to Slack block elements
-    const elements: ActionsBlockElement[] = validButtons.map((btn) => ({
-      type: "button",
-      text: { type: "plain_text", text: btn.text },
-      action_id: btn.action_id,
-      style: btn.style,
-      value: btn.value,
-    }));
+    const elements: ActionsBlockElement[] = validButtons.map((btn) => {
+      if (btn.url) {
+        return {
+          type: "button",
+          text: { type: "plain_text", text: btn.text },
+          url: btn.url,
+          action_id: btn.action_id,
+          style: btn.style,
+        };
+      }
+      return {
+        type: "button",
+        text: { type: "plain_text", text: btn.text },
+        action_id: btn.action_id,
+        style: btn.style,
+        value: btn.value,
+      };
+    });
 
     blocks.push({
       type: "actions",

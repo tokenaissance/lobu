@@ -11,7 +11,7 @@ import {
   IMAGE_PULL_FAILURE_REASONS,
   LOBU_FINALIZER,
   WORKER_SECURITY,
-} from "./types";
+} from "./deployment";
 
 const logger = createLogger("k8s-deployment");
 
