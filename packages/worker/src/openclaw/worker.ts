@@ -15,7 +15,6 @@ import {
   AuthStorage,
   createAgentSession,
   ModelRegistry,
-  SessionManager,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import * as Sentry from "@sentry/node";
@@ -36,6 +35,12 @@ import {
 } from "../shared/provider-auth-hints";
 import { createOpenClawCustomTools } from "./custom-tools";
 import { OpenClawCoreInstructionProvider } from "./instructions";
+import {
+  DEFAULT_PROVIDER_BASE_URL_ENV,
+  openOrCreateSessionManager,
+  PROVIDER_REGISTRY_ALIASES,
+  resolveModelRef,
+} from "./model-resolver";
 import { loadPlugins } from "./plugin-loader";
 import { OpenClawProgressProcessor } from "./processor";
 import { getOpenClawSessionContext } from "./session-context";
@@ -47,33 +52,6 @@ import {
 import { createOpenClawTools } from "./tools";
 
 const logger = createLogger("worker");
-
-/** Hardcoded fallback map for provider base URL env vars. */
-const DEFAULT_PROVIDER_BASE_URL_ENV: Record<string, string> = {
-  anthropic: "ANTHROPIC_BASE_URL",
-  openai: "OPENAI_BASE_URL",
-  "openai-codex": "OPENAI_BASE_URL",
-  google: "GEMINI_API_BASE_URL",
-  nvidia: "NVIDIA_API_BASE_URL",
-  "z-ai": "Z_AI_API_BASE_URL",
-};
-
-/** Default model IDs per provider, used when no explicit model is configured. */
-const DEFAULT_PROVIDER_MODELS: Record<string, string> = {
-  anthropic: "claude-sonnet-4-20250514",
-  openai: "gpt-4.1",
-  "openai-codex": "gpt-5.1-codex-mini",
-  google: "gemini-2.5-pro",
-  "z-ai": "glm-4.7",
-};
-
-/**
- * Map gateway provider slugs to model-registry provider names.
- * The gateway uses slugs like "z-ai" while the model registry uses "zai".
- */
-const PROVIDER_REGISTRY_ALIASES: Record<string, string> = {
-  "z-ai": "zai",
-};
 
 export class OpenClawWorker implements WorkerExecutor {
   private workspaceManager: WorkspaceManager;
@@ -922,74 +900,5 @@ Create and show files for any output that helps answer the user's request by usi
     }
 
     return errorMessage;
-  }
-}
-
-function resolveModelRef(rawModelRef: string): {
-  provider: string;
-  modelId: string;
-} {
-  const defaultModelRef = process.env.AGENT_DEFAULT_MODEL || "";
-  const defaultProvider = process.env.AGENT_DEFAULT_PROVIDER || "";
-
-  const normalizedRaw = rawModelRef?.trim();
-  let modelRef = normalizedRaw || defaultModelRef;
-
-  // When no model is configured but a provider is known, use the provider's
-  // default model so auto-mode provider selection works end-to-end.
-  if (!modelRef && defaultProvider) {
-    const fallbackModel = DEFAULT_PROVIDER_MODELS[defaultProvider];
-    if (fallbackModel) {
-      logger.info(
-        `No model configured, using default for ${defaultProvider}: ${fallbackModel}`
-      );
-      modelRef = fallbackModel;
-    }
-  }
-
-  if (!modelRef) {
-    throw new Error(
-      "No model configured. Please add a model provider in your settings."
-    );
-  }
-
-  const parts = modelRef.split("/").filter(Boolean);
-  if (parts.length >= 2) {
-    const provider = parts[0]!;
-    let modelId = parts.slice(1).join("/");
-    // Resolve "auto" to the provider's default model
-    if (modelId === "auto") {
-      const fallback = DEFAULT_PROVIDER_MODELS[provider];
-      if (fallback) {
-        logger.info(`Resolved auto model for ${provider}: ${fallback}`);
-        modelId = fallback;
-      }
-    }
-    return { provider, modelId };
-  }
-
-  if (!defaultProvider) {
-    throw new Error(
-      `No provider specified for model "${modelRef}". Use "provider/model" format or set AGENT_DEFAULT_PROVIDER.`
-    );
-  }
-
-  return { provider: defaultProvider, modelId: modelRef };
-}
-
-async function openOrCreateSessionManager(
-  sessionFile: string,
-  workspaceDir: string
-): Promise<SessionManager> {
-  try {
-    await fs.stat(sessionFile);
-    return SessionManager.open(sessionFile);
-  } catch {
-    const sessionManager = SessionManager.create(
-      workspaceDir,
-      path.dirname(sessionFile)
-    );
-    sessionManager.setSessionFile(sessionFile);
-    return sessionManager;
   }
 }
