@@ -1,160 +1,120 @@
-import { useSignal } from "@preact/signals";
-import { useEffect, useRef } from "preact/hooks";
+import type { ComponentType } from "preact";
 import { useCases } from "../use-cases";
-import { SettingsDemo } from "./SettingsDemo";
+import {
+  IntegrationsPanel,
+  ModelsPanel,
+  PackagesPanel,
+  PermissionsPanel,
+  RemindersPanel,
+} from "./SettingsPanels";
 import { TelegramChat } from "./TelegramChat";
 
-const SECTION_MAP: Record<string, string> = {
-  setup: "model",
-  packages: "packages",
-  mcp: "integrations",
-  schedules: "reminders",
-  network: "permissions",
+const PANEL_MAP: Record<string, ComponentType> = {
+  setup: ModelsPanel,
+  packages: PackagesPanel,
+  mcp: IntegrationsPanel,
+  schedules: RemindersPanel,
+  network: PermissionsPanel,
 };
 
-const COUNT = useCases.length;
-
-export function DemoSection() {
-  const sectionRef = useRef<HTMLElement>(null);
-  const activeIndex = useSignal(0);
-  const stepProgress = useSignal(0);
-  const openSections = useSignal<Record<string, boolean>>({
-    [SECTION_MAP[useCases[0].id]]: true,
-  });
-
-  useEffect(() => {
-    const section = sectionRef.current;
-    if (!section) return;
-
-    function onScroll() {
-      const rect = section!.getBoundingClientRect();
-      const maxScroll = section!.offsetHeight - window.innerHeight;
-      if (maxScroll <= 0) return;
-
-      const scrolled = Math.max(0, Math.min(-rect.top, maxScroll));
-      const rawProgress = scrolled / maxScroll;
-      const step = Math.min(Math.floor(rawProgress * COUNT), COUNT - 1);
-      const subProgress = Math.min(rawProgress * COUNT - step, 1);
-
-      stepProgress.value = subProgress;
-
-      if (step !== activeIndex.peek()) {
-        activeIndex.value = step;
-        openSections.value = {
-          [SECTION_MAP[useCases[step].id]]: true,
-        };
-      }
-    }
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const activeCase = useCases[activeIndex.value];
+function FeatureRow({
+  uc,
+  index,
+  isLast,
+}: {
+  uc: (typeof useCases)[0];
+  index: number;
+  isLast: boolean;
+}) {
+  const Panel = PANEL_MAP[uc.id];
 
   return (
-    <section ref={sectionRef} style={{ height: `${COUNT * 100}vh` }}>
-      <div class="sticky top-0 h-screen flex flex-col justify-center px-4">
-        <div class="max-w-6xl mx-auto w-full">
-          <h2
-            class="text-2xl sm:text-3xl font-bold text-center mb-3 tracking-tight"
-            style={{ color: "var(--color-page-text)" }}
-          >
-            See it in action
-          </h2>
+    <div class="grid grid-cols-1 md:grid-cols-[1fr_40px_1fr] gap-4 md:gap-6">
+      {/* Left column: title + settings panel */}
+      <div class="pb-8 md:pb-12 md:text-right md:pr-4">
+        <div
+          class="text-xs font-semibold uppercase tracking-wider mb-1"
+          style={{ color: "var(--color-tg-accent)" }}
+        >
+          {uc.tabLabel}
+        </div>
+        <h3
+          class="text-xl font-bold mb-2"
+          style={{ color: "var(--color-page-text)" }}
+        >
+          {uc.title}
+        </h3>
+        <p
+          class="text-sm leading-relaxed mb-6 md:ml-auto max-w-md"
+          style={{ color: "var(--color-page-text-muted)" }}
+        >
+          {uc.description}
+        </p>
+        <p
+          class="text-xs font-medium mb-2"
+          style={{ color: "var(--color-page-text-muted)" }}
+        >
+          {uc.settingsLabel}
+        </p>
+        <div class="md:text-left">
+          <Panel />
+        </div>
+      </div>
 
-          {/* Progress dots */}
-          <div class="flex justify-center gap-2 mb-4">
-            {useCases.map((uc, i) => (
-              <span
-                key={uc.id}
-                class="rounded-full transition-all duration-300"
-                style={{
-                  width: i === activeIndex.value ? "10px" : "6px",
-                  height: i === activeIndex.value ? "10px" : "6px",
-                  backgroundColor:
-                    i === activeIndex.value
-                      ? "var(--color-page-text)"
-                      : "var(--color-page-text-muted)",
-                  opacity: i === activeIndex.value ? 1 : 0.35,
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Crossfading title + description */}
+      {/* Timeline column (center) */}
+      <div class="hidden md:flex flex-col items-center">
+        <div
+          class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+          style={{
+            backgroundColor: "rgba(var(--color-tg-accent-rgb), 0.15)",
+            color: "var(--color-tg-accent)",
+            border: "1px solid rgba(var(--color-tg-accent-rgb), 0.3)",
+          }}
+        >
+          {index + 1}
+        </div>
+        {!isLast && (
           <div
-            class="relative mx-auto max-w-lg mb-10"
-            style={{ height: "80px" }}
-          >
-            {useCases.map((uc, i) => (
-              <div
-                key={uc.id}
-                class="absolute inset-0 flex flex-col items-center justify-start transition-opacity duration-500"
-                style={{
-                  opacity: i === activeIndex.value ? 1 : 0,
-                  pointerEvents: i === activeIndex.value ? "auto" : "none",
-                }}
-              >
-                <p
-                  class="text-lg sm:text-xl font-semibold text-center"
-                  style={{ color: "var(--color-page-text)" }}
-                >
-                  {uc.title}
-                </p>
-                <p
-                  class="text-sm text-center mt-1.5 max-w-md"
-                  style={{ color: "var(--color-page-text-muted)" }}
-                >
-                  {uc.description}
-                </p>
-              </div>
-            ))}
-          </div>
+            class="w-px flex-1 mt-2"
+            style={{ backgroundColor: "var(--color-page-border)" }}
+          />
+        )}
+      </div>
 
-          {/* Panels */}
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start justify-items-center">
-            <div class="max-w-[420px] w-full">
-              {/* Crossfading settings label */}
-              <div class="relative mb-2" style={{ height: "20px" }}>
-                {useCases.map((uc, i) => (
-                  <p
-                    key={uc.id}
-                    class="absolute inset-0 text-xs font-medium transition-opacity duration-500"
-                    style={{
-                      color: "var(--color-page-text-muted)",
-                      opacity: i === activeIndex.value ? 1 : 0,
-                    }}
-                  >
-                    {uc.settingsLabel}
-                  </p>
-                ))}
-              </div>
-              <SettingsDemo openSections={openSections} />
-            </div>
-            <div class="max-w-[420px] w-full">
-              {/* Crossfading chat label */}
-              <div class="relative mb-2" style={{ height: "20px" }}>
-                {useCases.map((uc, i) => (
-                  <p
-                    key={uc.id}
-                    class="absolute inset-0 text-xs font-medium transition-opacity duration-500"
-                    style={{
-                      color: "var(--color-page-text-muted)",
-                      opacity: i === activeIndex.value ? 1 : 0,
-                    }}
-                  >
-                    {uc.chatLabel}
-                  </p>
-                ))}
-              </div>
-              <TelegramChat
-                useCase={activeCase}
-                progress={stepProgress.value}
-              />
-            </div>
-          </div>
+      {/* Right column: chat */}
+      <div class="pb-8 md:pb-12 md:pl-4">
+        <p
+          class="text-xs font-medium mb-2"
+          style={{ color: "var(--color-page-text-muted)" }}
+        >
+          {uc.chatLabel}
+        </p>
+        <TelegramChat useCase={uc} />
+      </div>
+    </div>
+  );
+}
+
+export function DemoSection() {
+  return (
+    <section class="py-14 px-8">
+      <div class="max-w-[60rem] mx-auto">
+        <h2
+          class="text-2xl sm:text-3xl font-bold text-center mb-12 tracking-tight"
+          style={{ color: "var(--color-page-text)" }}
+        >
+          How it works
+        </h2>
+
+        <div>
+          {useCases.map((uc, i) => (
+            <FeatureRow
+              key={uc.id}
+              uc={uc}
+              index={i}
+              isLast={i === useCases.length - 1}
+            />
+          ))}
         </div>
       </div>
     </section>

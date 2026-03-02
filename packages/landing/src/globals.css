@@ -4,19 +4,22 @@
 @source "../../gateway/src/routes/public/settings-page/**/*.tsx";
 
 @theme {
-  --color-page-bg: rgb(8, 10, 12);
-  --color-page-surface: rgba(17, 19, 24, 0.8);
-  --color-page-surface-dim: rgba(17, 19, 24, 0.4);
+  --color-page-bg: rgb(9, 9, 11);
+  --color-page-bg-elevated: rgb(14, 14, 18);
+  --color-page-bg-overlay: rgba(9, 9, 11, 0.8);
+  --color-page-surface: rgba(18, 18, 22, 0.8);
+  --color-page-surface-dim: rgba(18, 18, 22, 0.4);
   --color-page-border: rgba(45, 54, 67, 0.5);
   --color-page-border-active: rgba(148, 163, 184, 0.5);
-  --color-page-text: rgb(248, 250, 252);
-  --color-page-text-muted: rgb(117, 136, 163);
+  --color-page-text: rgb(250, 250, 250);
+  --color-page-text-muted: rgb(120, 130, 150);
 
   --color-tg-bg: rgb(33, 33, 33);
   --color-tg-bg-secondary: rgb(15, 15, 15);
-  --color-tg-bubble-out: #b91c1c;
+  --color-tg-bubble-out: #c2410c;
   --color-tg-bubble-in: rgb(33, 33, 33);
-  --color-tg-accent: #ef4444;
+  --color-tg-accent: #f97316;
+  --color-tg-accent-rgb: 249, 115, 22;
   --color-tg-border: rgb(48, 48, 48);
   --color-tg-text: white;
   --color-tg-meta: rgba(255, 255, 255, 0.533);
@@ -25,105 +28,60 @@
 html {
   background-color: var(--color-page-bg);
   color: var(--color-page-text);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
-  scroll-behavior: smooth;
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
 }
 
 body {
   margin: 0;
 }
 
-/* Typing animation */
-@keyframes typing-dot {
-  0%,
-  60%,
-  100% {
-    opacity: 0.3;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
+/* Vercel-style edge lines */
+.grid-lines {
+  --grid-color: rgba(255, 255, 255, 0.06);
+  --grid-max-w: 64rem;
+  position: relative;
 }
 
-.typing-dot {
-  animation: typing-dot 1.4s infinite;
-}
-.typing-dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.typing-dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-/* Message appear animation */
-@keyframes msg-appear {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.grid-lines::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(var(--grid-max-w), calc(100% - 3rem));
+  pointer-events: none;
+  z-index: 0;
+  border-left: 1px solid var(--grid-color);
+  border-right: 1px solid var(--grid-color);
 }
 
-.msg-appear {
-  animation: msg-appear 0.3s ease-out forwards;
+/* Section divider with + marks */
+.section-divider {
+  position: relative;
+  height: 1px;
+  background-color: var(--grid-color);
+  max-width: min(64rem, calc(100% - 3rem));
+  margin: 1rem auto;
 }
 
-/* Settings slide up */
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+.section-divider::before,
+.section-divider::after {
+  content: "+";
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.15);
 }
 
-.slide-up {
-  animation: slide-up 0.4s ease-out forwards;
+.section-divider::before {
+  left: 0;
 }
 
-/* Fade in */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.fade-in {
-  animation: fade-in 0.6s ease-out forwards;
-}
-
-/* Card hover glow */
-.card-glow {
-  transition:
-    box-shadow 0.3s ease,
-    border-color 0.3s ease;
-}
-.card-glow:hover {
-  box-shadow:
-    0 0 24px rgba(239, 68, 68, 0.12),
-    0 0 48px rgba(239, 68, 68, 0.06);
-  border-color: rgba(239, 68, 68, 0.3);
-}
-
-/* Gateway pulse */
-@keyframes gateway-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.35);
-  }
-}
-.gateway-pulse {
-  animation: gateway-pulse 3s ease-in-out infinite;
+.section-divider::after {
+  right: 0;
+  transform: translate(50%, -50%);
 }

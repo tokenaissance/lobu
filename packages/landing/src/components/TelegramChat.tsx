@@ -1,27 +1,7 @@
-import { useEffect, useRef } from "preact/hooks";
 import type { ChatMessage, UseCase } from "../types";
 
 interface Props {
   useCase: UseCase;
-  progress: number;
-}
-
-function TypingIndicator() {
-  return (
-    <div class="flex justify-start msg-appear">
-      <div
-        class="px-4 py-3 rounded-[15px] rounded-bl-[6px] flex gap-1.5 items-center"
-        style={{
-          backgroundColor: "var(--color-tg-bubble-in)",
-          border: "1px solid var(--color-tg-border)",
-        }}
-      >
-        <span class="typing-dot w-2 h-2 rounded-full bg-white/60 inline-block" />
-        <span class="typing-dot w-2 h-2 rounded-full bg-white/60 inline-block" />
-        <span class="typing-dot w-2 h-2 rounded-full bg-white/60 inline-block" />
-      </div>
-    </div>
-  );
 }
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
@@ -29,7 +9,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   const time = isUser ? "12:01" : "12:01";
 
   return (
-    <div class={`flex ${isUser ? "justify-end" : "justify-start"} msg-appear`}>
+    <div class={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div class="max-w-[85%]">
         <div
           class={`px-3.5 py-2 text-[13.5px] leading-[1.35] whitespace-pre-wrap ${
@@ -61,9 +41,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             key={btn.label}
             class="w-full mt-1 py-2 text-[13px] font-medium rounded-lg cursor-default transition-colors"
             style={{
-              backgroundColor: "rgba(239, 68, 68, 0.15)",
+              backgroundColor: "rgba(var(--color-tg-accent-rgb), 0.15)",
               color: "var(--color-tg-accent)",
-              border: "1px solid rgba(239, 68, 68, 0.3)",
+              border: "1px solid rgba(var(--color-tg-accent-rgb), 0.3)",
             }}
           >
             {btn.label}
@@ -74,30 +54,10 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
-export function TelegramChat({ useCase, progress }: Props) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const messages = useCase.messages;
-
-  // Derive visible count and typing from scroll progress
-  const messageProgress = progress * (messages.length + 1);
-  const visibleCount = Math.min(Math.floor(messageProgress), messages.length);
-  const fractional = messageProgress - Math.floor(messageProgress);
-  const nextMessage = messages[visibleCount];
-  const showTyping =
-    visibleCount < messages.length &&
-    nextMessage.role === "bot" &&
-    fractional > 0.3;
-
-  // Auto-scroll chat container when messages change
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  });
-
+export function TelegramChat({ useCase }: Props) {
   return (
     <div
-      class="rounded-xl overflow-hidden w-full max-w-[420px] mx-auto shadow-2xl"
+      class="rounded-xl overflow-hidden w-full"
       style={{ border: "1px solid var(--color-tg-border)" }}
     >
       {/* Header */}
@@ -106,7 +66,6 @@ export function TelegramChat({ useCase, progress }: Props) {
         style={{ backgroundColor: "var(--color-tg-bg-secondary)" }}
       >
         <div class="flex items-center gap-3 flex-1 min-w-0">
-          {/* Back arrow */}
           <svg
             width="20"
             height="20"
@@ -123,12 +82,10 @@ export function TelegramChat({ useCase, progress }: Props) {
               stroke-linejoin="round"
             />
           </svg>
-          {/* Avatar */}
           <div
             class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0"
             style={{
-              background:
-                "linear-gradient(135deg, var(--color-tg-accent), var(--color-tg-bubble-out))",
+              background: "var(--color-tg-accent)",
             }}
           >
             L
@@ -139,7 +96,7 @@ export function TelegramChat({ useCase, progress }: Props) {
               <span
                 class="text-[10px] px-1 py-0.5 rounded font-medium"
                 style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  backgroundColor: "rgba(var(--color-tg-accent-rgb), 0.2)",
                   color: "var(--color-tg-accent)",
                 }}
               >
@@ -147,11 +104,10 @@ export function TelegramChat({ useCase, progress }: Props) {
               </span>
             </div>
             <div class="text-[11px]" style={{ color: "var(--color-tg-meta)" }}>
-              {showTyping ? "typing..." : "online"}
+              online
             </div>
           </div>
         </div>
-        {/* Icons */}
         <div class="flex gap-3 opacity-40">
           <svg
             width="18"
@@ -189,17 +145,14 @@ export function TelegramChat({ useCase, progress }: Props) {
 
       {/* Messages */}
       <div
-        ref={scrollRef}
-        class="flex flex-col gap-2 px-3 py-4 overflow-y-auto"
+        class="flex flex-col gap-2 px-3 py-4"
         style={{
           backgroundColor: "var(--color-tg-bg-secondary)",
-          height: "340px",
         }}
       >
-        {messages.slice(0, visibleCount).map((msg, i) => (
+        {useCase.messages.map((msg, i) => (
           <MessageBubble key={`${useCase.id}-${i}`} msg={msg} />
         ))}
-        {showTyping && <TypingIndicator />}
       </div>
 
       {/* Input bar */}
@@ -210,7 +163,6 @@ export function TelegramChat({ useCase, progress }: Props) {
           borderTop: "1px solid var(--color-tg-border)",
         }}
       >
-        {/* Emoji */}
         <svg
           width="22"
           height="22"
@@ -244,7 +196,6 @@ export function TelegramChat({ useCase, progress }: Props) {
         >
           Message
         </div>
-        {/* Attach */}
         <svg
           width="22"
           height="22"
@@ -260,7 +211,6 @@ export function TelegramChat({ useCase, progress }: Props) {
             stroke-linecap="round"
           />
         </svg>
-        {/* Mic */}
         <svg
           width="22"
           height="22"

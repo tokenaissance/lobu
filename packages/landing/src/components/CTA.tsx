@@ -1,10 +1,11 @@
-const TELEGRAM_BOT_URL = "https://t.me/lobuaibot";
+import { TryDropdown } from "./TryDropdown";
+
 const GITHUB_URL = "https://github.com/lobu-ai/lobu";
 const SCHEDULE_CALL_URL = "https://calendar.app.google/LwAk3ecptkJQaYr87";
 
 export function CTA() {
   return (
-    <section class="py-20 px-4 text-center">
+    <section class="py-14 px-8 text-center">
       <div class="max-w-2xl mx-auto">
         <h2
           class="text-2xl sm:text-3xl font-bold mb-3 tracking-tight"
@@ -19,19 +20,7 @@ export function CTA() {
           Get running in under a minute — or talk to us about your use case.
         </p>
         <div class="flex flex-wrap justify-center gap-3">
-          <a
-            href={TELEGRAM_BOT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-lg transition-all hover:opacity-90 hover:-translate-y-0.5"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--color-tg-accent), var(--color-tg-bubble-out))",
-              color: "white",
-            }}
-          >
-            Try on Telegram
-          </a>
+          <TryDropdown />
           <a
             href={GITHUB_URL}
             target="_blank"

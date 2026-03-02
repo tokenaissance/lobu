@@ -7,12 +7,12 @@ export function Nav() {
     <nav
       class="fixed top-0 left-0 right-0 z-50 px-4 py-3"
       style={{
-        backgroundColor: "rgba(8, 10, 12, 0.8)",
+        backgroundColor: "var(--color-page-bg-overlay)",
         backdropFilter: "blur(12px)",
         borderBottom: "1px solid var(--color-page-border)",
       }}
     >
-      <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="max-w-5xl mx-auto flex items-center justify-between">
         <a
           href="/"
           class="flex items-center gap-2 text-lg font-bold tracking-tight"

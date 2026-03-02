@@ -12,20 +12,20 @@ export const useCases: UseCase[] = [
     messages: [
       {
         role: "user",
-        text: "Hey, can you help me write a blog post?",
+        text: "Help me write a blog post",
       },
       {
         role: "bot",
-        text: "I'd love to help! First, I need an AI model to work with. Click below to set me up.",
+        text: "I need an AI model first. Set me up below.",
         buttons: [{ label: "Open Settings", action: "settings" }],
       },
       {
         role: "user",
-        text: "Ok I'm set up, help me write that blog post",
+        text: "Done, let's go",
       },
       {
         role: "bot",
-        text: "Great! Here's a draft outline:\n\n1. Hook with a compelling question\n2. Share your key insight with examples\n3. Close with a clear takeaway\n\nWant me to expand on any section?",
+        text: "Here's an outline:\n1. Hook with a question\n2. Key insight + examples\n3. Clear takeaway\n\nExpand any section?",
       },
     ],
   },
@@ -40,11 +40,11 @@ export const useCases: UseCase[] = [
     messages: [
       {
         role: "user",
-        text: "Convert this video to a gif and compress it under 5MB",
+        text: "Convert this video to a gif under 5MB",
       },
       {
         role: "bot",
-        text: "I need ffmpeg and gifsicle for that. Can I install them?",
+        text: "I need ffmpeg and gifsicle. Install them?",
         buttons: [{ label: "Approve Installation", action: "link" }],
       },
       {
@@ -53,11 +53,11 @@ export const useCases: UseCase[] = [
       },
       {
         role: "bot",
-        text: "Installed ffmpeg and gifsicle via Nix. These will persist across sessions.\n\nConverting now — optimizing for size with gifsicle.",
+        text: "Installed via Nix. These persist across sessions.\n\nConverting now...",
       },
       {
         role: "bot",
-        text: "Done! output.gif is 4.2MB (from 28MB video). Want me to adjust the frame rate or resolution?",
+        text: "Done! 4.2 MB (from 28 MB). Adjust frame rate?",
       },
     ],
   },
@@ -76,20 +76,16 @@ export const useCases: UseCase[] = [
       },
       {
         role: "bot",
-        text: "I don't have email access yet. Let me check available integrations...",
-      },
-      {
-        role: "bot",
-        text: "Found a Gmail MCP server. You'll need to authorize access first.",
+        text: "No email access yet. Found a Gmail integration.",
         buttons: [{ label: "Connect Gmail", action: "link" }],
       },
       {
         role: "user",
-        text: "Done, go ahead",
+        text: "Connected",
       },
       {
         role: "bot",
-        text: "Your inbox summary:\n\n• 3 from team — sprint planning\n• 1 from CEO — Q1 review deck\n• 2 newsletters (skipped)\n\nWant me to draft a reply to any of these?",
+        text: "Inbox summary:\n• 3 from team — sprint planning\n• 1 from CEO — Q1 deck\n• 2 newsletters (skipped)\n\nDraft a reply?",
       },
     ],
   },
@@ -104,20 +100,20 @@ export const useCases: UseCase[] = [
     messages: [
       {
         role: "user",
-        text: "Every Monday at 9am, check my GitHub PRs and summarize what needs review",
+        text: "Every Monday 9am, check my PRs",
       },
       {
         role: "bot",
-        text: "I'll create a recurring schedule for that:\n\n⏰ Every Monday 9:00 AM\n📋 Check open PRs → summarize review queue\n\nApprove?",
+        text: "⏰ Mon 9 AM — check open PRs\n\nApprove?",
         buttons: [{ label: "Approve Schedule", action: "link" }],
       },
       {
         role: "user",
-        text: "Approved. Also remind me tomorrow at 2pm to review the Q1 deck",
+        text: "Yes. Also remind me tomorrow 2pm to review Q1 deck",
       },
       {
         role: "bot",
-        text: "One-off reminder set for tomorrow 2:00 PM.\n\nTwo schedules active:\n1. Weekly PR summary — Mon 9:00 AM (recurring)\n2. Review Q1 deck — Tomorrow 2:00 PM (one-off)\n\nI'll message you when each one triggers.",
+        text: "Two schedules active:\n1. PR summary — Mon 9 AM (recurring)\n2. Q1 deck — Tomorrow 2 PM (one-off)\n\nI'll ping you when they trigger.",
       },
     ],
   },
@@ -132,20 +128,20 @@ export const useCases: UseCase[] = [
     messages: [
       {
         role: "user",
-        text: "Fetch the latest pricing from api.stripe.com and update our docs",
+        text: "Clone my repo and install dependencies",
       },
       {
         role: "bot",
-        text: "I can't reach api.stripe.com — it's not in my allowed domains.\n\nCurrent access:\n• api.github.com ✓\n• registry.npmjs.org ✓\n\nAdd api.stripe.com to my permissions?",
-        buttons: [{ label: "Allow api.stripe.com", action: "link" }],
+        text: "Can't reach github.com — not in allowed domains.\n\nGrant access?",
+        buttons: [{ label: "Allow for 1 hour", action: "link" }],
       },
       {
         role: "user",
-        text: "Allowed, go ahead",
+        text: "Allow it permanently",
       },
       {
         role: "bot",
-        text: "Got it. Fetched the latest pricing tiers from Stripe.\n\nUpdated docs/pricing.md with the new rates. Want me to commit and open a PR?",
+        text: "github.com added to always-allow list.\n\nCloned the repo and ran npm install. Ready to go.",
       },
     ],
   },

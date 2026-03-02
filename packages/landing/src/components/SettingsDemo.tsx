@@ -15,14 +15,14 @@ export function SettingsDemo({
 }) {
   return (
     <div
-      class="rounded-xl overflow-hidden shadow-2xl"
+      class="rounded-xl overflow-hidden"
       style={{ border: "1px solid rgba(255,255,255,0.08)" }}
     >
       {/* Phone-style header */}
       <div
         class="flex items-center justify-between px-4 py-2.5"
         style={{
-          backgroundColor: "rgb(14, 14, 18)",
+          backgroundColor: "var(--color-page-bg-elevated)",
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}
       >
@@ -30,8 +30,7 @@ export function SettingsDemo({
           <div
             class="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
             style={{
-              background:
-                "linear-gradient(135deg, var(--color-tg-accent), var(--color-tg-bubble-out))",
+              background: "var(--color-tg-accent)",
             }}
           >
             L
