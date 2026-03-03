@@ -235,6 +235,11 @@ export class WorkerGateway {
         this.jobRouter.acknowledgeJob(jobId);
       }
 
+      // Delivery receipts (worker ACKs) have no message payload — just acknowledge and return
+      if (responseData.received) {
+        return c.json({ success: true });
+      }
+
       // Log for debugging
       logger.info(
         `[WORKER-GATEWAY] Received response with fields: ${Object.keys(responseData).join(", ")}`
