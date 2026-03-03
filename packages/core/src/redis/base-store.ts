@@ -106,6 +106,34 @@ export abstract class BaseRedisStore<T> {
   }
 
   /**
+   * Scan for all keys matching a prefix (cursor-based, production-safe).
+   * Returns full key strings matching `{prefix}*`.
+   */
+  protected async scanByPrefix(prefix: string): Promise<string[]> {
+    const results: string[] = [];
+    let cursor = "0";
+    try {
+      do {
+        const [nextCursor, keys] = await this.redis.scan(
+          cursor,
+          "MATCH",
+          `${prefix}*`,
+          "COUNT",
+          100
+        );
+        cursor = nextCursor;
+        results.push(...keys);
+      } while (cursor !== "0");
+    } catch (error) {
+      this.logger.error("Failed to scan by prefix", {
+        error: errMsg(error),
+        prefix,
+      });
+    }
+    return results;
+  }
+
+  /**
    * Check if key exists in Redis
    */
   protected async exists(key: string): Promise<boolean> {

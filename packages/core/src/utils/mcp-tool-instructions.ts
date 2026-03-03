@@ -7,10 +7,13 @@ export interface McpToolDef {
 /**
  * Build markdown instructions documenting available MCP tools
  * with example curl commands for workers to call them.
+ * Optionally includes server-provided instructions (from MCP initialize)
+ * co-located with each server's tools.
  */
 export function buildMcpToolInstructions(
   mcpTools: Record<string, McpToolDef[]>,
-  dispatcherUrl: string
+  dispatcherUrl: string,
+  mcpInstructions?: Record<string, string>
 ): string {
   const mcpIds = Object.keys(mcpTools);
   if (mcpIds.length === 0) return "";
@@ -29,6 +32,12 @@ export function buildMcpToolInstructions(
     if (!tools || tools.length === 0) continue;
 
     lines.push(`### ${mcpId}`, "");
+
+    // Include server-provided instructions if available
+    const serverInstructions = mcpInstructions?.[mcpId];
+    if (serverInstructions) {
+      lines.push(`**Server instructions:** ${serverInstructions}`, "");
+    }
 
     for (const tool of tools) {
       lines.push(

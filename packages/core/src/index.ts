@@ -8,8 +8,23 @@ export { CommandRegistry } from "./command-registry";
 export * from "./constants";
 // Errors & logging
 export * from "./errors";
+// Integration types
+export type {
+  AgentIntegrationConfig,
+  IntegrationAccountInfo,
+  IntegrationApiKeyConfig,
+  IntegrationApiResponse,
+  IntegrationAuthType,
+  IntegrationConfig,
+  IntegrationCredentialRecord,
+  IntegrationInfo,
+  IntegrationOAuthConfig,
+  IntegrationScopesConfig,
+  SystemSkillEntry,
+  SystemSkillIntegration,
+  SystemSkillsConfigFile,
+} from "./integration-types";
 export * from "./logger";
-
 // Module system
 export type { ActionButton, ModuleSessionContext } from "./modules";
 export * from "./modules";
@@ -39,6 +54,11 @@ export type {
   PluginsConfig,
   ProviderRegistration,
 } from "./plugin-types";
+// Config-driven provider types
+export type {
+  ConfigProviderMeta,
+  ProviderConfigEntry,
+} from "./provider-config-types";
 // Redis & worker helpers
 export * from "./redis/base-store";
 // Observability
@@ -61,12 +81,16 @@ export type {
   NixConfig,
   SessionContext,
   SkillConfig,
+  SkillIntegration,
+  SkillMcpServer,
   SkillsConfig,
   SuggestedPrompt,
   ThreadResponsePayload,
   ToolsConfig,
   UserSuggestion,
 } from "./types";
+
+export { normalizeSkillIntegration } from "./types";
 
 // Utilities
 export * from "./utils/encryption";

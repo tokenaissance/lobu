@@ -15,7 +15,9 @@
       "!**/workspaces/**",
       "!**/.claude/debug/**",
       "!**/dist/**",
-      "!**/node_modules/**"
+      "!**/node_modules/**",
+      "!**/.astro/**",
+      "!**/tmp/**"
     ]
   },
   "formatter": {
@@ -136,11 +138,28 @@
       }
     },
     {
-      "includes": ["**/settings-input.css", "**/landing/src/globals.css"],
+      "includes": ["**/*.astro"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/settings-input.css",
+        "**/landing/src/globals.css",
+        "**/landing/src/styles/**"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
             "noUnknownAtRules": "off"
+          },
+          "complexity": {
+            "noImportantStyles": "off"
           }
         }
       }

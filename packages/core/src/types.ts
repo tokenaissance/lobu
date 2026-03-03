@@ -83,6 +83,45 @@ export interface ConversationMessage {
 // ============================================================================
 
 /**
+ * Rich integration declared by a skill.
+ * Carries OAuth scopes, API domains, and auth type.
+ */
+export interface SkillIntegration {
+  id: string;
+  label?: string;
+  authType?: "oauth" | "api-key";
+  oauth?: import("./integration-types").IntegrationOAuthConfig;
+  scopesConfig?: { default: string[]; available: string[] };
+  scopes?: string[];
+  apiDomains?: string[];
+}
+
+/**
+ * MCP server declared by a skill manifest.
+ */
+export interface SkillMcpServer {
+  id: string;
+  name?: string;
+  url?: string;
+  type?: "sse" | "stdio";
+  command?: string;
+  args?: string[];
+}
+
+/**
+ * Normalize a skill integration entry (string or object) to a SkillIntegration.
+ * Used at parse boundaries to convert legacy string-only format.
+ */
+export function normalizeSkillIntegration(
+  entry: string | SkillIntegration
+): SkillIntegration {
+  if (typeof entry === "string") {
+    return { id: entry };
+  }
+  return entry;
+}
+
+/**
  * Individual skill configuration.
  * Skills are SKILL.md files from GitHub repos that provide instructions to Claude.
  */
@@ -95,10 +134,22 @@ export interface SkillConfig {
   description?: string;
   /** Whether this skill is currently enabled */
   enabled: boolean;
+  /** True for system-defined skills (from system-skills.json). Cannot be removed by users. */
+  system?: boolean;
   /** Cached SKILL.md content (fetched from GitHub) */
   content?: string;
   /** When the content was last fetched (timestamp ms) */
   contentFetchedAt?: number;
+  /** Required integrations declared by the skill */
+  integrations?: SkillIntegration[];
+  /** MCP servers declared by the skill */
+  mcpServers?: SkillMcpServer[];
+  /** System packages declared by the skill (nix) */
+  nixPackages?: string[];
+  /** Network domains the skill needs access to */
+  permissions?: string[];
+  /** AI providers the skill requires */
+  providers?: string[];
 }
 
 /**
