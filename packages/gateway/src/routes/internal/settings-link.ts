@@ -202,7 +202,10 @@ export function createSettingsLinkRoutes(
           platform,
         },
       });
-      const url = buildSettingsUrl(token);
+      // Telegram web_app buttons replace URL hash fragments, so use query param
+      const url = buildSettingsUrl(token, {
+        useQueryParam: platform === "telegram",
+      });
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
       logger.info("Settings link generated", { agentId, userId, expiresAt });

@@ -397,9 +397,15 @@ export class McpOAuthModule extends BaseModule {
           agentId,
           id
         );
-        // Show as authenticated if credentials exist, even if expired
-        // Auto-refresh will handle expired tokens when MCP is used
-        isAuthenticated = !!credentials?.accessToken;
+        // Check token existence and expiry — stale tokens without a
+        // refresh token should show as unauthenticated so login triggers.
+        const hasToken = !!credentials?.accessToken;
+        const isExpired =
+          hasToken &&
+          credentials!.expiresAt != null &&
+          credentials!.expiresAt <= Date.now();
+        const canRefresh = isExpired && !!credentials!.refreshToken;
+        isAuthenticated = hasToken && (!isExpired || canRefresh);
         metadata = credentials?.metadata;
       } else {
         // Input-based authentication

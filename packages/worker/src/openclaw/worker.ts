@@ -42,7 +42,12 @@ import {
   registerDynamicProvider,
   resolveModelRef,
 } from "./model-resolver";
-import { loadPlugins } from "./plugin-loader";
+import {
+  loadPlugins,
+  runPluginHooks,
+  startPluginServices,
+  stopPluginServices,
+} from "./plugin-loader";
 import { OpenClawProgressProcessor } from "./processor";
 import { getOpenClawSessionContext } from "./session-context";
 import {
@@ -574,7 +579,7 @@ Use it when the user references past discussions or you need context.`);
 
     // Load OpenClaw plugins
     const pluginsConfig = rawOptions.pluginsConfig as PluginsConfig | undefined;
-    const loadedPlugins = await loadPlugins(pluginsConfig);
+    const loadedPlugins = await loadPlugins(pluginsConfig, workspaceDir);
     const pluginTools = loadedPlugins.flatMap((p) => p.tools);
 
     if (pluginTools.length > 0) {
@@ -597,6 +602,7 @@ Use it when the user references past discussions or you need context.`);
         );
       }
     }
+    await startPluginServices(loadedPlugins);
 
     logger.info(
       `Starting OpenClaw session: provider=${provider}, model=${modelId}, tools=${tools.length}, customTools=${customTools.length}`
@@ -606,9 +612,17 @@ Use it when the user references past discussions or you need context.`);
     const HEARTBEAT_INTERVAL_MS = 20000;
     let heartbeatTimer: Timer | null = null;
     let deltaTimer: Timer | null = null;
+    let session:
+      | Awaited<ReturnType<typeof createAgentSession>>["session"]
+      | null = null;
+    const pluginHookContext: Record<string, unknown> = {
+      cwd: workspaceDir,
+      sessionKey: this.config.sessionKey,
+      messageProvider: this.config.platform,
+    };
 
     try {
-      const { session } = await createAgentSession({
+      const createdSession = await createAgentSession({
         cwd: workspaceDir,
         model,
         tools,
@@ -618,6 +632,7 @@ Use it when the user references past discussions or you need context.`);
         authStorage,
         modelRegistry,
       });
+      session = createdSession.session;
 
       const basePrompt = session.systemPrompt;
       session.agent.setSystemPrompt(`${basePrompt}\n\n${finalInstructions}`);
@@ -724,13 +739,40 @@ Use it when the user references past discussions or you need context.`);
         configNotice = `[System notice: Your configuration was updated since the last message]\n${lines.join("\n")}\n\n`;
       }
 
-      const effectivePrompt = `${configNotice}${sessionSummary ? `${sessionSummary}\n\n` : ""}${userPrompt}`;
+      const beforeAgentStartResults = await runPluginHooks({
+        plugins: loadedPlugins,
+        hook: "before_agent_start",
+        event: {
+          prompt: userPrompt,
+          messages: session.messages as unknown as Record<string, unknown>[],
+        },
+        ctx: pluginHookContext,
+      });
+      const prependContexts = beforeAgentStartResults
+        .flatMap((result) => {
+          if (!result || typeof result !== "object") return [];
+          const prepend = (result as Record<string, unknown>).prependContext;
+          if (typeof prepend !== "string" || !prepend.trim()) return [];
+          return [prepend.trim()];
+        })
+        .join("\n\n");
+
+      const effectivePrompt = `${configNotice}${sessionSummary ? `${sessionSummary}\n\n` : ""}${prependContexts ? `${prependContexts}\n\n` : ""}${userPrompt}`;
       await session.prompt(effectivePrompt);
       await done;
-      session.dispose();
 
       const sessionError = this.progressProcessor.consumeFatalErrorMessage();
       if (sessionError) {
+        await runPluginHooks({
+          plugins: loadedPlugins,
+          hook: "agent_end",
+          event: {
+            success: false,
+            error: sessionError,
+            messages: session.messages as unknown as Record<string, unknown>[],
+          },
+          ctx: pluginHookContext,
+        });
         const errorWithHint = await this.maybeBuildAuthHintMessage(
           sessionError,
           provider,
@@ -747,6 +789,16 @@ Use it when the user references past discussions or you need context.`);
         };
       }
 
+      await runPluginHooks({
+        plugins: loadedPlugins,
+        hook: "agent_end",
+        event: {
+          success: true,
+          messages: session.messages as unknown as Record<string, unknown>[],
+        },
+        ctx: pluginHookContext,
+      });
+
       return {
         success: true,
         exitCode: 0,
@@ -755,6 +807,18 @@ Use it when the user references past discussions or you need context.`);
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (session) {
+        await runPluginHooks({
+          plugins: loadedPlugins,
+          hook: "agent_end",
+          event: {
+            success: false,
+            error: errorMsg,
+            messages: session.messages as unknown as Record<string, unknown>[],
+          },
+          ctx: pluginHookContext,
+        });
+      }
       const errorWithHint = await this.maybeBuildAuthHintMessage(
         errorMsg,
         provider,
@@ -781,6 +845,11 @@ Use it when the user references past discussions or you need context.`);
         deltaTimer = null;
         logger.debug("Delta batch timer cleared");
       }
+      if (session) {
+        session.dispose();
+        session = null;
+      }
+      await stopPluginServices(loadedPlugins);
     }
   }
 

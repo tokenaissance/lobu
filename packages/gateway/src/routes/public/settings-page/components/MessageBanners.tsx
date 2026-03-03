@@ -1,6 +1,26 @@
 import { useSignal } from "@preact/signals";
+import { Marked } from "marked";
+import { useEffect, useMemo } from "preact/hooks";
 import * as api from "../api";
 import { useSettings } from "../app";
+
+const marked = new Marked({ async: false });
+
+/** Resolved skill details fetched from the registry */
+interface ResolvedSkillDetail {
+  repo: string;
+  name: string;
+  description: string;
+  content?: string;
+  integrations?: Array<{
+    id: string;
+    label?: string;
+    authType?: "oauth" | "api-key";
+  }>;
+  mcpServers?: Array<{ id: string; name?: string; url?: string }>;
+  nixPackages?: string[];
+  permissions?: string[];
+}
 
 export function MessageBanners() {
   const ctx = useSettings();
@@ -135,6 +155,8 @@ function PendingApiKeyRow({
 
 function PrefillBanner() {
   const ctx = useSettings();
+  const resolvedSkills = useSignal<ResolvedSkillDetail[]>([]);
+  const skillsLoading = useSignal(false);
 
   const hasPrefills =
     ctx.prefillGrants.value.length > 0 ||
@@ -142,6 +164,43 @@ function PrefillBanner() {
     ctx.prefillEnvVars.value.length > 0 ||
     ctx.prefillSkills.value.length > 0 ||
     ctx.prefillMcpServers.value.length > 0;
+
+  // Eagerly fetch skill details when banner mounts
+  useEffect(() => {
+    if (
+      ctx.prefillSkills.value.length === 0 ||
+      ctx.prefillBannerDismissed.value
+    )
+      return;
+
+    skillsLoading.value = true;
+    Promise.all(
+      ctx.prefillSkills.value.map(async (s) => {
+        try {
+          const fetched = await api.fetchSkillContent(s.repo);
+          return {
+            repo: s.repo,
+            name: fetched.name || s.name || s.repo,
+            description: fetched.description || s.description || "",
+            content: fetched.content,
+            integrations: fetched.integrations,
+            mcpServers: fetched.mcpServers,
+            nixPackages: fetched.nixPackages,
+            permissions: fetched.permissions,
+          } satisfies ResolvedSkillDetail;
+        } catch {
+          return {
+            repo: s.repo,
+            name: s.name || s.repo,
+            description: s.description || "",
+          } satisfies ResolvedSkillDetail;
+        }
+      })
+    ).then((results) => {
+      resolvedSkills.value = results;
+      skillsLoading.value = false;
+    });
+  }, []);
 
   if (!hasPrefills || ctx.prefillBannerDismissed.value) return null;
 
@@ -170,7 +229,7 @@ function PrefillBanner() {
         ctx.nixPackages.value = merged;
       }
 
-      // 3. Fetch and add prefill skills locally
+      // 3. Add prefill skills locally (reuse already-fetched data when available)
       const failures: string[] = [];
       for (const skill of ctx.prefillSkills.value) {
         if (ctx.skills.value.some((s) => s.repo === skill.repo)) continue;
@@ -185,6 +244,10 @@ function PrefillBanner() {
               enabled: true,
               content: fetched.content,
               contentFetchedAt: fetched.fetchedAt,
+              integrations: fetched.integrations,
+              mcpServers: fetched.mcpServers,
+              nixPackages: fetched.nixPackages,
+              permissions: fetched.permissions,
             },
           ];
         } catch {
@@ -243,37 +306,36 @@ function PrefillBanner() {
         </div>
       </div>
       <div class="space-y-2 mb-3">
-        {ctx.prefillGrants.value.length > 0 && (
+        {ctx.prefillSkills.value.length > 0 && (
           <div>
             <p class="text-xs font-medium text-amber-800 mb-1">
-              &#127760; Network Access Domains
+              &#9889; Skills
             </p>
-            <div class="flex flex-wrap gap-1">
-              {ctx.prefillGrants.value.map((d) => (
-                <span
-                  key={d}
-                  class="inline-block px-1.5 py-0.5 bg-white border border-amber-200 rounded text-xs font-mono text-amber-900"
-                >
-                  {d}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        {ctx.prefillNixPackages.value.length > 0 && (
-          <div>
-            <p class="text-xs font-medium text-amber-800 mb-1">
-              &#128230; System Packages
-            </p>
-            <div class="flex flex-wrap gap-1">
-              {ctx.prefillNixPackages.value.map((p) => (
-                <span
-                  key={p}
-                  class="inline-block px-1.5 py-0.5 bg-white border border-amber-200 rounded text-xs font-mono text-amber-900"
-                >
-                  {p}
-                </span>
-              ))}
+            <div class="space-y-2">
+              {skillsLoading.value ? (
+                <p class="text-xs text-amber-600">Loading skill details...</p>
+              ) : resolvedSkills.value.length > 0 ? (
+                resolvedSkills.value.map((skill) => (
+                  <PrefillSkillCard
+                    key={skill.repo}
+                    skill={skill}
+                    prefillMcpServers={ctx.prefillMcpServers.value}
+                    prefillGrants={ctx.prefillGrants.value}
+                    prefillNixPackages={ctx.prefillNixPackages.value}
+                  />
+                ))
+              ) : (
+                ctx.prefillSkills.value.map((s) => (
+                  <div key={s.repo} class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-amber-900">
+                      {s.name || s.repo}
+                    </span>
+                    <span class="text-xs text-amber-600 font-mono">
+                      {s.repo}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -297,42 +359,63 @@ function PrefillBanner() {
             </p>
           </div>
         )}
-        {ctx.prefillSkills.value.length > 0 && (
-          <div>
-            <p class="text-xs font-medium text-amber-800 mb-1">
-              &#9889; Skills
-            </p>
-            <div class="space-y-1">
-              {ctx.prefillSkills.value.map((s) => (
-                <div key={s.repo} class="flex items-center gap-2">
-                  <span class="text-xs font-medium text-amber-900">
-                    {s.name || s.repo}
+        {/* Show standalone sections only when there are no skills to group them under */}
+        {ctx.prefillSkills.value.length === 0 &&
+          ctx.prefillGrants.value.length > 0 && (
+            <div>
+              <p class="text-xs font-medium text-amber-800 mb-1">
+                &#127760; Network Access Domains
+              </p>
+              <div class="flex flex-wrap gap-1">
+                {ctx.prefillGrants.value.map((d) => (
+                  <span
+                    key={d}
+                    class="inline-block px-1.5 py-0.5 bg-white border border-amber-200 rounded text-xs font-mono text-amber-900"
+                  >
+                    {d}
                   </span>
-                  <span class="text-xs text-amber-600 font-mono">{s.repo}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-        {ctx.prefillMcpServers.value.length > 0 && (
-          <div>
-            <p class="text-xs font-medium text-amber-800 mb-1">
-              &#128268; MCP Servers
-            </p>
-            <div class="space-y-1">
-              {ctx.prefillMcpServers.value.map((m) => (
-                <div key={m.id} class="flex items-center gap-2">
-                  <span class="text-xs font-medium text-amber-900">
-                    {m.name || m.id}
+          )}
+        {ctx.prefillSkills.value.length === 0 &&
+          ctx.prefillNixPackages.value.length > 0 && (
+            <div>
+              <p class="text-xs font-medium text-amber-800 mb-1">
+                &#128230; System Packages
+              </p>
+              <div class="flex flex-wrap gap-1">
+                {ctx.prefillNixPackages.value.map((p) => (
+                  <span
+                    key={p}
+                    class="inline-block px-1.5 py-0.5 bg-white border border-amber-200 rounded text-xs font-mono text-amber-900"
+                  >
+                    {p}
                   </span>
-                  <span class="text-xs text-amber-600 font-mono">
-                    {m.url || ""}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        {ctx.prefillSkills.value.length === 0 &&
+          ctx.prefillMcpServers.value.length > 0 && (
+            <div>
+              <p class="text-xs font-medium text-amber-800 mb-1">
+                &#128268; MCP Servers
+              </p>
+              <div class="space-y-1">
+                {ctx.prefillMcpServers.value.map((m) => (
+                  <div key={m.id} class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-amber-900">
+                      {m.name || m.id}
+                    </span>
+                    <span class="text-xs text-amber-600 font-mono">
+                      {m.url || ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
       </div>
       <div class="flex gap-2">
         <button
@@ -351,6 +434,154 @@ function PrefillBanner() {
           Dismiss
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Expanded card showing skill details.
+ *
+ * Merges two data sources:
+ * 1. Skill's own SKILL.md frontmatter (integrations, mcpServers from registry)
+ * 2. Prefill context data (MCP servers, grants, packages extracted by the worker)
+ *
+ * This ensures the card shows the full picture even when the SKILL.md frontmatter
+ * is sparse — the worker already resolved the manifest and sent the details as
+ * separate prefill fields.
+ */
+function PrefillSkillCard({
+  skill,
+  prefillMcpServers,
+  prefillGrants,
+  prefillNixPackages,
+}: {
+  skill: ResolvedSkillDetail;
+  prefillMcpServers: Array<{ id: string; name?: string; url?: string }>;
+  prefillGrants: string[];
+  prefillNixPackages: string[];
+}) {
+  const contentExpanded = useSignal(false);
+
+  // Merge skill's own sub-items with prefill context data (deduped)
+  const skillMcpIds = new Set(skill.mcpServers?.map((m) => m.id) || []);
+  const extraMcps = prefillMcpServers.filter((m) => !skillMcpIds.has(m.id));
+  const allMcps = [...(skill.mcpServers || []), ...extraMcps];
+
+  const skillPermissions = new Set(skill.permissions || []);
+  const extraGrants = prefillGrants.filter((g) => !skillPermissions.has(g));
+  const allPermissions = [...(skill.permissions || []), ...extraGrants];
+
+  const skillPkgs = new Set(skill.nixPackages || []);
+  const extraPkgs = prefillNixPackages.filter((p) => !skillPkgs.has(p));
+  const allNixPackages = [...(skill.nixPackages || []), ...extraPkgs];
+
+  const hasDetails =
+    (skill.integrations && skill.integrations.length > 0) ||
+    allMcps.length > 0 ||
+    allPermissions.length > 0 ||
+    allNixPackages.length > 0;
+
+  // Strip YAML frontmatter from content for display
+  const bodyContent = skill.content
+    ? skill.content.replace(/^---\n[\s\S]*?\n---\n*/, "").trim()
+    : "";
+
+  return (
+    <div class="bg-white border border-amber-200 rounded-lg p-2.5">
+      <div class="flex items-center gap-2">
+        <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+          skill
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-medium text-gray-800 truncate">{skill.name}</p>
+          {skill.description && (
+            <p class="text-xs text-gray-500 truncate">{skill.description}</p>
+          )}
+        </div>
+        <span class="text-xs text-amber-500 font-mono shrink-0">
+          {skill.repo}
+        </span>
+      </div>
+
+      {hasDetails && (
+        <div class="mt-2 ml-4 pl-2 border-l-2 border-purple-100 space-y-1">
+          {skill.integrations?.map((ig) => (
+            <div key={ig.id} class="flex items-center gap-2 py-0.5">
+              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-amber-50 text-amber-600">
+                {ig.authType || "oauth"}
+              </span>
+              <span class="text-[11px] text-gray-600 truncate">
+                {ig.label || ig.id}
+              </span>
+            </div>
+          ))}
+          {allMcps.map((m) => (
+            <div key={m.id} class="flex items-center gap-2 py-0.5">
+              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-blue-50 text-blue-600">
+                mcp
+              </span>
+              <span class="text-[11px] text-gray-600 truncate">
+                {m.name || m.id}
+              </span>
+              {m.url && (
+                <span class="text-[10px] text-gray-400 font-mono truncate">
+                  {m.url}
+                </span>
+              )}
+            </div>
+          ))}
+          {allPermissions.length > 0 && (
+            <div class="flex items-center gap-2 py-0.5">
+              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-red-50 text-red-600">
+                network
+              </span>
+              <span class="text-[11px] text-gray-600">
+                {allPermissions.join(", ")}
+              </span>
+            </div>
+          )}
+          {allNixPackages.length > 0 && (
+            <div class="flex items-center gap-2 py-0.5">
+              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-green-50 text-green-600">
+                packages
+              </span>
+              <span class="text-[11px] text-gray-600">
+                {allNixPackages.join(", ")}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {bodyContent && <SkillContentToggle content={bodyContent} />}
+    </div>
+  );
+}
+
+/** Collapsible rendered markdown preview of the skill's SKILL.md body */
+function SkillContentToggle({ content }: { content: string }) {
+  const expanded = useSignal(false);
+  const html = useMemo(() => marked.parse(content) as string, [content]);
+
+  return (
+    <div class="mt-2">
+      <button
+        type="button"
+        onClick={() => {
+          expanded.value = !expanded.value;
+        }}
+        class="text-[11px] text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
+      >
+        <span class="text-[10px]">{expanded.value ? "\u25BC" : "\u25B6"}</span>
+        {expanded.value ? "Hide skill content" : "View skill content"}
+      </button>
+      {expanded.value && (
+        <div
+          class="skill-content mt-1.5 p-2.5 bg-gray-50 border border-gray-200 rounded max-h-72 overflow-y-auto text-[11px] text-gray-700 leading-relaxed"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized markdown from skill manifest
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
     </div>
   );
 }

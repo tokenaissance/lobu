@@ -1058,6 +1058,7 @@ export async function startGateway(
     runtime: config.agentDefaults.runtime,
     model: config.agentDefaults.model,
     timeoutMinutes: config.agentDefaults.timeoutMinutes,
+    pluginsConfig: config.agentDefaults.pluginsConfig,
   };
 
   // Register Slack platform if configured

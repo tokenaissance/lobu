@@ -12,7 +12,7 @@ import { TelegramChat } from "./TelegramChat";
 const PANEL_MAP: Record<string, ComponentType> = {
   setup: ModelsPanel,
   packages: PackagesPanel,
-  mcp: IntegrationsPanel,
+  skills: IntegrationsPanel,
   schedules: RemindersPanel,
   network: PermissionsPanel,
 };

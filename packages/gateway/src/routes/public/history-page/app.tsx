@@ -1,4 +1,4 @@
-import { useComputed, useSignal } from "@preact/signals";
+import { useSignal } from "@preact/signals";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { render } from "preact";
 import { useEffect, useRef } from "preact/hooks";
@@ -27,37 +27,17 @@ function App() {
   const cursor = useSignal<string | null>(null);
   const status = useSignal<StatusResponse | null>(null);
   const stats = useSignal<StatsResponse | null>(null);
-  const showVerbose = useSignal(false);
   const focusedId = useSignal<string | null>(null);
   const initialLoad = useSignal(true);
   const error = useSignal<string | null>(null);
 
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Filtered messages based on verbose toggle
-  const filteredMessages = useComputed(() => {
-    if (showVerbose.value) return messages.value;
-    return messages.value.filter((m) => !m.isVerbose);
-  });
-
   // Parse URL state
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("verbose") === "true") showVerbose.value = true;
     if (params.get("msg")) focusedId.value = params.get("msg");
   }, []);
-
-  // Sync showVerbose to URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (showVerbose.value) {
-      params.set("verbose", "true");
-    } else {
-      params.delete("verbose");
-    }
-    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
-    window.history.replaceState({}, "", newUrl);
-  }, [showVerbose.value]);
 
   // Fetch status
   async function fetchStatus() {
@@ -151,7 +131,7 @@ function App() {
 
   // Virtual scroll
   const virtualizer = useVirtualizer({
-    count: filteredMessages.value.length,
+    count: messages.value.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 80,
     overscan: 10,
@@ -164,7 +144,7 @@ function App() {
     if (!lastItem) return;
 
     if (
-      lastItem.index >= filteredMessages.value.length - 5 &&
+      lastItem.index >= messages.value.length - 5 &&
       hasMore.value &&
       !loading.value &&
       cursor.value
@@ -175,15 +155,15 @@ function App() {
 
   // Scroll to focused message
   useEffect(() => {
-    if (focusedId.value && filteredMessages.value.length > 0) {
-      const idx = filteredMessages.value.findIndex(
+    if (focusedId.value && messages.value.length > 0) {
+      const idx = messages.value.findIndex(
         (m) => m.id === focusedId.value
       );
       if (idx >= 0) {
         virtualizer.scrollToIndex(idx, { align: "center" });
       }
     }
-  }, [focusedId.value, filteredMessages.value.length]);
+  }, [focusedId.value, messages.value.length]);
 
   // Handle wake callback
   function onWake() {
@@ -209,7 +189,7 @@ function App() {
         <StatusBar
           connected={false}
           stats={stats.value}
-          showVerbose={showVerbose}
+
         />
         <WakePrompt agentId={agentId} onWake={onWake} />
       </>
@@ -221,7 +201,6 @@ function App() {
       <StatusBar
         connected={true}
         stats={stats.value}
-        showVerbose={showVerbose}
       />
 
       {error.value && (
@@ -239,7 +218,7 @@ function App() {
           }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
-            const msg = filteredMessages.value[virtualRow.index];
+            const msg = messages.value[virtualRow.index];
             if (!msg) return null;
             return (
               <div

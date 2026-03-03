@@ -261,6 +261,24 @@ export async function fetchSkillContent(repo: string): Promise<{
   description: string;
   content: string;
   fetchedAt: string;
+  integrations?: Array<{
+    id: string;
+    label?: string;
+    authType?: "oauth" | "api-key";
+    scopes?: string[];
+    apiDomains?: string[];
+  }>;
+  mcpServers?: Array<{
+    id: string;
+    name?: string;
+    url?: string;
+    type?: "sse" | "stdio";
+    command?: string;
+    args?: string[];
+  }>;
+  nixPackages?: string[];
+  permissions?: string[];
+  providers?: string[];
 }> {
   const resp = await jsonPost("/api/v1/integrations/skills/fetch", { repo });
   const data = await parseJson(resp);

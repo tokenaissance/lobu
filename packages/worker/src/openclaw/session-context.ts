@@ -84,21 +84,26 @@ function buildMcpInstructions(
     return "";
   }
 
-  // Only show auth prompt for MCPs that need setup AND don't already have tools fetched
-  const unavailableMcps = mcpStatus.filter(
+  // MCPs with no tools at all that need setup
+  const undiscoveredMcps = mcpStatus.filter(
     (mcp) =>
       !mcpToolIds.has(mcp.id) &&
       ((mcp.requiresAuth && !mcp.authenticated) ||
         (mcp.requiresInput && !mcp.configured))
   );
 
-  if (unavailableMcps.length === 0) {
+  // MCPs with tools visible but still needing auth to use them
+  const unauthenticatedMcps = mcpStatus.filter(
+    (mcp) => mcpToolIds.has(mcp.id) && mcp.requiresAuth && !mcp.authenticated
+  );
+
+  if (undiscoveredMcps.length === 0 && unauthenticatedMcps.length === 0) {
     return "";
   }
 
   const lines: string[] = ["## MCP Tools Requiring Setup"];
 
-  for (const mcp of unavailableMcps) {
+  for (const mcp of undiscoveredMcps) {
     const reasons: string[] = [];
     if (mcp.requiresAuth && !mcp.authenticated) {
       reasons.push("OAuth authentication");
@@ -109,6 +114,12 @@ function buildMcpInstructions(
 
     lines.push(
       `- ⚠️ **${mcp.name}** (id: ${mcp.id}): Requires ${reasons.join(" and ")}. Call ConnectService(id="${mcp.id}") to authenticate and see available tools.`
+    );
+  }
+
+  for (const mcp of unauthenticatedMcps) {
+    lines.push(
+      `- ⚠️ **${mcp.name}** (id: ${mcp.id}): Tools are visible but require authentication to use. Call ConnectService(id="${mcp.id}") to authenticate.`
     );
   }
 

@@ -1,12 +1,11 @@
 /**
  * OpenClaw plugin types for Lobu.
  *
- * Supports loading existing OpenClaw community plugins (tool and provider).
- * Memory and channel plugins are deferred to a future PR.
+ * Supports loading existing OpenClaw community plugins.
  */
 
 /** Supported plugin slots */
-export type PluginSlot = "tool" | "provider";
+export type PluginSlot = "tool" | "provider" | "memory";
 
 /** Configuration for a single plugin */
 export interface PluginConfig {
@@ -16,6 +15,8 @@ export interface PluginConfig {
   slot: PluginSlot;
   /** Whether this plugin is enabled (default: true) */
   enabled?: boolean;
+  /** Plugin-specific configuration passed through to the plugin runtime */
+  config?: Record<string, unknown>;
 }
 
 /** Top-level plugins configuration stored in agent settings */

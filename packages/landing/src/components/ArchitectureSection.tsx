@@ -22,6 +22,7 @@ const nodes = [
     sublabel: "sandboxed worker",
     features: [
       "No direct internet access",
+      "Owletto memory plugin enabled by default",
       "Nix reproducible environments",
       "Per-thread persistent storage",
     ],

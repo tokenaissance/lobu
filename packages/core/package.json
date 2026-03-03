@@ -10,11 +10,15 @@
     ".": {
       "bun": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "bun": "./src/__tests__/fixtures/index.ts"
     }
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,12 +1,9 @@
 /**
  * OpenClaw plugin loader.
  *
- * Loads OpenClaw community plugins by dynamic-importing their package,
- * providing a shim ExtensionAPI that captures registerTool() and
- * registerProvider() calls. Event hooks and other registrations are no-oped.
- *
- * Tool definitions are captured as-is (full ToolDefinition from pi-coding-agent)
- * so signal, ctx, onUpdate all pass through to the plugin's execute function.
+ * Loads plugin modules by dynamic import and provides a compatibility shim.
+ * Supports both legacy function-style plugins and object-style plugins with
+ * a `register(api)` method.
  */
 
 import {
@@ -20,19 +17,35 @@ import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 
 const logger = createLogger("openclaw-plugin-loader");
 
+type PluginHookName = "before_agent_start" | "agent_end";
+
+export type PluginHookHandler = (
+  event: Record<string, unknown>,
+  ctx: Record<string, unknown>
+) => unknown | Promise<unknown>;
+
+export interface PluginService {
+  id: string;
+  start?: () => unknown | Promise<unknown>;
+  stop?: () => unknown | Promise<unknown>;
+}
+
 /** Result of loading a single plugin */
 export interface LoadedPlugin {
   manifest: PluginManifest;
   /** Raw ToolDefinition objects captured from registerTool() — no bridging needed */
   tools: ToolDefinition[];
   providers: ProviderRegistration[];
+  hooks: Record<PluginHookName, PluginHookHandler[]>;
+  services: PluginService[];
 }
 
 /**
  * Load all enabled plugins from config.
  */
 export async function loadPlugins(
-  config: PluginsConfig | undefined
+  config: PluginsConfig | undefined,
+  cwd?: string
 ): Promise<LoadedPlugin[]> {
   if (!config?.plugins?.length) {
     return [];
@@ -49,7 +62,7 @@ export async function loadPlugins(
 
   for (const pluginConfig of enabledPlugins) {
     try {
-      const loaded = await loadSinglePlugin(pluginConfig);
+      const loaded = await loadSinglePlugin(pluginConfig, cwd);
       if (loaded) {
         results.push(loaded);
         const parts = [];
@@ -57,6 +70,11 @@ export async function loadPlugins(
           parts.push(`${loaded.tools.length} tool(s)`);
         if (loaded.providers.length > 0)
           parts.push(`${loaded.providers.length} provider(s)`);
+        const hookCount =
+          loaded.hooks.before_agent_start.length + loaded.hooks.agent_end.length;
+        if (hookCount > 0) parts.push(`${hookCount} hook(s)`);
+        if (loaded.services.length > 0)
+          parts.push(`${loaded.services.length} service(s)`);
         logger.info(
           `Loaded plugin "${loaded.manifest.name}" with ${parts.join(", ") || "no registrations"}`
         );
@@ -75,9 +93,10 @@ export async function loadPlugins(
  * Load a single plugin by resolving its module and invoking its factory.
  */
 async function loadSinglePlugin(
-  config: PluginConfig
+  config: PluginConfig,
+  cwd?: string
 ): Promise<LoadedPlugin | null> {
-  const { source, slot } = config;
+  const { source, slot, config: pluginConfig } = config;
 
   let mod: Record<string, unknown>;
   try {
@@ -88,68 +107,159 @@ async function loadSinglePlugin(
     );
   }
 
-  const factory = resolveFactory(mod);
-  if (!factory) {
-    logger.warn(`Plugin "${source}" has no extension factory - skipping`);
+  const pluginEntrypoint = resolvePluginEntrypoint(mod);
+  if (!pluginEntrypoint) {
+    logger.warn(`Plugin "${source}" has no registerable entrypoint - skipping`);
     return null;
   }
 
   const capturedTools: ToolDefinition[] = [];
   const capturedProviders: ProviderRegistration[] = [];
-  const shimApi = createShimApi(capturedTools, capturedProviders);
+  const capturedHooks: Record<PluginHookName, PluginHookHandler[]> = {
+    before_agent_start: [],
+    agent_end: [],
+  };
+  const capturedServices: PluginService[] = [];
+  const shimApi = createShimApi({
+    source,
+    pluginConfig: pluginConfig ?? {},
+    capturedTools,
+    capturedProviders,
+    capturedHooks,
+    capturedServices,
+    cwd,
+  });
 
-  await Promise.resolve(factory(shimApi));
+  await Promise.resolve(pluginEntrypoint.register(shimApi));
+  const pluginName =
+    readStringProperty(pluginEntrypoint.metadata, "name") ||
+    extractPluginName(source);
 
   return {
     manifest: {
       source,
       slot,
-      name: extractPluginName(source),
+      name: pluginName,
     },
     tools: capturedTools,
     providers: capturedProviders,
+    hooks: capturedHooks,
+    services: capturedServices,
   };
 }
 
 /**
- * Resolve the extension factory from a module's exports.
- * Looks for: default export, `register`, or `init`.
+ * Resolve plugin entrypoint from module exports.
+ * Supports:
+ * - default export function (legacy)
+ * - default export object with register(api)
+ * - named register/init functions
  */
-function resolveFactory(
+function resolvePluginEntrypoint(
   mod: Record<string, unknown>
-): ((api: unknown) => void | Promise<void>) | null {
+):
+  | {
+      register: (api: unknown) => void | Promise<void>;
+      metadata?: Record<string, unknown>;
+    }
+  | null {
   const defaultExport = mod.default;
   if (typeof defaultExport === "function") {
-    return defaultExport as (api: unknown) => void | Promise<void>;
+    return {
+      register: defaultExport as (api: unknown) => void | Promise<void>,
+    };
+  }
+
+  if (isRecord(defaultExport) && typeof defaultExport.register === "function") {
+    return {
+      register: defaultExport.register as (api: unknown) => void | Promise<void>,
+      metadata: defaultExport,
+    };
   }
 
   for (const name of ["register", "init"]) {
     const fn = mod[name];
     if (typeof fn === "function") {
-      return fn as (api: unknown) => void | Promise<void>;
+      return {
+        register: fn as (api: unknown) => void | Promise<void>,
+      };
     }
   }
 
   return null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readStringProperty(
+  obj: Record<string, unknown> | undefined,
+  key: string
+): string | undefined {
+  if (!obj) return undefined;
+  const value = obj[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
 /**
- * Create a shim ExtensionAPI that captures tool and provider registrations
- * and no-ops everything else.
- *
- * Tool definitions are captured as raw ToolDefinition objects (the same type
- * pi-coding-agent uses) so execute(toolCallId, params, signal, onUpdate, ctx)
- * passes through unchanged.
+ * Create a shim API that captures tool/provider/hook/service registrations.
+ * Non-worker capabilities are no-oped for compatibility.
  */
-function createShimApi(
-  capturedTools: ToolDefinition[],
-  capturedProviders: ProviderRegistration[]
-): Record<string, unknown> {
+function createShimApi(params: {
+  source: string;
+  pluginConfig: Record<string, unknown>;
+  capturedTools: ToolDefinition[];
+  capturedProviders: ProviderRegistration[];
+  capturedHooks: Record<PluginHookName, PluginHookHandler[]>;
+  capturedServices: PluginService[];
+  cwd?: string;
+}): Record<string, unknown> {
+  const {
+    source,
+    pluginConfig,
+    capturedTools,
+    capturedProviders,
+    capturedHooks,
+    capturedServices,
+    cwd,
+  } = params;
   const noop = () => {
     /* intentional no-op */
   };
 
+  const shimLogger = {
+    info(message: string, ...args: unknown[]) {
+      logger.info(`[plugin:${extractPluginName(source)}] ${message}`, ...args);
+    },
+    warn(message: string, ...args: unknown[]) {
+      logger.warn(`[plugin:${extractPluginName(source)}] ${message}`, ...args);
+    },
+    error(message: string, ...args: unknown[]) {
+      logger.error(`[plugin:${extractPluginName(source)}] ${message}`, ...args);
+    },
+    debug(message: string, ...args: unknown[]) {
+      logger.debug(`[plugin:${extractPluginName(source)}] ${message}`, ...args);
+    },
+  };
+
   return {
+    pluginConfig,
+    logger: shimLogger,
+
+    on(eventName: unknown, handler: unknown) {
+      if (
+        (eventName === "before_agent_start" || eventName === "agent_end") &&
+        typeof handler === "function"
+      ) {
+        capturedHooks[eventName].push(handler as PluginHookHandler);
+        return;
+      }
+      logger.debug(
+        `Plugin "${source}" registered unsupported hook "${String(eventName)}"`
+      );
+    },
+
     // Capture tool registrations as-is (full ToolDefinition passthrough)
     registerTool(toolDef: Record<string, unknown>) {
       if (
@@ -185,18 +295,121 @@ function createShimApi(
       });
     },
 
-    // No-op all event hooks
-    on: noop,
+    registerService(service: unknown) {
+      if (!isRecord(service)) {
+        logger.warn(`Plugin "${source}" registered invalid service`);
+        return;
+      }
+      const id = readStringProperty(service, "id");
+      if (!id) {
+        logger.warn(`Plugin "${source}" registered service without valid id`);
+        return;
+      }
+      const start =
+        typeof service.start === "function"
+          ? (service.start as () => unknown | Promise<unknown>)
+          : undefined;
+      const stop =
+        typeof service.stop === "function"
+          ? (service.stop as () => unknown | Promise<unknown>)
+          : undefined;
+      capturedServices.push({ id, start, stop });
+    },
 
-    // No-op other registration methods
+    // No-op compatibility methods (worker runtime does not expose these surfaces)
+    registerCli: noop,
     registerCommand: noop,
     registerShortcut: noop,
     registerFlag: noop,
     registerChannel: noop,
+    registerMessageRenderer: noop,
+    sendMessage: noop,
+    sendUserMessage: noop,
+    appendEntry: noop,
+    setSessionName: noop,
+    getSessionName: () => undefined,
+    setLabel: noop,
+    exec: async () => ({
+      exitCode: 1,
+      stdout: "",
+      stderr: "exec is not supported in Lobu worker plugin shim",
+    }),
+    getActiveTools: () => [] as string[],
+    getAllTools: () => [] as Array<{ name: string; description: string }>,
+    setActiveTools: noop,
+    getCommands: () => [] as unknown[],
+    setModel: async () => false,
+    getThinkingLevel: () => "medium",
+    setThinkingLevel: noop,
+    events: {
+      on: noop,
+      off: noop,
+      emit: noop,
+    },
 
     // Expose minimal context that plugins might read
-    cwd: process.cwd(),
+    cwd: cwd || process.cwd(),
   };
+}
+
+export async function runPluginHooks(params: {
+  plugins: LoadedPlugin[];
+  hook: PluginHookName;
+  event: Record<string, unknown>;
+  ctx: Record<string, unknown>;
+}): Promise<unknown[]> {
+  const { plugins, hook, event, ctx } = params;
+  const results: unknown[] = [];
+  for (const plugin of plugins) {
+    const handlers = plugin.hooks[hook];
+    if (handlers.length === 0) continue;
+
+    for (const handler of handlers) {
+      try {
+        const result = await Promise.resolve(handler(event, ctx));
+        results.push(result);
+      } catch (err) {
+        logger.error(
+          `Plugin hook "${hook}" failed for "${plugin.manifest.name}": ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+  return results;
+}
+
+export async function startPluginServices(
+  plugins: LoadedPlugin[]
+): Promise<void> {
+  for (const plugin of plugins) {
+    for (const service of plugin.services) {
+      if (!service.start) continue;
+      try {
+        await Promise.resolve(service.start());
+      } catch (err) {
+        logger.error(
+          `Plugin service "${service.id}" failed to start (${plugin.manifest.name}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+}
+
+export async function stopPluginServices(
+  plugins: LoadedPlugin[]
+): Promise<void> {
+  for (const plugin of [...plugins].reverse()) {
+    for (const service of [...plugin.services].reverse()) {
+      if (!service.stop) continue;
+      try {
+        await Promise.resolve(service.stop());
+      } catch (err) {
+        logger.error(
+          `Plugin service "${service.id}" failed to stop (${plugin.manifest.name}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
 }
 
 /**

@@ -174,16 +174,11 @@ export class McpProxy {
           // notifications can fail silently
         });
       } catch (initError) {
-        logger.debug(
-          "MCP initialize failed (server may not support it), continuing with tools/list",
-          {
-            mcpId,
-            error:
-              initError instanceof Error
-                ? initError.message
-                : String(initError),
-          }
-        );
+        logger.warn("MCP initialize failed (continuing with tools/list)", {
+          mcpId,
+          error:
+            initError instanceof Error ? initError.message : String(initError),
+        });
       }
 
       // Step 3: Fetch tools list
@@ -307,15 +302,17 @@ export class McpProxy {
       return c.json({ error: `MCP server '${mcpId}' not found` }, 404);
     }
 
-    // Check tool approval based on annotations and grants
+    // Check tool approval based on annotations and grants.
+    // Skip when tool list couldn't be fetched (e.g. auth failure) — let
+    // the upstream return the proper error instead of blocking here.
     if (this.grantStore) {
-      const annotations = await this.getToolAnnotations(
+      const { found, annotations } = await this.getToolAnnotations(
         mcpId,
         toolName,
         resolved.agentId,
         auth.tokenData
       );
-      if (requiresToolApproval(annotations)) {
+      if (found && requiresToolApproval(annotations)) {
         const pattern = `/mcp/${mcpId}/tools/${toolName}`;
         const hasGrant = await this.grantStore.hasGrant(
           resolved.agentId,
@@ -374,16 +371,28 @@ export class McpProxy {
 
       const data = (await response.json()) as JsonRpcResponse;
       if (data?.error) {
+        const errorMsg =
+          data.error.message ||
+          (typeof data.error === "string" ? data.error : "Upstream error");
         logger.error("Upstream returned JSON-RPC error on tool call", {
           mcpId,
           toolName,
           error: data.error,
         });
+
+        // Clear stale credentials on auth-related upstream errors
+        if (/invalid.token|expired|unauthorized|unauthenticated/i.test(errorMsg)) {
+          await this.credentialStore.deleteCredentials(resolved.agentId, mcpId);
+          logger.info(
+            `Cleared stale credentials for ${mcpId} after upstream auth error`
+          );
+        }
+
         return c.json(
           {
             content: [],
             isError: true,
-            error: data.error.message || "Upstream error",
+            error: errorMsg,
           },
           502
         );
@@ -583,7 +592,7 @@ export class McpProxy {
     toolName: string,
     agentId: string,
     tokenData: any
-  ): Promise<McpTool["annotations"] | undefined> {
+  ): Promise<{ found: boolean; annotations?: McpTool["annotations"] }> {
     let tools: McpTool[] | null = null;
     if (this.toolCache) {
       tools = await this.toolCache.get(mcpId, agentId);
@@ -594,8 +603,13 @@ export class McpProxy {
       tools = result.tools;
     }
 
+    // If tool list is empty (e.g. auth failure), we can't determine annotations
+    if (tools.length === 0) {
+      return { found: false };
+    }
+
     const tool = tools.find((t) => t.name === toolName);
-    return tool?.annotations;
+    return { found: true, annotations: tool?.annotations };
   }
 
   private async resolveMcpServer(

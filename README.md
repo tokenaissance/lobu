@@ -75,13 +75,15 @@ Every Lobu agent comes equipped with a suite of tools for autonomous execution a
 
 | Feature | Description | Built-in Tools |
 | :--- | :--- | :--- |
-| **Autonomous Scheduling** | Schedule one-time or recurring execution via cron. | `ScheduleReminder` |
-| **Human-in-the-Loop** | Pause for user input via buttons and resume when answered. | `AskUserQuestion` |
-| **Full Linux Toolbox** | Sandboxed shell access, file editing, and advanced search. | `bash`, `read`, `write`, `edit`, `grep`, `find` |
+| **Autonomous Scheduling** | Schedule one-time or recurring execution via cron. | `ScheduleReminder`, `ListReminders`, `CancelReminder` |
+| **Human-in-the-Loop** | Pause for user input via buttons and resume when answered. | `AskUserQuestion`, `GetSettingsLink` |
+| **Full Linux Toolbox** | Sandboxed shell access, file editing, and advanced search. | `bash`, `read`, `write`, `edit`, `grep`, `find`, `ls` |
+| **Conversation Context** | Pull earlier thread messages when the user references prior work. | `GetChannelHistory` |
 | **File & Media Delivery** | Share reports, charts, or generated voice messages. | `UploadUserFile`, `GenerateAudio` |
-| **Self-Expansion** | Search and dynamically install new skills or MCP servers. | `SearchExtensions`, `InstallExtension` |
+| **Self-Expansion** | Search and dynamically install new skills or MCP servers. | `SearchSkills`, `InstallSkill` |
+| **Connected APIs** | Authenticate and call OAuth/API-key backed services through gateway-managed credentials. | `ConnectService`, `CallService`, `DisconnectService` |
 | **Managed MCP Proxy** | Securely connect to any MCP server with OAuth. | [MCP Proxy](docs/SECURITY.md#mcp-oauth-and-credentials) |
-| **Advanced Capabilities** | Extend agent abilities with web browsing, headless UI interaction, and specialized utilities via Nix packages or external MCP servers. | `bash` (Nix), `SearchExtensions`, `InstallExtension` (MCP) |
+| **Advanced Capabilities** | Extend agent abilities with web browsing, headless UI interaction, and specialized utilities via Nix packages or external MCP servers. | `bash` (Nix), `SearchSkills`, `InstallSkill` (MCP) |
 
 ### Popular MCP Integrations
 Lobu's gateway handles OAuth and secret injection for any MCP server, including:

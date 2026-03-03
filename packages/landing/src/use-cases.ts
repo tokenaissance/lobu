@@ -62,30 +62,57 @@ export const useCases: UseCase[] = [
     ],
   },
   {
-    id: "mcp",
-    tabLabel: "MCP",
-    title: "Connect tools via MCP",
+    id: "skills",
+    tabLabel: "Skills",
+    title: "Connect skills and integrations",
     description:
-      "Add MCP servers for Gmail, GitHub, and more. Agents authenticate via OAuth — you control what they access.",
-    settingsLabel: "Add and authenticate integrations",
-    chatLabel: "Agent discovers and uses tools",
+      "Install skills that bundle MCP servers and integrations. Mix OAuth and API-key auth in one setup.",
+    settingsLabel: "Review skills, MCP servers, and auth",
+    chatLabel: "Agent configures dependencies",
     messages: [
       {
         role: "user",
-        text: "Summarize my unread emails",
+        text: "Install my triage skill and summarize inbox + PRs",
       },
       {
         role: "bot",
-        text: "No email access yet. Found a Gmail integration.",
-        buttons: [{ label: "Connect Gmail", action: "link" }],
+        text: "Found `ops-triage`.\nNeeds:\n• Gmail MCP (OAuth)\n• GitHub MCP (OAuth)\n• Linear integration (API key)\n\nInstall and connect now?",
+        buttons: [{ label: "Install Skill", action: "link" }],
       },
       {
         role: "user",
-        text: "Connected",
+        text: "Yes, connect everything",
       },
       {
         role: "bot",
-        text: "Inbox summary:\n• 3 from team — sprint planning\n• 1 from CEO — Q1 deck\n• 2 newsletters (skipped)\n\nDraft a reply?",
+        text: "Done. OAuth connected for Gmail/GitHub, Linear API key saved.\n\nSummary:\n• Inbox: 3 urgent emails\n• PRs: 2 need review\n• Linear: 5 high-priority issues",
+      },
+    ],
+  },
+  {
+    id: "memory",
+    tabLabel: "Memory",
+    title: "Persistent memory with Owletto",
+    description:
+      "Owletto is the default OpenClaw memory plugin, so important context survives across sessions and compaction.",
+    settingsLabel: "Choose and configure memory plugins",
+    chatLabel: "Agent stores and recalls long-term context",
+    messages: [
+      {
+        role: "user",
+        text: "Remember that my weekly report should focus on customer churn",
+      },
+      {
+        role: "bot",
+        text: "Saved to persistent memory via Owletto (default memory plugin). I will use this preference in future reports.",
+      },
+      {
+        role: "user",
+        text: "Can I use a different memory backend later?",
+      },
+      {
+        role: "bot",
+        text: "Yes. You can switch to another OpenClaw memory plugin, such as native memory, by changing `pluginsConfig`.",
       },
     ],
   },

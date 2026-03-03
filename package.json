@@ -20,6 +20,7 @@
     "check:fix": "biome check --config-path config/biome.config.json --write .",
     "prepare": "husky || true",
     "test": "bun test packages/",
+    "test:coverage": "bun test packages/ --coverage",
     "typecheck": "tsc --noEmit",
     "jscpd": "bunx jscpd --pattern \"packages/**/*.ts\" --reporters \"console\" --ignore \"**/node_modules/**,**/dist/**,**/coverage/**,**/.bun/**,**/.turbo/**,workspaces/**,charts/**,integration-tests/**,examples/**,bin/**,**/__tests__/**,**/__mocks__/**,**/*.d.ts\"",
     "depcruise": "bunx --bun depcruise --config config/dependency-cruiser.config.cjs packages",

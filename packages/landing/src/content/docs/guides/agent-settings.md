@@ -24,3 +24,37 @@ Agent settings control behavior of each worker session.
 - Keep tool permissions minimal.
 - Add only required domains/grants.
 - Prefer explicit integrations over broad API-key exposure.
+
+## Memory Plugin Defaults
+
+Lobu configures Owletto as the default OpenClaw memory plugin:
+
+```json
+{
+  "pluginsConfig": {
+    "plugins": [
+      {
+        "source": "./plugins/openclaw-owletto-plugin.js",
+        "slot": "memory",
+        "enabled": true
+      }
+    ]
+  }
+}
+```
+
+You can switch to another OpenClaw memory plugin (for example native memory) by updating `pluginsConfig`:
+
+```json
+{
+  "pluginsConfig": {
+    "plugins": [
+      {
+        "source": "@openclaw/native-memory",
+        "slot": "memory",
+        "enabled": true
+      }
+    ]
+  }
+}
+```

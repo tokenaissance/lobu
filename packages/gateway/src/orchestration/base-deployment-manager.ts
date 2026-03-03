@@ -415,16 +415,14 @@ export abstract class BaseDeploymentManager {
    */
   async syncNetworkConfigGrants(messageData: MessagePayload): Promise<void> {
     const agentId = messageData.agentId;
-    if (
-      !this.grantStore ||
-      !agentId ||
-      !messageData.networkConfig?.allowedDomains?.length
-    ) {
-      return;
+    if (!this.grantStore || !agentId) return;
+
+    if (messageData.networkConfig?.allowedDomains?.length) {
+      for (const domain of messageData.networkConfig.allowedDomains) {
+        await this.grantStore.grant(agentId, domain, null);
+      }
     }
-    for (const domain of messageData.networkConfig.allowedDomains) {
-      await this.grantStore.grant(agentId, domain, null);
-    }
+
   }
 
   /**

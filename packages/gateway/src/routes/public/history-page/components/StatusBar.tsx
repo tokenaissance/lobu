@@ -1,14 +1,11 @@
-import type { Signal } from "@preact/signals";
 import type { StatsResponse } from "../types";
 
 export function StatusBar({
   connected,
   stats,
-  showVerbose,
 }: {
   connected: boolean;
   stats: StatsResponse | null;
-  showVerbose: Signal<boolean>;
 }) {
   return (
     <div class="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
@@ -57,29 +54,6 @@ export function StatusBar({
             )}
           </div>
         )}
-      </div>
-
-      <div class="flex items-center gap-3">
-        <label class="flex items-center gap-1.5 cursor-pointer select-none">
-          <span class="text-xs text-gray-500">Verbose</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showVerbose.value}
-            onClick={() => {
-              showVerbose.value = !showVerbose.value;
-            }}
-            class={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              showVerbose.value ? "bg-blue-500" : "bg-gray-200"
-            }`}
-          >
-            <span
-              class={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-                showVerbose.value ? "translate-x-4" : "translate-x-0.5"
-              }`}
-            />
-          </button>
-        </label>
       </div>
     </div>
   );

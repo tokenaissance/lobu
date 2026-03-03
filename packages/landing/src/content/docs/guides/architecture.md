@@ -19,6 +19,19 @@ Lobu runs as a gateway + worker architecture.
 - **Worker**: model execution, tools, workspace state.
 - **Redis**: queue/state backing for job flow.
 
+## Persistent Memory
+
+- By default, Lobu injects an OpenClaw memory plugin for agents: `./plugins/openclaw-owletto-plugin.js` (`slot: "memory"`).
+- This default can be toggled with `AGENT_DEFAULT_OWLETTO_MEMORY_ENABLED` (enabled by default).
+- OpenClaw memory plugins are configurable per agent through `pluginsConfig`, so you can replace Owletto with other plugins (for example, native memory) when needed.
+
+### How It Works
+
+1. Gateway sets default `pluginsConfig` on new agents (Owletto memory plugin enabled unless disabled by env).
+2. Worker fetches session context from gateway and passes `pluginsConfig` into OpenClaw runtime startup.
+3. OpenClaw loads enabled plugins for that agent session.
+4. The memory plugin handles persistent memory operations so context can be reused across future runs.
+
 ## Security-Critical Path
 
 - Workers do not directly own global provider secrets.

@@ -283,8 +283,17 @@ export function verifySettingsToken(
  */
 export const SETTINGS_TOKEN_HASH_PARAM = "st";
 
-export function buildSettingsUrl(token: string): string {
+export function buildSettingsUrl(
+  token: string,
+  opts?: { useQueryParam?: boolean }
+): string {
   const baseUrl = process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
+  // Telegram web_app buttons replace the URL hash with tgWebAppData, so use a
+  // query parameter instead. The server's legacy ?token= handler validates the
+  // token, sets a session cookie, and redirects to /settings (clearing the URL).
+  if (opts?.useQueryParam) {
+    return `${baseUrl}/settings?token=${encodeURIComponent(token)}`;
+  }
   // Keep the token in URL hash so it never appears in server logs/referrers.
   return `${baseUrl}/settings#${SETTINGS_TOKEN_HASH_PARAM}=${encodeURIComponent(token)}`;
 }

@@ -173,6 +173,10 @@ export function buildGatewayConfig(): GatewayConfig {
 
   // Build MCP config
   const mcpServersUrl = process.env.LOBU_MCP_SERVERS_URL;
+  const defaultOwlettoMemoryEnabled = getOptionalBoolean(
+    "AGENT_DEFAULT_OWLETTO_MEMORY_ENABLED",
+    true
+  );
   const publicGatewayUrl = getOptionalEnv(
     "PUBLIC_GATEWAY_URL",
     DEFAULTS.PUBLIC_GATEWAY_URL
@@ -189,6 +193,15 @@ export function buildGatewayConfig(): GatewayConfig {
       timeoutMinutes: process.env.TIMEOUT_MINUTES
         ? Number(process.env.TIMEOUT_MINUTES)
         : undefined,
+      pluginsConfig: {
+        plugins: [
+          {
+            source: "./plugins/openclaw-owletto-plugin.js",
+            slot: "memory",
+            enabled: defaultOwlettoMemoryEnabled,
+          },
+        ],
+      },
     },
     sessionTimeoutMinutes: getOptionalNumber(
       "SESSION_TIMEOUT_MINUTES",

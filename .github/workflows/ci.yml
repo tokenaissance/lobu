@@ -24,8 +24,15 @@ jobs:
       - name: Build core package first
         run: cd packages/core && bun run build
 
-      - name: Run tests
-        run: bun test
+      - name: Run tests with coverage
+        run: bun test packages/ --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
 
   format-lint:
     runs-on: ubuntu-latest

@@ -291,7 +291,7 @@ export class TelegramInteractionRenderer {
       "Rendering link button"
     );
 
-    // OAuth links must open in system browser (Google blocks embedded WebViews)
+    // OAuth links should open in browser; settings/install use Telegram WebApp.
     const keyboard =
       btn.linkType === "oauth"
         ? new InlineKeyboard().url(btn.label, btn.url)
@@ -310,7 +310,7 @@ export class TelegramInteractionRenderer {
     } catch (err) {
       logger.warn(
         { error: String(err), chatId },
-        "web_app button failed, falling back to URL button"
+        "Primary link button failed, falling back to URL button"
       );
       // Fall back to regular URL button (works for non-HTTPS URLs too)
       const fallbackKeyboard = new InlineKeyboard().url(btn.label, btn.url);

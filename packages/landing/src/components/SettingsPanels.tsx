@@ -133,20 +133,36 @@ export function PackagesPanel() {
   );
 }
 
-// --- MCP: Integrations ---
+// --- Skills + Integrations ---
 
 export function IntegrationsPanel() {
   const integrations = [
     {
-      name: "Gmail",
-      type: "mcp",
-      description: "Gmail — read & send emails",
+      name: "ops-triage",
+      type: "skill",
+      auth: "Mixed",
+      description: "Bundles Gmail/GitHub MCP + Linear integration",
       enabled: true,
     },
     {
-      name: "GitHub",
+      name: "gmail-mcp",
       type: "mcp",
-      description: "GitHub — repos, PRs, issues",
+      auth: "OAuth",
+      description: "https://gmail-mcp.example.com/sse",
+      enabled: true,
+    },
+    {
+      name: "github-mcp",
+      type: "mcp",
+      auth: "OAuth",
+      description: "https://github-mcp.example.com/sse",
+      enabled: true,
+    },
+    {
+      name: "linear",
+      type: "integration",
+      auth: "API key",
+      description: "Linear workspace token configured",
       enabled: true,
     },
   ];
@@ -164,6 +180,9 @@ export function IntegrationsPanel() {
               <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">
                 {i.type}
               </span>
+              <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
+                {i.auth}
+              </span>
               <div class="min-w-0">
                 <p class="text-xs font-medium text-slate-700">{i.name}</p>
                 <p class="text-xs text-gray-500 truncate">{i.description}</p>
@@ -171,6 +190,63 @@ export function IntegrationsPanel() {
             </div>
             <span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800 shrink-0">
               Enabled
+            </span>
+          </div>
+        ))}
+      </div>
+    </PanelShell>
+  );
+}
+
+// --- Memory: Owletto default plugin ---
+
+export function MemoryPanel() {
+  const memoryPlugins = [
+    {
+      name: "owletto-memory",
+      source: "./plugins/openclaw-owletto-plugin.js",
+      slot: "memory",
+      status: "Default",
+      enabled: true,
+    },
+    {
+      name: "native-memory",
+      source: "@openclaw/native-memory",
+      slot: "memory",
+      status: "Optional",
+      enabled: false,
+    },
+  ];
+
+  return (
+    <PanelShell title="Memory">
+      <SectionHeader emoji="🧠" label="Memory Plugins" />
+      <div class="space-y-2">
+        {memoryPlugins.map((p) => (
+          <div
+            key={p.name}
+            class="flex items-center justify-between p-2 bg-white rounded border border-gray-100"
+          >
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
+                {p.slot}
+              </span>
+              <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">
+                {p.status}
+              </span>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-slate-700">{p.name}</p>
+                <p class="text-xs text-gray-500 truncate">{p.source}</p>
+              </div>
+            </div>
+            <span
+              class={`px-2 py-1 text-xs rounded shrink-0 ${
+                p.enabled
+                  ? "bg-green-100 text-green-800"
+                  : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {p.enabled ? "Enabled" : "Disabled"}
             </span>
           </div>
         ))}

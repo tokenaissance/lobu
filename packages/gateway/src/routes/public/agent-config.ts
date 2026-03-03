@@ -139,8 +139,9 @@ const updateConfigRoute = createRoute({
                 plugins: z.array(
                   z.object({
                     source: z.string(),
-                    slot: z.enum(["tool", "provider"]),
+                    slot: z.enum(["tool", "provider", "memory"]),
                     enabled: z.boolean().optional(),
+                    config: z.record(z.string(), z.any()).optional(),
                   })
                 ),
               })
@@ -1112,6 +1113,8 @@ async function validateSettings(
           source: p.source.trim(),
           slot: p.slot,
           enabled: p.enabled ?? true,
+          config:
+            p.config && typeof p.config === "object" ? { ...p.config } : undefined,
         })),
     };
   }
