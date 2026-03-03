@@ -35,6 +35,184 @@
       ]
     },
     {
+      "id": "github",
+      "name": "GitHub",
+      "description": "Repos, issues, pull requests, and code access",
+      "integrations": [
+        {
+          "id": "github",
+          "label": "GitHub",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://github.com/login/oauth/authorize",
+            "tokenUrl": "https://github.com/login/oauth/access_token",
+            "clientId": "${env:GITHUB_CLIENT_ID}",
+            "clientSecret": "${env:GITHUB_CLIENT_SECRET}"
+          },
+          "scopesConfig": {
+            "default": ["read:user", "user:email"],
+            "available": [
+              "repo",
+              "read:org",
+              "read:project",
+              "gist",
+              "notifications"
+            ]
+          },
+          "apiDomains": ["api.github.com", "raw.githubusercontent.com"]
+        }
+      ]
+    },
+    {
+      "id": "microsoft-365",
+      "name": "Microsoft 365",
+      "description": "Outlook, OneDrive, and Teams integration",
+      "integrations": [
+        {
+          "id": "microsoft",
+          "label": "Microsoft",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+            "tokenUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            "clientId": "${env:MICROSOFT_CLIENT_ID}",
+            "clientSecret": "${env:MICROSOFT_CLIENT_SECRET}"
+          },
+          "scopesConfig": {
+            "default": ["openid", "profile", "email", "offline_access"],
+            "available": [
+              "Mail.Read",
+              "Mail.Send",
+              "Calendars.Read",
+              "Calendars.ReadWrite",
+              "Files.Read",
+              "Files.ReadWrite",
+              "Chat.Read",
+              "Team.ReadBasic.All"
+            ]
+          },
+          "apiDomains": ["graph.microsoft.com"]
+        }
+      ]
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "description": "Workspace pages, databases, and content",
+      "integrations": [
+        {
+          "id": "notion",
+          "label": "Notion",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://api.notion.com/v1/oauth/authorize",
+            "tokenUrl": "https://api.notion.com/v1/oauth/token",
+            "clientId": "${env:NOTION_CLIENT_ID}",
+            "clientSecret": "${env:NOTION_CLIENT_SECRET}"
+          },
+          "apiDomains": ["api.notion.com"]
+        }
+      ]
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "description": "Issue tracking and project management",
+      "integrations": [
+        {
+          "id": "linear",
+          "label": "Linear",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://linear.app/oauth/authorize",
+            "tokenUrl": "https://api.linear.app/oauth/token",
+            "clientId": "${env:LINEAR_CLIENT_ID}",
+            "clientSecret": "${env:LINEAR_CLIENT_SECRET}"
+          },
+          "scopesConfig": {
+            "default": ["read"],
+            "available": ["read", "write", "issues:create", "comments:create"]
+          },
+          "apiDomains": ["api.linear.app"]
+        }
+      ]
+    },
+    {
+      "id": "jira",
+      "name": "Jira",
+      "description": "Atlassian Jira project and issue management",
+      "integrations": [
+        {
+          "id": "jira",
+          "label": "Atlassian",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://auth.atlassian.com/authorize",
+            "tokenUrl": "https://auth.atlassian.com/oauth/token",
+            "clientId": "${env:ATLASSIAN_CLIENT_ID}",
+            "clientSecret": "${env:ATLASSIAN_CLIENT_SECRET}"
+          },
+          "scopesConfig": {
+            "default": ["read:me"],
+            "available": [
+              "read:jira-work",
+              "write:jira-work",
+              "read:jira-user",
+              "read:confluence-content.all"
+            ]
+          },
+          "apiDomains": ["api.atlassian.com", "auth.atlassian.com"]
+        }
+      ]
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "description": "Error tracking, performance monitoring, and issue management",
+      "integrations": [
+        {
+          "id": "sentry",
+          "label": "Sentry",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://sentry.io/oauth/authorize/",
+            "tokenUrl": "https://sentry.io/oauth/token/",
+            "clientId": "${env:SENTRY_CLIENT_ID}",
+            "clientSecret": "${env:SENTRY_CLIENT_SECRET}"
+          },
+          "scopesConfig": {
+            "default": ["org:read", "project:read", "event:read"],
+            "available": [
+              "org:read",
+              "org:write",
+              "project:read",
+              "project:write",
+              "project:releases",
+              "team:read",
+              "team:write",
+              "member:read",
+              "event:read",
+              "event:write"
+            ]
+          },
+          "apiDomains": ["sentry.io"]
+        }
+      ]
+    },
+    {
+      "id": "owletto",
+      "name": "Owletto Memory",
+      "description": "Long-term memory across conversations",
+      "mcpServers": [
+        {
+          "id": "owletto",
+          "name": "Owletto",
+          "url": "https://owletto.com/mcp",
+          "type": "sse"
+        }
+      ]
+    },
+    {
       "id": "groq",
       "name": "Groq",
       "description": "Fast LLM inference via Groq",
@@ -48,6 +226,218 @@
           "apiKeyPlaceholder": "gsk_...",
           "sdkCompat": "openai",
           "defaultModel": "llama-3.3-70b-versatile",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "description": "Google Gemini models",
+      "providers": [
+        {
+          "displayName": "Gemini",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=128",
+          "envVarName": "GEMINI_API_KEY",
+          "upstreamBaseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://aistudio.google.com/apikey\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Google AI Studio</a>",
+          "apiKeyPlaceholder": "AIza...",
+          "sdkCompat": "openai",
+          "defaultModel": "gemini-2.0-flash",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "together-ai",
+      "name": "Together AI",
+      "description": "Open-source models hosted by Together",
+      "providers": [
+        {
+          "displayName": "Together AI",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=together.ai&sz=128",
+          "envVarName": "TOGETHER_API_KEY",
+          "upstreamBaseUrl": "https://api.together.xyz/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://api.together.ai/settings/api-keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Together AI Dashboard</a>",
+          "apiKeyPlaceholder": "tok_...",
+          "sdkCompat": "openai",
+          "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "fireworks",
+      "name": "Fireworks AI",
+      "description": "Fast inference for open-source models",
+      "providers": [
+        {
+          "displayName": "Fireworks AI",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=fireworks.ai&sz=128",
+          "envVarName": "FIREWORKS_API_KEY",
+          "upstreamBaseUrl": "https://api.fireworks.ai/inference/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://fireworks.ai/account/api-keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Fireworks Dashboard</a>",
+          "apiKeyPlaceholder": "fw_...",
+          "sdkCompat": "openai",
+          "defaultModel": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral",
+      "description": "Mistral AI models",
+      "providers": [
+        {
+          "displayName": "Mistral",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=mistral.ai&sz=128",
+          "envVarName": "MISTRAL_API_KEY",
+          "upstreamBaseUrl": "https://api.mistral.ai/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://console.mistral.ai/api-keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Mistral Console</a>",
+          "apiKeyPlaceholder": "sk-...",
+          "sdkCompat": "openai",
+          "defaultModel": "mistral-large-latest",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "description": "DeepSeek reasoning and coding models",
+      "providers": [
+        {
+          "displayName": "DeepSeek",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=deepseek.com&sz=128",
+          "envVarName": "DEEPSEEK_API_KEY",
+          "upstreamBaseUrl": "https://api.deepseek.com",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://platform.deepseek.com/api_keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">DeepSeek Platform</a>",
+          "apiKeyPlaceholder": "sk-...",
+          "sdkCompat": "openai",
+          "defaultModel": "deepseek-chat",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "description": "Multi-provider model router with per-user billing",
+      "integrations": [
+        {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "authType": "oauth",
+          "oauth": {
+            "authUrl": "https://openrouter.ai/auth",
+            "tokenUrl": "https://openrouter.ai/api/v1/auth/keys",
+            "clientId": "${env:OPENROUTER_CLIENT_ID}",
+            "clientSecret": "${env:OPENROUTER_CLIENT_SECRET}"
+          },
+          "apiDomains": ["openrouter.ai"]
+        }
+      ],
+      "providers": [
+        {
+          "displayName": "OpenRouter",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=openrouter.ai&sz=128",
+          "envVarName": "OPENROUTER_API_KEY",
+          "upstreamBaseUrl": "https://openrouter.ai/api/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://openrouter.ai/keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">OpenRouter</a>, or connect via OAuth for per-user billing",
+          "apiKeyPlaceholder": "sk-or-...",
+          "sdkCompat": "openai",
+          "defaultModel": "anthropic/claude-sonnet-4",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "description": "Ultra-fast inference on Cerebras hardware",
+      "providers": [
+        {
+          "displayName": "Cerebras",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=cerebras.ai&sz=128",
+          "envVarName": "CEREBRAS_API_KEY",
+          "upstreamBaseUrl": "https://api.cerebras.ai/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://cloud.cerebras.ai/\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Cerebras Cloud</a>",
+          "apiKeyPlaceholder": "csk-...",
+          "sdkCompat": "openai",
+          "defaultModel": "llama-3.3-70b",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "opencode-zen",
+      "name": "OpenCode Zen",
+      "description": "Curated AI gateway with 40+ coding-optimized models",
+      "providers": [
+        {
+          "displayName": "OpenCode Zen",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=opencode.ai&sz=128",
+          "envVarName": "OPENCODE_ZEN_API_KEY",
+          "upstreamBaseUrl": "https://opencode.ai/zen/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://opencode.ai/auth\" target=\"_blank\" class=\"text-blue-600 hover:underline\">OpenCode Zen</a>",
+          "apiKeyPlaceholder": "zen-...",
+          "sdkCompat": "openai",
+          "defaultModel": "anthropic/claude-sonnet-4",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "xai",
+      "name": "xAI",
+      "description": "Grok models by xAI",
+      "providers": [
+        {
+          "displayName": "xAI",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=x.ai&sz=128",
+          "envVarName": "XAI_API_KEY",
+          "upstreamBaseUrl": "https://api.x.ai/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://console.x.ai/\" target=\"_blank\" class=\"text-blue-600 hover:underline\">xAI Console</a>",
+          "apiKeyPlaceholder": "xai-...",
+          "sdkCompat": "openai",
+          "defaultModel": "grok-3",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "description": "Search-augmented AI models",
+      "providers": [
+        {
+          "displayName": "Perplexity",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=perplexity.ai&sz=128",
+          "envVarName": "PERPLEXITY_API_KEY",
+          "upstreamBaseUrl": "https://api.perplexity.ai",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://www.perplexity.ai/settings/api\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Perplexity Settings</a>",
+          "apiKeyPlaceholder": "pplx-...",
+          "sdkCompat": "openai",
+          "defaultModel": "sonar-pro",
+          "modelsEndpoint": "/v1/models"
+        }
+      ]
+    },
+    {
+      "id": "cohere",
+      "name": "Cohere",
+      "description": "Enterprise AI with Command and Embed models",
+      "providers": [
+        {
+          "displayName": "Cohere",
+          "iconUrl": "https://www.google.com/s2/favicons?domain=cohere.com&sz=128",
+          "envVarName": "COHERE_API_KEY",
+          "upstreamBaseUrl": "https://api.cohere.com/compatibility/v1",
+          "apiKeyInstructions": "Get your API key from <a href=\"https://dashboard.cohere.com/api-keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">Cohere Dashboard</a>",
+          "apiKeyPlaceholder": "co-...",
+          "sdkCompat": "openai",
+          "defaultModel": "command-r-plus",
           "modelsEndpoint": "/v1/models"
         }
       ]
