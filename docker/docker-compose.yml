@@ -40,6 +40,7 @@ services:
       DEPLOYMENT_MODE: docker
       QUEUE_URL: redis://redis:6379
       LOBU_MCP_SERVERS_URL: ${LOBU_MCP_SERVERS_URL:-examples/mcp/oauth.json}
+      LOBU_SYSTEM_SKILLS_URL: ${LOBU_SYSTEM_SKILLS_URL:-config/system-skills.json}
       # Host project path for worker bind mounts (Docker-in-Docker)
       LOBU_DEV_PROJECT_PATH: ${PWD}
     volumes:
@@ -49,6 +50,8 @@ services:
       - ../.env:/app/.env:ro
       # Mount MCP config for live editing
       - ../examples:/app/examples:ro
+      # Mount integrations config for live editing
+      - ../config:/app/config:ro
       # Mount source for hot reload (bun --watch detects changes)
       - ../packages/core/src:/app/packages/core/src
       - ../packages/gateway/src:/app/packages/gateway/src

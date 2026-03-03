@@ -186,8 +186,7 @@ export class FlyDeploymentManager extends BaseDeploymentManager {
     deploymentName: string,
     username: string,
     userId: string,
-    messageData?: MessagePayload,
-    userEnvVars?: Record<string, string>
+    messageData?: MessagePayload
   ): Promise<void> {
     const existingMachine =
       await this.findMachineByDeploymentName(deploymentName);
@@ -204,8 +203,7 @@ export class FlyDeploymentManager extends BaseDeploymentManager {
       userId,
       deploymentName,
       messageData,
-      true,
-      userEnvVars ?? {}
+      true
     );
     this.normalizeWorkerEnvForFly(envVars);
 

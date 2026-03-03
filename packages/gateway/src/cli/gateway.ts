@@ -230,12 +230,30 @@ function setupServer(
     logger.info("Settings link routes enabled at :8080/internal/settings-link");
   }
 
+  // MCP login routes (worker can trigger MCP OAuth login for users)
+  if (coreServices?.getMcpOAuthModule()) {
+    const { createMcpLoginRoutes } = require("../routes/internal/mcp-login");
+    const mcpLoginRouter = createMcpLoginRoutes(
+      coreServices.getMcpOAuthModule(),
+      interactionService
+    );
+    app.route("", mcpLoginRouter);
+    logger.info("MCP login routes enabled at :8080/internal/mcp-login");
+  }
+
   // Integrations discovery routes (unified skills + MCP search for workers)
   {
     const {
       createIntegrationsDiscoveryRoutes,
     } = require("../routes/internal/integrations-discovery");
-    const integrationsDiscoveryRouter = createIntegrationsDiscoveryRoutes();
+    const { SkillRegistryCoordinator } = require("../services/skill-registry");
+    const skillRegistryCoordinator = new SkillRegistryCoordinator();
+    const integrationsDiscoveryRouter = createIntegrationsDiscoveryRoutes({
+      coordinator: skillRegistryCoordinator,
+      agentSettingsStore: coreServices?.getAgentSettingsStore(),
+      integrationConfigService: coreServices?.getIntegrationConfigService(),
+      integrationCredentialStore: coreServices?.getIntegrationCredentialStore(),
+    });
     app.route("", integrationsDiscoveryRouter);
     logger.info(
       "Integrations discovery routes enabled at :8080/internal/integrations/*"
@@ -302,29 +320,76 @@ function setupServer(
     if (authProfilesManager) {
       const { verifySettingsToken } = require("../auth/settings/token-service");
       const {
+        verifySettingsSession,
+      } = require("../routes/public/settings-auth");
+      const {
         createAuthProfileLabel,
       } = require("../auth/settings/auth-profiles-manager");
+      const agentMetadataStore = coreServices.getAgentMetadataStore();
+      const userAgentsStore = coreServices.getUserAgentsStore();
 
-      const providerModuleMap = new Map(
-        providerModules.map((m) => [m.providerId, m])
-      );
+      /** Verify token or session cookie authorizes access to the given agentId */
+      const verifyProviderAuth = async (
+        c: any,
+        agentId: string
+      ): Promise<boolean> => {
+        // Try explicit token first (query param or body)
+        const body = c.__parsedBody;
+        const queryToken = c.req.query("token");
+        const authToken =
+          typeof body?.token === "string" ? body.token : queryToken;
+        const payload = authToken
+          ? verifySettingsToken(authToken)
+          : verifySettingsSession(c);
+        if (!payload) return false;
+
+        // Agent-based token: must match exactly
+        if (payload.agentId) return payload.agentId === agentId;
+
+        // Channel-based token: check user-agent association or metadata owner
+        if (userAgentsStore) {
+          const owns = await userAgentsStore.ownsAgent(
+            payload.platform,
+            payload.userId,
+            agentId
+          );
+          if (owns) return true;
+        }
+        if (agentMetadataStore) {
+          const metadata = await agentMetadataStore.getMetadata(agentId);
+          const isOwner =
+            metadata?.owner?.platform === payload.platform &&
+            metadata?.owner?.userId === payload.userId;
+          if (isOwner) {
+            // Reconcile missing index
+            userAgentsStore
+              ?.addAgent(payload.platform, payload.userId, agentId)
+              .catch(() => {
+                /* best-effort reconciliation */
+              });
+            return true;
+          }
+          if (metadata?.isWorkspaceAgent) return true;
+        }
+        return false;
+      };
 
       authRouter.post("/:provider/save-key", async (c: any) => {
         try {
           const providerId = c.req.param("provider");
-          const mod = providerModuleMap.get(providerId);
+          const mod = getModelProviderModules().find(
+            (m) => m.providerId === providerId
+          );
           if (!mod) return c.json({ error: "Unknown provider" }, 404);
 
           const body = await c.req.json();
-          const { agentId, apiKey, token } = body;
+          c.__parsedBody = body;
+          const { agentId, apiKey } = body;
           if (!agentId || !apiKey) {
             return c.json({ error: "Missing agentId or apiKey" }, 400);
           }
 
-          const queryToken = c.req.query("token");
-          const authToken = typeof token === "string" ? token : queryToken;
-          const payload = authToken ? verifySettingsToken(authToken) : null;
-          if (!payload?.agentId || payload.agentId !== agentId) {
+          if (!(await verifyProviderAuth(c, agentId))) {
             return c.json({ error: "Unauthorized" }, 401);
           }
 
@@ -347,21 +412,20 @@ function setupServer(
       authRouter.post("/:provider/logout", async (c: any) => {
         try {
           const providerId = c.req.param("provider");
-          const mod = providerModuleMap.get(providerId);
+          const mod = getModelProviderModules().find(
+            (m) => m.providerId === providerId
+          );
           if (!mod) return c.json({ error: "Unknown provider" }, 404);
 
           const body = await c.req.json().catch(() => ({}));
+          c.__parsedBody = body;
           const agentId = body.agentId || c.req.query("agentId");
-          const queryToken = c.req.query("token");
-          const authToken =
-            typeof body.token === "string" ? body.token : queryToken;
 
           if (!agentId) {
             return c.json({ error: "Missing agentId" }, 400);
           }
 
-          const payload = authToken ? verifySettingsToken(authToken) : null;
-          if (!payload?.agentId || payload.agentId !== agentId) {
+          if (!(await verifyProviderAuth(c, agentId))) {
             return c.json({ error: "Unauthorized" }, 401);
           }
 
@@ -392,6 +456,49 @@ function setupServer(
       registeredProviders.push("mcp");
     }
 
+    // Integration OAuth + internal routes
+    const integrationConfigService = coreServices.getIntegrationConfigService();
+    const integrationCredentialStore =
+      coreServices.getIntegrationCredentialStore();
+    const integrationOAuthModule = coreServices.getIntegrationOAuthModule();
+
+    if (
+      integrationConfigService &&
+      integrationCredentialStore &&
+      integrationOAuthModule
+    ) {
+      // Internal routes for workers (list, connect, disconnect)
+      const { createIntegrationRoutes } = require("../auth/integration/routes");
+      const publicGatewayUrl = coreServices.getPublicGatewayUrl();
+      const integrationRouter = createIntegrationRoutes(
+        integrationConfigService,
+        integrationCredentialStore,
+        integrationOAuthModule,
+        publicGatewayUrl,
+        interactionService,
+        coreServices.getAgentSettingsStore()
+      );
+      app.route("", integrationRouter);
+
+      // API proxy (credential injection + forwarding)
+      const {
+        createIntegrationApiProxy,
+      } = require("../auth/integration/api-proxy");
+      const apiProxyRouter = createIntegrationApiProxy(
+        integrationConfigService,
+        integrationCredentialStore
+      );
+      app.route("", apiProxyRouter);
+
+      // OAuth routes (public, for user browser redirects)
+      authRouter.route("/integration", integrationOAuthModule.getApp());
+      registeredProviders.push("integration");
+
+      logger.info(
+        "Integration routes enabled at :8080/internal/integrations/*, :8080/api/v1/auth/integration/*"
+      );
+    }
+
     // Get shared dependencies (needed before mounting auth router)
     const agentSettingsStore = coreServices.getAgentSettingsStore();
     const claudeOAuthStateStore = coreServices.getClaudeOAuthStateStore();
@@ -416,6 +523,13 @@ function setupServer(
         userAgentsStore: coreServices.getUserAgentsStore(),
         agentMetadataStore: coreServices.getAgentMetadataStore(),
         channelBindingService: coreServices.getChannelBindingService(),
+        integrationConfigService: coreServices.getIntegrationConfigService(),
+        integrationCredentialStore:
+          coreServices.getIntegrationCredentialStore(),
+        connectionManager: coreServices
+          .getWorkerGateway()
+          ?.getConnectionManager(),
+        systemSkillsService: coreServices.getSystemSkillsService(),
       });
       app.route("", settingsPageRouter);
       logger.info("Settings HTML page enabled at :8080/settings");

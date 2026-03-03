@@ -1,39 +1,13 @@
+import type { SkillIntegration, SkillMcpServer } from "@lobu/core";
 import { createLogger } from "@lobu/core";
+import yaml from "yaml";
+import type {
+  SkillContent,
+  SkillRegistry,
+  SkillRegistryResult,
+} from "./skill-registry";
 
 const logger = createLogger("skills-fetcher");
-
-const CLAWHUB_API_URL = "https://wry-manatee-359.convex.site/api/v1";
-
-/**
- * Parsed skill metadata from SKILL.md file
- */
-export interface SkillMetadata {
-  name: string;
-  description: string;
-  content: string;
-}
-
-/**
- * Curated skill entry for the skills dropdown
- */
-export interface CuratedSkill {
-  repo: string;
-  name: string;
-  description: string;
-  category: string;
-}
-
-/**
- * Skill entry from ClawHub API (replaces SkillsShSkill)
- * Kept as SkillsShSkill for backwards compatibility with route consumers
- */
-export interface SkillsShSkill {
-  id: string; // ClawHub slug (e.g., "pdf")
-  skillId: string; // Same as slug
-  name: string; // Display name
-  installs: number; // Downloads count
-  source: string; // "clawhub"
-}
 
 /**
  * ClawHub list response
@@ -73,98 +47,80 @@ interface ClawHubSearchResponse {
 }
 
 /**
- * Service for fetching skills from ClawHub (OpenClaw skill registry).
+ * ClawHub skill registry adapter.
  *
- * Responsibilities:
- * - Search and list skills via ClawHub REST API
- * - Fetch SKILL.md content via ClawHub file endpoint
- * - Parse YAML frontmatter for name/description
- * - Cache content with TTL
- * - Provide curated popular skills list
+ * Implements the SkillRegistry interface for the ClawHub (OpenClaw) registry.
+ * Handles search, fetch, and caching of SKILL.md content.
  */
-export class SkillsFetcherService {
-  private cache: Map<string, { data: SkillMetadata; fetchedAt: number }>;
+export class ClawHubRegistry implements SkillRegistry {
+  id: string;
+  private apiUrl: string;
+  private contentCache: Map<string, { data: SkillContent; fetchedAt: number }>;
   private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-  // Cache for ClawHub list results
-  private listCache: { skills: SkillsShSkill[]; fetchedAt: number } | null =
-    null;
+  // Cache for list results
+  private listCache: {
+    skills: SkillRegistryResult[];
+    fetchedAt: number;
+  } | null = null;
   private readonly LIST_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-  /**
-   * Curated list of popular skills from ClawHub
-   * These appear in the settings page dropdown for easy discovery
-   * repo field uses ClawHub slug format
-   */
-  static readonly CURATED_SKILLS: CuratedSkill[] = [
-    // Productivity
-    {
-      repo: "gog",
-      name: "gog",
-      description:
-        "Google Workspace CLI for Gmail, Calendar, Drive, Contacts, Sheets, and Docs",
-      category: "Productivity",
-    },
-    {
-      repo: "tavily-search",
-      name: "tavily-search",
-      description: "AI-optimized web search via Tavily API",
-      category: "Productivity",
-    },
-    {
-      repo: "summarize",
-      name: "summarize",
-      description:
-        "Summarize URLs or files (web, PDFs, images, audio, YouTube)",
-      category: "Productivity",
-    },
-    // Development
-    {
-      repo: "github",
-      name: "github",
-      description: "Interact with GitHub using the gh CLI",
-      category: "Development",
-    },
-    {
-      repo: "agent-browser",
-      name: "agent-browser",
-      description: "Headless browser automation CLI",
-      category: "Development",
-    },
-    {
-      repo: "frontend-design",
-      name: "frontend-design",
-      description: "Frontend design best practices",
-      category: "Development",
-    },
-    // Documents
-    {
-      repo: "pdf",
-      name: "pdf",
-      description: "PDF document processing and generation",
-      category: "Documents",
-    },
-    // Agent
-    {
-      repo: "self-improving-agent",
-      name: "self-improving-agent",
-      description:
-        "Captures learnings and corrections for continuous improvement",
-      category: "Agent",
-    },
-  ];
-
-  constructor() {
-    this.cache = new Map();
+  constructor(apiUrl: string, registryId = "clawhub") {
+    this.apiUrl = apiUrl;
+    this.id = registryId;
+    this.contentCache = new Map();
   }
 
   /**
-   * Fetch SKILL.md content from ClawHub.
-   * @param slug - ClawHub skill slug (e.g., "pdf", "cheese-brain")
+   * Search skills from ClawHub registry.
    */
-  async fetchSkill(slug: string): Promise<SkillMetadata> {
+  async search(query: string, limit = 20): Promise<SkillRegistryResult[]> {
+    if (!query.trim()) {
+      const allSkills = await this.fetchList();
+      return allSkills.slice(0, limit);
+    }
+
+    logger.info(`Searching ClawHub for: ${query}`);
+
+    try {
+      const url = `${this.apiUrl}/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`ClawHub search API returned ${response.status}`);
+      }
+
+      const data = (await response.json()) as ClawHubSearchResponse;
+      logger.info(`Found ${data.results.length} skills for query: ${query}`);
+
+      return data.results.slice(0, limit).map((result) => ({
+        id: result.slug,
+        name: result.displayName,
+        description: result.summary || undefined,
+        installs: 0,
+        source: this.id,
+      }));
+    } catch (error) {
+      logger.error("Failed to search ClawHub", { error, query });
+      // Fall back to client-side filtering
+      const allSkills = await this.fetchList();
+      const lowerQuery = query.toLowerCase().trim();
+      return allSkills
+        .filter(
+          (skill) =>
+            skill.name.toLowerCase().includes(lowerQuery) ||
+            skill.id.toLowerCase().includes(lowerQuery)
+        )
+        .slice(0, limit);
+    }
+  }
+
+  /**
+   * Fetch SKILL.md content from ClawHub and parse frontmatter.
+   */
+  async fetch(slug: string): Promise<SkillContent> {
     // Check cache
-    const cached = this.cache.get(slug);
+    const cached = this.contentCache.get(slug);
     if (cached && Date.now() - cached.fetchedAt < this.CACHE_TTL_MS) {
       logger.debug(`Returning cached skill: ${slug}`);
       return cached.data;
@@ -173,7 +129,7 @@ export class SkillsFetcherService {
     logger.info(`Fetching skill from ClawHub: ${slug}`);
 
     try {
-      const url = `${CLAWHUB_API_URL}/skills/${encodeURIComponent(slug)}/file?path=SKILL.md`;
+      const url = `${this.apiUrl}/skills/${encodeURIComponent(slug)}/file?path=SKILL.md`;
       const response = await fetch(url, {
         headers: { Accept: "text/plain" },
       });
@@ -185,13 +141,16 @@ export class SkillsFetcherService {
       }
 
       const content = await response.text();
-      const metadata = this.parseSkillContent(content, slug);
+      const skillContent = this.parseSkillContent(content, slug);
 
       // Cache result
-      this.cache.set(slug, { data: metadata, fetchedAt: Date.now() });
-      logger.info(`Cached skill: ${slug} (${metadata.name})`);
+      this.contentCache.set(slug, {
+        data: skillContent,
+        fetchedAt: Date.now(),
+      });
+      logger.info(`Cached skill: ${slug} (${skillContent.name})`);
 
-      return metadata;
+      return skillContent;
     } catch (error) {
       logger.error(`Failed to fetch skill ${slug} from ClawHub`, { error });
       throw new Error(
@@ -201,55 +160,22 @@ export class SkillsFetcherService {
   }
 
   /**
-   * Parse SKILL.md content and extract YAML frontmatter.
-   */
-  private parseSkillContent(content: string, slug: string): SkillMetadata {
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-
-    let name = slug;
-    let description = "";
-
-    if (frontmatterMatch?.[1]) {
-      const frontmatter = frontmatterMatch[1];
-
-      const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-      if (nameMatch?.[1]) {
-        name = nameMatch[1].trim();
-      }
-
-      const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-      if (descMatch?.[1]) {
-        description = descMatch[1].trim();
-      }
-    }
-
-    return { name, description, content };
-  }
-
-  /**
-   * Get list of curated popular skills for the settings dropdown.
-   */
-  getCuratedSkills(): CuratedSkill[] {
-    return SkillsFetcherService.CURATED_SKILLS;
-  }
-
-  /**
    * Clear cached skill content.
    */
   clearCache(slug?: string): void {
     if (slug) {
-      this.cache.delete(slug);
+      this.contentCache.delete(slug);
       logger.debug(`Cleared cache for: ${slug}`);
     } else {
-      this.cache.clear();
+      this.contentCache.clear();
       logger.debug("Cleared all skill cache");
     }
   }
 
   /**
-   * Fetch popular skills from ClawHub API (with caching).
+   * Fetch popular skills list from ClawHub API (with caching).
    */
-  async fetchSkillsFromRegistry(): Promise<SkillsShSkill[]> {
+  private async fetchList(): Promise<SkillRegistryResult[]> {
     if (
       this.listCache &&
       Date.now() - this.listCache.fetchedAt < this.LIST_CACHE_TTL_MS
@@ -264,14 +190,20 @@ export class SkillsFetcherService {
 
     try {
       const response = await fetch(
-        `${CLAWHUB_API_URL}/skills?sort=downloads&limit=50`
+        `${this.apiUrl}/skills?sort=downloads&limit=50`
       );
       if (!response.ok) {
         throw new Error(`ClawHub API returned ${response.status}`);
       }
 
       const data = (await response.json()) as ClawHubListResponse;
-      const skills = data.items.map((item) => this.toSkillsShSkill(item));
+      const skills: SkillRegistryResult[] = data.items.map((item) => ({
+        id: item.slug,
+        name: item.displayName,
+        description: item.summary || undefined,
+        installs: item.stats?.downloads || 0,
+        source: this.id,
+      }));
 
       logger.info(`Fetched ${skills.length} skills from ClawHub`);
 
@@ -284,59 +216,115 @@ export class SkillsFetcherService {
   }
 
   /**
-   * Search skills from ClawHub registry.
+   * Parse SKILL.md content and extract YAML frontmatter using yaml parser.
    */
-  async searchSkills(query: string, limit = 20): Promise<SkillsShSkill[]> {
-    if (!query.trim()) {
-      const allSkills = await this.fetchSkillsFromRegistry();
-      return allSkills.slice(0, limit);
-    }
+  private parseSkillContent(content: string, slug: string): SkillContent {
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
 
-    logger.info(`Searching ClawHub for: ${query}`);
+    let name = slug;
+    let description = "";
+    let integrations: SkillIntegration[] | undefined;
+    let mcpServers: SkillMcpServer[] | undefined;
+    let nixPackages: string[] | undefined;
+    let permissions: string[] | undefined;
+    let providers: string[] | undefined;
 
-    try {
-      const url = `${CLAWHUB_API_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`;
-      const response = await fetch(url);
+    if (frontmatterMatch?.[1]) {
+      try {
+        const fm = yaml.parse(frontmatterMatch[1]) as Record<string, unknown>;
 
-      if (!response.ok) {
-        throw new Error(`ClawHub search API returned ${response.status}`);
+        if (typeof fm.name === "string") name = fm.name;
+        if (typeof fm.description === "string") description = fm.description;
+
+        integrations = this.parseIntegrations(fm.integrations);
+        mcpServers = this.parseMcpServers(fm.mcpServers);
+        nixPackages = this.parseStringList(fm.nixPackages);
+        permissions = this.parseStringList(fm.permissions);
+        providers = this.parseStringList(fm.providers);
+      } catch (error) {
+        logger.warn(`Failed to parse YAML frontmatter for ${slug}`, { error });
       }
-
-      const data = (await response.json()) as ClawHubSearchResponse;
-      logger.info(`Found ${data.results.length} skills for query: ${query}`);
-
-      return data.results.slice(0, limit).map((result) => ({
-        id: result.slug,
-        skillId: result.slug,
-        name: result.displayName,
-        installs: 0,
-        source: "clawhub",
-      }));
-    } catch (error) {
-      logger.error("Failed to search ClawHub", { error, query });
-      // Fall back to client-side filtering
-      const allSkills = await this.fetchSkillsFromRegistry();
-      const lowerQuery = query.toLowerCase().trim();
-      return allSkills
-        .filter(
-          (skill) =>
-            skill.name.toLowerCase().includes(lowerQuery) ||
-            skill.id.toLowerCase().includes(lowerQuery)
-        )
-        .slice(0, limit);
     }
+
+    return {
+      name,
+      description,
+      content,
+      integrations,
+      mcpServers,
+      nixPackages,
+      permissions,
+      providers,
+    };
   }
 
   /**
-   * Convert ClawHub list item to SkillsShSkill format
+   * Parse integrations field — normalizes string entries to SkillIntegration objects.
    */
-  private toSkillsShSkill(item: ClawHubListItem): SkillsShSkill {
-    return {
-      id: item.slug,
-      skillId: item.slug,
-      name: item.displayName,
-      installs: item.stats?.downloads || 0,
-      source: "clawhub",
-    };
+  private parseIntegrations(value: unknown): SkillIntegration[] | undefined {
+    if (!Array.isArray(value) || value.length === 0) return undefined;
+    const result = value
+      .map((entry): SkillIntegration | null => {
+        if (typeof entry === "string") return { id: entry };
+        if (
+          typeof entry === "object" &&
+          entry !== null &&
+          typeof entry.id === "string"
+        ) {
+          const obj: SkillIntegration = { id: entry.id };
+          if (typeof entry.label === "string") obj.label = entry.label;
+          if (entry.authType === "oauth" || entry.authType === "api-key")
+            obj.authType = entry.authType;
+          if (Array.isArray(entry.scopes))
+            obj.scopes = entry.scopes.filter(
+              (s: unknown) => typeof s === "string"
+            );
+          if (Array.isArray(entry.apiDomains))
+            obj.apiDomains = entry.apiDomains.filter(
+              (d: unknown) => typeof d === "string"
+            );
+          return obj;
+        }
+        return null;
+      })
+      .filter((v): v is SkillIntegration => v !== null);
+    return result.length > 0 ? result : undefined;
+  }
+
+  /**
+   * Parse mcpServers field from frontmatter.
+   */
+  private parseMcpServers(value: unknown): SkillMcpServer[] | undefined {
+    if (!Array.isArray(value) || value.length === 0) return undefined;
+    return value
+      .map((entry) => {
+        if (
+          typeof entry !== "object" ||
+          entry === null ||
+          typeof entry.id !== "string"
+        )
+          return null;
+        const server: SkillMcpServer = { id: entry.id };
+        if (typeof entry.name === "string") server.name = entry.name;
+        if (typeof entry.url === "string") server.url = entry.url;
+        if (entry.type === "sse" || entry.type === "stdio")
+          server.type = entry.type;
+        if (typeof entry.command === "string") server.command = entry.command;
+        if (Array.isArray(entry.args))
+          server.args = entry.args.filter(
+            (a: unknown) => typeof a === "string"
+          );
+        return server;
+      })
+      .filter((v): v is SkillMcpServer => v !== null);
+  }
+
+  /**
+   * Parse a YAML list of strings.
+   */
+  private parseStringList(value: unknown): string[] | undefined {
+    if (!Array.isArray(value) || value.length === 0) return undefined;
+    const items = value.filter((v): v is string => typeof v === "string");
+    return items.length > 0 ? items : undefined;
   }
 }

@@ -137,7 +137,7 @@ You can access any external service without restrictions.`;
 
 **Internet Access:** Complete isolation (no external access)
 
-You do NOT have access to the internet. All external requests (curl, wget, npm, pip, etc.) will fail. If you need network access, use GetSettingsLinkForDomain to request it — this presents inline approval buttons to the user. Only local operations and MCP tools are available.`;
+You do NOT have access to the internet. All external requests (curl, wget, npm, pip, etc.) will fail. If you need network access, use GetSettingsLink with prefillGrants to request it — this presents inline approval buttons to the user. Only local operations and MCP tools are available.`;
     }
 
     // Allowlist mode
@@ -168,7 +168,7 @@ ${blockedList}`;
 
     instructions += `
 
-You can only access the allowed domains listed above. All other external requests will be blocked by the proxy. If a domain is blocked, use GetSettingsLinkForDomain to request access — this presents inline approval buttons to the user (default grant: 1 hour). Plan your work accordingly and use available MCP tools when possible.`;
+You can only access the allowed domains listed above. All other external requests will be blocked by the proxy. If a domain is blocked, use GetSettingsLink with prefillGrants to request access — this presents inline approval buttons to the user (default grant: 1 hour). Plan your work accordingly and use available MCP tools when possible.`;
 
     return instructions;
   }

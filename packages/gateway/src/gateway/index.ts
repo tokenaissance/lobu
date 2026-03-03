@@ -1,10 +1,19 @@
 #!/usr/bin/env bun
 
-import type { InstructionContext, WorkerTokenData } from "@lobu/core";
+import type {
+  ConfigProviderMeta,
+  InstructionContext,
+  IntegrationAccountInfo,
+  IntegrationInfo,
+  WorkerTokenData,
+} from "@lobu/core";
 import { createLogger, verifyWorkerToken } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
+import type { ApiKeyProviderModule } from "../auth/api-key-provider-module";
+import type { IntegrationConfigService } from "../auth/integration/config-service";
+import type { IntegrationCredentialStore } from "../auth/integration/credential-store";
 import type { McpConfigService } from "../auth/mcp/config-service";
 import type { McpProxy } from "../auth/mcp/proxy";
 import type { McpTool } from "../auth/mcp/tool-cache";
@@ -34,6 +43,8 @@ export class WorkerGateway {
   private mcpProxy?: McpProxy;
   private providerCatalogService?: ProviderCatalogService;
   private agentSettingsStore?: AgentSettingsStore;
+  private integrationConfigService?: IntegrationConfigService;
+  private integrationCredentialStore?: IntegrationCredentialStore;
 
   constructor(
     queue: IMessageQueue,
@@ -62,6 +73,17 @@ export class WorkerGateway {
     // Setup Hono app
     this.app = new Hono();
     this.setupRoutes();
+  }
+
+  /**
+   * Set integration services (called after integration services are initialized)
+   */
+  setIntegrationServices(
+    configService: IntegrationConfigService,
+    credentialStore: IntegrationCredentialStore
+  ): void {
+    this.integrationConfigService = configService;
+    this.integrationCredentialStore = credentialStore;
   }
 
   /**
@@ -282,33 +304,30 @@ export class WorkerGateway {
         ),
       ]);
 
-      // Fetch tool lists for authenticated MCPs
+      // Fetch tool lists and instructions for ALL MCPs (unauthenticated ones
+      // will attempt discovery without credentials)
       const mcpTools: Record<string, McpTool[]> = {};
+      const mcpInstructions: Record<string, string> = {};
       if (this.mcpProxy && contextData.mcpStatus.length > 0) {
-        const authenticatedMcps = contextData.mcpStatus.filter(
-          (mcp) =>
-            (!mcp.requiresAuth || mcp.authenticated) &&
-            (!mcp.requiresInput || mcp.configured)
-        );
-
         const toolResults = await Promise.allSettled(
-          authenticatedMcps.map(async (mcp) => {
-            const tools = await this.mcpProxy?.fetchToolsForMcp(
+          contextData.mcpStatus.map(async (mcp) => {
+            const result = await this.mcpProxy?.fetchToolsForMcp(
               mcp.id,
               agentId || userId,
               auth.tokenData
             );
-            return { mcpId: mcp.id, tools };
+            return { mcpId: mcp.id, ...(result || { tools: [] }) };
           })
         );
 
         for (const result of toolResults) {
-          if (
-            result.status === "fulfilled" &&
-            result.value.tools &&
-            result.value.tools.length > 0
-          ) {
-            mcpTools[result.value.mcpId] = result.value.tools;
+          if (result.status === "fulfilled") {
+            if (result.value.tools && result.value.tools.length > 0) {
+              mcpTools[result.value.mcpId] = result.value.tools;
+            }
+            if (result.value.instructions) {
+              mcpInstructions[result.value.mcpId] = result.value.instructions;
+            }
           }
         }
       }
@@ -322,8 +341,39 @@ export class WorkerGateway {
         baseUrl
       );
 
+      // Fetch integration status
+      const integrationStatus: IntegrationInfo[] = [];
+      if (
+        this.integrationConfigService &&
+        this.integrationCredentialStore &&
+        agentId
+      ) {
+        try {
+          const allConfigs = await this.integrationConfigService.getAll();
+          for (const [id, config] of Object.entries(allConfigs)) {
+            const authType = config.authType || "oauth";
+            const accountList =
+              await this.integrationCredentialStore.listAccounts(agentId, id);
+            const accounts: IntegrationAccountInfo[] = accountList.map((a) => ({
+              accountId: a.accountId,
+              grantedScopes: a.credentials.grantedScopes,
+            }));
+            integrationStatus.push({
+              id,
+              label: config.label,
+              authType,
+              connected: accounts.length > 0,
+              accounts,
+              availableScopes: config.scopes?.available ?? [],
+            });
+          }
+        } catch (error) {
+          logger.error("Failed to fetch integration status", { error });
+        }
+      }
+
       logger.info(
-        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.agentInstructions.length} chars agent instructions, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${contextData.skillsInstructions.length} chars skills instructions, ${contextData.mcpStatus.length} MCP status entries, ${Object.keys(mcpTools).length} MCP tool lists, provider: ${providerConfig.defaultProvider || "none"}`
+        `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.agentInstructions.length} chars agent instructions, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${contextData.skillsInstructions.length} chars skills instructions, ${contextData.mcpStatus.length} MCP status entries, ${Object.keys(mcpTools).length} MCP tool lists, ${Object.keys(mcpInstructions).length} MCP instructions, ${integrationStatus.length} integrations, provider: ${providerConfig.defaultProvider || "none"}`
       );
 
       return c.json({
@@ -334,7 +384,9 @@ export class WorkerGateway {
         skillsInstructions: contextData.skillsInstructions,
         mcpStatus: contextData.mcpStatus,
         mcpTools,
+        mcpInstructions,
         providerConfig,
+        integrationStatus,
       });
     } catch (error) {
       logger.error("Failed to generate session context", { error });
@@ -405,6 +457,7 @@ export class WorkerGateway {
       sessionArg?: string;
     }>;
     providerBaseUrlMappings?: Record<string, string>;
+    configProviders?: Record<string, ConfigProviderMeta>;
   }> {
     if (!this.providerCatalogService || !agentId) {
       return {};
@@ -464,12 +517,22 @@ export class WorkerGateway {
       }
     }
 
+    // Collect metadata from config-driven providers for worker model resolution
+    const configProviders: Record<string, ConfigProviderMeta> = {};
+    for (const provider of effectiveProviders) {
+      const meta = (provider as ApiKeyProviderModule).getProviderMetadata?.();
+      if (meta) {
+        configProviders[provider.providerId] = meta;
+      }
+    }
+
     const result: {
       credentialEnvVarName?: string;
       defaultProvider?: string;
       defaultModel?: string;
       cliBackends?: typeof cliBackends;
       providerBaseUrlMappings?: Record<string, string>;
+      configProviders?: typeof configProviders;
     } = {};
 
     if (primaryProvider) {
@@ -490,6 +553,10 @@ export class WorkerGateway {
 
     if (cliBackends.length > 0) {
       result.cliBackends = cliBackends;
+    }
+
+    if (Object.keys(configProviders).length > 0) {
+      result.configProviders = configProviders;
     }
 
     return result;

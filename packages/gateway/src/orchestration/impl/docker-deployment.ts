@@ -336,11 +336,8 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
   async createDeployment(
     ...args: Parameters<BaseDeploymentManager["createDeployment"]>
   ): Promise<void> {
-    const [deploymentName, username, userId, messageDataRaw, userEnvVarsRaw] =
-      args;
+    const [deploymentName, username, userId, messageDataRaw] = args;
     const messageData = messageDataRaw as MessagePayload | undefined;
-    const userEnvVars =
-      (userEnvVarsRaw as Record<string, string> | undefined) ?? {};
 
     try {
       // Use agentId for volume naming (shared across threads in same space)
@@ -363,8 +360,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
         userId,
         deploymentName,
         messageData,
-        true,
-        userEnvVars
+        true
       );
 
       // On macOS/Windows, Docker containers need to use host.docker.internal instead of localhost

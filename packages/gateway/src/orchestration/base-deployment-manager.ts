@@ -219,8 +219,7 @@ export abstract class BaseDeploymentManager {
     deploymentName: string,
     username: string,
     userId: string,
-    messageData?: MessagePayload,
-    userEnvVars?: Record<string, string>
+    messageData?: MessagePayload
   ): Promise<void>;
   abstract scaleDeployment(
     deploymentName: string,
@@ -315,17 +314,7 @@ export abstract class BaseDeploymentManager {
         }
       }
 
-      // Extract user env vars from agent settings (carried in agentOptions)
-      const userEnvVars =
-        (messageData?.agentOptions as Record<string, any>)?.envVars ?? {};
-
-      await this.createDeployment(
-        deploymentName,
-        userId,
-        userId,
-        messageData,
-        userEnvVars
-      );
+      await this.createDeployment(deploymentName, userId, userId, messageData);
     } catch (error) {
       throw new OrchestratorError(
         ErrorCode.DEPLOYMENT_CREATE_FAILED,
@@ -604,8 +593,7 @@ export abstract class BaseDeploymentManager {
     userId: string,
     deploymentName: string,
     messageData?: MessagePayload,
-    includeSecrets: boolean = true,
-    userEnvVars: Record<string, string> = {}
+    includeSecrets: boolean = true
   ): Promise<Record<string, string>> {
     const validated = this.validateMessageData(deploymentName, messageData);
     const { conversationId, channelId, platformMetadata, agentId, platform } =
@@ -654,31 +642,6 @@ export abstract class BaseDeploymentManager {
       for (const [key, value] of Object.entries(this.config.worker.env)) {
         envVars[key] = String(value);
       }
-    }
-
-    // Merge user environment variables (they take precedence over defaults,
-    // except for system-critical vars that must not be overridden)
-    const PROTECTED_ENV_VARS = new Set([
-      "QUEUE_URL",
-      "DEPLOYMENT_NAME",
-      "WORKER_TOKEN",
-      "HTTP_PROXY",
-      "HTTPS_PROXY",
-      "NO_PROXY",
-      "DISPATCHER_URL",
-      "NODE_ENV",
-    ]);
-
-    for (const [key, value] of Object.entries(userEnvVars)) {
-      if (!PROTECTED_ENV_VARS.has(key)) {
-        envVars[key] = value;
-      }
-    }
-
-    if (Object.keys(userEnvVars).length > 0) {
-      logger.info(
-        `Loaded ${Object.keys(userEnvVars).length} user environment variables for ${userId}`
-      );
     }
 
     // Resolve per-agent installed providers (catalog-only when active, no global fallback)

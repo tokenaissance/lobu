@@ -20,8 +20,7 @@ interface ChatGPTOAuthModuleOptions {
 
 /**
  * ChatGPT OAuth Module - Handles device code authentication for ChatGPT.
- * Stores the access token in AgentSettings.envVars as OPENAI_API_KEY.
- * Pi-ai's openai-codex provider picks up OPENAI_API_KEY automatically.
+ * Stores the access token in auth profiles.
  */
 export class ChatGPTOAuthModule extends BaseProviderModule {
   private deviceCodeClient: ChatGPTDeviceCodeClient;

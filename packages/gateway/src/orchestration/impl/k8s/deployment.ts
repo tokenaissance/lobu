@@ -483,8 +483,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
     deploymentName: string,
     username: string,
     userId: string,
-    messageData?: MessagePayload,
-    userEnvVars: Record<string, string> = {}
+    messageData?: MessagePayload
   ): Promise<void> {
     // Extract traceparent for distributed tracing
     const traceparent = messageData?.platformMetadata?.traceparent as
@@ -525,8 +524,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
       userId,
       deploymentName,
       messageData,
-      true, // Include secrets to match Docker behavior
-      userEnvVars
+      true // Include secrets to match Docker behavior
     );
 
     const platform = messageData?.platform || "unknown";

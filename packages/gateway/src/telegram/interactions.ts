@@ -291,14 +291,20 @@ export class TelegramInteractionRenderer {
       "Rendering link button"
     );
 
-    const keyboard = new InlineKeyboard().webApp(btn.label, btn.url);
+    // OAuth links must open in system browser (Google blocks embedded WebViews)
+    const keyboard =
+      btn.linkType === "oauth"
+        ? new InlineKeyboard().url(btn.label, btn.url)
+        : new InlineKeyboard().webApp(btn.label, btn.url);
 
     try {
       await this.bot.api.sendMessage(
         chatId,
         btn.linkType === "install"
           ? `Tap the button below to install:`
-          : `Tap the button below to open settings:`,
+          : btn.linkType === "oauth"
+            ? `Tap the button below to connect:`
+            : `Tap the button below to open settings:`,
         { reply_markup: keyboard }
       );
     } catch (err) {

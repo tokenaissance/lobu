@@ -1,4 +1,5 @@
 import {
+  type AgentIntegrationConfig,
   type AuthProfile,
   BaseRedisStore,
   decrypt,
@@ -37,8 +38,8 @@ export interface AgentSettings {
   mcpServers?: Record<string, McpServerConfig>;
   /** Internal marker: MCP IDs already acknowledged to the user in chat */
   mcpInstallNotified?: Record<string, number>;
-  /** Environment variables passed to worker (KEY=VALUE pairs) */
-  envVars?: Record<string, string>;
+  /** Agent-created API key integrations, keyed by integration ID */
+  agentIntegrations?: Record<string, AgentIntegrationConfig>;
   /** Workspace identity/instruction files (markdown content) */
   soulMd?: string;
   /** Workspace user-specific context (markdown content) */

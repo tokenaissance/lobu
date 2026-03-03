@@ -1,3 +1,4 @@
+import type { ConfigProviderMeta } from "@lobu/core";
 import type { ModelOption } from "../modules/module-system";
 import { BaseProviderModule } from "./base-provider-module";
 import type { AgentSettingsStore } from "./settings/agent-settings-store";
@@ -17,6 +18,16 @@ export interface ApiKeyProviderConfig {
   upstreamBaseUrl?: string;
   /** Explicit base URL env var name (defaults to envVarName with _KEY replaced by _BASE_URL) */
   baseUrlEnvVarName?: string;
+  /** Relative path to fetch model list (e.g. "/v1/models"). Enables generic model fetching. */
+  modelsEndpoint?: string;
+  /** SDK compatibility — "openai" means OpenAI-compatible format. Also maps OPENAI_BASE_URL in proxy. */
+  sdkCompat?: "openai";
+  /** Default model ID when none is configured */
+  defaultModel?: string;
+  /** Override provider name for model registry lookup */
+  registryAlias?: string;
+  /** Whether to show in "Add Provider" catalog (default: true) */
+  catalogVisible?: boolean;
   agentSettingsStore: AgentSettingsStore;
 }
 
@@ -24,8 +35,13 @@ export interface ApiKeyProviderConfig {
  * Generic API-key provider module.
  * Any model provider that only needs a "paste your API key" flow
  * can be instantiated from this class without writing a full module.
+ *
+ * Config-driven providers (from system-skills.json) set sdkCompat,
+ * defaultModel, and registryAlias to enable dynamic worker model resolution.
  */
 export class ApiKeyProviderModule extends BaseProviderModule {
+  protected readonly apiKeyConfig: ApiKeyProviderConfig;
+
   constructor(config: ApiKeyProviderConfig) {
     const authProfilesManager = new AuthProfilesManager(
       config.agentSettingsStore
@@ -46,11 +62,51 @@ export class ApiKeyProviderModule extends BaseProviderModule {
         authType: "api-key",
         apiKeyInstructions: config.apiKeyInstructions,
         apiKeyPlaceholder: config.apiKeyPlaceholder,
+        catalogVisible: config.catalogVisible,
       },
       authProfilesManager
     );
-    // Preserve existing module name format
+    this.apiKeyConfig = config;
     this.name = `${config.providerId}-api-key`;
+  }
+
+  /**
+   * For openai-compatible providers, also map OPENAI_BASE_URL so the
+   * OpenAI SDK resolves through our proxy.
+   */
+  override getProxyBaseUrlMappings(
+    proxyUrl: string,
+    agentId?: string
+  ): Record<string, string> {
+    const mappings = super.getProxyBaseUrlMappings(proxyUrl, agentId);
+    if (this.apiKeyConfig.sdkCompat === "openai") {
+      const slug = this.providerConfig.slug || this.providerId;
+      const base = `${proxyUrl}/${slug}`;
+      mappings.OPENAI_BASE_URL = agentId ? `${base}/a/${agentId}` : base;
+    }
+    return mappings;
+  }
+
+  /**
+   * Returns metadata for config-driven providers (sdkCompat, defaultModel, etc.)
+   * so the worker can register them dynamically. Returns null for hardcoded providers.
+   */
+  getProviderMetadata(): ConfigProviderMeta | null {
+    if (
+      !this.apiKeyConfig.sdkCompat &&
+      !this.apiKeyConfig.defaultModel &&
+      !this.apiKeyConfig.registryAlias
+    ) {
+      return null;
+    }
+    return {
+      sdkCompat: this.apiKeyConfig.sdkCompat,
+      defaultModel: this.apiKeyConfig.defaultModel,
+      registryAlias: this.apiKeyConfig.registryAlias,
+      baseUrlEnvVar:
+        this.providerConfig.baseUrlEnvVarName ||
+        this.apiKeyConfig.envVarName.replace("_KEY", "_BASE_URL"),
+    };
   }
 
   async getModelOptions(
@@ -60,12 +116,69 @@ export class ApiKeyProviderModule extends BaseProviderModule {
     const key = await this.getCredential(agentId);
     if (!key) return [];
 
+    // Gemini uses a non-standard models endpoint with key-in-query auth
     if (this.providerId === "gemini") {
       return this.fetchGeminiModels(key);
     }
 
-    if (this.providerId === "nvidia") {
-      return this.fetchNvidiaModels(key);
+    // Generic modelsEndpoint: supports OpenAI format ({data:[{id}]}) and Ollama format ({models:[{name}]})
+    const modelsEndpoint = this.apiKeyConfig.modelsEndpoint;
+    if (modelsEndpoint && this.apiKeyConfig.upstreamBaseUrl) {
+      return this.fetchModelsGeneric(
+        key,
+        this.apiKeyConfig.upstreamBaseUrl,
+        modelsEndpoint
+      );
+    }
+
+    return [];
+  }
+
+  /**
+   * Generic model fetcher using Bearer auth. Works with OpenAI-compatible
+   * endpoints ({data:[{id}]}) and Ollama ({models:[{name}]}).
+   */
+  private async fetchModelsGeneric(
+    apiKey: string,
+    baseUrl: string,
+    endpoint: string
+  ): Promise<ModelOption[]> {
+    const url = `${baseUrl.replace(/\/$/, "")}${endpoint}`;
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+    }).catch(() => null);
+    if (!response || !response.ok) return [];
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: Array<{ id?: string }>;
+      models?: Array<{ name?: string; model?: string }>;
+    };
+
+    const prefix = this.providerId;
+
+    // OpenAI format: { data: [{ id: "model-name" }] }
+    if (payload.data && Array.isArray(payload.data)) {
+      return payload.data
+        .map((model) => {
+          const id = model.id?.trim();
+          if (!id) return null;
+          return { value: `${prefix}/${id}`, label: id } satisfies ModelOption;
+        })
+        .filter((item): item is ModelOption => Boolean(item));
+    }
+
+    // Ollama format: { models: [{ name: "model-name", model: "model-name" }] }
+    if (payload.models && Array.isArray(payload.models)) {
+      return payload.models
+        .map((model) => {
+          const id = (model.model || model.name)?.trim();
+          if (!id) return null;
+          return { value: `${prefix}/${id}`, label: id } satisfies ModelOption;
+        })
+        .filter((item): item is ModelOption => Boolean(item));
     }
 
     return [];
@@ -93,31 +206,6 @@ export class ApiKeyProviderModule extends BaseProviderModule {
         return {
           value: `gemini/${raw}`,
           label: model.displayName || raw,
-        } satisfies ModelOption;
-      })
-      .filter((item): item is ModelOption => Boolean(item));
-  }
-
-  private async fetchNvidiaModels(apiKey: string): Promise<ModelOption[]> {
-    const response = await fetch("https://integrate.api.nvidia.com/v1/models", {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-    }).catch(() => null);
-    if (!response || !response.ok) return [];
-
-    const payload = (await response.json().catch(() => ({}))) as {
-      data?: Array<{ id?: string }>;
-    };
-
-    return (payload.data || [])
-      .map((model) => {
-        const id = model.id?.trim();
-        if (!id) return null;
-        return {
-          value: `nvidia/${id}`,
-          label: id,
         } satisfies ModelOption;
       })
       .filter((item): item is ModelOption => Boolean(item));

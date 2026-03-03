@@ -443,6 +443,22 @@ export class McpConfigService {
   }
 
   /**
+   * Return global MCP server configs (from the config file) in settings-compatible format.
+   * Used by the settings page to show global MCPs alongside per-agent ones.
+   */
+  async getGlobalMcpServers(): Promise<
+    Record<string, { url?: string; type?: "sse" | "stdio" }>
+  > {
+    const config = await this.loadConfig();
+    const result: Record<string, { url?: string; type?: "sse" | "stdio" }> = {};
+    for (const [id, raw] of Object.entries(config.rawServers)) {
+      const type = raw.type === "stdio" ? ("stdio" as const) : ("sse" as const);
+      result[id] = { url: raw.url, type };
+    }
+    return result;
+  }
+
+  /**
    * Enrich config with OAuth discovery for all HTTP MCPs
    * Should be called once during gateway initialization
    */

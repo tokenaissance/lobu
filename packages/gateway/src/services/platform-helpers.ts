@@ -45,9 +45,6 @@ export async function resolveAgentOptions(
   if (settings.nixConfig) {
     mergedOptions.nixConfig = settings.nixConfig;
   }
-  if (settings.envVars) {
-    mergedOptions.envVars = settings.envVars;
-  }
   if (settings.toolsConfig) {
     mergedOptions.toolsConfig = settings.toolsConfig;
   }

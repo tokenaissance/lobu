@@ -7,6 +7,9 @@ import { ApiKeyProviderModule } from "../auth/api-key-provider-module";
 import { ChatGPTOAuthModule } from "../auth/chatgpt";
 import { ClaudeModelPreferenceStore } from "../auth/claude/model-preference-store";
 import { ClaudeOAuthModule } from "../auth/claude/oauth-module";
+import { IntegrationConfigService } from "../auth/integration/config-service";
+import { IntegrationCredentialStore } from "../auth/integration/credential-store";
+import { IntegrationOAuthModule } from "../auth/integration/oauth-module";
 import { McpConfigService } from "../auth/mcp/config-service";
 import { McpCredentialStore } from "../auth/mcp/credential-store";
 import { McpInputStore } from "../auth/mcp/input-store";
@@ -44,6 +47,7 @@ import { SecretProxy } from "../proxy/secret-proxy";
 import { TokenRefreshJob } from "../proxy/token-refresh-job";
 import { InstructionService } from "./instruction-service";
 import { RedisSessionStore, SessionManager } from "./session-manager";
+import { SystemSkillsService } from "./system-skills-service";
 import { TranscriptionService } from "./transcription-service";
 
 const logger = createLogger("core-services");
@@ -102,6 +106,18 @@ export class CoreServices {
   private mcpOAuthModule?: McpOAuthModule;
 
   // ============================================================================
+  // System Skills Service
+  // ============================================================================
+  private systemSkillsService?: SystemSkillsService;
+
+  // ============================================================================
+  // Integration Services
+  // ============================================================================
+  private integrationConfigService?: IntegrationConfigService;
+  private integrationCredentialStore?: IntegrationCredentialStore;
+  private integrationOAuthModule?: IntegrationOAuthModule;
+
+  // ============================================================================
   // Worker Gateway
   // ============================================================================
   private workerGateway?: WorkerGateway;
@@ -154,6 +170,29 @@ export class CoreServices {
     // 4. MCP ecosystem (depends on queue and Claude services)
     await this.initializeMcpServices();
     logger.debug("MCP services initialized");
+
+    // 4b. Integration services (depends on queue)
+    await this.initializeIntegrationServices();
+    logger.debug("Integration services initialized");
+
+    // Wire integration services into worker gateway (initialized in step 4)
+    if (
+      this.workerGateway &&
+      this.integrationConfigService &&
+      this.integrationCredentialStore
+    ) {
+      this.workerGateway.setIntegrationServices(
+        this.integrationConfigService,
+        this.integrationCredentialStore
+      );
+    }
+
+    // Wire connection manager into integration OAuth module for config_changed notifications
+    if (this.integrationOAuthModule && this.workerGateway) {
+      this.integrationOAuthModule.setConnectionManager(
+        this.workerGateway.getConnectionManager()
+      );
+    }
 
     // 5. Queue producer (depends on queue being ready)
     await this.initializeQueueProducer();
@@ -324,6 +363,7 @@ export class CoreServices {
       envVarName: "NVIDIA_API_KEY",
       slug: "nvidia",
       upstreamBaseUrl: "https://integrate.api.nvidia.com",
+      modelsEndpoint: "/v1/models",
       apiKeyInstructions:
         'Get your API key from <a href="https://build.nvidia.com/settings/api-keys" target="_blank" class="text-blue-600 hover:underline">NVIDIA Build</a>',
       apiKeyPlaceholder: "nvapi-...",
@@ -413,6 +453,56 @@ export class CoreServices {
     logger.info(
       `✅ ElevenLabs module registered (system token: ${elevenlabsModule.hasSystemKey() ? "available" : "not available"})`
     );
+
+    // Initialize SystemSkillsService from LOBU_SYSTEM_SKILLS_URL (or legacy env vars)
+    const systemSkillsUrl =
+      process.env.LOBU_SYSTEM_SKILLS_URL ||
+      process.env.LOBU_INTEGRATIONS_CONFIG_URL ||
+      process.env.LOBU_INTEGRATIONS_URL;
+    this.systemSkillsService = new SystemSkillsService(systemSkillsUrl);
+
+    // Register config-driven providers from system skills
+    if (systemSkillsUrl) {
+      // Create config service early if not yet initialized
+      if (!this.integrationConfigService) {
+        this.integrationConfigService = new IntegrationConfigService(
+          this.systemSkillsService,
+          this.agentSettingsStore
+        );
+      }
+      const configProviders =
+        await this.integrationConfigService.getProviders();
+      const registeredIds = new Set(
+        getModelProviderModules().map((m) => m.providerId)
+      );
+      for (const [id, entry] of Object.entries(configProviders)) {
+        if (registeredIds.has(id)) {
+          logger.info(
+            `Skipping config-driven provider "${id}" — already registered`
+          );
+          continue;
+        }
+        const module = new ApiKeyProviderModule({
+          providerId: id,
+          providerDisplayName: entry.displayName,
+          providerIconUrl: entry.iconUrl,
+          envVarName: entry.envVarName,
+          slug: id,
+          upstreamBaseUrl: entry.upstreamBaseUrl,
+          modelsEndpoint: entry.modelsEndpoint,
+          sdkCompat: entry.sdkCompat,
+          defaultModel: entry.defaultModel,
+          registryAlias: entry.registryAlias,
+          apiKeyInstructions: entry.apiKeyInstructions,
+          apiKeyPlaceholder: entry.apiKeyPlaceholder,
+          agentSettingsStore: this.agentSettingsStore,
+        });
+        moduleRegistry.register(module);
+        logger.info(
+          `✅ Registered config-driven provider: ${id} (system key: ${module.hasSystemKey() ? "available" : "not available"})`
+        );
+      }
+    }
 
     // Initialize provider catalog service
     this.providerCatalogService = new ProviderCatalogService(
@@ -553,6 +643,63 @@ export class CoreServices {
   }
 
   // ============================================================================
+  // 4b. Integration Services Initialization
+  // ============================================================================
+
+  private async initializeIntegrationServices(): Promise<void> {
+    if (!this.queue) {
+      throw new Error("Queue must be initialized before integration services");
+    }
+
+    if (!this.systemSkillsService) {
+      logger.info(
+        "No SystemSkillsService available, integration services disabled"
+      );
+      return;
+    }
+
+    // Check if there are any integrations configured
+    const integrationConfigs =
+      await this.systemSkillsService.getAllIntegrationConfigs();
+    if (Object.keys(integrationConfigs).length === 0) {
+      logger.info(
+        "No integrations found in system skills, integration services disabled"
+      );
+      return;
+    }
+
+    const redisClient = this.queue.getRedisClient();
+
+    if (!this.integrationConfigService) {
+      this.integrationConfigService = new IntegrationConfigService(
+        this.systemSkillsService,
+        this.agentSettingsStore
+      );
+    }
+    this.integrationCredentialStore = new IntegrationCredentialStore(
+      redisClient
+    );
+
+    // Reuse MCP OAuth state store for integration OAuth flows
+    const mcpOAuthStateStore = createMcpOAuthStateStore(redisClient);
+
+    const callbackUrl = `${this.config.mcp.publicGatewayUrl}/api/v1/auth/integration/callback`;
+
+    this.integrationOAuthModule = new IntegrationOAuthModule(
+      this.integrationConfigService,
+      this.integrationCredentialStore,
+      mcpOAuthStateStore,
+      this.config.mcp.publicGatewayUrl,
+      callbackUrl,
+      this.queue
+    );
+
+    logger.info(
+      `✅ Integration services initialized (${Object.keys(integrationConfigs).length} integration(s))`
+    );
+  }
+
+  // ============================================================================
   // 7. Command Registry Initialization
   // ============================================================================
 
@@ -621,6 +768,10 @@ export class CoreServices {
 
   getMcpProxy(): McpProxy | undefined {
     return this.mcpProxy;
+  }
+
+  getMcpConfigService(): McpConfigService | undefined {
+    return this.mcpConfigService;
   }
 
   getClaudeModelPreferenceStore(): ClaudeModelPreferenceStore | undefined {
@@ -711,5 +862,21 @@ export class CoreServices {
 
   getGrantStore(): GrantStore | undefined {
     return this.grantStore;
+  }
+
+  getSystemSkillsService(): SystemSkillsService | undefined {
+    return this.systemSkillsService;
+  }
+
+  getIntegrationConfigService(): IntegrationConfigService | undefined {
+    return this.integrationConfigService;
+  }
+
+  getIntegrationCredentialStore(): IntegrationCredentialStore | undefined {
+    return this.integrationCredentialStore;
+  }
+
+  getIntegrationOAuthModule(): IntegrationOAuthModule | undefined {
+    return this.integrationOAuthModule;
   }
 }

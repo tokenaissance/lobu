@@ -9,7 +9,7 @@ import type { McpConfigService } from "./config-service";
 import type { McpCredentialStore } from "./credential-store";
 import type { McpInputStore } from "./input-store";
 import { substituteObject, substituteString } from "./string-substitution";
-import type { McpTool, McpToolCache } from "./tool-cache";
+import type { CachedMcpServer, McpTool, McpToolCache } from "./tool-cache";
 
 const logger = createLogger("mcp-proxy");
 
@@ -96,23 +96,97 @@ export class McpProxy {
   }
 
   /**
-   * Fetch tools for a specific MCP server.
-   * Used by session-context handler to include tool lists in the response.
+   * Fetch tools and instructions for a specific MCP server.
+   * Performs MCP initialize handshake first to capture server instructions,
+   * then fetches tool list.
    */
   async fetchToolsForMcp(
     mcpId: string,
     agentId: string,
     tokenData: any
-  ): Promise<McpTool[]> {
+  ): Promise<{ tools: McpTool[]; instructions?: string }> {
     if (this.toolCache) {
-      const cached = await this.toolCache.get(mcpId, agentId);
+      const cached = await this.toolCache.getServerInfo(mcpId, agentId);
       if (cached) return cached;
     }
 
-    const resolved = await this.resolveMcpServer(mcpId, tokenData);
-    if (!resolved) return [];
+    let resolved = await this.resolveMcpServer(mcpId, tokenData);
+    if (!resolved) {
+      // Retry with discoveryOnly to attempt unauthenticated tool listing
+      resolved = await this.resolveMcpServer(mcpId, tokenData, {
+        discoveryOnly: true,
+      });
+      if (!resolved) return { tools: [] };
+    }
 
     try {
+      // Step 1: Send initialize to capture server instructions
+      let instructions: string | undefined;
+      try {
+        const initBody = JSON.stringify({
+          jsonrpc: "2.0",
+          method: "initialize",
+          params: {
+            protocolVersion: "2024-11-05",
+            capabilities: {},
+            clientInfo: { name: "lobu-gateway", version: "1.0.0" },
+          },
+          id: 0,
+        });
+
+        const initResponse = await this.sendUpstreamRequest(
+          resolved.httpServer,
+          resolved.credentials,
+          resolved.inputValues,
+          resolved.agentId,
+          mcpId,
+          "POST",
+          initBody
+        );
+
+        const initData = (await initResponse.json()) as {
+          result?: { instructions?: string };
+          error?: { code: number; message: string };
+        };
+
+        if (initData?.result?.instructions) {
+          instructions = initData.result.instructions;
+          logger.info("Captured MCP server instructions", {
+            mcpId,
+            length: instructions.length,
+          });
+        }
+
+        // Step 2: Send initialized notification (required by MCP spec)
+        const notifyBody = JSON.stringify({
+          jsonrpc: "2.0",
+          method: "notifications/initialized",
+        });
+        await this.sendUpstreamRequest(
+          resolved.httpServer,
+          resolved.credentials,
+          resolved.inputValues,
+          resolved.agentId,
+          mcpId,
+          "POST",
+          notifyBody
+        ).catch(() => {
+          // notifications can fail silently
+        });
+      } catch (initError) {
+        logger.debug(
+          "MCP initialize failed (server may not support it), continuing with tools/list",
+          {
+            mcpId,
+            error:
+              initError instanceof Error
+                ? initError.message
+                : String(initError),
+          }
+        );
+      }
+
+      // Step 3: Fetch tools list
       const jsonRpcBody = JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/list",
@@ -133,14 +207,15 @@ export class McpProxy {
       const data = (await response.json()) as JsonRpcResponse;
       const tools: McpTool[] = data?.result?.tools || [];
 
+      const serverInfo: CachedMcpServer = { tools, instructions };
       if (this.toolCache && tools.length > 0) {
-        await this.toolCache.set(mcpId, tools, agentId);
+        await this.toolCache.setServerInfo(mcpId, serverInfo, agentId);
       }
 
-      return tools;
+      return serverInfo;
     } catch (error) {
       logger.error("Failed to fetch tools for MCP", { mcpId, error });
-      return [];
+      return { tools: [] };
     }
   }
 
@@ -349,7 +424,7 @@ export class McpProxy {
     // Fetch tools in parallel, tolerate failures
     const results = await Promise.allSettled(
       allMcpIds.map(async (mcpId) => {
-        const tools = await this.fetchToolsForMcp(
+        const { tools } = await this.fetchToolsForMcp(
           mcpId,
           agentId,
           auth.tokenData
@@ -421,7 +496,7 @@ export class McpProxy {
         return this.sendJsonRpcError(
           c,
           -32002,
-          `MCP '${mcpId}' requires authentication. Please authenticate via the Slack app home tab.`
+          `MCP '${mcpId}' requires authentication. Use ConnectService(id="${mcpId}") to authenticate.`
         );
       }
 
@@ -453,7 +528,7 @@ export class McpProxy {
             return this.sendJsonRpcError(
               c,
               -32002,
-              `MCP '${mcpId}' authentication expired. Please re-authenticate via the Slack app home tab.`
+              `MCP '${mcpId}' authentication expired. Use ConnectService(id="${mcpId}") to re-authenticate.`
             );
           }
         } else {
@@ -464,7 +539,7 @@ export class McpProxy {
           return this.sendJsonRpcError(
             c,
             -32002,
-            `MCP '${mcpId}' authentication expired. Please re-authenticate via the Slack app home tab.`
+            `MCP '${mcpId}' authentication expired. Use ConnectService(id="${mcpId}") to re-authenticate.`
           );
         }
       }
@@ -515,7 +590,8 @@ export class McpProxy {
     }
 
     if (!tools) {
-      tools = await this.fetchToolsForMcp(mcpId, agentId, tokenData);
+      const result = await this.fetchToolsForMcp(mcpId, agentId, tokenData);
+      tools = result.tools;
     }
 
     const tool = tools.find((t) => t.name === toolName);
@@ -524,7 +600,8 @@ export class McpProxy {
 
   private async resolveMcpServer(
     mcpId: string,
-    tokenData: any
+    tokenData: any,
+    options?: { discoveryOnly?: boolean }
   ): Promise<ResolvedMcp | null> {
     const agentId = tokenData.agentId || tokenData.userId;
     const httpServer = await this.configService.getHttpServer(
@@ -544,11 +621,22 @@ export class McpProxy {
 
     if (hasOAuth || hasDiscoveredOAuth) {
       credentials = await this.credentialStore.getCredentials(agentId, mcpId);
-      if (!credentials?.accessToken) return null;
+      if (!credentials?.accessToken) {
+        if (options?.discoveryOnly) {
+          // Return server with null credentials for unauthenticated tool discovery
+          return { httpServer, credentials: null, inputValues, agentId };
+        }
+        return null;
+      }
 
       // Refresh expired token
       if (credentials.expiresAt && credentials.expiresAt <= Date.now()) {
-        if (!credentials.refreshToken) return null;
+        if (!credentials.refreshToken) {
+          if (options?.discoveryOnly) {
+            return { httpServer, credentials: null, inputValues, agentId };
+          }
+          return null;
+        }
 
         try {
           credentials = await this.refreshCredentials(
@@ -559,6 +647,9 @@ export class McpProxy {
             mcpId
           );
         } catch {
+          if (options?.discoveryOnly) {
+            return { httpServer, credentials: null, inputValues, agentId };
+          }
           return null;
         }
       }
@@ -567,7 +658,12 @@ export class McpProxy {
     // Load input values
     if (httpServer.inputs && httpServer.inputs.length > 0) {
       const inputs = await this.inputStore.getInputs(agentId, mcpId);
-      if (!inputs) return null;
+      if (!inputs) {
+        if (options?.discoveryOnly) {
+          return { httpServer, credentials: null, inputValues, agentId };
+        }
+        return null;
+      }
       inputValues = inputs;
     }
 

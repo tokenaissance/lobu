@@ -527,7 +527,7 @@ export class ClaudeOAuthModule extends BaseProviderModule {
       }
 
       // Send success message based on context
-      await this.sendSuccessMessage(userId, loginContext);
+      await this.sendSuccessMessage(userId, stateData.agentId, loginContext);
     } catch (error) {
       logger.error("Failed to process auth code", { error, userId });
       throw error;
@@ -535,23 +535,22 @@ export class ClaudeOAuthModule extends BaseProviderModule {
   }
 
   /**
-   * Send success message after successful authentication
+   * Send success message after successful authentication.
+   * Includes agent ID and authentication details.
    */
   private async sendSuccessMessage(
     userId: string,
+    agentId: string,
     loginContext: any
   ): Promise<void> {
     const source = loginContext.source || "home_tab";
+    const agentLabel = agentId ? ` (agent: ${agentId})` : "";
     let message: string;
 
     if (source === "ephemeral_message") {
-      // User clicked login from ephemeral message in DM
-      message =
-        "✅ *Login Successful!*\n\nYou're now authenticated with Claude. Please send your message again to process it.";
+      message = `✅ *Login Successful!*\n\nAuthenticated with Claude${agentLabel}. Provider: Anthropic (OAuth).\nPlease send your message again to process it.`;
     } else {
-      // User clicked login from home tab
-      message =
-        "✅ *Login Successful!*\n\nYou're now authenticated with Claude. You can start chatting with the bot!";
+      message = `✅ *Login Successful!*\n\nAuthenticated with Claude${agentLabel}. Provider: Anthropic (OAuth).\nYou can start chatting with the bot!`;
     }
 
     // Create thread_response queue if it doesn't exist
@@ -561,7 +560,7 @@ export class ClaudeOAuthModule extends BaseProviderModule {
     await this.queue.send("thread_response", {
       messageId: `auth_success_${Date.now()}`,
       userId,
-      channelId: loginContext.channelId || userId, // Use DM channel if no channelId
+      channelId: loginContext.channelId || userId,
       conversationId: loginContext.messageTs || "",
       platform: loginContext.platform || "slack",
       teamId: loginContext.teamId || "slack",
@@ -570,7 +569,9 @@ export class ClaudeOAuthModule extends BaseProviderModule {
       processedMessageIds: [`auth_success_${Date.now()}`],
     });
 
-    logger.info(`Sent success message to user ${userId} via ${source}`);
+    logger.info(
+      `Sent success message to user ${userId} via ${source}, agent ${agentId}`
+    );
   }
 
   /**

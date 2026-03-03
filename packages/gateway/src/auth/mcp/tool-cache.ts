@@ -14,17 +14,39 @@ export interface McpTool {
   };
 }
 
+export interface CachedMcpServer {
+  tools: McpTool[];
+  instructions?: string;
+}
+
 const CACHE_TTL_SECONDS = 300; // 5 minutes
 
 export class McpToolCache {
   constructor(private readonly redisClient: any) {}
 
   async get(mcpId: string, agentId?: string): Promise<McpTool[] | null> {
+    const info = await this.getServerInfo(mcpId, agentId);
+    return info ? info.tools : null;
+  }
+
+  async set(mcpId: string, tools: McpTool[], agentId?: string): Promise<void> {
+    await this.setServerInfo(mcpId, { tools }, agentId);
+  }
+
+  async getServerInfo(
+    mcpId: string,
+    agentId?: string
+  ): Promise<CachedMcpServer | null> {
     const key = this.buildKey(mcpId, agentId);
     try {
       const cached = await this.redisClient.get(key);
       if (cached) {
-        return JSON.parse(cached) as McpTool[];
+        const parsed = JSON.parse(cached);
+        // Backward compat: if cached value is an array, it's old format (tools only)
+        if (Array.isArray(parsed)) {
+          return { tools: parsed as McpTool[] };
+        }
+        return parsed as CachedMcpServer;
       }
       return null;
     } catch (error) {
@@ -33,18 +55,30 @@ export class McpToolCache {
     }
   }
 
-  async set(mcpId: string, tools: McpTool[], agentId?: string): Promise<void> {
+  async setServerInfo(
+    mcpId: string,
+    info: CachedMcpServer,
+    agentId?: string
+  ): Promise<void> {
     const key = this.buildKey(mcpId, agentId);
     try {
       await this.redisClient.set(
         key,
-        JSON.stringify(tools),
+        JSON.stringify(info),
         "EX",
         CACHE_TTL_SECONDS
       );
     } catch (error) {
       logger.error("Failed to write tool cache", { key, error });
     }
+  }
+
+  async getInstructions(
+    mcpId: string,
+    agentId?: string
+  ): Promise<string | undefined> {
+    const info = await this.getServerInfo(mcpId, agentId);
+    return info?.instructions;
   }
 
   private buildKey(mcpId: string, agentId?: string): string {
