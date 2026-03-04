@@ -617,7 +617,7 @@ Use it when the user references past discussions or you need context.`);
     } | null = null;
 
     if (hasModelPreferences) {
-      const currentModelRef = modelRef;
+      let currentModelRef = modelRef;
       const switchSkillTool: import("@mariozechner/pi-coding-agent").ToolDefinition =
         {
           name: "SwitchSkill",
@@ -1053,6 +1053,10 @@ Use it when the user references past discussions or you need context.`);
           await session.prompt(switchPrompt);
           await newDone;
 
+          // Update currentModelRef so subsequent SwitchSkill calls compare against the new model
+          if (hasModelPreferences) {
+            currentModelRef = pendingSwitch!.modelPreference;
+          }
           logger.info("Model switch completed successfully");
         } catch (switchError) {
           logger.error("Model switch failed, continuing with original model", {

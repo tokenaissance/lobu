@@ -91,8 +91,10 @@ export function SkillsSection() {
     );
   }
 
-  // Collect all available models from all providers for the model preference dropdown
-  const allModels = Object.values(ctx.providerModels).flat();
+  // Collect all available models from all providers for the model preference dropdown (deduplicated by value)
+  const allModels = Object.values(ctx.providerModels)
+    .flat()
+    .filter((m, i, arr) => arr.findIndex((o) => o.value === m.value) === i);
 
   const count = ctx.skills.value.length;
   const badge =
