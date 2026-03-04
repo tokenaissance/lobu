@@ -5,8 +5,8 @@
 import type { AgentMetadata } from "../../../auth/agent-metadata-store";
 import type { AgentSettings } from "../../../auth/settings";
 import {
-  SETTINGS_TOKEN_HASH_PARAM,
-  type SettingsTokenPayload,
+	SETTINGS_TOKEN_HASH_PARAM,
+	type SettingsTokenPayload,
 } from "../../../auth/settings/token-service";
 import type { ModelOption } from "../../../modules/module-system";
 import { settingsPageCSS } from "../settings-page-styles";
@@ -14,138 +14,138 @@ import { escapeHtml, formatUserId, getPlatformDisplay } from "./utils";
 
 let settingsPageJS = "";
 try {
-  const bundle = require("../settings-page-bundle");
-  settingsPageJS = bundle.settingsPageJS;
+	const bundle = require("../settings-page-bundle");
+	settingsPageJS = bundle.settingsPageJS;
 } catch {
-  settingsPageJS =
-    'document.getElementById("app").textContent = "Bundle not built. Run: bun run scripts/build-settings.ts";';
+	settingsPageJS =
+		'document.getElementById("app").textContent = "Bundle not built. Run: bun run scripts/build-settings.ts";';
 }
 
 export interface ProviderMeta {
-  id: string;
-  name: string;
-  iconUrl: string;
-  authType: "oauth" | "device-code" | "api-key";
-  supportedAuthTypes: ("oauth" | "device-code" | "api-key")[];
-  apiKeyInstructions: string;
-  apiKeyPlaceholder: string;
-  catalogDescription?: string;
+	id: string;
+	name: string;
+	iconUrl: string;
+	authType: "oauth" | "device-code" | "api-key";
+	supportedAuthTypes: ("oauth" | "device-code" | "api-key")[];
+	apiKeyInstructions: string;
+	apiKeyPlaceholder: string;
+	catalogDescription?: string;
 }
 
 export interface SettingsPageOptions {
-  providers?: ProviderMeta[];
-  catalogProviders?: ProviderMeta[];
-  providerModelOptions?: Record<string, ModelOption[]>;
-  showSwitcher?: boolean;
-  agents?: (AgentMetadata & { channelCount: number })[];
-  agentName?: string;
-  agentDescription?: string;
-  hasChannelId?: boolean;
-  systemSkills?: import("@lobu/core").SkillConfig[];
-  integrationStatus?: Record<
-    string,
-    {
-      connected: boolean;
-      accounts: { accountId: string; grantedScopes: string[] }[];
-      availableScopes: string[];
-    }
-  >;
+	providers?: ProviderMeta[];
+	catalogProviders?: ProviderMeta[];
+	providerModelOptions?: Record<string, ModelOption[]>;
+	showSwitcher?: boolean;
+	agents?: (AgentMetadata & { channelCount: number })[];
+	agentName?: string;
+	agentDescription?: string;
+	hasChannelId?: boolean;
+	systemSkills?: import("@lobu/core").SkillConfig[];
+	integrationStatus?: Record<
+		string,
+		{
+			connected: boolean;
+			accounts: { accountId: string; grantedScopes: string[] }[];
+			availableScopes: string[];
+		}
+	>;
 }
 
 export function renderSettingsPage(
-  payload: SettingsTokenPayload,
-  settings: AgentSettings | null,
-  options?: SettingsPageOptions
+	payload: SettingsTokenPayload,
+	settings: AgentSettings | null,
+	options?: SettingsPageOptions,
 ): string {
-  const s: Partial<AgentSettings> = settings || {};
-  const providers: ProviderMeta[] = options?.providers ?? [];
-  const catalogProviders: ProviderMeta[] = options?.catalogProviders ?? [];
-  const providerModelOptions: Record<string, ModelOption[]> =
-    options?.providerModelOptions || {};
-  const providerOrder = providers.map((p) => p.id);
+	const s: Partial<AgentSettings> = settings || {};
+	const providers: ProviderMeta[] = options?.providers ?? [];
+	const catalogProviders: ProviderMeta[] = options?.catalogProviders ?? [];
+	const providerModelOptions: Record<string, ModelOption[]> =
+		options?.providerModelOptions || {};
+	const providerOrder = providers.map((p) => p.id);
 
-  const showSwitcher = options?.showSwitcher ?? false;
-  const agents = options?.agents ?? [];
-  const agentName = options?.agentName ?? "";
-  const agentDescription = options?.agentDescription ?? "";
-  const hasChannelId = options?.hasChannelId ?? false;
-  const initialNixPackages = (() => {
-    const existing = s.nixConfig?.packages || [];
-    const prefill = payload.prefillNixPackages || [];
-    return Array.from(
-      new Set(
-        [...existing, ...prefill]
-          .map((pkg) => (typeof pkg === "string" ? pkg.trim() : ""))
-          .filter(Boolean)
-      )
-    );
-  })();
+	const showSwitcher = options?.showSwitcher ?? false;
+	const agents = options?.agents ?? [];
+	const agentName = options?.agentName ?? "";
+	const agentDescription = options?.agentDescription ?? "";
+	const hasChannelId = options?.hasChannelId ?? false;
+	const initialNixPackages = (() => {
+		const existing = s.nixConfig?.packages || [];
+		const prefill = payload.prefillNixPackages || [];
+		return Array.from(
+			new Set(
+				[...existing, ...prefill]
+					.map((pkg) => (typeof pkg === "string" ? pkg.trim() : ""))
+					.filter(Boolean),
+			),
+		);
+	})();
 
-  const initialState = {
-    agentId: payload.agentId,
-    PROVIDERS: Object.fromEntries(
-      providers.map((p) => [
-        p.id,
-        {
-          name: p.name,
-          authType: p.authType,
-          supportedAuthTypes: p.supportedAuthTypes,
-          apiKeyInstructions: p.apiKeyInstructions,
-          apiKeyPlaceholder: p.apiKeyPlaceholder,
-        },
-      ])
-    ),
-    providerOrder,
-    providerModels: providerModelOptions,
-    catalogProviders: catalogProviders.map((p) => ({
-      id: p.id,
-      name: p.name,
-      iconUrl: p.iconUrl,
-      authType: p.authType,
-      supportedAuthTypes: p.supportedAuthTypes,
-      apiKeyInstructions: p.apiKeyInstructions,
-      apiKeyPlaceholder: p.apiKeyPlaceholder,
-    })),
-    initialSkills: [
-      ...(options?.systemSkills || []),
-      ...(s.skillsConfig?.skills || []),
-    ],
-    initialMcpServers: s.mcpServers || {},
-    prefillSkills: payload.prefillSkills || [],
-    prefillMcpServers: payload.prefillMcpServers || [],
-    prefillGrants: payload.prefillGrants || [],
-    prefillNixPackages: payload.prefillNixPackages || [],
-    prefillEnvVars: payload.prefillEnvVars || [],
-    initialNixPackages,
-    agentName,
-    agentDescription,
-    hasChannelId,
-    verboseLogging: !!s.verboseLogging,
-    identityMd: s.identityMd || "",
-    soulMd: s.soulMd || "",
-    userMd: s.userMd || "",
-    // Additional fields for Preact client
-    platform: payload.platform,
-    userId: payload.userId,
-    channelId: payload.channelId,
-    teamId: payload.teamId,
-    message: payload.message,
-    showSwitcher,
-    agents: agents.map((a) => ({
-      agentId: a.agentId,
-      name: a.name,
-      isWorkspaceAgent: a.isWorkspaceAgent,
-      channelCount: a.channelCount,
-      description: a.description,
-    })),
-    hasNoProviders: providers.length === 0,
-    providerIconUrls: Object.fromEntries(
-      providers.map((p) => [p.id, p.iconUrl])
-    ),
-    integrationStatus: options?.integrationStatus ?? {},
-  };
+	const initialState = {
+		agentId: payload.agentId,
+		PROVIDERS: Object.fromEntries(
+			providers.map((p) => [
+				p.id,
+				{
+					name: p.name,
+					authType: p.authType,
+					supportedAuthTypes: p.supportedAuthTypes,
+					apiKeyInstructions: p.apiKeyInstructions,
+					apiKeyPlaceholder: p.apiKeyPlaceholder,
+				},
+			]),
+		),
+		providerOrder,
+		providerModels: providerModelOptions,
+		catalogProviders: catalogProviders.map((p) => ({
+			id: p.id,
+			name: p.name,
+			iconUrl: p.iconUrl,
+			authType: p.authType,
+			supportedAuthTypes: p.supportedAuthTypes,
+			apiKeyInstructions: p.apiKeyInstructions,
+			apiKeyPlaceholder: p.apiKeyPlaceholder,
+		})),
+		initialSkills: [
+			...(options?.systemSkills || []),
+			...(s.skillsConfig?.skills || []),
+		],
+		initialMcpServers: s.mcpServers || {},
+		prefillSkills: payload.prefillSkills || [],
+		prefillMcpServers: payload.prefillMcpServers || [],
+		prefillGrants: payload.prefillGrants || [],
+		prefillNixPackages: payload.prefillNixPackages || [],
+		prefillEnvVars: payload.prefillEnvVars || [],
+		initialNixPackages,
+		agentName,
+		agentDescription,
+		hasChannelId,
+		verboseLogging: !!s.verboseLogging,
+		identityMd: s.identityMd || "",
+		soulMd: s.soulMd || "",
+		userMd: s.userMd || "",
+		// Additional fields for Preact client
+		platform: payload.platform,
+		userId: payload.userId,
+		channelId: payload.channelId,
+		teamId: payload.teamId,
+		message: payload.message,
+		showSwitcher,
+		agents: agents.map((a) => ({
+			agentId: a.agentId,
+			name: a.name,
+			isWorkspaceAgent: a.isWorkspaceAgent,
+			channelCount: a.channelCount,
+			description: a.description,
+		})),
+		hasNoProviders: providers.length === 0,
+		providerIconUrls: Object.fromEntries(
+			providers.map((p) => [p.id, p.iconUrl]),
+		),
+		integrationStatus: options?.integrationStatus ?? {},
+	};
 
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -168,10 +168,10 @@ export function renderSettingsPage(
 // ─── Picker Page ────────────────────────────────────────────────────────────
 
 export function renderPickerPage(
-  payload: SettingsTokenPayload,
-  agents: (AgentMetadata & { channelCount: number })[]
+	payload: SettingsTokenPayload,
+	agents: (AgentMetadata & { channelCount: number })[],
 ): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -194,14 +194,14 @@ export function renderPickerPage(
     <div id="error-msg" class="hidden bg-red-100 text-red-800 px-3 py-2 rounded-lg mb-4 text-center text-sm"></div>
 
     ${
-      agents.length > 0
-        ? `<!-- Existing Agents -->
+			agents.length > 0
+				? `<!-- Existing Agents -->
     <div class="mb-4">
       <h2 class="text-sm font-medium text-gray-800 mb-2">Your Agents</h2>
       <div class="space-y-2" id="agents-list">
 ${agents
-  .map(
-    (agent) => `
+	.map(
+		(agent) => `
         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium text-gray-800">${escapeHtml(agent.name)}${agent.isWorkspaceAgent ? ' <span class="text-xs text-slate-600">(workspace)</span>' : ""}</p>
@@ -212,15 +212,15 @@ ${agents
             class="ml-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-all flex-shrink-0">
             Select
           </button>
-        </div>`
-  )
-  .join("")}
+        </div>`,
+	)
+	.join("")}
       </div>
     </div>`
-        : `<div class="mb-4">
+				: `<div class="mb-4">
       <p class="text-sm text-gray-500 p-3 bg-gray-50 rounded-lg text-center">No agents yet. Create one below to get started.</p>
     </div>`
-    }
+		}
 
     <!-- Create New Agent -->
     <div class="border-t border-gray-200 pt-4">
@@ -351,7 +351,7 @@ ${agents
 // ─── Session Bootstrap Page ─────────────────────────────────────────────────
 
 export function renderSessionBootstrapPage(): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -428,13 +428,13 @@ export function renderSessionBootstrapPage(): string {
         }
       }
 
-      // Path B: Token-based authentication (existing flow)
+      // Path B: Session-based authentication (opaque session ID in URL hash)
       var hash = window.location.hash ? window.location.hash.slice(1) : '';
       var params = new URLSearchParams(hash);
-      var token = params.get('${SETTINGS_TOKEN_HASH_PARAM}') || params.get('token');
+      var sessionId = params.get('s') || params.get('${SETTINGS_TOKEN_HASH_PARAM}') || params.get('token');
 
-      if (!token) {
-        showError('Missing settings link token. Request a new link with /configure.');
+      if (!sessionId) {
+        showError('Missing settings link. Request a new link with /configure.');
         return;
       }
 
@@ -442,7 +442,7 @@ export function renderSessionBootstrapPage(): string {
         var resp = await fetch('/settings/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token })
+          body: JSON.stringify({ sessionId: sessionId })
         });
 
         if (!resp.ok) {
@@ -464,7 +464,7 @@ export function renderSessionBootstrapPage(): string {
 // ─── Error Page ─────────────────────────────────────────────────────────────
 
 export function renderErrorPage(message: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
