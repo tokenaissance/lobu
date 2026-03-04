@@ -55,20 +55,38 @@ class SkillsInstructionProvider implements InstructionProvider {
         return this.getGenericSkillsInstructions();
       }
 
-      // Progressive disclosure: inject only metadata (name + description)
+      // Progressive disclosure: inject metadata (name + description + model/thinking preferences)
       // to reduce prompt size. Agent reads full SKILL.md on demand.
+      const hasModelPreferences = enabledSkills.some(
+        (s) => s.modelPreference || s.thinkingLevel
+      );
       const skillSummaries = enabledSkills
         .map((skill) => {
           const desc = skill.description ? ` - ${skill.description}` : "";
-          return `- **${skill.name}**${desc} (\`${skill.repo}\`)`;
+          const tags: string[] = [];
+          if (skill.modelPreference)
+            tags.push(`model: ${skill.modelPreference}`);
+          if (skill.thinkingLevel)
+            tags.push(`thinking: ${skill.thinkingLevel}`);
+          const tagStr = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
+          return `- **${skill.name}**${desc}${tagStr} (\`${skill.repo}\`)`;
         })
         .join("\n");
+
+      // Build thinking budget note (settings already fetched above)
+      const budgetNote = settings?.thinkingBudget?.maxThinkingLevel
+        ? `\nYour thinking budget ceiling: ${settings.thinkingBudget.maxThinkingLevel}`
+        : "";
+
+      const switchNote = hasModelPreferences
+        ? `\n\nWhen a task clearly matches a skill that prefers a different model, use the **SwitchSkill** tool to switch to that skill's preferred model. The current context will be preserved.`
+        : "";
 
       return `# Enabled Skills
 
 The following skills are installed and available. When a task matches a skill, read the full skill instructions before using it.
 
-${skillSummaries}
+${skillSummaries}${budgetNote}${switchNote}
 
 **To read full skill instructions:** \`cat ~/.claude/skills/*/SKILL.md\` to read the relevant SKILL.md file.
 

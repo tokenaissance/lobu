@@ -12,6 +12,7 @@ import {
   type SkillsConfig,
   safeJsonParse,
   safeJsonStringify,
+  type ThinkingLevel,
   type ToolsConfig,
 } from "@lobu/core";
 import type Redis from "ioredis";
@@ -56,6 +57,8 @@ export interface AgentSettings {
   authProfiles?: AuthProfile[];
   /** Installed providers for this agent (index 0 = primary). */
   installedProviders?: InstalledProvider[];
+  /** User-level ceiling on thinking spend per skill */
+  thinkingBudget?: { maxThinkingLevel: ThinkingLevel };
   /** Enable verbose logging (show tool calls, reasoning, etc.) */
   verboseLogging?: boolean;
   /** Last updated timestamp */

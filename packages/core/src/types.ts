@@ -121,6 +121,9 @@ export function normalizeSkillIntegration(
   return entry;
 }
 
+/** Thinking level for skills and agent-level budget ceiling */
+export type ThinkingLevel = "none" | "low" | "medium" | "high";
+
 /**
  * Individual skill configuration.
  * Skills are SKILL.md files from GitHub repos that provide instructions to Claude.
@@ -150,6 +153,10 @@ export interface SkillConfig {
   permissions?: string[];
   /** AI providers the skill requires */
   providers?: string[];
+  /** Preferred model for this skill (e.g., "anthropic/claude-opus-4"). When set, agent can switch models via SwitchSkill tool. */
+  modelPreference?: string;
+  /** Preferred thinking level for this skill. Capped by agent-level thinkingBudget. */
+  thinkingLevel?: ThinkingLevel;
 }
 
 /**

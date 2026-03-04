@@ -51,6 +51,8 @@ export interface Skill {
   nixPackages?: string[];
   permissions?: string[];
   providers?: string[];
+  modelPreference?: string;
+  thinkingLevel?: string;
 }
 
 export interface McpConfig {
@@ -154,6 +156,7 @@ export interface SettingsState {
   identityMd: string;
   soulMd: string;
   userMd: string;
+  thinkingBudget?: { maxThinkingLevel: string };
   // Injected by the server into the HTML shell
   platform: string;
   userId: string;
@@ -180,4 +183,5 @@ export interface SettingsSnapshot {
   skills: string;
   mcpServers: string;
   permissions: string;
+  thinkingBudget: string;
 }

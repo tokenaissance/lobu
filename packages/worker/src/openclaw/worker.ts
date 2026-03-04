@@ -7,6 +7,9 @@ import { pipeline } from "node:stream/promises";
 import {
   createLogger,
   type PluginsConfig,
+  type SkillConfig,
+  type SkillsConfig,
+  type ThinkingLevel,
   type ToolsConfig,
   type WorkerTransport,
 } from "@lobu/core";
@@ -355,8 +358,30 @@ export class OpenClawWorker implements WorkerExecutor {
       }
     }
 
-    const modelRef =
+    // Check session-meta.json for a model override from a previous SwitchSkill
+    let modelRef =
       typeof rawOptions.model === "string" ? rawOptions.model : "";
+    const workspaceDirForMeta = this.getWorkingDirectory();
+    const sessionMetaPath = path.join(
+      workspaceDirForMeta,
+      ".openclaw",
+      "session-meta.json"
+    );
+    try {
+      const metaRaw = await fs.readFile(sessionMetaPath, "utf-8");
+      const meta = JSON.parse(metaRaw) as {
+        currentModel?: string;
+        activeSkill?: string;
+      };
+      if (meta.currentModel) {
+        logger.info(
+          `Resuming with switched model from session-meta.json: ${meta.currentModel} (skill: ${meta.activeSkill || "unknown"})`
+        );
+        modelRef = meta.currentModel;
+      }
+    } catch {
+      // No session-meta.json — use default model
+    }
 
     const { provider: rawProvider, modelId } = resolveModelRef(modelRef);
     // Map gateway slug to model-registry provider name (e.g. "z-ai" → "zai")
@@ -577,6 +602,96 @@ Use it when the user references past discussions or you need context.`);
       platform: this.config.platform,
     });
 
+    // SwitchSkill tool — only register when skills have model preferences
+    const skillsConfig = rawOptions.skillsConfig as SkillsConfig | undefined;
+    const enabledSkills = (skillsConfig?.skills || []).filter(
+      (s: SkillConfig) => s.enabled
+    );
+    const hasModelPreferences = enabledSkills.some(
+      (s: SkillConfig) => s.modelPreference
+    );
+    let pendingSwitch: {
+      skillName: string;
+      modelPreference: string;
+      reason: string;
+    } | null = null;
+
+    if (hasModelPreferences) {
+      const currentModelRef = modelRef;
+      const switchSkillTool: import("@mariozechner/pi-coding-agent").ToolDefinition =
+        {
+          name: "SwitchSkill",
+          label: "SwitchSkill",
+          description:
+            "Switch to a skill's preferred model for the current task. Use when a task clearly benefits from a different model. The current context will be preserved and the task will continue on the new model.",
+          parameters: {
+            type: "object" as const,
+            properties: {
+              skillName: {
+                type: "string" as const,
+                description: "Name of the skill to activate",
+              },
+              reason: {
+                type: "string" as const,
+                description: "Brief reason for switching",
+              },
+            },
+            required: ["skillName", "reason"],
+          },
+          execute: async (_toolCallId, rawArgs) => {
+            const args = rawArgs as {
+              skillName?: string;
+              reason?: string;
+            };
+            const skillName = args?.skillName || "";
+            const reason = args?.reason || "";
+
+            const targetSkill = enabledSkills.find(
+              (s: SkillConfig) =>
+                s.name.toLowerCase() === skillName.toLowerCase() ||
+                s.repo.toLowerCase().includes(skillName.toLowerCase())
+            );
+
+            if (!targetSkill) {
+              return {
+                content: `Skill "${skillName}" not found. Available skills: ${enabledSkills.map((s: SkillConfig) => s.name).join(", ")}`,
+                details: {},
+              };
+            }
+
+            if (!targetSkill.modelPreference) {
+              return {
+                content: `Skill "${targetSkill.name}" uses the agent default model. No switch needed.`,
+                details: {},
+              };
+            }
+
+            if (targetSkill.modelPreference === currentModelRef) {
+              return {
+                content: `Already running on ${currentModelRef}, which is ${targetSkill.name}'s preferred model. No switch needed.`,
+                details: {},
+              };
+            }
+
+            pendingSwitch = {
+              skillName: targetSkill.name,
+              modelPreference: targetSkill.modelPreference,
+              reason,
+            };
+
+            logger.info(
+              `SwitchSkill requested: ${targetSkill.name} → ${targetSkill.modelPreference} (reason: ${reason})`
+            );
+
+            return {
+              content: `Switching to ${targetSkill.modelPreference} for ${targetSkill.name}. Context will be preserved. Complete your current response — the switch will take effect on the next turn.`,
+              details: {},
+            };
+          },
+        };
+      customTools.push(switchSkillTool);
+    }
+
     // Load OpenClaw plugins
     const pluginsConfig = rawOptions.pluginsConfig as PluginsConfig | undefined;
     const loadedPlugins = await loadPlugins(pluginsConfig, workspaceDir);
@@ -760,6 +875,193 @@ Use it when the user references past discussions or you need context.`);
       const effectivePrompt = `${configNotice}${sessionSummary ? `${sessionSummary}\n\n` : ""}${prependContexts ? `${prependContexts}\n\n` : ""}${userPrompt}`;
       await session.prompt(effectivePrompt);
       await done;
+
+      // Handle pending model switch from SwitchSkill tool
+      if (pendingSwitch && session) {
+        logger.info(
+          `Processing model switch to ${pendingSwitch.modelPreference} for skill "${pendingSwitch.skillName}"`
+        );
+
+        try {
+          // 1. Build compressed context from current conversation
+          const messageCount = (session.messages || []).length;
+          const compressedContext = `[System: Model switched from ${modelRef} to ${pendingSwitch.modelPreference} for skill "${pendingSwitch.skillName}" (reason: ${pendingSwitch.reason}). Previous conversation had ${messageCount} turns. Continue helping the user.]`;
+
+          // 2. Dispose current session
+          session.dispose();
+          session = null;
+
+          // 3. Archive old session file
+          const sessionMetaFile = path.join(
+            workspaceDir,
+            ".openclaw",
+            "session-meta.json"
+          );
+          let segments: Array<{
+            file: string;
+            model: string;
+            turns: number;
+          }> = [];
+          try {
+            const existingMeta = JSON.parse(
+              await fs.readFile(sessionMetaFile, "utf-8")
+            );
+            segments = existingMeta.segments || [];
+          } catch {
+            // No existing meta
+          }
+          const segmentIndex = segments.length;
+          const segmentFile = `session.segment-${segmentIndex}.jsonl`;
+          try {
+            await fs.rename(
+              sessionFile,
+              path.join(workspaceDir, ".openclaw", segmentFile)
+            );
+          } catch {
+            // Session file may not exist
+          }
+          segments.push({
+            file: segmentFile,
+            model: `${provider}/${modelId}`,
+            turns: messageCount,
+          });
+
+          // 4. Write session metadata
+          await fs.writeFile(
+            sessionMetaFile,
+            JSON.stringify(
+              {
+                segments,
+                currentModel: pendingSwitch.modelPreference,
+                activeSkill: pendingSwitch.skillName,
+              },
+              null,
+              2
+            ),
+            "utf-8"
+          );
+
+          // 5. Resolve the new model
+          const { provider: newRawProvider, modelId: newModelId } =
+            resolveModelRef(pendingSwitch.modelPreference);
+          const newProvider =
+            PROVIDER_REGISTRY_ALIASES[newRawProvider] || newRawProvider;
+          const newBaseModel = getModel(
+            newProvider as any,
+            newModelId as any
+          ) as any;
+          if (!newBaseModel) {
+            throw new Error(
+              `Model "${newModelId}" not found for provider "${newProvider}"`
+            );
+          }
+
+          // Resolve base URL for new provider
+          let newProviderBaseUrl: string | undefined;
+          const dynamicMappings2 = rawOptions.providerBaseUrlMappings as
+            | Record<string, string>
+            | undefined;
+          if (dynamicMappings2) {
+            const envVar = DEFAULT_PROVIDER_BASE_URL_ENV[newRawProvider];
+            if (envVar && dynamicMappings2[envVar]) {
+              newProviderBaseUrl = dynamicMappings2[envVar];
+            }
+          }
+          if (!newProviderBaseUrl) {
+            const envVar = DEFAULT_PROVIDER_BASE_URL_ENV[newRawProvider];
+            if (envVar && process.env[envVar]) {
+              newProviderBaseUrl = process.env[envVar];
+            }
+          }
+
+          const newModel = newProviderBaseUrl
+            ? { ...newBaseModel, baseUrl: newProviderBaseUrl }
+            : newBaseModel;
+
+          // 6. Set up credentials for new provider
+          const newCredEnvVar = getApiKeyEnvVarForProvider(newProvider);
+          if (process.env[newCredEnvVar]) {
+            authStorage.setRuntimeApiKey(
+              newProvider,
+              process.env[newCredEnvVar]!
+            );
+          }
+
+          // 7. Update provider state file
+          await fs.writeFile(
+            providerStateFile,
+            JSON.stringify({
+              provider: newProvider,
+              modelId: newModelId,
+            }),
+            "utf-8"
+          );
+
+          // 8. Create new session
+          const newSessionManager = await openOrCreateSessionManager(
+            sessionFile,
+            workspaceDir
+          );
+          const newCreatedSession = await createAgentSession({
+            cwd: workspaceDir,
+            model: newModel,
+            tools,
+            customTools,
+            sessionManager: newSessionManager,
+            settingsManager,
+            authStorage,
+            modelRegistry,
+          });
+          session = newCreatedSession.session;
+          const newBasePrompt = session.systemPrompt;
+          session.agent.setSystemPrompt(
+            `${newBasePrompt}\n\n${finalInstructions}`
+          );
+
+          // 9. Reset progress processor and subscribe to new session events
+          this.progressProcessor.reset();
+
+          let newDoneResolve: (() => void) | undefined;
+          const newDone = new Promise<void>((resolve) => {
+            newDoneResolve = resolve;
+          });
+
+          session.subscribe((event) => {
+            const hasUpdate = this.progressProcessor.processEvent(event);
+            if (hasUpdate) {
+              const delta = this.progressProcessor.getDelta();
+              if (delta) {
+                pendingDelta += delta;
+                scheduleDeltaFlush();
+              }
+            }
+            if (event.type === "agent_end") {
+              flushDelta()
+                .then(() => newDoneResolve?.())
+                .catch((err) => {
+                  logger.error("Failed to flush final delta:", err);
+                  newDoneResolve?.();
+                });
+            }
+          });
+
+          // 10. Re-send prompt with compressed context
+          const switchPrompt = `${compressedContext}\n\n${userPrompt}`;
+          logger.info(
+            `Re-sending prompt to new model: ${newProvider}/${newModelId}`
+          );
+          await session.prompt(switchPrompt);
+          await newDone;
+
+          logger.info("Model switch completed successfully");
+        } catch (switchError) {
+          logger.error("Model switch failed, continuing with original model", {
+            error: switchError,
+          });
+          // The original session already completed its turn, so we continue with that result
+        }
+        pendingSwitch = null;
+      }
 
       const sessionError = this.progressProcessor.consumeFatalErrorMessage();
       if (sessionError) {

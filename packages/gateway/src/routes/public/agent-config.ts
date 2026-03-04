@@ -41,7 +41,8 @@ export interface ConfigChangeEntry {
     | "instructions"
     | "env"
     | "plugins"
-    | "logging";
+    | "logging"
+    | "thinking";
   action: "added" | "removed" | "updated" | "reordered";
   summary: string;
   details?: string[];
@@ -130,9 +131,19 @@ const updateConfigRoute = createRoute({
                     enabled: z.boolean(),
                     content: z.string().optional(),
                     contentFetchedAt: z.number().optional(),
+                    modelPreference: z.string().optional(),
+                    thinkingLevel: z
+                      .enum(["none", "low", "medium", "high"])
+                      .optional(),
                   })
                 ),
               })
+              .optional(),
+            thinkingBudget: z
+              .object({
+                maxThinkingLevel: z.enum(["none", "low", "medium", "high"]),
+              })
+              .nullable()
               .optional(),
             pluginsConfig: z
               .object({
@@ -329,6 +340,21 @@ function buildConfigChanges(
     });
   }
 
+  // Thinking budget
+  if (updates.thinkingBudget !== undefined) {
+    const oldLevel = existing?.thinkingBudget?.maxThinkingLevel;
+    const newLevel = updates.thinkingBudget?.maxThinkingLevel;
+    if (oldLevel !== newLevel) {
+      changes.push({
+        category: "thinking",
+        action: "updated",
+        summary: newLevel
+          ? `Thinking budget set to "${newLevel}"`
+          : "Thinking budget removed",
+      });
+    }
+  }
+
   // Verbose logging
   if (
     updates.verboseLogging !== undefined &&
@@ -469,6 +495,12 @@ export function createAgentConfigRoutes(
       if (body.nixConfig === null) {
         updates.nixConfig = undefined;
         delete body.nixConfig;
+      }
+
+      // Handle explicit null for thinkingBudget (clear)
+      if ((body as any).thinkingBudget === null) {
+        updates.thinkingBudget = undefined;
+        delete (body as any).thinkingBudget;
       }
 
       if (Object.keys(body).length > 0) {
@@ -1103,6 +1135,10 @@ async function validateSettings(
 
   if (input.skillsConfig) {
     settings.skillsConfig = input.skillsConfig;
+  }
+
+  if (input.thinkingBudget !== undefined) {
+    settings.thinkingBudget = input.thinkingBudget ?? undefined;
   }
 
   if (input.pluginsConfig) {

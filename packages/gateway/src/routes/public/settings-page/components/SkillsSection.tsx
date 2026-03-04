@@ -85,6 +85,15 @@ export function SkillsSection() {
     );
   }
 
+  function updateSkillField(repo: string, field: string, value: string) {
+    ctx.skills.value = ctx.skills.value.map((s) =>
+      s.repo === repo ? { ...s, [field]: value || undefined } : s
+    );
+  }
+
+  // Collect all available models from all providers for the model preference dropdown
+  const allModels = Object.values(ctx.providerModels).flat();
+
   const count = ctx.skills.value.length;
   const badge =
     count > 0 ? (
@@ -154,7 +163,78 @@ export function SkillsSection() {
                 )}
               </ItemRow>
 
-              {hasSubItems && skill.enabled && (
+              {skill.enabled && !isSystem && (
+                <div class="ml-6 pl-2 border-l-2 border-purple-100 space-y-1">
+                  <div class="flex items-center gap-2 py-0.5">
+                    <span class="text-[10px] text-gray-500 w-12 shrink-0">
+                      Model
+                    </span>
+                    <select
+                      value={skill.modelPreference || ""}
+                      onChange={(e) =>
+                        updateSkillField(
+                          skill.repo,
+                          "modelPreference",
+                          (e.target as HTMLSelectElement).value
+                        )
+                      }
+                      class="flex-1 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded bg-white"
+                    >
+                      <option value="">Agent default</option>
+                      {allModels.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div class="flex items-center gap-2 py-0.5">
+                    <span class="text-[10px] text-gray-500 w-12 shrink-0">
+                      Thinking
+                    </span>
+                    <select
+                      value={skill.thinkingLevel || ""}
+                      onChange={(e) =>
+                        updateSkillField(
+                          skill.repo,
+                          "thinkingLevel",
+                          (e.target as HTMLSelectElement).value
+                        )
+                      }
+                      class="flex-1 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded bg-white"
+                    >
+                      <option value="">Default</option>
+                      <option value="none">None</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                  {ownedIntegrations.map((ig) => (
+                    <SubItem
+                      key={`skill-ig-${ig.id}`}
+                      badge={ig.authType || "oauth"}
+                      badgeColor="bg-amber-50 text-amber-600"
+                      name={ig.label || ig.id}
+                      status={ig.connected ? "connected" : "not connected"}
+                      statusColor={
+                        ig.connected ? "text-green-600" : "text-gray-400"
+                      }
+                    />
+                  ))}
+                  {ownedMcps.map((m) => (
+                    <SubItem
+                      key={`skill-mcp-${m.id}`}
+                      badge="mcp"
+                      badgeColor="bg-blue-50 text-blue-600"
+                      name={m.name || m.id}
+                      status="included"
+                      statusColor="text-gray-500"
+                    />
+                  ))}
+                </div>
+              )}
+              {hasSubItems && skill.enabled && isSystem && (
                 <div class="ml-6 pl-2 border-l-2 border-purple-100 space-y-1">
                   {ownedIntegrations.map((ig) => (
                     <SubItem

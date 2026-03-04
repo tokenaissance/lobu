@@ -226,6 +226,7 @@ function createShimApi(params: {
   const noop = () => {
     /* intentional no-op */
   };
+  let currentThinkingLevel = "medium";
 
   const shimLogger = {
     info(message: string, ...args: unknown[]) {
@@ -338,8 +339,10 @@ function createShimApi(params: {
     setActiveTools: noop,
     getCommands: () => [] as unknown[],
     setModel: async () => false,
-    getThinkingLevel: () => "medium",
-    setThinkingLevel: noop,
+    getThinkingLevel: () => currentThinkingLevel,
+    setThinkingLevel: (level: string) => {
+      currentThinkingLevel = level;
+    },
     events: {
       on: noop,
       off: noop,

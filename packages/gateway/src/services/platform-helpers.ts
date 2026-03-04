@@ -57,6 +57,12 @@ export async function resolveAgentOptions(
   if (settings.verboseLogging !== undefined) {
     mergedOptions.verboseLogging = settings.verboseLogging;
   }
+  if (settings.skillsConfig) {
+    mergedOptions.skillsConfig = settings.skillsConfig;
+  }
+  if (settings.thinkingBudget) {
+    mergedOptions.thinkingBudget = settings.thinkingBudget;
+  }
 
   return mergedOptions;
 }

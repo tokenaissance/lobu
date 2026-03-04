@@ -85,6 +85,7 @@ export type {
   SkillMcpServer,
   SkillsConfig,
   SuggestedPrompt,
+  ThinkingLevel,
   ThreadResponsePayload,
   ToolsConfig,
   UserSuggestion,

@@ -69,6 +69,7 @@ export interface SettingsContextValue {
   identityMd: Signal<string>;
   soulMd: Signal<string>;
   userMd: Signal<string>;
+  thinkingBudget: Signal<string>;
 
   skills: Signal<Skill[]>;
   skillsLoading: Signal<boolean>;
@@ -142,6 +143,7 @@ function App() {
   const identityMd = useSignal(state.identityMd || "");
   const soulMd = useSignal(state.soulMd || "");
   const userMd = useSignal(state.userMd || "");
+  const thinkingBudget = useSignal(state.thinkingBudget?.maxThinkingLevel || "");
 
   // Providers
   const providerOrder = useSignal<string[]>(
@@ -257,6 +259,8 @@ function App() {
         mcpServers: s.mcpServers,
         nixPackages: s.nixPackages,
         permissions: s.permissions,
+        modelPreference: s.modelPreference,
+        thinkingLevel: s.thinkingLevel,
       }))
     );
   }
@@ -298,6 +302,7 @@ function App() {
       skills: skillsSignature(),
       mcpServers: mcpServersSignature(),
       permissions: permissionsSignature(),
+      thinkingBudget: thinkingBudget.value || "",
     };
   }
 
@@ -458,6 +463,7 @@ function App() {
     identityMd,
     soulMd,
     userMd,
+    thinkingBudget,
 
     skills,
     skillsLoading,
@@ -530,6 +536,32 @@ function App() {
         <PermissionsSection />
         <NixPackagesSection />
 
+        {/* Thinking Budget */}
+        <div class="bg-gray-50 rounded-lg p-3">
+          <label class="block text-sm font-medium text-gray-800 mb-1">
+            Thinking Budget
+          </label>
+          <select
+            value={ctx.thinkingBudget.value}
+            onChange={(e) => {
+              ctx.thinkingBudget.value = (
+                e.target as HTMLSelectElement
+              ).value;
+            }}
+            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-slate-600 focus:ring-1 focus:ring-slate-200 outline-none bg-white"
+          >
+            <option value="">No limit</option>
+            <option value="none">None</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            Maximum thinking level any skill can use. Skills requesting more
+            will be capped to this level.
+          </p>
+        </div>
+
         {/* Verbose toggle */}
         <div class="bg-gray-50 rounded-lg p-3">
           <label class="flex items-center gap-2 cursor-pointer">
@@ -597,6 +629,9 @@ async function handleSave(ctx: SettingsContextValue) {
       soulMd: ctx.soulMd.value || "",
       userMd: ctx.userMd.value || "",
       verboseLogging: !!ctx.verboseLogging.value,
+      thinkingBudget: ctx.thinkingBudget.value
+        ? { maxThinkingLevel: ctx.thinkingBudget.value }
+        : null,
     };
 
     const nixPkgs = ctx.nixPackages.value

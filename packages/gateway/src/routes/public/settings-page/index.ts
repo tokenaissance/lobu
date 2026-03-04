@@ -124,6 +124,7 @@ export function renderSettingsPage(
     identityMd: s.identityMd || "",
     soulMd: s.soulMd || "",
     userMd: s.userMd || "",
+    thinkingBudget: s.thinkingBudget || undefined,
     // Additional fields for Preact client
     platform: payload.platform,
     userId: payload.userId,
