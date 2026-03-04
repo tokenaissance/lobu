@@ -124,18 +124,20 @@ const updateConfigRoute = createRoute({
             skillsConfig: z
               .object({
                 skills: z.array(
-                  z.object({
-                    repo: z.string(),
-                    name: z.string(),
-                    description: z.string(),
-                    enabled: z.boolean(),
-                    content: z.string().optional(),
-                    contentFetchedAt: z.number().optional(),
-                    modelPreference: z.string().optional(),
-                    thinkingLevel: z
-                      .enum(["none", "low", "medium", "high"])
-                      .optional(),
-                  })
+                  z
+                    .object({
+                      repo: z.string(),
+                      name: z.string(),
+                      description: z.string().optional(),
+                      enabled: z.boolean(),
+                      content: z.string().optional(),
+                      contentFetchedAt: z.number().optional(),
+                      modelPreference: z.string().optional(),
+                      thinkingLevel: z
+                        .enum(["none", "low", "medium", "high"])
+                        .optional(),
+                    })
+                    .passthrough()
                 ),
               })
               .optional(),

@@ -45,7 +45,7 @@ export interface Skill {
   enabled: boolean;
   system?: boolean;
   content?: string;
-  contentFetchedAt?: string;
+  contentFetchedAt?: number;
   integrations?: SkillIntegrationInfo[];
   mcpServers?: SkillMcpServerInfo[];
   nixPackages?: string[];
