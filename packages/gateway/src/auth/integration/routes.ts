@@ -217,11 +217,15 @@ export function createIntegrationRoutes(
           });
         }
 
-        // Fallback: return URL directly
+        // Fallback: no interaction service. Never return the raw OAuth URL
+        // to the worker — it would be visible to the agent (security risk).
+        logger.warn(
+          "No interactionService available — OAuth link generated but cannot be delivered",
+          { integration, agentId: worker.agentId }
+        );
         return c.json({
           status: "login_required",
-          message: `User must authenticate with ${config.label}`,
-          url: oauthUrl,
+          message: `A login link for "${config.label}" has been sent to the user. Session will end now.`,
         });
       } catch (error) {
         logger.error("Failed to request integration connection", { error });

@@ -106,11 +106,15 @@ export function createMcpLoginRoutes(
       });
     }
 
-    // Fallback: return the URL directly
+    // Fallback: no interaction service. Never return the raw URL to the
+    // worker — it would be visible to the agent, which is a security risk.
+    logger.warn(
+      "No interactionService available — MCP login link generated but cannot be delivered",
+      { mcpId, agentId, userId }
+    );
     return c.json({
-      type: "mcp_login_url",
-      url: mcpStatus.loginUrl,
-      message: `Send this login link to the user: ${mcpStatus.loginUrl}`,
+      type: "mcp_login_link",
+      message: `Login link for ${mcpStatus.name} generated but could not be delivered (no interaction service).`,
     });
   });
 

@@ -989,14 +989,18 @@ export async function connectService(
     if (integrationResponse.ok) {
       const result = (await integrationResponse.json()) as {
         status: string;
-        message: string;
+        message?: string;
         grantedScopes?: string[];
       };
       if (result.status === "already_connected") {
-        return textResult(result.message);
+        return textResult(
+          `Already connected to ${args.id} with the requested scopes.`
+        );
       }
+      // login_required — button was sent directly to the user via interactionService.
+      // Never pass raw gateway messages to the agent (could contain URLs/tokens).
       return textResult(
-        `${result.message} Your session will end now. The user will authenticate and your next message will arrive after they return.`
+        "A login button has been sent to the user in chat. Do not include any URL in your response. Your session will end now. The user will authenticate and your next message will arrive after they return."
       );
     }
 
@@ -1005,7 +1009,6 @@ export async function connectService(
       const { data, error } = await gatewayFetch<{
         type?: string;
         message?: string;
-        url?: string;
       }>(
         gw,
         "/internal/mcp-login",
@@ -1016,7 +1019,17 @@ export async function connectService(
         "Failed to connect service"
       );
       if (error) return error;
-      return textResult(data?.message || "Login link sent to the user.");
+
+      // Never pass raw gateway messages to the agent — they could contain
+      // URLs or tokens in fallback paths. Use a fixed message instead.
+      if (data?.type === "mcp_login_link") {
+        return textResult(
+          "A login button has been sent to the user in chat. Do not include any URL in your response. Ask the user to click the button to authenticate."
+        );
+      }
+      return textResult(
+        "A login link has been generated. Ask the user to check their messages for the login button."
+      );
     }
 
     // Other error
