@@ -4,10 +4,7 @@
 
 import type { AgentMetadata } from "../../../auth/agent-metadata-store";
 import type { AgentSettings } from "../../../auth/settings";
-import {
-	SETTINGS_TOKEN_HASH_PARAM,
-	type SettingsTokenPayload,
-} from "../../../auth/settings/token-service";
+import type { SettingsSessionPayload } from "../../../auth/settings/token-service";
 import type { ModelOption } from "../../../modules/module-system";
 import { settingsPageCSS } from "../settings-page-styles";
 import { escapeHtml, formatUserId, getPlatformDisplay } from "./utils";
@@ -53,7 +50,7 @@ export interface SettingsPageOptions {
 }
 
 export function renderSettingsPage(
-	payload: SettingsTokenPayload,
+	payload: SettingsSessionPayload,
 	settings: AgentSettings | null,
 	options?: SettingsPageOptions,
 ): string {
@@ -168,7 +165,7 @@ export function renderSettingsPage(
 // ─── Picker Page ────────────────────────────────────────────────────────────
 
 export function renderPickerPage(
-	payload: SettingsTokenPayload,
+	payload: SettingsSessionPayload,
 	agents: (AgentMetadata & { channelCount: number })[],
 ): string {
 	return `<!DOCTYPE html>
@@ -350,7 +347,17 @@ ${agents
 
 // ─── Session Bootstrap Page ─────────────────────────────────────────────────
 
-export function renderSessionBootstrapPage(): string {
+/**
+ * Telegram WebApp bootstrap page.
+ *
+ * Only used for Telegram stable URLs (/settings?platform=telegram&chat=...).
+ * Telegram injects initData in the hash; this page reads it, POSTs to
+ * /settings/session to create a server-side session + cookie, then redirects.
+ *
+ * All other platforms use ?s= query param which is handled server-side
+ * by GET /settings — no client-side bootstrap needed.
+ */
+export function renderTelegramBootstrapPage(): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -369,7 +376,7 @@ export function renderSessionBootstrapPage(): string {
 <body>
   <div class="card">
     <div id="spinner" class="spinner"></div>
-    <p id="status">Securing your settings session...</p>
+    <p id="status">Authenticating with Telegram...</p>
     <p id="error" class="error"></p>
   </div>
   <script>
@@ -385,56 +392,20 @@ export function renderSessionBootstrapPage(): string {
         spinnerEl.style.display = 'none';
       }
 
-      function redirectToSettings() {
-        var url = new URL(window.location.href);
-        url.hash = '';
-        url.search = '';
-        window.history.replaceState({}, '', url.pathname);
-        window.location.replace('/settings');
-      }
-
-      // Path A: Telegram WebApp initData (stable URLs, no token needed)
       var qp = new URLSearchParams(window.location.search);
       var chatId = qp.get('chat');
-      var isTelegramUrl = qp.get('platform') === 'telegram' && chatId;
-
-      if (isTelegramUrl) {
-        // Telegram injects initData as #tgWebAppData=<url-encoded-initData>&...
-        var hashStr = window.location.hash ? window.location.hash.slice(1) : '';
-        var hashParams = new URLSearchParams(hashStr);
-        var initData = hashParams.get('tgWebAppData') || '';
-
-        if (!initData) {
-          showError('Could not authenticate with Telegram. Please open this link using the button in Telegram, not as a regular URL.');
-          return;
-        }
-
-        try {
-          var resp = await fetch('/settings/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: initData, chatId: chatId })
-          });
-          if (resp.ok) {
-            redirectToSettings();
-            return;
-          }
-          var result = await resp.json().catch(function () { return {}; });
-          showError(result.error || 'Telegram authentication failed.');
-          return;
-        } catch (e) {
-          showError('Network error while authenticating.');
-          return;
-        }
+      if (!chatId) {
+        showError('Missing chat ID. Please open this link using the button in Telegram.');
+        return;
       }
 
-      // Path B: Session-based authentication (opaque session ID in URL hash)
-      var hash = window.location.hash ? window.location.hash.slice(1) : '';
-      var params = new URLSearchParams(hash);
-      var sessionId = params.get('s') || params.get('${SETTINGS_TOKEN_HASH_PARAM}') || params.get('token');
+      // Telegram injects initData as #tgWebAppData=<url-encoded-initData>&...
+      var hashStr = window.location.hash ? window.location.hash.slice(1) : '';
+      var hashParams = new URLSearchParams(hashStr);
+      var initData = hashParams.get('tgWebAppData') || '';
 
-      if (!sessionId) {
-        showError('Missing settings link. Request a new link with /configure.');
+      if (!initData) {
+        showError('Could not authenticate with Telegram. Please open this link using the button in Telegram, not as a regular URL.');
         return;
       }
 
@@ -442,18 +413,16 @@ export function renderSessionBootstrapPage(): string {
         var resp = await fetch('/settings/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sessionId })
+          body: JSON.stringify({ initData: initData, chatId: chatId })
         });
-
-        if (!resp.ok) {
-          var result = await resp.json().catch(function () { return {}; });
-          showError(result.error || 'Invalid or expired settings link.');
+        if (resp.ok) {
+          window.location.replace('/settings');
           return;
         }
-
-        redirectToSettings();
-      } catch (error) {
-        showError('Network error while securing session.');
+        var result = await resp.json().catch(function () { return {}; });
+        showError(result.error || 'Telegram authentication failed.');
+      } catch (e) {
+        showError('Network error while authenticating.');
       }
     })();
   </script>

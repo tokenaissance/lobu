@@ -6,16 +6,16 @@ import { settingsPageCSS } from "../settings-page-styles";
 
 let historyPageJS = "";
 try {
-  // Dynamic import to handle case where bundle hasn't been generated yet
-  const bundle = require("../history-page-bundle");
-  historyPageJS = bundle.historyPageJS;
+	// Dynamic import to handle case where bundle hasn't been generated yet
+	const bundle = require("../history-page-bundle");
+	historyPageJS = bundle.historyPageJS;
 } catch {
-  historyPageJS =
-    'document.getElementById("app").textContent = "Bundle not built. Run: bun run scripts/build-history.ts";';
+	historyPageJS =
+		'document.getElementById("app").textContent = "Bundle not built. Run: bun run scripts/build-history.ts";';
 }
 
 export function renderHistoryPage(agentId: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -30,20 +30,19 @@ export function renderHistoryPage(agentId: string): string {
   </div>
   <script>window.__AGENT_ID__ = ${JSON.stringify(agentId)};</script>
   <script>
-    // Bootstrap session cookie from ?token= query param before app loads
+    // Bootstrap session cookie from ?s= query param before app loads
     window.__sessionReady__ = (async function() {
       var params = new URLSearchParams(window.location.search);
-      var token = params.get('token');
-      if (token) {
+      var sid = params.get('s');
+      if (sid) {
         try {
           await fetch('/settings/session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token })
+            body: JSON.stringify({ sessionId: sid })
           });
         } catch(e) { /* ignore */ }
-        // Remove token from URL but keep other params (e.g. msg)
-        params.delete('token');
+        params.delete('s');
         var remaining = params.toString();
         var newUrl = window.location.pathname + (remaining ? '?' + remaining : '');
         window.history.replaceState({}, '', newUrl);
