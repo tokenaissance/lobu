@@ -25,6 +25,9 @@ import {
 } from "../auth/oauth/state-store";
 import { ProviderCatalogService } from "../auth/provider-catalog";
 import { AgentSettingsStore, AuthProfilesManager } from "../auth/settings";
+import { OAuthIdentityStore } from "../auth/settings/identity-store";
+import { SettingsOAuthProvider } from "../auth/settings/oauth-provider";
+import { AuthSessionStore } from "../auth/settings/session-store";
 import { UserAgentsStore } from "../auth/user-agents-store";
 import { ChannelBindingService } from "../channels";
 import { registerBuiltInCommands } from "../commands/built-in-commands";
@@ -131,6 +134,13 @@ export class CoreServices {
   private userAgentsStore?: UserAgentsStore;
   private agentMetadataStore?: AgentMetadataStore;
   private adminStatusCache?: AdminStatusCache;
+
+  // ============================================================================
+  // Auth Session & OAuth
+  // ============================================================================
+  private authSessionStore?: AuthSessionStore;
+  private settingsOAuthProvider?: SettingsOAuthProvider;
+  private oauthIdentityStore?: OAuthIdentityStore;
 
   // ============================================================================
   // Provider Catalog
@@ -298,8 +308,18 @@ export class CoreServices {
     this.userAgentsStore = new UserAgentsStore(redisClient);
     this.agentMetadataStore = new AgentMetadataStore(redisClient);
     this.adminStatusCache = new AdminStatusCache(redisClient);
+
+    // Auth session store (replaces encrypted tokens for settings, integration init)
+    this.authSessionStore = new AuthSessionStore(redisClient);
+    this.oauthIdentityStore = new OAuthIdentityStore(redisClient);
+    // Settings OAuth provider (optional — configured via SETTINGS_OAUTH_* env vars)
+    this.settingsOAuthProvider = SettingsOAuthProvider.fromEnv(
+      redisClient,
+      this.config.mcp.publicGatewayUrl
+    );
+
     logger.info(
-      "✅ Agent settings, channel binding, user agents & metadata stores initialized"
+      `✅ Agent settings, channel binding, user agents & metadata stores initialized (settings OAuth: ${this.settingsOAuthProvider ? "enabled" : "disabled"})`
     );
   }
 
@@ -685,10 +705,17 @@ export class CoreServices {
 
     const callbackUrl = `${this.config.mcp.publicGatewayUrl}/api/v1/auth/integration/callback`;
 
+    if (!this.authSessionStore) {
+      throw new Error(
+        "Auth session store must be initialized before integration services"
+      );
+    }
+
     this.integrationOAuthModule = new IntegrationOAuthModule(
       this.integrationConfigService,
       this.integrationCredentialStore,
       mcpOAuthStateStore,
+      this.authSessionStore,
       this.config.mcp.publicGatewayUrl,
       callbackUrl,
       this.queue
@@ -878,5 +905,19 @@ export class CoreServices {
 
   getIntegrationOAuthModule(): IntegrationOAuthModule | undefined {
     return this.integrationOAuthModule;
+  }
+
+  getAuthSessionStore(): AuthSessionStore {
+    if (!this.authSessionStore)
+      throw new Error("Auth session store not initialized");
+    return this.authSessionStore;
+  }
+
+  getSettingsOAuthProvider(): SettingsOAuthProvider | undefined {
+    return this.settingsOAuthProvider;
+  }
+
+  getOAuthIdentityStore(): OAuthIdentityStore | undefined {
+    return this.oauthIdentityStore;
   }
 }

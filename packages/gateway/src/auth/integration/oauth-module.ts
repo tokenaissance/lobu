@@ -1,5 +1,5 @@
 import type { IntegrationCredentialRecord } from "@lobu/core";
-import { createLogger, decrypt, encrypt } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { WorkerConnectionManager } from "../../gateway/connection-manager";
@@ -10,6 +10,7 @@ import {
   renderOAuthErrorPage,
   renderOAuthSuccessPage,
 } from "../oauth-templates";
+import type { AuthSessionStore } from "../settings/session-store";
 import type { IntegrationConfigService } from "./config-service";
 import type { IntegrationCredentialStore } from "./credential-store";
 
@@ -22,19 +23,22 @@ export interface ThreadContext {
   platform: string;
 }
 
-interface SecureTokenPayload {
+/**
+ * Session payload for integration OAuth init URLs.
+ * Stored server-side in Redis via AuthSessionStore.
+ */
+interface IntegrationInitSession {
   userId: string;
   agentId: string;
   integrationId: string;
   requestedScopes: string[];
   accountId: string;
   threadContext?: ThreadContext;
-  expiresAt: number;
 }
 
 /**
  * Integration OAuth Module — handles OAuth init/callback for generic integrations.
- * Supports incremental auth: request only new scopes when user already has some granted.
+ * Uses server-side Redis sessions instead of encrypted tokens in URLs.
  */
 export class IntegrationOAuthModule {
   private oauth2Client: GenericOAuth2Client;
@@ -44,6 +48,7 @@ export class IntegrationOAuthModule {
     private configService: IntegrationConfigService,
     private credentialStore: IntegrationCredentialStore,
     private stateStore: McpOAuthStateStore,
+    private sessionStore: AuthSessionStore,
     _publicGatewayUrl: string,
     private callbackUrl: string,
     private queue?: IMessageQueue,
@@ -63,45 +68,71 @@ export class IntegrationOAuthModule {
   }
 
   /**
-   * Generate a secure encrypted token for the OAuth init URL.
-   * Contains userId, agentId, integrationId, requestedScopes, and expiry (15 min).
+   * Create a server-side session for the OAuth init URL.
+   * Returns an opaque session ID (no encrypted tokens in URLs).
    */
-  generateSecureToken(
+  async createInitSession(
     userId: string,
     agentId: string,
     integrationId: string,
     requestedScopes: string[],
     accountId = "default",
     threadContext?: ThreadContext
-  ): string {
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
-    const payload: SecureTokenPayload = {
+  ): Promise<string> {
+    const ttlMs = 15 * 60 * 1000; // 15 minutes
+    const { sessionId } = await this.sessionStore.createSession(
+      {
+        userId,
+        platform: threadContext?.platform || "unknown",
+        agentId,
+      },
+      ttlMs
+    );
+
+    // Store integration-specific metadata alongside the session
+    const metaKey = `auth:session:meta:${sessionId}`;
+    const meta: IntegrationInitSession = {
       userId,
       agentId,
       integrationId,
       requestedScopes,
       accountId,
       threadContext,
-      expiresAt,
     };
-    return encrypt(JSON.stringify(payload));
+    const ttlSeconds = Math.ceil(ttlMs / 1000);
+    await this.sessionStore.redis.setex(
+      metaKey,
+      ttlSeconds,
+      JSON.stringify(meta)
+    );
+
+    return sessionId;
   }
 
-  private validateSecureToken(token: string): SecureTokenPayload | null {
+  /**
+   * Retrieve and consume integration init session metadata.
+   */
+  private async consumeInitSession(
+    sessionId: string
+  ): Promise<IntegrationInitSession | null> {
+    // Consume the auth session (one-time use)
+    const session = await this.sessionStore.consumeSession(sessionId);
+    if (!session) return null;
+
+    // Retrieve and delete the integration metadata
+    const metaKey = `auth:session:meta:${sessionId}`;
+    const metaData = await this.sessionStore.redis.getdel(metaKey);
+    if (!metaData) {
+      logger.warn("Integration init session missing metadata", {
+        sessionId: `${sessionId.substring(0, 8)}...`,
+      });
+      return null;
+    }
+
     try {
-      const decrypted = decrypt(token);
-      const data = JSON.parse(decrypted) as SecureTokenPayload;
-
-      if (Date.now() > data.expiresAt) {
-        logger.warn("Integration OAuth token expired", {
-          integrationId: data.integrationId,
-        });
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      logger.error("Failed to validate integration token", { error });
+      return JSON.parse(metaData) as IntegrationInitSession;
+    } catch {
+      logger.error("Failed to parse integration init session metadata");
       return null;
     }
   }
@@ -113,28 +144,28 @@ export class IntegrationOAuthModule {
   }
 
   /**
-   * GET /api/v1/auth/integration/init/:id?token=<secure>
-   * Validates token, builds auth URL with incremental scope support, redirects.
+   * GET /api/v1/auth/integration/init/:id?s=<sessionId>
+   * Validates session, builds auth URL with incremental scope support, redirects.
    */
   private async handleOAuthInit(c: Context): Promise<Response> {
     const integrationId = c.req.param("id");
-    const token = c.req.query("token");
+    const sessionId = c.req.query("s");
 
-    if (!token) {
-      return c.json({ error: "Missing token parameter" }, 400);
+    if (!sessionId) {
+      return c.json({ error: "Missing session parameter" }, 400);
     }
 
-    const tokenData = this.validateSecureToken(token);
-    if (!tokenData) {
-      return c.json({ error: "Invalid or expired token" }, 401);
+    const initSession = await this.consumeInitSession(sessionId);
+    if (!initSession) {
+      return c.json({ error: "Invalid or expired session" }, 401);
     }
 
-    if (tokenData.integrationId !== integrationId) {
-      return c.json({ error: "Token integrationId mismatch" }, 400);
+    if (initSession.integrationId !== integrationId) {
+      return c.json({ error: "Session integrationId mismatch" }, 400);
     }
 
     const { userId, agentId, requestedScopes, accountId, threadContext } =
-      tokenData;
+      initSession;
 
     try {
       const config = await this.configService.getIntegration(integrationId);
@@ -157,12 +188,10 @@ export class IntegrationOAuthModule {
           accountId
         );
         if (existing?.grantedScopes?.length) {
-          // Only request the new scopes, include_granted_scopes preserves old ones
           const newScopes = requestedScopes.filter(
             (s) => !existing.grantedScopes.includes(s)
           );
           if (newScopes.length === 0) {
-            // All scopes already granted
             return c.json({
               message: "All requested scopes are already granted",
             });
@@ -173,8 +202,6 @@ export class IntegrationOAuthModule {
       }
 
       // Create state for CSRF protection
-      // Encode accountId alongside integrationId in mcpId field as {integrationId}:{accountId}
-      // Store thread context in redirectPath for post-auth notification
       const state = await this.stateStore.createWithNonce({
         userId,
         agentId,
@@ -353,7 +380,7 @@ export class IntegrationOAuthModule {
         `Integration OAuth successful for agent ${agentId}, integration ${integrationId}, account ${accountId}, scopes: ${finalScopes.join(", ")}`
       );
 
-      // Invalidate worker's cached session context so it sees updated integration status
+      // Invalidate worker's cached session context
       this.connectionManager?.notifyAgent(agentId, "config_changed", {
         changes: [`integration:${integrationId}:${accountId}:connected`],
       });
@@ -382,10 +409,6 @@ export class IntegrationOAuthModule {
     }
   }
 
-  /**
-   * Send a system message to the thread so the agent knows authentication succeeded
-   * and can resume working with the new credentials.
-   */
   private async sendAuthNotification(
     userId: string,
     agentId: string,

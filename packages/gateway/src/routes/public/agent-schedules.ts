@@ -128,7 +128,7 @@ export function createAgentSchedulesRoutes(
 
   app.openapi(listSchedulesRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     if (!config.scheduledWakeupService) return c.json({ schedules: [] });
@@ -149,7 +149,7 @@ export function createAgentSchedulesRoutes(
 
   app.openapi(cancelScheduleRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     if (!config.scheduledWakeupService) {

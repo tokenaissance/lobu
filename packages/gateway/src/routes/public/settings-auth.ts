@@ -1,23 +1,40 @@
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import {
-  type SettingsTokenPayload,
-  verifySettingsToken,
-} from "../../auth/settings/token-service";
+import type { AuthSessionStore } from "../../auth/settings/session-store";
+import type { SettingsSessionPayload } from "../../auth/settings/token-service";
 
-export const SETTINGS_TOKEN_QUERY_PARAM = "token";
 export const SETTINGS_SESSION_COOKIE_NAME = "lobu_settings_session";
 
-function getTokenFromQuery(c: Context): string | undefined {
-  const token = c.req.query(SETTINGS_TOKEN_QUERY_PARAM);
-  if (!token || token.trim().length === 0) return undefined;
-  return token;
+/**
+ * Singleton reference to the session store.
+ * Set once during app initialization via `setSessionStore()`.
+ */
+let _sessionStore: AuthSessionStore | undefined;
+
+export function setSessionStore(store: AuthSessionStore): void {
+  _sessionStore = store;
 }
 
-function getTokenFromCookie(c: Context): string | undefined {
-  const token = getCookie(c, SETTINGS_SESSION_COOKIE_NAME);
-  if (!token || token.trim().length === 0) return undefined;
-  return token;
+function getSessionStore(): AuthSessionStore {
+  if (!_sessionStore) {
+    throw new Error(
+      "AuthSessionStore not initialized — call setSessionStore() first"
+    );
+  }
+  return _sessionStore;
+}
+
+function getSessionIdFromQuery(c: Context): string | undefined {
+  // New session-based param
+  const sid = c.req.query("s");
+  if (sid && sid.trim().length > 0) return sid.trim();
+  return undefined;
+}
+
+function getSessionIdFromCookie(c: Context): string | undefined {
+  const sid = getCookie(c, SETTINGS_SESSION_COOKIE_NAME);
+  if (!sid || sid.trim().length === 0) return undefined;
+  return sid.trim();
 }
 
 function isSecureRequest(c: Context): boolean {
@@ -28,30 +45,41 @@ function isSecureRequest(c: Context): boolean {
   return new URL(c.req.url).protocol === "https:";
 }
 
-export function resolveSettingsToken(c: Context): string | undefined {
-  return getTokenFromQuery(c) ?? getTokenFromCookie(c);
+/**
+ * Resolve the session ID from query param or cookie.
+ */
+export function resolveSessionId(c: Context): string | undefined {
+  return getSessionIdFromQuery(c) ?? getSessionIdFromCookie(c);
 }
 
-export function verifySettingsSession(c: Context): SettingsTokenPayload | null {
-  const token = resolveSettingsToken(c);
-  if (!token) return null;
-  return verifySettingsToken(token);
+/**
+ * Verify the current settings session.
+ * Looks up the session ID in Redis and returns the payload if valid.
+ */
+export async function verifySettingsSession(
+  c: Context
+): Promise<SettingsSessionPayload | null> {
+  const sessionId = resolveSessionId(c);
+  if (!sessionId) return null;
+
+  const store = getSessionStore();
+  return store.getSession(sessionId);
 }
 
+/**
+ * Set the session cookie with the session ID.
+ */
 export function setSettingsSessionCookie(
   c: Context,
-  token: string,
-  payload?: SettingsTokenPayload
+  sessionId: string,
+  payload: SettingsSessionPayload
 ): boolean {
-  const verifiedPayload = payload ?? verifySettingsToken(token);
-  if (!verifiedPayload) return false;
-
   const maxAgeSeconds = Math.max(
     1,
-    Math.floor((verifiedPayload.exp - Date.now()) / 1000)
+    Math.floor((payload.exp - Date.now()) / 1000)
   );
 
-  setCookie(c, SETTINGS_SESSION_COOKIE_NAME, token, {
+  setCookie(c, SETTINGS_SESSION_COOKIE_NAME, sessionId, {
     path: "/",
     httpOnly: true,
     sameSite: "Lax",

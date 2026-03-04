@@ -1,26 +1,28 @@
 /**
  * Settings Page Routes
  *
- * Serves the unified settings/agent-selector page via magic link.
- * Supports two entry modes:
- * - Agent-based token: shows settings directly
- * - Channel-based token: resolves agent via binding or shows agent picker
+ * Serves the unified settings/agent-selector page.
+ * Authentication uses server-side Redis sessions (no encrypted tokens in URLs).
+ *
+ * Supports three entry modes:
+ * - Session-based: opaque session ID in URL, context lives in Redis
+ * - Telegram initData: HMAC-signed by bot token, creates Redis session
+ * - OAuth (optional): configurable provider for identity verification
  *
  * API endpoints (agent config, schedules, etc.) remain in separate files.
  */
 
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { encrypt } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import type {
   AgentMetadata,
   AgentMetadataStore,
 } from "../../auth/agent-metadata-store";
 import { collectProviderModelOptions } from "../../auth/provider-model-options";
 import type { AgentSettingsStore } from "../../auth/settings";
-import {
-  type SettingsTokenPayload,
-  verifySettingsToken,
-} from "../../auth/settings/token-service";
+import type { OAuthIdentityStore } from "../../auth/settings/identity-store";
+import type { SettingsOAuthProvider } from "../../auth/settings/oauth-provider";
+import type { AuthSessionStore } from "../../auth/settings/session-store";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChannelBindingService } from "../../channels";
 import { getModelProviderModules } from "../../modules/module-system";
@@ -38,11 +40,16 @@ import {
   renderSettingsPage,
 } from "./settings-page";
 
+const logger = createLogger("settings-routes");
+
 export interface SettingsPageConfig {
   agentSettingsStore: AgentSettingsStore;
   userAgentsStore: UserAgentsStore;
   agentMetadataStore: AgentMetadataStore;
   channelBindingService: ChannelBindingService;
+  sessionStore: AuthSessionStore;
+  oauthProvider?: SettingsOAuthProvider;
+  identityStore?: OAuthIdentityStore;
   integrationConfigService?: import("../../auth/integration/config-service").IntegrationConfigService;
   integrationCredentialStore?: import("../../auth/integration/credential-store").IntegrationCredentialStore;
   connectionManager?: import("../../gateway/connection-manager").WorkerConnectionManager;
@@ -72,11 +79,24 @@ export function createSettingsPageRoutes(
 ): OpenAPIHono {
   const app = new OpenAPIHono();
 
+  // =========================================================================
+  // POST /settings/session — establish a session cookie
+  // =========================================================================
   app.post("/settings/session", async (c) => {
     const body = await c.req
-      .json<{ token?: string; initData?: string; chatId?: string }>()
+      .json<{
+        sessionId?: string;
+        token?: string;
+        initData?: string;
+        chatId?: string;
+      }>()
       .catch(
-        (): { token?: string; initData?: string; chatId?: string } => ({})
+        (): {
+          sessionId?: string;
+          token?: string;
+          initData?: string;
+          chatId?: string;
+        } => ({})
       );
 
     // Path A: Telegram WebApp initData authentication
@@ -105,55 +125,155 @@ export function createSettingsPageRoutes(
         return c.json({ error: "Chat ID mismatch" }, 403);
       }
 
-      // Build a synthetic payload (1-hour session, matching token-based flow)
+      // Create a server-side session (replaces the old encrypt-to-cookie approach)
       const sessionTtlMs = 60 * 60 * 1000;
-      const payload: SettingsTokenPayload = {
-        userId,
-        platform: "telegram",
-        channelId: chatId,
-        exp: Date.now() + sessionTtlMs,
-      };
+      const { sessionId } = await config.sessionStore.createSession(
+        {
+          userId,
+          platform: "telegram",
+          channelId: chatId,
+        },
+        sessionTtlMs
+      );
 
-      // Encrypt payload into a token for the session cookie
-      const syntheticToken = encrypt(JSON.stringify(payload));
-
-      const sessionSet = setSettingsSessionCookie(c, syntheticToken, payload);
-      if (!sessionSet) {
+      const payload = await config.sessionStore.getSession(sessionId);
+      if (!payload) {
         clearSettingsSessionCookie(c);
         return c.json({ error: "Failed to create session" }, 500);
       }
 
+      setSettingsSessionCookie(c, sessionId, payload);
       return c.json({ success: true });
     }
 
-    // Path B: Existing token-based authentication
-    const token = (body.token ?? "").trim();
-    if (!token) return c.json({ error: "Missing token" }, 400);
+    // Path B: Session-based authentication (new — opaque session ID)
+    const sessionId = (body.sessionId ?? body.token ?? "").trim();
+    if (!sessionId) return c.json({ error: "Missing session ID" }, 400);
 
-    const payload = verifySettingsToken(token);
+    const payload = await config.sessionStore.getSession(sessionId);
     if (!payload) {
       clearSettingsSessionCookie(c);
-      return c.json({ error: "Invalid or expired token" }, 401);
+      return c.json({ error: "Invalid or expired session" }, 401);
     }
 
-    const sessionSet = setSettingsSessionCookie(c, token, payload);
-    if (!sessionSet) {
-      clearSettingsSessionCookie(c);
-      return c.json({ error: "Invalid or expired token" }, 401);
+    // If OAuth provider is configured, redirect to OAuth instead of setting cookie directly
+    if (config.oauthProvider) {
+      const authUrl = await config.oauthProvider.startAuth(
+        payload.userId,
+        sessionId,
+        payload.platform
+      );
+      return c.json({ oauthRedirect: authUrl });
     }
 
+    setSettingsSessionCookie(c, sessionId, payload);
     return c.json({ success: true });
   });
 
-  // HTML Settings Page
+  // =========================================================================
+  // GET /settings/oauth/callback — OAuth identity verification callback
+  // =========================================================================
+  if (config.oauthProvider && config.identityStore) {
+    const oauthProvider = config.oauthProvider;
+    const identityStore = config.identityStore;
+
+    app.get("/settings/oauth/callback", async (c) => {
+      const code = c.req.query("code");
+      const state = c.req.query("state");
+      const error = c.req.query("error");
+
+      if (error) {
+        logger.warn("Settings OAuth error", {
+          error,
+          description: c.req.query("error_description"),
+        });
+        return c.html(
+          renderErrorPage(
+            `Authentication failed: ${error}. Please request a new settings link.`
+          ),
+          401
+        );
+      }
+
+      if (!code || !state) {
+        return c.html(
+          renderErrorPage("Invalid OAuth callback (missing code or state)."),
+          400
+        );
+      }
+
+      try {
+        const result = await oauthProvider.handleCallback(code, state);
+        if (!result) {
+          return c.html(
+            renderErrorPage(
+              "Authentication failed. The link may have expired — request a new one."
+            ),
+            401
+          );
+        }
+
+        const { stateData, userInfo } = result;
+
+        // Verify/establish identity mapping
+        const { linked, existingUserId } = await identityStore.linkIdentity(
+          oauthProvider.providerName,
+          userInfo.sub,
+          stateData.userId,
+          stateData.platform
+        );
+
+        if (!linked) {
+          logger.warn("OAuth identity mismatch", {
+            oauthSub: userInfo.sub,
+            sessionUserId: stateData.userId,
+            existingUserId,
+          });
+          return c.html(
+            renderErrorPage(
+              "This OAuth account is already linked to a different user."
+            ),
+            403
+          );
+        }
+
+        // Load the session and set the cookie
+        const payload = await config.sessionStore.getSession(
+          stateData.sessionId
+        );
+        if (!payload) {
+          return c.html(
+            renderErrorPage("Session expired. Please request a new link."),
+            401
+          );
+        }
+
+        setSettingsSessionCookie(c, stateData.sessionId, payload);
+        return c.redirect("/settings", 303);
+      } catch (err) {
+        logger.error("Settings OAuth callback failed", { error: err });
+        return c.html(
+          renderErrorPage(
+            "Authentication failed due to a server error. Please try again."
+          ),
+          500
+        );
+      }
+    });
+  }
+
+  // =========================================================================
+  // GET /settings — HTML Settings Page
+  // =========================================================================
   app.get("/settings", async (c) => {
     c.header("Referrer-Policy", "no-referrer");
     c.header("Cache-Control", "no-store, max-age=0");
     c.header("Pragma", "no-cache");
 
-    const legacyToken = c.req.query("token");
-    if (legacyToken) {
-      const payload = verifySettingsToken(legacyToken);
+    // Handle ?s= query param: validate session, set cookie, redirect clean
+    const querySessionId = c.req.query("s");
+    if (querySessionId) {
+      const payload = await config.sessionStore.getSession(querySessionId);
       if (!payload) {
         clearSettingsSessionCookie(c);
         return c.html(
@@ -164,11 +284,21 @@ export function createSettingsPageRoutes(
         );
       }
 
-      setSettingsSessionCookie(c, legacyToken, payload);
+      // If OAuth configured, redirect through OAuth first
+      if (config.oauthProvider) {
+        const authUrl = await config.oauthProvider.startAuth(
+          payload.userId,
+          querySessionId,
+          payload.platform
+        );
+        return c.redirect(authUrl, 303);
+      }
+
+      setSettingsSessionCookie(c, querySessionId, payload);
       return c.redirect("/settings", 303);
     }
 
-    const payload = verifySettingsSession(c);
+    const payload = await verifySettingsSession(c);
     if (!payload) {
       return c.html(renderSessionBootstrapPage());
     }
@@ -177,7 +307,7 @@ export function createSettingsPageRoutes(
     let agentId = payload.agentId;
 
     if (!agentId && payload.channelId) {
-      // Channel-based token: try to resolve via existing binding
+      // Channel-based entry: try to resolve via existing binding
       const binding = await config.channelBindingService.getBinding(
         payload.platform,
         payload.channelId,
@@ -329,7 +459,7 @@ export function createSettingsPageRoutes(
 
   // Disconnect an OAuth integration account
   app.post("/api/v1/integrations/oauth/disconnect", async (c) => {
-    const session = verifySettingsSession(c);
+    const session = await verifySettingsSession(c);
     if (!session) return c.json({ error: "Not authenticated" }, 401);
 
     const { agentId, integrationId, accountId } = await c.req.json<{
@@ -362,7 +492,7 @@ export function createSettingsPageRoutes(
 
   // Save an API key for an api-key integration
   app.post("/api/v1/integrations/apikey/save", async (c) => {
-    const session = verifySettingsSession(c);
+    const session = await verifySettingsSession(c);
     if (!session) return c.json({ error: "Not authenticated" }, 401);
 
     const { agentId, integrationId, apiKey } = await c.req.json<{

@@ -2,15 +2,15 @@
  * Internal Settings Link Routes
  *
  * Worker-facing endpoint for generating settings magic links.
- * Used by the GetSettingsLink custom MCP tool.
+ * Uses server-side Redis sessions (no encrypted tokens in URLs).
  */
 
 import { createLogger, verifyWorkerToken } from "@lobu/core";
 import { Hono } from "hono";
+import type { AuthSessionStore } from "../../auth/settings/session-store";
+import { buildSessionUrl } from "../../auth/settings/session-store";
 import {
-  buildSettingsUrl,
   buildTelegramSettingsUrl,
-  generateSettingsToken,
   getSettingsTokenTtlMs,
   type PrefillMcpServer,
   type PrefillSkill,
@@ -38,6 +38,7 @@ type WorkerContext = {
  * Create internal settings link routes (Hono)
  */
 export function createSettingsLinkRoutes(
+  sessionStore: AuthSessionStore,
   interactionService?: InteractionService,
   grantStore?: GrantStore
 ): Hono<WorkerContext> {
@@ -59,21 +60,11 @@ export function createSettingsLinkRoutes(
   };
 
   /**
-   * Generate a settings magic link for the current user/agent context
+   * Generate a settings link for the current user/agent context.
+   * Context is stored server-side in Redis — only an opaque session ID
+   * appears in the URL.
+   *
    * POST /internal/settings-link
-   *
-   * Body: {
-   *   reason?: string (optional explanation for what to configure)
-   *   message?: string (optional message to display on settings page)
-   *   prefillEnvVars?: string[] (optional env var keys to pre-fill)
-   *   prefillSkills?: PrefillSkill[] (optional skills to pre-fill)
-   *   prefillMcpServers?: PrefillMcpServer[] (optional MCP servers to pre-fill)
-   * }
-   *
-   * Response: {
-   *   url: string (settings page URL with magic token)
-   *   expiresAt: string (ISO timestamp when link expires)
-   * }
    */
   router.post("/internal/settings-link", authenticateWorker, async (c) => {
     try {
@@ -153,7 +144,7 @@ export function createSettingsLinkRoutes(
         });
       }
 
-      // Telegram plain "Open Settings" links use stable URLs (no token needed)
+      // Telegram plain "Open Settings" links use stable URLs (no session needed)
       const hasPrefillData =
         prefillSkills?.length ||
         prefillMcpServers?.length ||
@@ -183,32 +174,41 @@ export function createSettingsLinkRoutes(
         });
       }
 
-      // Generate token with configured TTL (defaults to 1 hour)
+      // Create server-side session (no encrypted token in URL)
       const ttlMs = getSettingsTokenTtlMs();
-      const token = generateSettingsToken(agentId, userId, platform, {
-        ttlMs,
-        channelId: worker.channelId,
-        teamId: worker.teamId,
-        message,
-        prefillEnvVars,
-        prefillSkills,
-        prefillMcpServers,
-        prefillNixPackages,
-        prefillGrants,
-        sourceContext: {
-          conversationId: worker.conversationId,
+      const { sessionId, expiresAt } = await sessionStore.createSession(
+        {
+          userId,
+          platform,
+          agentId,
           channelId: worker.channelId,
           teamId: worker.teamId,
-          platform,
+          message,
+          prefillEnvVars,
+          prefillSkills,
+          prefillMcpServers,
+          prefillNixPackages,
+          prefillGrants,
+          sourceContext: {
+            conversationId: worker.conversationId,
+            channelId: worker.channelId,
+            teamId: worker.teamId,
+            platform,
+          },
         },
-      });
+        ttlMs
+      );
+
       // Telegram web_app buttons replace URL hash fragments, so use query param
-      const url = buildSettingsUrl(token, {
+      const url = buildSessionUrl(sessionId, {
         useQueryParam: platform === "telegram",
       });
-      const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
-      logger.info("Settings link generated", { agentId, userId, expiresAt });
+      logger.info("Settings link generated (session-based)", {
+        agentId,
+        userId,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
 
       // Fire link button event so platforms render natively
       if (interactionService) {
@@ -240,12 +240,15 @@ export function createSettingsLinkRoutes(
       }
 
       // Fallback: no interaction service (shouldn't happen in practice).
-      // Never return the raw URL/token to the worker — it would be visible
-      // to the agent, which is a security risk.
-      logger.warn("No interactionService available — settings link generated but cannot be delivered to user", { agentId, userId });
+      // Never return the raw URL to the worker.
+      logger.warn(
+        "No interactionService available — settings link generated but cannot be delivered to user",
+        { agentId, userId }
+      );
       return c.json({
         type: "settings_link",
-        message: "Settings link generated but could not be delivered (no interaction service).",
+        message:
+          "Settings link generated but could not be delivered (no interaction service).",
       });
     } catch (error) {
       logger.error("Failed to generate settings link", { error });

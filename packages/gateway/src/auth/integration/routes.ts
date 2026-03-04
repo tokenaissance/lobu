@@ -181,8 +181,8 @@ export function createIntegrationRoutes(
           }
         }
 
-        // Generate OAuth URL with thread context for post-auth notification
-        const token = oauthModule.generateSecureToken(
+        // Create server-side session for the OAuth init URL (no encrypted tokens)
+        const sessionId = await oauthModule.createInitSession(
           worker.userId,
           agentId,
           integration,
@@ -195,7 +195,7 @@ export function createIntegrationRoutes(
             platform: worker.platform || "slack",
           }
         );
-        const oauthUrl = `${publicGatewayUrl}/api/v1/auth/integration/init/${integration}?token=${encodeURIComponent(token)}`;
+        const oauthUrl = `${publicGatewayUrl}/api/v1/auth/integration/init/${integration}?s=${encodeURIComponent(sessionId)}`;
 
         // Send login link to user via InteractionService
         if (interactionService) {

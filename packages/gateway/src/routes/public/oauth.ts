@@ -80,7 +80,7 @@ export function createOAuthRoutes(config: OAuthRoutesConfig): OpenAPIHono {
 
   // --- Provider login redirect (excluded from docs) ---
   app.get("/:provider/login", async (c) => {
-    const payload = verifyToken(verifySettingsSession(c));
+    const payload = verifyToken(await verifySettingsSession(c));
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     const provider = c.req.param("provider");
@@ -102,7 +102,7 @@ export function createOAuthRoutes(config: OAuthRoutesConfig): OpenAPIHono {
 
   // --- Provider code exchange ---
   app.openapi(codeExchangeRoute, async (c): Promise<any> => {
-    const payload = verifyToken(verifySettingsSession(c));
+    const payload = verifyToken(await verifySettingsSession(c));
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     const { provider } = c.req.valid("param");

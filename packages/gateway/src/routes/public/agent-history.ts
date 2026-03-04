@@ -11,8 +11,8 @@ import { verifySettingsSession } from "./settings-auth";
 
 const logger = createLogger("agent-history-routes");
 
-function getAgentId(c: Context): string | null {
-  const session = verifySettingsSession(c);
+async function getAgentId(c: Context): Promise<string | null> {
+  const session = await verifySettingsSession(c);
   if (!session) return null;
   return c.req.param("agentId") || session.agentId || null;
 }
@@ -24,8 +24,8 @@ export function createAgentHistoryRoutes(deps: {
   const { connectionManager } = deps;
 
   // Agent status (connected, httpUrl available)
-  app.get("/status", (c) => {
-    const agentId = getAgentId(c);
+  app.get("/status", async (c) => {
+    const agentId = await getAgentId(c);
     if (!agentId) return c.json({ error: "Unauthorized" }, 401);
 
     const deployments = connectionManager.getDeploymentsForAgent(agentId);
@@ -40,7 +40,7 @@ export function createAgentHistoryRoutes(deps: {
 
   // Proxy session messages to worker
   app.get("/session/messages", async (c) => {
-    const agentId = getAgentId(c);
+    const agentId = await getAgentId(c);
     if (!agentId) return c.json({ error: "Unauthorized" }, 401);
 
     const httpUrl = connectionManager.getHttpUrl(agentId);
@@ -80,7 +80,7 @@ export function createAgentHistoryRoutes(deps: {
 
   // Proxy session stats to worker
   app.get("/session/stats", async (c) => {
-    const agentId = getAgentId(c);
+    const agentId = await getAgentId(c);
     if (!agentId) return c.json({ error: "Unauthorized" }, 401);
 
     const httpUrl = connectionManager.getHttpUrl(agentId);

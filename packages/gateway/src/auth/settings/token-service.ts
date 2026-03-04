@@ -53,7 +53,11 @@ export interface SettingsSourceContext {
  * - Channel-based: `channelId` is set, `agentId` may be absent (from message handlers when no agent bound)
  * At least one of `agentId` or `channelId` must be present.
  */
-export interface SettingsTokenPayload {
+/**
+ * Canonical session payload type. Stored server-side in Redis.
+ * SettingsTokenPayload is kept as an alias for backward compatibility.
+ */
+export interface SettingsSessionPayload {
   /** Agent to configure. Optional when using channel-based entry (user picks agent on page). */
   agentId?: string;
   userId: string;
@@ -78,6 +82,9 @@ export interface SettingsTokenPayload {
   /** Optional source context for post-install notifications */
   sourceContext?: SettingsSourceContext;
 }
+
+/** @deprecated Use SettingsSessionPayload instead. */
+export type SettingsTokenPayload = SettingsSessionPayload;
 
 /**
  * Default TTL for settings tokens (1 hour)
@@ -190,7 +197,7 @@ export function generateSettingsToken(
     );
   }
 
-  const payload: SettingsTokenPayload = {
+  const payload: SettingsSessionPayload = {
     userId,
     platform,
     exp: Date.now() + ttlMs,

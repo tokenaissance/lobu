@@ -177,7 +177,7 @@ export function createIntegrationsRoutes(): OpenAPIHono {
 
   app.openapi(registryRoute, async (c): Promise<any> => {
     const { q, limit } = c.req.valid("query");
-    if (!verifySettingsSession(c))
+    if (!(await verifySettingsSession(c)))
       return c.json({ error: "Unauthorized" }, 401);
 
     const maxLimit = Math.min(parseInt(limit || "20", 10), 50);
@@ -208,7 +208,7 @@ export function createIntegrationsRoutes(): OpenAPIHono {
   });
 
   app.openapi(skillFetchRoute, async (c): Promise<any> => {
-    if (!verifySettingsSession(c))
+    if (!(await verifySettingsSession(c)))
       return c.json({ error: "Unauthorized" }, 401);
 
     const { repo } = c.req.valid("json");
@@ -234,7 +234,7 @@ export function createIntegrationsRoutes(): OpenAPIHono {
   });
 
   app.openapi(mcpByIdRoute, async (c): Promise<any> => {
-    if (!verifySettingsSession(c))
+    if (!(await verifySettingsSession(c)))
       return c.json({ error: "Unauthorized" }, 401);
 
     const { id } = c.req.valid("param");

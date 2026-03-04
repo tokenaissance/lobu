@@ -217,12 +217,20 @@ function setupServer(
     }
   }
 
+  // Initialize auth session store for settings-auth module
+  if (coreServices) {
+    const { setSessionStore } = require("../routes/public/settings-auth");
+    setSessionStore(coreServices.getAuthSessionStore());
+    logger.info("Auth session store wired into settings-auth");
+  }
+
   // Settings link routes (worker can generate settings links for users)
   {
     const {
       createSettingsLinkRoutes,
     } = require("../routes/internal/settings-link");
     const settingsLinkRouter = createSettingsLinkRoutes(
+      coreServices!.getAuthSessionStore(),
       interactionService,
       coreServices?.getGrantStore()
     );
@@ -523,6 +531,9 @@ function setupServer(
         userAgentsStore: coreServices.getUserAgentsStore(),
         agentMetadataStore: coreServices.getAgentMetadataStore(),
         channelBindingService: coreServices.getChannelBindingService(),
+        sessionStore: coreServices.getAuthSessionStore(),
+        oauthProvider: coreServices.getSettingsOAuthProvider(),
+        identityStore: coreServices.getOAuthIdentityStore(),
         integrationConfigService: coreServices.getIntegrationConfigService(),
         integrationCredentialStore:
           coreServices.getIntegrationCredentialStore(),

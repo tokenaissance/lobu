@@ -395,7 +395,7 @@ export function createAgentConfigRoutes(
 
   app.openapi(getConfigRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     const settings = await config.agentSettingsStore.getSettings(agentId);
@@ -451,7 +451,7 @@ export function createAgentConfigRoutes(
 
   app.openapi(updateConfigRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     try {
@@ -530,7 +530,7 @@ export function createAgentConfigRoutes(
   // GET /packages/search?q=python
   app.get("/packages/search", async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     const query = (c.req.query("q") || "").trim();
@@ -552,7 +552,7 @@ export function createAgentConfigRoutes(
   // GET /providers/catalog
   app.get("/providers/catalog", async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     if (!config.providerCatalogService) {
@@ -580,7 +580,7 @@ export function createAgentConfigRoutes(
   app.put("/providers/:providerId", async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
     const providerId = c.req.param("providerId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     if (!config.providerCatalogService) {
@@ -638,7 +638,7 @@ export function createAgentConfigRoutes(
   // PATCH /providers/reorder
   app.patch("/providers/reorder", async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
+    const payload = await verifyToken(await verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
     if (!config.providerCatalogService) {
@@ -682,7 +682,7 @@ export function createAgentConfigRoutes(
     // GET /grants - List all active grants
     app.get("/grants", async (c) => {
       const agentId = c.req.param("agentId") || "";
-      const payload = await verifyToken(verifySettingsSession(c), agentId);
+      const payload = await verifyToken(await verifySettingsSession(c), agentId);
       if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
       const grants = await grantStore.listGrants(agentId);
@@ -692,7 +692,7 @@ export function createAgentConfigRoutes(
     // POST /grants - Create a grant
     app.post("/grants", async (c) => {
       const agentId = c.req.param("agentId") || "";
-      const payload = await verifyToken(verifySettingsSession(c), agentId);
+      const payload = await verifyToken(await verifySettingsSession(c), agentId);
       if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
       const body = await c.req.json<{
@@ -722,7 +722,7 @@ export function createAgentConfigRoutes(
     app.delete("/grants/:pattern", async (c) => {
       const agentId = c.req.param("agentId") || "";
       const pattern = decodeURIComponent(c.req.param("pattern") || "");
-      const payload = await verifyToken(verifySettingsSession(c), agentId);
+      const payload = await verifyToken(await verifySettingsSession(c), agentId);
       if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
       await grantStore.revoke(agentId, pattern);

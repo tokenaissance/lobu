@@ -47,7 +47,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
 
   // POST /api/v1/agents - Create a new agent
   router.post("/", async (c) => {
-    const payload = verifySettingsSession(c);
+    const payload = await verifySettingsSession(c);
     if (!payload) {
       return c.json({ error: "Invalid or expired token" }, 401);
     }
@@ -150,7 +150,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
 
   // GET /api/v1/agents - List user's agents
   router.get("/", async (c) => {
-    const payload = verifySettingsSession(c);
+    const payload = await verifySettingsSession(c);
     if (!payload) {
       return c.json({ error: "Invalid or expired token" }, 401);
     }
@@ -188,7 +188,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
 
   // PATCH /api/v1/manage/agents/{agentId} - Update agent name/description
   router.patch("/:agentId", async (c) => {
-    const payload = verifySettingsSession(c);
+    const payload = await verifySettingsSession(c);
     if (!payload) {
       return c.json({ error: "Invalid or expired token" }, 401);
     }
@@ -256,7 +256,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
 
   // DELETE /api/v1/manage/agents/{agentId} - Delete an agent
   router.delete("/:agentId", async (c) => {
-    const payload = verifySettingsSession(c);
+    const payload = await verifySettingsSession(c);
     if (!payload) {
       return c.json({ error: "Invalid or expired token" }, 401);
     }
