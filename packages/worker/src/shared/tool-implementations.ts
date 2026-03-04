@@ -814,14 +814,13 @@ export async function getSettingsLink(
       );
     }
 
-    logger.info(`Generated settings link: ${result.url}`);
-
-    const expiresLabel = result.expiresAt
-      ? `Expires: ${new Date(result.expiresAt).toLocaleString()}`
-      : "";
+    // Fallback: gateway could not deliver the link via platform button.
+    // Never expose the raw URL/token to the agent — log without the token
+    // and tell the agent the link was delivered separately.
+    logger.warn("Settings link fallback: no platform button delivery");
 
     return textResult(
-      `Settings link generated successfully!\n\nURL: ${result.url}\n\n${expiresLabel}\n\nReason: ${args.reason}\n\nShare this link with the user so they can configure their settings.`
+      "A settings link has been generated and sent to the user. Do not include any URL in your response. Ask the user to check their messages for the settings link."
     );
   });
 }

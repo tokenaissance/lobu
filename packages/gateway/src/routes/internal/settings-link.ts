@@ -239,10 +239,13 @@ export function createSettingsLinkRoutes(
         });
       }
 
-      // Fallback: no interaction service (shouldn't happen in practice)
+      // Fallback: no interaction service (shouldn't happen in practice).
+      // Never return the raw URL/token to the worker — it would be visible
+      // to the agent, which is a security risk.
+      logger.warn("No interactionService available — settings link generated but cannot be delivered to user", { agentId, userId });
       return c.json({
-        url,
-        expiresAt,
+        type: "settings_link",
+        message: "Settings link generated but could not be delivered (no interaction service).",
       });
     } catch (error) {
       logger.error("Failed to generate settings link", { error });
