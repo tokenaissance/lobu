@@ -461,15 +461,13 @@ export function HeroSection() {
           >
             Sandboxed
           </a>
-          , persistent, powered by{" "}
+          , persistent, powered by the{" "}
           <a
-            href="https://github.com/openclaw/openclaw"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/getting-started/comparison/"
             class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            OpenClaw
+            OpenClaw runtime
           </a>{" "}
           and{" "}
           <a
