@@ -12,7 +12,12 @@ Lobu and OpenClaw are complementary, but they solve different layers of the prob
 
 ## Why Not Just Use OpenClaw Directly?
 
-OpenClaw is a powerful runtime (~800k lines of code), but it was designed as a **single-tenant, single-user system**. It assumes one user runs one agent on their own machine. That's great for local development, but production deployments need:
+OpenClaw is a powerful runtime (~800k lines of code), but it was designed as a **single-tenant, single-user system** — by design. The creator of OpenClaw, Peter Steinberger, has been explicit about this:
+
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Since I spend my night again sifting through security advisories, folks, security researches, slop clankers, PLEASE - read <a href="https://t.co/Y6PYY4zg5W">https://t.co/Y6PYY4zg5W</a> and <a href="https://t.co/FSsm4M4FSq">https://t.co/FSsm4M4FSq</a><br><br>The security model of OpenClaw is that it&#39;s your PERSONAL assistant (one user - 1...many agents).<br><br>IT IS…</p>&mdash; Peter Steinberger 🦞 (@steipete) <a href="https://twitter.com/steipete/status/2026092642623201379?ref_src=twsrc%5Etfw">February 24, 2026</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+OpenClaw assumes one user runs one agent on their own machine. That's great for local development, but production deployments need:
 
 - **Multi-tenant isolation** — every user gets their own sandboxed worker, not a shared process.
 - **Platform routing** — messages arrive from Slack, Telegram, WhatsApp, or REST API and need to reach the right worker.
