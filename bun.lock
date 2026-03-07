@@ -111,6 +111,7 @@
         "@scalar/astro": "^0.2.0",
         "astro": "^5.18.0",
         "preact": "^10.25.4",
+        "zod": "^3.25.76",
       },
       "devDependencies": {
         "@tailwindcss/vite": "^4.1.8",

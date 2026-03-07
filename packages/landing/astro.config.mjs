@@ -9,8 +9,8 @@ import { defineConfig } from "astro/config";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-// Force Zod v3 (bundled with Astro) over the workspace-hoisted Zod v4
-const zodPath = `${dirname(require.resolve("astro/package.json"))}/node_modules/zod`;
+// Force Zod v3 for Astro action runtime compatibility.
+const zodPath = dirname(require.resolve("zod/package.json"));
 
 const settingsDir = resolve(
   __dirname,
