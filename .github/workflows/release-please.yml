@@ -25,25 +25,25 @@ jobs:
           
       # The logic below handles NPM publishing after a release is created
       - uses: actions/checkout@v4
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
 
       - uses: actions/setup-node@v4
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
 
       - uses: oven-sh/setup-bun@v2
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           bun-version: 1.2.12
 
       - name: Install dependencies
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         run: bun install
 
       - name: Build packages
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         run: |
           # Build core first (dependency for both cli and worker)
           cd packages/core && bun run build
@@ -51,7 +51,7 @@ jobs:
           cd ../worker && bun run build
 
       - name: Authenticate to npm
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           npm whoami
@@ -72,7 +72,7 @@ jobs:
 
       # Trigger Docker build and K8s deployment after release
       - name: Trigger Docker Build
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
