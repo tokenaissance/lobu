@@ -270,6 +270,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "lobu.fullname" . }}-secrets
                   key: claude-code-oauth-token
+                  optional: true
             {{- if .Values.gateway.anthropicProxy.baseUrl }}
             - name: ANTHROPIC_BASE_URL
               value: "{{ .Values.gateway.anthropicProxy.baseUrl }}"
