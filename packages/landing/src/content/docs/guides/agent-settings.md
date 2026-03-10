@@ -34,7 +34,7 @@ Lobu configures Owletto as the default OpenClaw memory plugin:
   "pluginsConfig": {
     "plugins": [
       {
-        "source": "./plugins/openclaw-owletto-plugin.js",
+        "source": "@lobu/owletto-openclaw",
         "slot": "memory",
         "enabled": true
       }

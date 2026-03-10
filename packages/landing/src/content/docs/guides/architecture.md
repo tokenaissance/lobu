@@ -21,7 +21,7 @@ Lobu runs as a gateway + worker architecture.
 
 ## Persistent Memory
 
-- By default, Lobu injects an OpenClaw memory plugin for agents: `./plugins/openclaw-owletto-plugin.js` (`slot: "memory"`).
+- By default, Lobu injects an OpenClaw memory plugin for agents: `@lobu/owletto-openclaw` (`slot: "memory"`).
 - This default can be toggled with `AGENT_DEFAULT_OWLETTO_MEMORY_ENABLED` (enabled by default).
 - OpenClaw memory plugins are configurable per agent through `pluginsConfig`, so you can replace Owletto with other plugins (for example, native memory) when needed.
 

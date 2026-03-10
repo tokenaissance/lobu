@@ -491,6 +491,17 @@ export abstract class BaseDeploymentManager {
       }
     }
 
+    // Forward WORKER_ENV_* vars to workers with prefix stripped
+    const WORKER_ENV_PREFIX = "WORKER_ENV_";
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith(WORKER_ENV_PREFIX)) {
+        const stripped = key.slice(WORKER_ENV_PREFIX.length);
+        if (stripped) {
+          envVars[stripped] = process.env[key]!;
+        }
+      }
+    }
+
     // Nix config
     if (messageData.nixConfig) {
       const { flakeUrl, packages } = messageData.nixConfig;

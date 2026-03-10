@@ -217,7 +217,7 @@ export function buildGatewayConfig(): GatewayConfig {
       pluginsConfig: {
         plugins: [
           {
-            source: "./plugins/openclaw-owletto-plugin.js",
+            source: "@lobu/owletto-openclaw",
             slot: "memory",
             enabled: defaultOwlettoMemoryEnabled,
           },

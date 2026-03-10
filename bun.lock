@@ -128,6 +128,7 @@
       "dependencies": {
         "@hono/node-server": "^1.19.9",
         "@lobu/core": "workspace:*",
+        "@lobu/owletto-openclaw": "^3.0.1",
         "@mariozechner/pi-agent-core": "^0.51.6",
         "@mariozechner/pi-ai": "^0.51.6",
         "@mariozechner/pi-coding-agent": "^0.51.6",
@@ -504,6 +505,8 @@
     "@lobu/gateway": ["@lobu/gateway@workspace:packages/gateway"],
 
     "@lobu/landing": ["@lobu/landing@workspace:packages/landing"],
+
+    "@lobu/owletto-openclaw": ["@lobu/owletto-openclaw@3.0.1", "", { "dependencies": { "@sinclair/typebox": "^0.34.33" } }, "sha512-sTgUQTgGXJ3hR4KR+O6KvtAq9tWUosI1Xx4LKLSsop3dv7IoUC2Jjl5mwHnyPbv+8JA6kxPZGw6jZ+7X+YSiHg=="],
 
     "@lobu/worker": ["@lobu/worker@workspace:packages/worker"],
 
