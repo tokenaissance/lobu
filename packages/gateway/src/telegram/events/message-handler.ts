@@ -766,6 +766,7 @@ The user sent a voice message but transcription failed. Let them know and sugges
     const sendPrompt = async () => {
       const baseUrl = process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
       const settingsUrl = new URL("/settings", baseUrl);
+      settingsUrl.searchParams.set("platform", "telegram");
       settingsUrl.searchParams.set("chat", String(context.chatId));
       const configUrl = settingsUrl.toString();
 
