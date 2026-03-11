@@ -724,6 +724,10 @@ export function createSettingsPageRoutes(
           );
 
           // Link platform identity → OAuth user for future initData sessions
+          const wasAlreadyLinked = await claimService.getLinkedOAuthUserId(
+            claimData.platform,
+            claimData.platformUserId
+          );
           await claimService.linkPlatformIdentity(
             claimData.platform,
             claimData.platformUserId,
@@ -734,11 +738,14 @@ export function createSettingsPageRoutes(
             oauthUserId,
             platform: claimData.platform,
             channelId: claimData.channelId,
+            wasAlreadyLinked: !!wasAlreadyLinked,
           });
 
-          config.platformRegistry
-            ?.get(claimData.platform)
-            ?.notifyIdentityLinked?.(claimData.channelId);
+          if (!wasAlreadyLinked) {
+            config.platformRegistry
+              ?.get(claimData.platform)
+              ?.notifyIdentityLinked?.(claimData.channelId);
+          }
 
           // Redirect to clean URL (strip claim param, keep agent/channel params)
           const cleanUrl = new URL(c.req.url);
