@@ -472,7 +472,7 @@ function App() {
         schedules.value = data as Schedule[];
       })
       .catch(() => {
-        schedulesError.value = "Failed to load scheduled reminders.";
+        schedulesError.value = "Failed to load schedules.";
       })
       .finally(() => {
         schedulesLoading.value = false;

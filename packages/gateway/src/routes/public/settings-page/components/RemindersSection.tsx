@@ -51,7 +51,7 @@ export function RemindersSection() {
   return (
     <Section
       id="reminders"
-      title="Scheduled Reminders"
+      title="Schedules"
       icon="&#9200;"
       badge={loadingBadge}
     >
@@ -63,7 +63,7 @@ export function RemindersSection() {
         )}
         <div class="space-y-2">
           {ctx.schedules.value.length === 0 && (
-            <p class="text-xs text-gray-500">No scheduled reminders.</p>
+            <p class="text-xs text-gray-500">No schedules.</p>
           )}
           {ctx.schedules.value.map((schedule) => (
             <div
