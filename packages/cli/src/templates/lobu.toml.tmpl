@@ -37,8 +37,16 @@ allowed = ["api.github.com", "registry.npmjs.org", "pypi.org"]
 # nix_packages = ["python311", "ffmpeg"]
 # timeout_minutes = 5
 
-# Platforms (which messaging channels)
-[platforms]
-api = true
-# telegram = true
-# slack = true
+# Platforms — declare which messaging connections to enable.
+# Credentials are configured via the settings page after startup.
+
+# [platforms.telegram]
+# mode = "auto"
+
+# [platforms.slack]
+
+# [platforms.discord]
+
+# [platforms.whatsapp]
+
+# [platforms.teams]

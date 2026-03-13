@@ -43,13 +43,9 @@ const workerSchema = z.object({
   timeout_minutes: z.number().positive().optional(),
 });
 
-// Platforms section
-const platformsSchema = z.object({
-  telegram: z.boolean().optional(),
-  slack: z.boolean().optional(),
-  whatsapp: z.boolean().optional(),
-  api: z.boolean().optional(),
-});
+// Platforms section — accept any platform name with any config object.
+// Field-level validation happens at the gateway when connections are created.
+const platformsSchema = z.record(z.string(), z.record(z.unknown()));
 
 // Full lobu.toml schema
 export const lobuConfigSchema = z.object({
@@ -68,4 +64,3 @@ export type McpServerEntry = z.infer<typeof mcpServerSchema>;
 export type SkillsEntry = z.infer<typeof skillsSchema>;
 export type NetworkEntry = z.infer<typeof networkSchema>;
 export type WorkerEntry = z.infer<typeof workerSchema>;
-export type PlatformsEntry = z.infer<typeof platformsSchema>;

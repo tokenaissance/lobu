@@ -8,14 +8,15 @@ export interface TransformResult {
 /**
  * Transform lobu.toml config into docker-compose environment variables
  * and MCP config JSON for local dev mode.
+ *
+ * Platform connection credentials are managed via the settings page /
+ * connections API and stored in Redis — they are NOT emitted as env vars.
  */
 export function transformConfig(config: LobuTomlConfig): TransformResult {
   const envVars: Record<string, string> = {};
 
   // Agent name as compose project name
   envVars.COMPOSE_PROJECT_NAME = config.agent.name;
-
-  // Identity lives in IDENTITY.md, SOUL.md, USER.md files — loaded by dev command
 
   // Network config
   if (config.network?.allowed) {
@@ -31,14 +32,6 @@ export function transformConfig(config: LobuTomlConfig): TransformResult {
   }
   if (config.worker?.nix_packages?.length) {
     envVars.WORKER_NIX_PACKAGES = config.worker.nix_packages.join(",");
-  }
-
-  // Platform flags
-  if (config.platforms?.telegram) {
-    envVars.TELEGRAM_ENABLED = "true";
-  }
-  if (config.platforms?.api !== false) {
-    envVars.API_ENABLED = "true";
   }
 
   // Provider config - stored as JSON for gateway to parse

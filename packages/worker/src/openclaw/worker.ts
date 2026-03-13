@@ -830,9 +830,10 @@ export class OpenClawWorker implements WorkerExecutor {
         | undefined,
     });
 
-    let tools = createOpenClawTools(workspaceDir).filter((tool) =>
-      isToolAllowedByPolicy(tool.name, toolsPolicy)
-    );
+    const embeddedBashOps = (globalThis as any).__lobuEmbeddedBashOps;
+    let tools = createOpenClawTools(workspaceDir, {
+      bashOperations: embeddedBashOps,
+    }).filter((tool) => isToolAllowedByPolicy(tool.name, toolsPolicy));
 
     if (
       toolsPolicy.bashPolicy.allowPrefixes.length > 0 ||
@@ -1125,6 +1126,41 @@ Use it when the user references past discussions or you need context.`);
           logger.error("Failed to send heartbeat:", err);
         });
       }, HEARTBEAT_INTERVAL_MS);
+
+      // Session reset: run unconditional memory flush and return early
+      if ((this.config as any).platformMetadata?.sessionReset === true) {
+        logger.info(
+          "Session reset requested — running unconditional memory flush"
+        );
+
+        const flushPrompt = `${memoryFlushConfig.systemPrompt}\n\n${memoryFlushConfig.prompt}`;
+        try {
+          await runPromptTurn(flushPrompt, { silent: true });
+          logger.info("Memory flush completed for session reset");
+        } catch (error) {
+          logger.warn(
+            `Memory flush failed during session reset: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+
+        // Send visible confirmation to user
+        await onProgress({
+          type: "output",
+          data: "Context saved. Starting fresh.",
+          timestamp: Date.now(),
+        });
+
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        if (deltaTimer) clearTimeout(deltaTimer);
+        await stopPluginServices(loadedPlugins);
+
+        return {
+          success: true,
+          exitCode: 0,
+          output: "",
+          sessionKey: this.config.sessionKey,
+        };
+      }
 
       // Consume any pending config change notifications from SSE events
       const { consumePendingConfigNotifications } = await import(

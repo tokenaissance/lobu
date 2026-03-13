@@ -98,6 +98,7 @@ export type {
   McpServerConfig,
   NetworkConfig,
   NixConfig,
+  RegistryEntry,
   SessionContext,
   SkillConfig,
   SkillIntegration,
@@ -111,6 +112,16 @@ export type {
 } from "./types";
 
 export { normalizeSkillIntegration } from "./types";
+
+// Platform constants
+export const SUPPORTED_PLATFORMS = [
+  "telegram",
+  "slack",
+  "discord",
+  "whatsapp",
+  "teams",
+] as const;
+export type SupportedPlatform = (typeof SUPPORTED_PLATFORMS)[number];
 
 // Utilities
 export * from "./utils/encryption";

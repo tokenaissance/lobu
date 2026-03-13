@@ -59,7 +59,7 @@ Each integration declares `default` and `available` scopes in `system-skills.jso
 
 Agents can add MCPs at runtime:
 
-1. Agent calls `SearchSkills` / `Sudo` (with a capability `id`).
+1. Agent calls `SearchSkills` / `InstallSkill` (with a capability `id`).
 2. Gateway generates a prefilled settings link.
 3. User reviews and approves — MCP is active immediately.
 

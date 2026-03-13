@@ -19,6 +19,8 @@ export interface AgentMetadata {
   isWorkspaceAgent?: boolean;
   /** Workspace/team ID for workspace agents */
   workspaceId?: string;
+  /** Connection that auto-created this agent (makes it a "sandbox") */
+  parentConnectionId?: string;
   createdAt: number;
   lastUsedAt?: number;
 }
@@ -48,6 +50,7 @@ export class AgentMetadataStore extends BaseRedisStore<AgentMetadata> {
       description?: string;
       isWorkspaceAgent?: boolean;
       workspaceId?: string;
+      parentConnectionId?: string;
     }
   ): Promise<AgentMetadata> {
     const metadata: AgentMetadata = {
@@ -56,6 +59,7 @@ export class AgentMetadataStore extends BaseRedisStore<AgentMetadata> {
       owner: { platform, userId },
       isWorkspaceAgent: options?.isWorkspaceAgent,
       workspaceId: options?.workspaceId,
+      parentConnectionId: options?.parentConnectionId,
       createdAt: Date.now(),
     };
 
@@ -65,6 +69,15 @@ export class AgentMetadataStore extends BaseRedisStore<AgentMetadata> {
 
     const key = this.buildKey(agentId);
     await this.set(key, metadata);
+
+    // Index sandbox under its parent connection
+    if (options?.parentConnectionId) {
+      await this.redis.sadd(
+        `sandboxes:connection:${options.parentConnectionId}`,
+        agentId
+      );
+    }
+
     logger.info(`Created agent metadata for ${agentId}: "${name}"`);
     return metadata;
   }
@@ -100,6 +113,15 @@ export class AgentMetadataStore extends BaseRedisStore<AgentMetadata> {
    * Delete agent metadata
    */
   async deleteAgent(agentId: string): Promise<void> {
+    // Clean up sandbox index if this agent has a parent connection
+    const metadata = await this.getMetadata(agentId);
+    if (metadata?.parentConnectionId) {
+      await this.redis.srem(
+        `sandboxes:connection:${metadata.parentConnectionId}`,
+        agentId
+      );
+    }
+
     const key = this.buildKey(agentId);
     await this.delete(key);
     logger.info(`Deleted metadata for agent ${agentId}`);
@@ -111,5 +133,36 @@ export class AgentMetadataStore extends BaseRedisStore<AgentMetadata> {
   async hasAgent(agentId: string): Promise<boolean> {
     const key = this.buildKey(agentId);
     return this.exists(key);
+  }
+
+  /**
+   * List sandbox agents belonging to a connection
+   */
+  async listSandboxes(connectionId: string): Promise<AgentMetadata[]> {
+    const agentIds = await this.redis.smembers(
+      `sandboxes:connection:${connectionId}`
+    );
+    const sandboxes: AgentMetadata[] = [];
+    for (const agentId of agentIds) {
+      const data = await this.getMetadata(agentId);
+      if (data) sandboxes.push(data);
+    }
+    sandboxes.sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
+    return sandboxes;
+  }
+
+  /**
+   * List all agents in the system, sorted by lastUsedAt descending
+   */
+  async listAllAgents(): Promise<AgentMetadata[]> {
+    const prefix = `${this.keyPrefix}:`;
+    const keys = await this.scanByPrefix(prefix);
+    const agents: AgentMetadata[] = [];
+    for (const key of keys) {
+      const data = await this.get(key);
+      if (data) agents.push(data);
+    }
+    agents.sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
+    return agents;
   }
 }

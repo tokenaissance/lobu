@@ -70,6 +70,12 @@ const GATEWAY_DEFAULTS = {
   LOG_LEVEL: "INFO" as const,
   /** Default kubeconfig path */
   KUBECONFIG: "~/.kube/config",
+  /** Embedded mode defaults */
+  EMBEDDED_MAX_CONCURRENT_SESSIONS: 100,
+  EMBEDDED_MAX_MEMORY_PER_SESSION_MB: 256,
+  EMBEDDED_BASH_MAX_COMMAND_COUNT: 50_000,
+  EMBEDDED_BASH_MAX_LOOP_ITERATIONS: 50_000,
+  EMBEDDED_BASH_MAX_CALL_DEPTH: 50,
 } as const;
 
 // Merged DEFAULTS with core and gateway-specific values (internal use only)

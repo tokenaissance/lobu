@@ -55,7 +55,7 @@ function isSafeReturnUrl(url: string): boolean {
   return (
     url.startsWith("/settings") ||
     url.startsWith("/api/v1/") ||
-    url === "/admin"
+    url === "/agents"
   );
 }
 
@@ -129,6 +129,8 @@ export interface SettingsPageConfig {
   integrationConfigService?: import("../../auth/integration/config-service").IntegrationConfigService;
   integrationCredentialStore?: import("../../auth/integration/credential-store").IntegrationCredentialStore;
   connectionManager?: import("../../gateway/connection-manager").WorkerConnectionManager;
+  /** Chat instance manager for looking up connections (scopes, template agents) */
+  chatInstanceManager?: import("../../connections/chat-instance-manager").ChatInstanceManager;
   /** Settings OAuth client (optional — webapp-initdata auth works without it) */
   settingsOAuthClient?: SettingsOAuthClient;
   /** Settings OAuth state store (optional — required only when OAuth client is set) */
@@ -380,7 +382,9 @@ async function renderSettingsForPayload(
   const integrationStatus: Record<
     string,
     {
+      label: string;
       connected: boolean;
+      configured: boolean;
       accounts: { accountId: string; grantedScopes: string[] }[];
       availableScopes: string[];
     }
@@ -391,8 +395,19 @@ async function renderSettingsForPayload(
       for (const [id, cfg] of Object.entries(allConfigs)) {
         const accountList =
           await config.integrationCredentialStore.listAccounts(agentId, id);
+        // Resolve per-agent config to check if OAuth credentials exist
+        const resolved = await config.integrationConfigService.getIntegration(
+          id,
+          agentId
+        );
+        const isOAuth = (cfg.authType || "oauth") === "oauth";
+        const configured =
+          !isOAuth ||
+          !!(resolved?.oauth?.clientId && resolved?.oauth?.clientSecret);
         integrationStatus[id] = {
+          label: cfg.label,
           connected: accountList.length > 0,
+          configured,
           accounts: accountList.map((a) => ({
             accountId: a.accountId,
             grantedScopes: a.credentials.grantedScopes,
@@ -418,6 +433,8 @@ async function renderSettingsForPayload(
       agentName: agentMetadata?.name,
       agentDescription: agentMetadata?.description,
       hasChannelId: !!payload.channelId,
+      isSandbox: !!agentMetadata?.parentConnectionId,
+      ownerPlatform: agentMetadata?.owner?.platform || "",
       integrationStatus,
     })
   );
@@ -437,9 +454,19 @@ export function createSettingsPageRoutes(
   // ====================================================================
   app.post("/settings/session", async (c) => {
     const body = await c.req
-      .json<{ initData?: string; chatId?: string; platform?: string }>()
+      .json<{
+        initData?: string;
+        chatId?: string;
+        platform?: string;
+        connectionId?: string;
+      }>()
       .catch(
-        (): { initData?: string; chatId?: string; platform?: string } => ({})
+        (): {
+          initData?: string;
+          chatId?: string;
+          platform?: string;
+          connectionId?: string;
+        } => ({})
       );
 
     if (!body.initData) {
@@ -456,7 +483,15 @@ export function createSettingsPageRoutes(
       return c.json({ error: "Platform does not support initData auth" }, 400);
     }
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    // Look up bot token from connection config (Chat SDK) or fall back to env
+    let botToken: string | undefined;
+    if (body.connectionId && config.chatInstanceManager) {
+      botToken = config.chatInstanceManager.getConnectionConfigSecret(
+        body.connectionId,
+        "botToken"
+      );
+    }
+    botToken ??= process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
       return c.json({ error: "Platform not configured" }, 500);
     }
@@ -594,6 +629,7 @@ export function createSettingsPageRoutes(
           email: userInfo.email,
           name: userInfo.name,
           exp: Date.now() + sessionTtlMs,
+          isAdmin: true,
         };
 
         setSettingsSessionCookie(c, session);
@@ -676,6 +712,10 @@ export function createSettingsPageRoutes(
         );
       }
 
+      // No session — redirect to OAuth login if available, otherwise show error
+      if (oauthClient) {
+        return c.redirect("/settings/oauth/login");
+      }
       return c.html(
         renderErrorPage(
           "No active session. Use /configure in your chat to get a settings link."
@@ -868,50 +908,68 @@ export function createSettingsPageRoutes(
     }
 
     // 6. No agentId resolved: show dashboard of accessible channels
-    if (!agentId) {
-      if (session.oauthUserId) {
-        // OAuth session: show accessible channels
-        const channels = await claimService.getAccessibleChannels(
-          session.oauthUserId
-        );
+    if (!agentId && session.oauthUserId) {
+      // OAuth session: show accessible channels
+      const channels = await claimService.getAccessibleChannels(
+        session.oauthUserId
+      );
 
-        if (channels.length === 0) {
-          return c.html(
-            renderErrorPage(
-              "No channels configured yet. Use /configure in a chat to link your account."
-            ),
-            200
+      if (channels.length === 0) {
+        return c.html(
+          renderErrorPage(
+            "No channels configured yet. Use /configure in a chat to link your account."
+          ),
+          200
+        );
+      }
+
+      // Try to find agents for all accessible channels
+      const agents: (AgentMetadata & { channelCount: number })[] = [];
+      const seenAgents = new Set<string>();
+      for (const ch of channels) {
+        // 1. Try channel binding first
+        const binding = await config.channelBindingService.getBinding(
+          ch.platform,
+          ch.channelId
+        );
+        if (binding && !seenAgents.has(binding.agentId)) {
+          seenAgents.add(binding.agentId);
+          const metadata = await config.agentMetadataStore.getMetadata(
+            binding.agentId
           );
+          if (metadata) {
+            const bindings = await config.channelBindingService.listBindings(
+              binding.agentId
+            );
+            agents.push({ ...metadata, channelCount: bindings.length });
+          }
         }
 
-        // Try to find agents for all accessible channels
-        const agents: (AgentMetadata & { channelCount: number })[] = [];
-        const seenAgents = new Set<string>();
-        for (const ch of channels) {
-          const binding = await config.channelBindingService.getBinding(
+        // 2. Fallback for DM channels without bindings: resolve via user_agents.
+        // For DMs, channelId == userId on most platforms (Telegram, WhatsApp).
+        // Groups should always have channel bindings so this path won't fire for them.
+        if (!binding && !ch.channelId.startsWith("-")) {
+          const userAgentIds = await config.userAgentsStore.listAgents(
             ch.platform,
             ch.channelId
           );
-          if (binding && !seenAgents.has(binding.agentId)) {
-            seenAgents.add(binding.agentId);
-            const metadata = await config.agentMetadataStore.getMetadata(
-              binding.agentId
-            );
+          for (const aid of userAgentIds) {
+            if (seenAgents.has(aid)) continue;
+            seenAgents.add(aid);
+            const metadata = await config.agentMetadataStore.getMetadata(aid);
             if (metadata) {
-              const bindings = await config.channelBindingService.listBindings(
-                binding.agentId
-              );
+              const bindings =
+                await config.channelBindingService.listBindings(aid);
               agents.push({ ...metadata, channelCount: bindings.length });
             }
           }
         }
+      }
 
-        if (agents.length === 1 && agents[0]) {
-          return c.redirect(`/settings?agent=${agents[0].agentId}`, 303);
-        }
-
-        // Build a synthetic payload for the picker page.
-        // Prefer human-readable identifiers: email > name > platform userId > oauthUserId
+      if (agents.length === 1 && agents[0]) {
+        agentId = agents[0].agentId;
+      } else {
+        // Multiple or zero agents: show picker
         const displayUserId =
           session.email ||
           session.name ||
@@ -926,7 +984,9 @@ export function createSettingsPageRoutes(
         };
         return c.html(renderPickerPage(syntheticPayload, agents));
       }
+    }
 
+    if (!agentId) {
       // Non-OAuth session with channelId: show agent picker
       if (session.channelId && session.platform) {
         const agentIds = await config.userAgentsStore.listAgents(
@@ -974,6 +1034,7 @@ export function createSettingsPageRoutes(
       channelId: channelParam || session.channelId,
       agentId,
       exp: session.exp,
+      isAdmin: session.isAdmin,
       // Parse prefill query params (set by settings-link.ts for claim-based flows)
       message: c.req.query("message") || undefined,
       prefillSkills: c.req.query("skills")
@@ -994,6 +1055,25 @@ export function createSettingsPageRoutes(
         ? c.req.query("providers")!.split(",").filter(Boolean)
         : undefined,
     };
+
+    // Resolve scoped settings mode from connectionId or sandbox's parent connection
+    // For sandbox agents, always apply scopes (even for admins — admin manages from parent)
+    const agentMeta = await config.agentMetadataStore.getMetadata(agentId);
+    const isSandboxAgent = !!agentMeta?.parentConnectionId;
+    if (!payload.isAdmin || isSandboxAgent) {
+      const connectionIdParam = c.req.query("connectionId");
+      const resolvedConnectionId =
+        connectionIdParam || agentMeta?.parentConnectionId;
+      if (resolvedConnectionId && config.chatInstanceManager) {
+        const connection =
+          await config.chatInstanceManager.getConnection(resolvedConnectionId);
+        if (connection?.settings?.userConfigScopes?.length) {
+          payload.settingsMode = "user";
+          payload.allowedScopes = connection.settings.userConfigScopes;
+          payload.connectionId = resolvedConnectionId;
+        }
+      }
+    }
 
     return await renderSettingsForPayload(c, config, payload, agentId);
   });
@@ -1059,14 +1139,10 @@ export function createSettingsPageRoutes(
     return c.json({ success: true });
   });
 
-  // GET /settings/logout — Clear session cookie (for testing/re-auth)
-  app.get("/settings/logout", async (c) => {
+  // GET /settings/logout — Clear session cookie and redirect to root
+  app.get("/settings/logout", (c) => {
     clearSettingsSessionCookie(c);
-    return c.html(
-      renderErrorPage(
-        "Session cleared. Use /configure to get a new settings link."
-      )
-    );
+    return c.redirect("/");
   });
 
   return app;
@@ -1115,6 +1191,7 @@ function renderWebAppBootstrapPage(): string {
       var qp = new URLSearchParams(window.location.search);
       var chatId = qp.get('chat');
       var platform = qp.get('platform') || '';
+      var connectionId = qp.get('connectionId') || '';
 
       // WebApp injects initData as #tgWebAppData=<url-encoded-initData>&...
       var hashStr = window.location.hash ? window.location.hash.slice(1) : '';
@@ -1130,7 +1207,7 @@ function renderWebAppBootstrapPage(): string {
         var resp = await fetch('/settings/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: initData, chatId: chatId, platform: platform })
+          body: JSON.stringify({ initData: initData, chatId: chatId, platform: platform, connectionId: connectionId })
         });
         if (resp.ok) {
           var rp = new URLSearchParams(window.location.search);

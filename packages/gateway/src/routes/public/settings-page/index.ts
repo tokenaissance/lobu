@@ -2,6 +2,8 @@
  * Settings Page HTML Templates (Preact + Pre-compiled Tailwind CSS)
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { AgentMetadata } from "../../../auth/agent-metadata-store";
 import type { AgentSettings } from "../../../auth/settings";
 import type { SettingsTokenPayload } from "../../../auth/settings/token-service";
@@ -45,10 +47,14 @@ export interface SettingsPageOptions {
   agentName?: string;
   agentDescription?: string;
   hasChannelId?: boolean;
+  isSandbox?: boolean;
+  ownerPlatform?: string;
   integrationStatus?: Record<
     string,
     {
+      label: string;
       connected: boolean;
+      configured: boolean;
       accounts: { accountId: string; grantedScopes: string[] }[];
       availableScopes: string[];
     }
@@ -163,6 +169,27 @@ export function renderSettingsPage(
       providers.map((p) => [p.id, p.iconUrl])
     ),
     integrationStatus: options?.integrationStatus ?? {},
+    settingsMode: payload.settingsMode || "admin",
+    allowedScopes: payload.allowedScopes,
+    isAdmin: !!payload.isAdmin,
+    isSandbox: !!options?.isSandbox,
+    ownerPlatform: options?.ownerPlatform || "",
+    globalRegistries: (() => {
+      try {
+        const configPath = path.resolve(
+          process.cwd(),
+          "config/skill-registries.json"
+        );
+        if (fs.existsSync(configPath)) {
+          const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          return raw.registries || [];
+        }
+      } catch {
+        /* non-fatal */
+      }
+      return [];
+    })(),
+    initialRegistries: s.skillRegistries || [],
   };
 
   return `<!DOCTYPE html>
@@ -179,8 +206,8 @@ export function renderSettingsPage(
   })()}
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 p-4">
-  <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-2xl p-6">
-    <div id="app"></div>
+  <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div id="app" class="${payload.isAdmin ? "" : "p-6"}"></div>
   </div>
   <script>window.__SETTINGS_STATE__ = ${JSON.stringify(initialState)};</script>
   <script type="module">${settingsPageJS}</script>
@@ -333,7 +360,7 @@ ${agents
       try {
         var createBody = { agentId: agentId, name: name };
         if (__channelId) createBody.channelId = __channelId;
-        var resp = await fetch('/api/v1/manage/agents', {
+        var resp = await fetch('/api/v1/agents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(createBody)

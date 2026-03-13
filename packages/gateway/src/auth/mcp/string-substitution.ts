@@ -3,6 +3,24 @@ import type { InputValues } from "./input-store";
 
 const logger = createLogger("string-substitution");
 
+let envResolver: ((key: string) => string | undefined) | null = null;
+
+/**
+ * Register a custom env resolver that takes priority over process.env.
+ * Used by SystemEnvStore to inject Redis-backed env vars.
+ */
+export function setEnvResolver(fn: (key: string) => string | undefined): void {
+  envResolver = fn;
+}
+
+/**
+ * Resolve an environment variable using the registered envResolver (Redis)
+ * with process.env as fallback. Reusable by provider modules.
+ */
+export function resolveEnv(key: string): string | undefined {
+  return envResolver?.(key) ?? process.env[key];
+}
+
 /**
  * Substitutes placeholders in a string with values from environment or inputs
  *
@@ -20,7 +38,7 @@ export function substituteString(
 ): string {
   return template.replace(/\$\{(env|input):([^}]+)\}/g, (match, type, key) => {
     if (type === "env") {
-      const value = process.env[key];
+      const value = envResolver?.(key) ?? process.env[key];
       if (!value) {
         logger.warn(`Environment variable not found: ${key}`);
         return match; // Keep original if not found

@@ -32,10 +32,3 @@ data:
   worker-memory: {{ .Values.worker.resources.requests.memory | quote }}
   worker-timeout-seconds: {{ .Values.worker.job.timeoutSeconds | quote }}
   worker-ttl-seconds: {{ .Values.worker.job.ttlSecondsAfterFinished | quote }}
-  
-  # Slack Configuration
-  slack-socket-mode: {{ .Values.slack.socketMode | quote }}
-  slack-allow-direct-messages: {{ .Values.slack.allowDirectMessages | quote }}
-  slack-allow-private-channels: {{ .Values.slack.allowPrivateChannels | quote }}
-  slack-enable-status-reactions: {{ .Values.slack.enableStatusReactions | quote }}
-  slack-enable-progress-updates: {{ .Values.slack.enableProgressUpdates | quote }}

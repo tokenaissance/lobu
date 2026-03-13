@@ -5,110 +5,12 @@ import { join } from "node:path";
 import chalk from "chalk";
 import inquirer from "inquirer";
 import ora from "ora";
-import YAML from "yaml";
 import {
   getRequiredEnvVars,
   MCP_SERVERS,
   type McpServerDefinition,
 } from "../mcp-servers.js";
 import { renderTemplate } from "../utils/template.js";
-
-const DEFAULT_SLACK_MANIFEST = {
-  display_information: {
-    name: "Lobu",
-    description: "Hire AI peers to work with you, using your environments",
-    background_color: "#4a154b",
-    long_description:
-      "This bot integrates Claude Code SDK with Slack to provide AI-powered coding assistance directly in your workspace. You can generate apps/AI peers that will appear as new handles.",
-  },
-  features: {
-    app_home: {
-      home_tab_enabled: true,
-      messages_tab_enabled: true,
-      messages_tab_read_only_enabled: false,
-    },
-    bot_user: {
-      display_name: "Lobu",
-      always_online: true,
-    },
-    slash_commands: [
-      {
-        command: "/lobu",
-        description: "Lobu commands - manage repositories and authentication",
-        usage_hint: "connect | login | help",
-      },
-    ],
-    assistant_view: {
-      assistant_description:
-        "It can generate Claude Code session working on public Github data",
-      suggested_prompts: [
-        {
-          title: "Create a project",
-          message: "Create a new project",
-        },
-        {
-          title: "Start working on a feature",
-          message:
-            "List me projects and let me tell you what I want to develop on which project",
-        },
-        {
-          title: "Fix a bug",
-          message:
-            "List me projects and let me tell you what I want to develop on which project",
-        },
-        {
-          title: "Ask a question to the codebase",
-          message:
-            "List me projects and let me tell you what I want to develop on which project",
-        },
-      ],
-    },
-  },
-  oauth_config: {
-    redirect_urls: [],
-    scopes: {
-      bot: [
-        "app_mentions:read",
-        "assistant:write",
-        "channels:history",
-        "channels:read",
-        "chat:write",
-        "chat:write.public",
-        "groups:history",
-        "groups:read",
-        "im:history",
-        "im:read",
-        "im:write",
-        "files:read",
-        "files:write",
-        "mpim:read",
-        "reactions:read",
-        "reactions:write",
-        "users:read",
-        "commands",
-      ],
-    },
-  },
-  settings: {
-    event_subscriptions: {
-      bot_events: [
-        "app_home_opened",
-        "app_mention",
-        "team_join",
-        "member_joined_channel",
-        "message.channels",
-        "message.groups",
-        "message.im",
-      ],
-    },
-    interactivity: {
-      is_enabled: true,
-    },
-    org_deploy_enabled: false,
-    socket_mode_enabled: true,
-    token_rotation_enabled: false,
-  },
-} as const;
 
 export async function initCommand(
   cwd: string = process.cwd(),
@@ -164,6 +66,26 @@ export async function initCommand(
       chalk.dim(`\nCreating project in: ${chalk.cyan(projectDir)}\n`)
     );
   }
+
+  // Deployment mode selection
+  const { deploymentMode } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "deploymentMode",
+      message: "How should workers run?",
+      choices: [
+        {
+          name: "Embedded (in-process, no Docker needed for workers)",
+          value: "embedded",
+        },
+        {
+          name: "Docker containers (sandboxed workers, recommended for teams)",
+          value: "docker",
+        },
+      ],
+      default: "embedded",
+    },
+  ]);
 
   // MCP Server selection
   const { configureMcp } = await inquirer.prompt([
@@ -276,7 +198,8 @@ export async function initCommand(
     {
       type: "checkbox",
       name: "selectedPlatforms",
-      message: "Which messaging platform(s) do you want to configure?",
+      message:
+        "Which messaging platform(s) do you want to configure? (REST API is always available)",
       choices: [
         {
           name: "Telegram (quickest — 1 token from @BotFather)",
@@ -287,191 +210,28 @@ export async function initCommand(
           value: "slack",
         },
         {
-          name: "API only (no chat platform, use REST endpoints)",
-          value: "api",
+          name: "Discord (requires bot token + application ID)",
+          value: "discord",
+        },
+        {
+          name: "WhatsApp (requires Cloud API access token)",
+          value: "whatsapp",
+        },
+        {
+          name: "Teams (requires Microsoft App registration)",
+          value: "teams",
         },
       ],
-      validate: (input: string[]) => {
-        if (input.length === 0) {
-          return "Select at least one platform";
-        }
-        return true;
-      },
     },
   ]);
 
-  // Telegram setup
-  let telegramBotToken = "";
-  let telegramAllowFrom = "";
-  if (selectedPlatforms.includes("telegram")) {
-    console.log(chalk.bold("\n📱 Telegram Setup"));
-    console.log(chalk.dim("  Step 1: Open Telegram and message @BotFather"));
-    console.log(chalk.dim("  Step 2: Send /newbot and follow the prompts"));
-    console.log(chalk.dim("  Step 3: Copy the bot token\n"));
-
-    const telegramAnswers = await inquirer.prompt([
-      {
-        type: "password",
-        name: "telegramBotToken",
-        message: "Telegram Bot Token?",
-        validate: (input: string) => {
-          if (!input) {
-            return "Please enter your Telegram bot token";
-          }
-          if (!/^\d+:[A-Za-z0-9_-]+$/.test(input)) {
-            return "Invalid token format. Expected: digits:alphanumeric (e.g., 123456789:ABCdefGHI...)";
-          }
-          return true;
-        },
-      },
-    ]);
-    telegramBotToken = telegramAnswers.telegramBotToken;
-
-    // Validate token via Telegram API
-    const spinner = ora("Verifying Telegram bot token...").start();
-    try {
-      const response = await fetch(
-        `https://api.telegram.org/bot${telegramBotToken}/getMe`
-      );
-      const data = (await response.json()) as {
-        ok: boolean;
-        result?: { username?: string };
-      };
-      if (data.ok && data.result?.username) {
-        spinner.succeed(`Bot verified: @${data.result.username}`);
-      } else {
-        spinner.warn(
-          "Could not verify bot token — check it after setup if needed"
-        );
-      }
-    } catch {
-      spinner.warn("Could not reach Telegram API — token will be saved as-is");
-    }
-
-    const { telegramAllowFromInput } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "telegramAllowFromInput",
-        message:
-          "Restrict to specific Telegram user IDs? (comma-separated, leave empty to allow all)",
-        default: "",
-      },
-    ]);
-    telegramAllowFrom = telegramAllowFromInput;
-  }
-
-  // Slack setup
-  let credentialAnswers = {
-    slackSigningSecret: "",
-    slackAppToken: "",
-    slackBotToken: "",
-  };
-  if (selectedPlatforms.includes("slack")) {
-    const { slackAppOption } = await inquirer.prompt([
-      {
-        type: "list",
-        name: "slackAppOption",
-        message: "Slack app setup?",
-        choices: [
-          {
-            name: "Create a new Slack app using the Lobu manifest",
-            value: "create",
-          },
-          {
-            name: "Use an existing Slack app",
-            value: "existing",
-          },
-        ],
-        default: "create",
-      },
-    ]);
-
-    if (slackAppOption === "create") {
-      const manifestUrl = await getSlackManifestUrl();
-      console.log(chalk.bold("\n🔗 Create your Slack app"));
-      console.log(
-        `Open this link to create the app with the recommended manifest:\n${chalk.cyan(
-          chalk.underline(manifestUrl)
-        )}\n`
-      );
-      await inquirer.prompt([
-        {
-          type: "confirm",
-          name: "slackAppCreated",
-          message:
-            "Press enter after clicking \u201CCreate\u201D and returning here to continue.",
-          default: true,
-        },
-      ]);
-    }
-
-    const { slackAppId } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "slackAppId",
-        message: "Slack App ID (optional)?",
-        default: "",
-      },
-    ]);
-
-    const trimmedAppId = slackAppId.trim();
-    const appIdForLinks = trimmedAppId !== "" ? trimmedAppId : "<YOUR_APP_ID>";
-    const appDashboardUrl = `https://api.slack.com/apps/${appIdForLinks}`;
-    const oauthUrl = `${appDashboardUrl}/oauth`;
-
-    console.log(chalk.bold("\n🔐 Collect your Slack credentials"));
+  // Platform credentials are configured via the settings page after setup
+  if (selectedPlatforms.length > 0) {
     console.log(
-      `Signing Secret & App-Level Tokens: ${chalk.cyan(
-        chalk.underline(appDashboardUrl)
-      )}`
+      chalk.dim(
+        `\nℹ Platform credentials (${selectedPlatforms.join(", ")}) are configured via the settings page after startup.\n`
+      )
     );
-    console.log(
-      `OAuth Tokens (Bot Token): ${chalk.cyan(chalk.underline(oauthUrl))}, you need to install the app first.\n`
-    );
-    if (trimmedAppId === "") {
-      console.log(
-        chalk.dim(
-          "Replace <YOUR_APP_ID> in the links above once you locate your Slack app ID."
-        )
-      );
-      console.log();
-    }
-
-    credentialAnswers = await inquirer.prompt([
-      {
-        type: "password",
-        name: "slackSigningSecret",
-        message: "Slack Signing Secret?",
-        validate: (input: string) => {
-          if (!input) {
-            return "Please enter your Slack signing secret.";
-          }
-          return true;
-        },
-      },
-      {
-        type: "password",
-        name: "slackAppToken",
-        message: "Slack App Token (xapp-...)?",
-        validate: (input: string) => {
-          if (!input || !input.startsWith("xapp-")) {
-            return "Please enter a valid Slack app token starting with xapp-";
-          }
-          return true;
-        },
-      },
-      {
-        type: "password",
-        name: "slackBotToken",
-        message: "Slack Bot Token (xoxb-...)?",
-        validate: (input: string) => {
-          if (!input || !input.startsWith("xoxb-")) {
-            return "Please enter a valid Slack bot token starting with xoxb-";
-          }
-          return true;
-        },
-      },
-    ]);
   }
 
   const { aiKeyStrategy } = await inquirer.prompt([
@@ -631,14 +391,12 @@ export async function initCommand(
 
   const answers = {
     ...baseAnswers,
-    ...credentialAnswers,
+    deploymentMode: deploymentMode as "embedded" | "docker",
     anthropicApiKey,
     publicUrl,
     encryptionKey,
     selectedMcpServers,
     selectedPlatforms,
-    telegramBotToken,
-    telegramAllowFrom,
     allowedDomains,
     disallowedDomains,
   };
@@ -696,14 +454,7 @@ export async function initCommand(
     const variables = {
       PROJECT_NAME: projectName,
       CLI_VERSION: cliVersion,
-      SLACK_SIGNING_SECRET: answers.slackSigningSecret,
-      SLACK_BOT_TOKEN: answers.slackBotToken,
-      SLACK_APP_TOKEN: answers.slackAppToken,
-      TELEGRAM_ENABLED: answers.selectedPlatforms.includes("telegram")
-        ? "true"
-        : "false",
-      TELEGRAM_BOT_TOKEN: answers.telegramBotToken,
-      TELEGRAM_ALLOW_FROM: answers.telegramAllowFrom,
+      DEPLOYMENT_MODE: answers.deploymentMode,
       ENCRYPTION_KEY: answers.encryptionKey,
       ANTHROPIC_API_KEY: answers.anthropicApiKey || "",
       PUBLIC_GATEWAY_URL: answers.publicUrl || "http://localhost:8080",
@@ -775,20 +526,22 @@ export async function initCommand(
       join(projectDir, "TESTING.md")
     );
 
-    // Create Dockerfile.worker
-    await renderTemplate(
-      "Dockerfile.worker.tmpl",
-      variables,
-      join(projectDir, "Dockerfile.worker")
-    );
+    if (answers.deploymentMode === "docker") {
+      // Create Dockerfile.worker for docker mode
+      await renderTemplate(
+        "Dockerfile.worker.tmpl",
+        variables,
+        join(projectDir, "Dockerfile.worker")
+      );
+    }
 
-    // Generate docker-compose.yml (always includes network isolation infrastructure)
+    // Always generate docker-compose.yml (Redis is needed for all modes)
     const composeContent = generateDockerCompose({
       projectName,
       gatewayPort: "8080",
       dockerfilePath: "./Dockerfile.worker",
       hasMcpServers: answers.selectedMcpServers.length > 0,
-      platforms: answers.selectedPlatforms,
+      deploymentMode: answers.deploymentMode,
     });
     await writeFile(join(projectDir, composeFilename), composeContent);
 
@@ -811,13 +564,16 @@ export async function initCommand(
     );
     console.log(chalk.dim("     - .env               (secrets)"));
     console.log(chalk.dim(`     - ${composeFilename}`));
-    console.log(chalk.dim("     - Dockerfile.worker"));
+    if (answers.deploymentMode === "docker") {
+      console.log(chalk.dim("     - Dockerfile.worker"));
+    }
     if (answers.selectedMcpServers.length > 0) {
       console.log(chalk.dim("     - .lobu/mcp.config.json"));
     }
     console.log();
 
     // MCP Setup instructions
+    let nextStep = 3;
     if (answers.selectedMcpServers.length > 0) {
       const oauthServers = answers.selectedMcpServers.filter(
         (s: McpServerDefinition) => s.type === "oauth"
@@ -827,7 +583,8 @@ export async function initCommand(
       );
 
       if (oauthServers.length > 0 || apiKeyServers.length > 0) {
-        console.log(chalk.cyan("  3. Configure MCP servers:"));
+        console.log(chalk.cyan(`  ${nextStep}. Configure MCP servers:`));
+        nextStep++;
 
         if (oauthServers.length > 0) {
           console.log(chalk.yellow("\n     OAuth-based MCP servers:"));
@@ -857,42 +614,21 @@ export async function initCommand(
           }
         }
 
-        console.log(chalk.cyan("\n  4. Start the services:"));
-      } else {
-        console.log(chalk.cyan("  3. Start the services:"));
+        console.log();
       }
-    } else {
-      console.log(chalk.cyan("  3. Start the services:"));
     }
 
+    console.log(chalk.cyan(`  ${nextStep}. Start the services:`));
     console.log(chalk.dim(`     docker compose -f ${composeFilename} up -d\n`));
-    console.log(
-      chalk.cyan(
-        `  ${answers.selectedMcpServers.length > 0 ? "5" : "4"}. View logs:`
-      )
-    );
+    nextStep++;
+    console.log(chalk.cyan(`  ${nextStep}. View logs:`));
     console.log(
       chalk.dim(`     docker compose -f ${composeFilename} logs -f\n`)
     );
-    console.log(
-      chalk.cyan(
-        `  ${answers.selectedMcpServers.length > 0 ? "6" : "5"}. Stop the services:`
-      )
-    );
+    nextStep++;
+    console.log(chalk.cyan(`  ${nextStep}. Stop the services:`));
     console.log(chalk.dim(`     docker compose -f ${composeFilename} down\n`));
-    console.log(
-      chalk.yellow(
-        "ℹ When you modify Dockerfile.worker or context files, rebuild the worker image:\n"
-      )
-    );
-    console.log(
-      chalk.dim(`  docker compose -f ${composeFilename} build worker\n`)
-    );
-    console.log(
-      chalk.dim(
-        "  The gateway will automatically pick up the latest worker image.\n"
-      )
-    );
+    nextStep++;
   } catch (error) {
     spinner.fail("Failed to create project");
     throw error;
@@ -955,44 +691,16 @@ async function generateLobuToml(
     lines.push("", "[network]", `allowed = [${domains}]`);
   }
 
-  // Platforms
-  const platformLines: string[] = [];
-  if (options.platforms.includes("telegram")) {
-    platformLines.push("telegram = true");
-  }
-  if (options.platforms.includes("slack")) {
-    platformLines.push("slack = true");
-  }
-  if (options.platforms.includes("api")) {
-    platformLines.push("api = true");
-  }
-  if (platformLines.length > 0) {
-    lines.push("", "[platforms]");
-    lines.push(...platformLines);
+  // Platforms — declare which connections to enable
+  for (const platform of options.platforms) {
+    lines.push("", `[platforms.${platform}]`);
+    if (platform === "telegram") {
+      lines.push('mode = "auto"');
+    }
   }
 
   lines.push(""); // trailing newline
   await writeFile(join(projectDir, "lobu.toml"), lines.join("\n"));
-}
-
-async function getSlackManifestUrl(): Promise<string> {
-  const manifestYaml = await loadSlackManifestYaml();
-  const encodedManifest = encodeURIComponent(manifestYaml);
-  return `https://api.slack.com/apps?new_app=1&manifest_yaml=${encodedManifest}`;
-}
-
-async function loadSlackManifestYaml(): Promise<string> {
-  try {
-    const manifestUrl = new URL(
-      "../../../../slack-app-manifest.json",
-      import.meta.url
-    );
-    const manifestContent = await readFile(manifestUrl, "utf-8");
-    const manifest = JSON.parse(manifestContent);
-    return YAML.stringify(manifest).trim();
-  } catch {
-    return YAML.stringify(DEFAULT_SLACK_MANIFEST).trim();
-  }
 }
 
 async function getCliVersion(): Promise<string> {
@@ -1007,11 +715,11 @@ function generateDockerCompose(options: {
   gatewayPort: string;
   dockerfilePath: string;
   hasMcpServers: boolean;
-  platforms: string[];
+  deploymentMode: "embedded" | "docker";
 }): string {
-  const { projectName, gatewayPort, hasMcpServers, platforms } = options;
-  const workerImage = `ghcr.io/lobu-ai/lobu-worker-base:latest`;
+  const { projectName, gatewayPort, hasMcpServers, deploymentMode } = options;
   const gatewayImage = `ghcr.io/lobu-ai/lobu-gateway:latest`;
+  const workerImage = `ghcr.io/lobu-ai/lobu-worker-base:latest`;
 
   const mcpConfigMount = hasMcpServers
     ? `
@@ -1024,22 +732,26 @@ function generateDockerCompose(options: {
       ENCRYPTION_KEY: \${ENCRYPTION_KEY}`
     : "";
 
-  const telegramEnvVars = platforms.includes("telegram")
-    ? `
-      TELEGRAM_ENABLED: \${TELEGRAM_ENABLED:-false}
-      TELEGRAM_BOT_TOKEN: \${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_ALLOW_FROM: \${TELEGRAM_ALLOW_FROM:-}`
-    : "";
+  const dockerSocketMount =
+    deploymentMode === "docker"
+      ? `
+      - /var/run/docker.sock:/var/run/docker.sock`
+      : "";
 
-  const slackEnvVars = platforms.includes("slack")
-    ? `
-      SLACK_BOT_TOKEN: \${SLACK_BOT_TOKEN}
-      SLACK_APP_TOKEN: \${SLACK_APP_TOKEN}
-      SLACK_SIGNING_SECRET: \${SLACK_SIGNING_SECRET}`
-    : "";
+  const workerImageEnv =
+    deploymentMode === "docker"
+      ? `
+      WORKER_IMAGE: ${workerImage}`
+      : "";
+
+  const proxyPort =
+    deploymentMode === "docker"
+      ? `
+      - "8118:8118" # HTTP proxy for workers`
+      : "";
 
   return `# Generated by @lobu/cli
-# You can modify this file as needed
+# Deployment mode: ${deploymentMode}
 
 name: ${projectName}
 
@@ -1061,40 +773,29 @@ services:
   gateway:
     image: ${gatewayImage}
     ports:
-      - "${gatewayPort}:8080"
-      - "8118:8118" # HTTP proxy for workers
+      - "${gatewayPort}:8080"${proxyPort}
     environment:
-      DEPLOYMENT_MODE: docker
-      WORKER_IMAGE: ${workerImage}
-      QUEUE_URL: redis://redis:6379/0${slackEnvVars}${telegramEnvVars}
+      DEPLOYMENT_MODE: ${deploymentMode}${workerImageEnv}
+      QUEUE_URL: redis://redis:6379/0
       PUBLIC_GATEWAY_URL: \${PUBLIC_GATEWAY_URL:-}
       NODE_ENV: production
       ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY:-}
       COMPOSE_PROJECT_NAME: ${projectName}${mcpEnvVars}
-      # Worker network access control
-      # Empty/unset: Complete isolation (deny all)
-      # WORKER_ALLOWED_DOMAINS=*: Unrestricted access
-      # WORKER_ALLOWED_DOMAINS=domains: Allowlist mode
       WORKER_ALLOWED_DOMAINS: \${WORKER_ALLOWED_DOMAINS:-}
       WORKER_DISALLOWED_DOMAINS: \${WORKER_DISALLOWED_DOMAINS:-}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock${mcpConfigMount}
+    volumes:${dockerSocketMount}${mcpConfigMount}
       - env_storage:/app/.lobu/env
     networks:
-      - lobu-public   # Internet access
-      - lobu-internal # Internal services (redis, workers)
+      - lobu-public
+      - lobu-internal
     depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
 
 networks:
-  # Public network with internet access (gateway only)
   lobu-public:
     driver: bridge
-
-  # Internal network - no direct internet access
-  # Workers use this network and can only reach internet via gateway's proxy
   lobu-internal:
     internal: true
     driver: bridge

@@ -1,14 +1,38 @@
 /**
- * Admin Page — read-only view of the system skills registry.
- * Server-rendered HTML, no Preact bundle needed.
+ * Admin Page — system skills registry + connections management.
+ * Preact SPA with server-injected state.
  */
 
+import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { createLogger } from "@lobu/core";
+import type { Context } from "hono";
+import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
+import type { SettingsTokenPayload } from "../../auth/settings/token-service";
+import type { SystemEnvStore } from "../../auth/system-env-store";
+import type { UserAgentsStore } from "../../auth/user-agents-store";
+import type { ChatInstanceManager } from "../../connections/chat-instance-manager";
+import { getModelProviderModules } from "../../modules/module-system";
 import type { SystemSkillsService } from "../../services/system-skills-service";
-import { verifySettingsSession } from "./settings-auth";
+import {
+  setSettingsSessionCookie,
+  verifySettingsSession,
+} from "./settings-auth";
+import { settingsPageCSS } from "./settings-page-styles";
 
 const logger = createLogger("admin-routes");
+
+const _adminBundlePath = path.resolve(__dirname, "admin-page-bundle.raw.js");
+function getAdminPageJS(): string {
+  try {
+    const content = fs.readFileSync(_adminBundlePath, "utf-8");
+    return `/* ADMIN_BUNDLE_LOADED_AT_${Date.now()} */ ${content}`;
+  } catch (e) {
+    return `document.getElementById("app").textContent = "Bundle error: ${String(e).replace(/"/g, "'")}";`;
+  }
+}
 
 function esc(text: string): string {
   return text
@@ -18,242 +42,472 @@ function esc(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// ─── Env Var Helpers ──────────────────────────────────────────────────────────
+
+const ENV_REF_REGEX = /\$\{(?:env:)?([A-Z_][A-Z0-9_]*)\}/g;
+
+/** Extract all ${env:KEY} references from an object tree */
+function extractEnvRefs(obj: unknown): string[] {
+  const refs = new Set<string>();
+  const str = JSON.stringify(obj);
+  for (const match of str.matchAll(ENV_REF_REGEX)) {
+    if (match[1]) refs.add(match[1]);
+  }
+  return [...refs];
+}
+
+interface EnvVarEntry {
+  key: string;
+  /** Section this var belongs to: provider:<id>, integration:<id>, mcp:<name>, gateway */
+  section: string;
+  label: string;
+  isSet: boolean;
+  maskedValue: string | null;
+}
+
+function maskValue(value: string): string {
+  if (value.length <= 4) return "****";
+  return `${"*".repeat(4)}${value.slice(-4)}`;
+}
+
+/**
+ * Build the env var catalog dynamically from registered providers,
+ * system-skills integrations, MCP servers, and static gateway/connection vars.
+ */
+function buildEnvCatalog(
+  skills: any[],
+  redisOverrides: Record<string, string>
+): { vars: EnvVarEntry[]; allowedKeys: Set<string> } {
+  const vars: EnvVarEntry[] = [];
+  const seen = new Set<string>();
+
+  function addVar(key: string, section: string, label: string) {
+    if (seen.has(key)) return;
+    seen.add(key);
+    const redisVal = redisOverrides[key];
+    const processVal = process.env[key];
+    const value = redisVal ?? processVal;
+    vars.push({
+      key,
+      section,
+      label,
+      isSet: !!value,
+      maskedValue: value ? maskValue(value) : null,
+    });
+  }
+
+  // 1. LLM Providers — from module registry
+  for (const mod of getModelProviderModules()) {
+    if (mod.catalogVisible === false) continue;
+    const envVars = mod.getSecretEnvVarNames?.() || [];
+    for (const key of envVars) {
+      addVar(key, `provider:${mod.providerId}`, mod.providerDisplayName);
+    }
+  }
+
+  // 2. Integrations — extract ${env:*} from OAuth configs
+  for (const skill of skills) {
+    const raw = skill as any;
+    if (!raw.integrations) continue;
+    for (const ig of raw.integrations) {
+      if (!ig.oauth) continue;
+      const refs = extractEnvRefs(ig.oauth);
+      for (const key of refs) {
+        addVar(key, `integration:${ig.id}`, ig.label || ig.id);
+      }
+    }
+  }
+
+  // 3. MCP Servers — extract ${env:*} from server configs
+  for (const skill of skills) {
+    const raw = skill as any;
+    if (!raw.mcpServers) continue;
+    for (const srv of raw.mcpServers) {
+      const refs = extractEnvRefs(srv);
+      for (const key of refs) {
+        addVar(key, `mcp:${srv.name || srv.id}`, srv.name || srv.id);
+      }
+    }
+  }
+
+  return { vars, allowedKeys: seen };
+}
+
 interface AdminPageConfig {
   systemSkillsService: SystemSkillsService;
+  userAgentsStore: UserAgentsStore;
+  agentMetadataStore: AgentMetadataStore;
+  chatInstanceManager?: ChatInstanceManager;
+  systemEnvStore?: SystemEnvStore;
+  adminPassword: string;
+  version?: string;
+  githubUrl?: string;
+}
+
+function requireAdmin(c: Context): SettingsTokenPayload | null {
+  const session = verifySettingsSession(c);
+  if (!session || !session.isAdmin) return null;
+  return session;
+}
+
+function verifyPassword(input: string, expected: string): boolean {
+  const a = Buffer.from(input);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 export function createAdminPageRoutes(config: AdminPageConfig) {
   const app = new OpenAPIHono();
 
-  app.get("/admin", async (c) => {
+  // ─── Admin Login ───────────────────────────────────────────────────────────
+
+  app.get("/agents/login", (c) => {
     const session = verifySettingsSession(c);
-    if (!session) {
-      return c.redirect(
-        `/settings/oauth/login?returnUrl=${encodeURIComponent("/admin")}`
-      );
+    if (session?.isAdmin) return c.redirect("/agents");
+    const error = c.req.query("error");
+    return c.html(renderAdminLoginPage(error || undefined));
+  });
+
+  app.post("/agents/login", async (c) => {
+    const body = await c.req.parseBody();
+    const password = typeof body.password === "string" ? body.password : "";
+
+    if (!verifyPassword(password, config.adminPassword)) {
+      return c.redirect("/agents/login?error=Invalid+password");
     }
 
-    try {
-      const skills = (await config.systemSkillsService.getSystemSkills()) || [];
+    // Create or upgrade session with isAdmin
+    let session = verifySettingsSession(c);
+    if (session) {
+      session = { ...session, isAdmin: true };
+    } else {
+      session = {
+        userId: "admin",
+        platform: "admin",
+        exp: Date.now() + 24 * 60 * 60 * 1000,
+        isAdmin: true,
+      };
+    }
+    setSettingsSessionCookie(c, session);
+    return c.redirect("/agents");
+  });
 
-      // Collect items from all skills
-      const integrations: {
-        skillName: string;
+  // ─── Admin State Builder ─────────────────────────────────────────────────
+
+  async function buildAdminState() {
+    const rawSkills =
+      (await config.systemSkillsService.getSystemSkills()) || [];
+    const providerConfigs =
+      await config.systemSkillsService.getProviderConfigs();
+
+    const systemSkillProviderIds = new Set<string>();
+    const adminSkills: {
+      id: string;
+      name: string;
+      description?: string;
+      source: string;
+      integrations: {
         id: string;
         label: string;
         authType: string;
         apiDomains: string[];
-      }[] = [];
-      const providers: {
-        skillName: string;
+      }[];
+      mcpServers: { name: string; type: string; url: string }[];
+      providers: {
+        providerId: string;
         displayName: string;
         defaultModel: string;
         sdkCompat: string;
-      }[] = [];
-      const mcpServers: {
-        skillName: string;
-        name: string;
-        type: string;
-        url: string;
-      }[] = [];
+      }[];
+    }[] = [];
 
-      for (const skill of skills) {
-        const raw = skill as any;
+    for (const skill of rawSkills) {
+      const raw = skill as any;
+      const skillId = skill.repo.replace("system/", "");
 
-        if (raw.integrations) {
-          for (const ig of raw.integrations) {
-            integrations.push({
-              skillName: skill.name,
-              id: ig.id,
-              label: ig.label || ig.id,
-              authType: ig.authType || "oauth",
-              apiDomains: ig.apiDomains || [],
-            });
-          }
-        }
-
-        // providers live on the raw system skill entry, not the mapped SkillConfig
-        // We access them via the service's underlying data
-      }
-
-      // Also get raw provider configs via the service
-      const providerConfigs =
-        await config.systemSkillsService.getProviderConfigs();
-      // Map provider configs back to skill names
-      for (const skill of skills) {
-        const providerEntry =
-          providerConfigs[skill.repo.replace("system/", "")];
-        if (providerEntry) {
-          providers.push({
-            skillName: skill.name,
-            displayName: providerEntry.displayName,
-            defaultModel: providerEntry.defaultModel || "-",
-            sdkCompat: providerEntry.sdkCompat || "-",
+      const skillIntegrations: (typeof adminSkills)[0]["integrations"] = [];
+      if (raw.integrations) {
+        for (const ig of raw.integrations) {
+          skillIntegrations.push({
+            id: ig.id,
+            label: ig.label || ig.id,
+            authType: ig.authType || "oauth",
+            apiDomains: ig.apiDomains || [],
           });
         }
       }
 
-      // MCP servers from skills
-      for (const skill of skills) {
-        const raw = skill as any;
-        const servers = raw.mcpServers || [];
-        for (const srv of servers) {
-          mcpServers.push({
-            skillName: skill.name,
-            name: srv.name || srv.id,
-            type: srv.type || "sse",
-            url: srv.url || srv.command || "-",
-          });
-        }
+      const skillMcpServers: (typeof adminSkills)[0]["mcpServers"] = [];
+      const servers = raw.mcpServers || [];
+      for (const srv of servers) {
+        skillMcpServers.push({
+          name: srv.name || srv.id,
+          type: srv.type || "sse",
+          url: srv.url || srv.command || "-",
+        });
       }
 
-      const html = renderAdminPage(integrations, providers, mcpServers);
-      return c.html(html);
+      const skillProviders: (typeof adminSkills)[0]["providers"] = [];
+      const providerEntry = providerConfigs[skillId];
+      if (providerEntry) {
+        systemSkillProviderIds.add(skillId);
+        skillProviders.push({
+          providerId: skillId,
+          displayName: providerEntry.displayName,
+          defaultModel: providerEntry.defaultModel || "-",
+          sdkCompat: providerEntry.sdkCompat || "-",
+        });
+      }
+
+      adminSkills.push({
+        id: skillId,
+        name: skill.name,
+        description: raw.description,
+        source: "lobu",
+        integrations: skillIntegrations,
+        mcpServers: skillMcpServers,
+        providers: skillProviders,
+      });
+    }
+
+    const builtInProviders: (typeof adminSkills)[0]["providers"] = [];
+    for (const mod of getModelProviderModules()) {
+      if (mod.catalogVisible === false) continue;
+      if (systemSkillProviderIds.has(mod.providerId)) continue;
+      builtInProviders.push({
+        providerId: mod.providerId,
+        displayName: mod.providerDisplayName,
+        defaultModel: "-",
+        sdkCompat: mod.authType || "-",
+      });
+    }
+    if (builtInProviders.length > 0) {
+      adminSkills.push({
+        id: "__built-in__",
+        name: "Built-in",
+        source: "built-in",
+        integrations: [],
+        mcpServers: [],
+        providers: builtInProviders,
+      });
+    }
+
+    const allAgents = await config.agentMetadataStore.listAllAgents();
+
+    // Enrich agents with connection counts and platforms
+    const allConnections = config.chatInstanceManager
+      ? await config.chatInstanceManager.listConnections()
+      : [];
+    const connectionsByAgent = new Map<
+      string,
+      { count: number; platforms: string[] }
+    >();
+    for (const conn of allConnections) {
+      const agentId = (conn as any).templateAgentId;
+      if (!agentId) continue;
+      const entry = connectionsByAgent.get(agentId) || {
+        count: 0,
+        platforms: [],
+      };
+      entry.count++;
+      if (!entry.platforms.includes(conn.platform)) {
+        entry.platforms.push(conn.platform);
+      }
+      connectionsByAgent.set(agentId, entry);
+    }
+
+    const agents = allAgents.map((a) => {
+      const connInfo = connectionsByAgent.get(a.agentId);
+      return {
+        agentId: a.agentId,
+        name: a.name,
+        description: a.description || "",
+        owner: a.owner,
+        parentConnectionId: a.parentConnectionId || null,
+        createdAt: a.createdAt,
+        lastUsedAt: a.lastUsedAt ?? null,
+        connectionCount: connInfo?.count ?? 0,
+        platforms: connInfo?.platforms ?? [],
+      };
+    });
+
+    return {
+      version: config.version || process.env.npm_package_version || "unknown",
+      githubUrl: config.githubUrl || "",
+      deploymentMode: process.env.DEPLOYMENT_MODE || "docker",
+      uptime: Math.floor(process.uptime()),
+      skills: adminSkills,
+      agents,
+    };
+  }
+
+  // ─── Admin Pages ──────────────────────────────────────────────────────────
+
+  async function handleAdminPage(c: Context) {
+    const session = requireAdmin(c);
+    if (!session) return c.redirect("/agents/login");
+    try {
+      const adminState = await buildAdminState();
+      return c.html(renderAdminPage(adminState));
     } catch (error) {
       logger.error("Failed to render admin page", { error });
       return c.html(renderAdminErrorPage("Failed to load system skills."), 500);
     }
+  }
+
+  app.get("/agents", handleAdminPage);
+
+  // ─── Agents API ──────────────────────────────────────────────────────────
+
+  app.get("/api/v1/admin/agents", async (c) => {
+    if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+    try {
+      const agents = await config.agentMetadataStore.listAllAgents();
+      return c.json({
+        agents: agents.map((a) => ({
+          agentId: a.agentId,
+          name: a.name,
+          description: a.description || "",
+          owner: a.owner,
+          parentConnectionId: a.parentConnectionId || null,
+          createdAt: a.createdAt,
+          lastUsedAt: a.lastUsedAt ?? null,
+        })),
+      });
+    } catch (error) {
+      logger.error("Failed to list agents", { error });
+      return c.json({ error: "Failed to list agents" }, 500);
+    }
   });
+
+  // ─── System Env API ────────────────────────────────────────────────────────
+
+  if (config.systemEnvStore) {
+    const envStore = config.systemEnvStore;
+
+    /** Build catalog and allowlist from current state */
+    async function getCatalog() {
+      const skills =
+        (await config.systemSkillsService.getRawSystemSkills()) || [];
+      const redisOverrides = await envStore.listAll();
+      return buildEnvCatalog(skills, redisOverrides);
+    }
+
+    app.get("/api/v1/admin/env", async (c) => {
+      if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+
+      try {
+        const { vars } = await getCatalog();
+        return c.json({ vars });
+      } catch (error) {
+        logger.error("Failed to list env vars", { error });
+        return c.json({ error: "Failed to list env vars" }, 500);
+      }
+    });
+
+    app.put("/api/v1/admin/env/:key", async (c) => {
+      if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+
+      const key = c.req.param("key");
+      const { allowedKeys } = await getCatalog();
+      if (!allowedKeys.has(key)) {
+        return c.json({ error: "Key not in allowed catalog" }, 400);
+      }
+
+      try {
+        const body = await c.req.json();
+        const value = body?.value;
+        if (typeof value !== "string" || value.length === 0) {
+          return c.json({ error: "Missing or empty value" }, 400);
+        }
+
+        await envStore.set(key, value);
+        return c.json({ success: true, maskedValue: maskValue(value) });
+      } catch (error) {
+        logger.error("Failed to set env var", { key, error });
+        return c.json({ error: "Failed to set env var" }, 500);
+      }
+    });
+
+    app.delete("/api/v1/admin/env/:key", async (c) => {
+      if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+
+      const key = c.req.param("key");
+      const { allowedKeys } = await getCatalog();
+      if (!allowedKeys.has(key)) {
+        return c.json({ error: "Key not in allowed catalog" }, 400);
+      }
+
+      try {
+        await envStore.delete(key);
+        const processVal = process.env[key];
+        return c.json({
+          success: true,
+          isSet: !!processVal,
+          maskedValue: processVal ? maskValue(processVal) : null,
+        });
+      } catch (error) {
+        logger.error("Failed to delete env var", { key, error });
+        return c.json({ error: "Failed to delete env var" }, 500);
+      }
+    });
+  }
 
   return app;
 }
 
 // ─── HTML Renderers ──────────────────────────────────────────────────────────
 
-function renderAdminPage(
-  integrations: {
-    skillName: string;
-    id: string;
-    label: string;
-    authType: string;
-    apiDomains: string[];
-  }[],
-  providers: {
-    skillName: string;
-    displayName: string;
-    defaultModel: string;
-    sdkCompat: string;
-  }[],
-  mcpServers: {
-    skillName: string;
-    name: string;
-    type: string;
-    url: string;
-  }[]
-): string {
+function renderAdminPage(adminState: Record<string, unknown>): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
-  <title>Admin - System Skills</title>
+  <title>Admin</title>
+  <style>${settingsPageCSS}</style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 p-4">
+  <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div id="app"></div>
+  </div>
+  <script>window.__ADMIN_STATE__ = ${JSON.stringify(adminState)};</script>
+  <script type="module">${getAdminPageJS()}</script>
+</body>
+</html>`;
+}
+
+function renderAdminLoginPage(error?: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>Admin Login</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg, #334155, #1e293b); min-height: 100vh; padding: 2rem 1rem; color: #1e293b; }
-    .container { max-width: 56rem; margin: 0 auto; }
-    .header { text-align: center; margin-bottom: 2rem; }
-    .header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
-    .header p { font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem; }
-    .card { background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgb(0 0 0 / 0.12); padding: 1.5rem; margin-bottom: 1.5rem; }
-    .card h2 { font-size: 1rem; font-weight: 600; color: #334155; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-    .badge { display: inline-flex; align-items: center; justify-content: center; background: #e2e8f0; color: #475569; font-size: 0.75rem; font-weight: 600; border-radius: 9999px; min-width: 1.5rem; height: 1.5rem; padding: 0 0.4rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-    th { text-align: left; padding: 0.5rem 0.75rem; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid #e2e8f0; }
-    td { padding: 0.625rem 0.75rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-    tr:last-child td { border-bottom: none; }
-    .tag { display: inline-block; background: #f1f5f9; color: #475569; font-size: 0.6875rem; padding: 0.125rem 0.5rem; border-radius: 0.25rem; margin: 0.1rem; }
-    .tag-oauth { background: #dbeafe; color: #1d4ed8; }
-    .tag-apikey { background: #fef3c7; color: #92400e; }
-    .tag-sse { background: #ede9fe; color: #6d28d9; }
-    .tag-stdio { background: #fce7f3; color: #be185d; }
-    .empty { text-align: center; padding: 1.5rem; color: #94a3b8; font-size: 0.875rem; }
-    .back-link { display: inline-block; color: #94a3b8; font-size: 0.8125rem; text-decoration: none; margin-bottom: 1rem; }
-    .back-link:hover { color: #fff; }
-    @media (max-width: 640px) {
-      body { padding: 1rem 0.5rem; }
-      .card { padding: 1rem; }
-      th, td { padding: 0.375rem 0.5rem; }
-      table { font-size: 0.75rem; }
-    }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.25rem; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(to bottom right, #334155, #0f172a); color: #e2e8f0; }
+    .card { background: #0f172a; border: 1px solid #334155; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.35); padding: 2rem; max-width: 24rem; width: 100%; }
+    h1 { font-size: 1.25rem; font-weight: 700; margin: 0 0 1.25rem; text-align: center; }
+    label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #94a3b8; }
+    input[type="password"] { width: 100%; padding: 0.625rem 0.75rem; border: 1px solid #334155; border-radius: 0.5rem; background: #1e293b; color: #e2e8f0; font-size: 0.875rem; outline: none; box-sizing: border-box; }
+    input[type="password"]:focus { border-color: #64748b; box-shadow: 0 0 0 2px rgba(100,116,139,0.3); }
+    button { width: 100%; margin-top: 1rem; padding: 0.625rem; border: none; border-radius: 0.5rem; background: linear-gradient(to right, #334155, #475569); color: #fff; font-weight: 600; font-size: 0.875rem; cursor: pointer; }
+    button:hover { background: linear-gradient(to right, #475569, #64748b); }
+    .error { margin-bottom: 1rem; padding: 0.625rem; border-radius: 0.5rem; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; font-size: 0.875rem; text-align: center; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <a href="/settings" class="back-link">&larr; Back to Settings</a>
-    <div class="header">
-      <h1>System Skills Registry</h1>
-      <p>Read-only view of registered integrations, providers, and MCP servers</p>
-    </div>
-
-    <div class="card">
-      <h2>Integrations <span class="badge">${integrations.length}</span></h2>
-      ${
-        integrations.length > 0
-          ? `<table>
-        <thead><tr><th>Skill</th><th>Integration</th><th>Auth</th><th>API Domains</th></tr></thead>
-        <tbody>
-${integrations
-  .map(
-    (ig) => `          <tr>
-            <td>${esc(ig.skillName)}</td>
-            <td>${esc(ig.label)}</td>
-            <td><span class="tag ${ig.authType === "oauth" ? "tag-oauth" : "tag-apikey"}">${esc(ig.authType)}</span></td>
-            <td>${ig.apiDomains.map((d) => `<span class="tag">${esc(d)}</span>`).join(" ") || "-"}</td>
-          </tr>`
-  )
-  .join("\n")}
-        </tbody>
-      </table>`
-          : '<div class="empty">No integrations configured</div>'
-      }
-    </div>
-
-    <div class="card">
-      <h2>LLM Providers <span class="badge">${providers.length}</span></h2>
-      ${
-        providers.length > 0
-          ? `<table>
-        <thead><tr><th>Skill</th><th>Provider</th><th>Default Model</th><th>SDK</th></tr></thead>
-        <tbody>
-${providers
-  .map(
-    (p) => `          <tr>
-            <td>${esc(p.skillName)}</td>
-            <td>${esc(p.displayName)}</td>
-            <td><code style="font-size:0.75rem;background:#f1f5f9;padding:0.1rem 0.35rem;border-radius:0.2rem">${esc(p.defaultModel)}</code></td>
-            <td>${p.sdkCompat !== "-" ? `<span class="tag">${esc(p.sdkCompat)}</span>` : "-"}</td>
-          </tr>`
-  )
-  .join("\n")}
-        </tbody>
-      </table>`
-          : '<div class="empty">No LLM providers configured</div>'
-      }
-    </div>
-
-    <div class="card">
-      <h2>MCP Servers <span class="badge">${mcpServers.length}</span></h2>
-      ${
-        mcpServers.length > 0
-          ? `<table>
-        <thead><tr><th>Skill</th><th>Server</th><th>Type</th><th>URL</th></tr></thead>
-        <tbody>
-${mcpServers
-  .map(
-    (s) => `          <tr>
-            <td>${esc(s.skillName)}</td>
-            <td>${esc(s.name)}</td>
-            <td><span class="tag ${s.type === "sse" ? "tag-sse" : "tag-stdio"}">${esc(s.type)}</span></td>
-            <td style="word-break:break-all;max-width:16rem">${esc(s.url)}</td>
-          </tr>`
-  )
-  .join("\n")}
-        </tbody>
-      </table>`
-          : '<div class="empty">No MCP servers configured</div>'
-      }
-    </div>
+  <div class="card">
+    <h1>Admin Login</h1>
+    ${error ? `<div class="error">${esc(error)}</div>` : ""}
+    <form method="POST" action="/agents/login">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autofocus required />
+      <button type="submit">Log In</button>
+    </form>
   </div>
 </body>
 </html>`;

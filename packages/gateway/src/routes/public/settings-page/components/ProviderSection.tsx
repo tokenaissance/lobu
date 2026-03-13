@@ -302,7 +302,7 @@ export function ProviderSection() {
   const ctx = useSettings();
 
   return (
-    <Section id="model" title="Models" icon="&#129302;">
+    <Section id="model" title="Providers" icon="&#129302;">
       <div id="provider-list">
         {ctx.providerOrder.value.length === 0 && (
           <div class="text-center py-6 text-gray-500">
@@ -428,17 +428,11 @@ function ProviderCard({
           <div class="min-w-0">
             <p class="text-sm font-medium text-gray-800">{pInfo.name}</p>
             <CapabilityChips capabilities={pInfo.capabilities || []} />
-            <p
-              class={`text-xs truncate max-w-[120px] sm:max-w-none ${
-                ps.connected
-                  ? ps.userConnected
-                    ? "text-emerald-600"
-                    : "text-amber-600"
-                  : "text-gray-500"
-              }`}
-            >
-              {ps.status || "Checking..."}
-            </p>
+            {!ps.connected && ps.status && (
+              <p class="text-xs truncate max-w-[120px] sm:max-w-none text-red-500">
+                {ps.status}
+              </p>
+            )}
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">

@@ -7,15 +7,18 @@ import {
   askUserQuestion,
   callService,
   cancelReminder,
+  configure,
   connectService,
   disconnectService,
   generateAudio,
   generateImage,
   getChannelHistory,
+  installPackage,
+  installSkill,
   listReminders,
+  requestNetworkAccess,
   scheduleReminder,
   searchSkills,
-  sudo,
   uploadUserFile,
 } from "../shared/tool-implementations";
 
@@ -151,9 +154,9 @@ export function createOpenClawCustomTools(params: {
     }),
 
     defineTool({
-      name: "Sudo",
+      name: "InstallSkill",
       description:
-        "Elevated setup tool for installing/upgrading capabilities and opening settings approvals. Use id+optional upgrade to install or update a skill/MCP from SearchSkills. Use reason (+ optional setup keys) for package requests, provider auth, MCP setup, and network grants.",
+        "Install or upgrade a skill from SearchSkills (pass id), or define an inline skill with its provider/MCP dependencies (pass reason + config). Skills bundle capabilities — use ConnectService to connect individual providers or MCPs.",
       parameters: Type.Object({
         id: Type.Optional(
           Type.String({
@@ -164,7 +167,7 @@ export function createOpenClawCustomTools(params: {
         upgrade: Type.Optional(
           Type.Boolean({
             description:
-              "Set to true to upgrade an already-installed skill to the latest version from its registry",
+              "Set to true to upgrade an already-installed skill to the latest version",
           })
         ),
         reason: Type.Optional(
@@ -182,7 +185,7 @@ export function createOpenClawCustomTools(params: {
         providers: Type.Optional(
           Type.Array(Type.String(), {
             description:
-              "Optional provider IDs to open auth setup (e.g., 'openai', 'claude')",
+              "Provider IDs this skill depends on (e.g., 'openai', 'claude')",
           })
         ),
         skills: Type.Optional(
@@ -200,7 +203,7 @@ export function createOpenClawCustomTools(params: {
                 })
               ),
             }),
-            { description: "Optional list of skills to add in settings" }
+            { description: "Inline skill definitions to add in settings" }
           )
         ),
         mcpServers: Type.Optional(
@@ -233,23 +236,65 @@ export function createOpenClawCustomTools(params: {
                 })
               ),
             }),
-            { description: "Optional list of MCP servers to add in settings" }
+            { description: "MCP servers this skill depends on" }
           )
         ),
-        nixPackages: Type.Optional(
-          Type.Array(Type.String(), {
-            description:
-              "Optional list of nix packages to add (e.g., 'ffmpeg', 'imagemagick')",
-          })
-        ),
-        grants: Type.Optional(
-          Type.Array(Type.String(), {
-            description:
-              "Optional list of domain patterns to request as grants (e.g., 'api.example.com')",
-          })
-        ),
       }),
-      run: (args) => sudo(gw, args),
+      run: (args) => {
+        const id = args.id?.trim();
+        if (id) {
+          return installSkill(gw, { id, upgrade: args.upgrade });
+        }
+        if (!args.reason?.trim()) {
+          return Promise.resolve({
+            content: [
+              {
+                type: "text" as const,
+                text: "Error: InstallSkill requires either an id (to install/upgrade from registry) or a reason (for inline skill setup).",
+              },
+            ],
+          });
+        }
+        return configure(gw, {
+          reason: args.reason!,
+          message: args.message,
+          providers: args.providers,
+          skills: args.skills,
+          mcpServers: args.mcpServers,
+        });
+      },
+    }),
+
+    defineTool({
+      name: "InstallPackage",
+      description:
+        "Request installation of system packages (nix). Sends approval buttons to the user. Stop and wait for approval after calling.",
+      parameters: Type.Object({
+        packages: Type.Array(Type.String(), {
+          description:
+            "Nix package names to install (e.g., 'ffmpeg', 'imagemagick')",
+        }),
+        reason: Type.String({
+          description: "Brief explanation of why these packages are needed",
+        }),
+      }),
+      run: (args) => installPackage(gw, args),
+    }),
+
+    defineTool({
+      name: "RequestNetworkAccess",
+      description:
+        "Request access to blocked domains. Sends inline approval buttons to the user. Stop and wait for approval after calling. Do NOT retry blocked requests — the domain is blocked at the network level.",
+      parameters: Type.Object({
+        domains: Type.Array(Type.String(), {
+          description:
+            "Domain patterns to request access for (e.g., 'api.example.com')",
+        }),
+        reason: Type.String({
+          description: "Brief explanation of why access is needed",
+        }),
+      }),
+      run: (args) => requestNetworkAccess(gw, args),
     }),
 
     defineTool({

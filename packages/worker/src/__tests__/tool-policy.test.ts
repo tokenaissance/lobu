@@ -206,12 +206,12 @@ describe("enforceBashCommandPolicy", () => {
     );
   });
 
-  test("package manager commands are blocked with sudo guidance", () => {
+  test("package manager commands are blocked with InstallPackage guidance", () => {
     const policy = buildToolPolicy({});
     expect(() =>
       enforceBashCommandPolicy("apt-get install -y ffmpeg", policy.bashPolicy)
     ).toThrow(
-      "Direct package manager commands are blocked in Bash. Use the Sudo tool with nixPackages instead."
+      "Direct package manager commands are blocked in Bash. Use the InstallPackage tool instead."
     );
   });
 

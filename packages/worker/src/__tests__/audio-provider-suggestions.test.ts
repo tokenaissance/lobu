@@ -14,12 +14,9 @@ function extractText(result: {
   return result.content[0]?.text || "";
 }
 
-function extractSudoPayload(text: string): Record<string, unknown> {
-  const marker = "Call Sudo next with this payload: ";
-  const idx = text.indexOf(marker);
-  if (idx === -1) return {};
-  const payloadText = text.slice(idx + marker.length).trim();
-  return JSON.parse(payloadText) as Record<string, unknown>;
+function extractConnectServiceHint(text: string): string | null {
+  const match = text.match(/ConnectService\s*\(e\.g\.\s*id='([^']+)'\)/);
+  return match?.[1] ?? null;
 }
 
 describe("audio provider suggestions", () => {
@@ -78,7 +75,7 @@ describe("GenerateAudio dynamic provider messaging", () => {
     mock.restore();
   });
 
-  test("uses dynamic capability providers in missing-scope guidance and sudo payload", async () => {
+  test("uses dynamic capability providers in missing-scope guidance and ConnectService hint", async () => {
     const fetchMock = mock(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
@@ -124,10 +121,11 @@ describe("GenerateAudio dynamic provider messaging", () => {
     );
 
     const text = extractText(result as any);
-    const payload = extractSudoPayload(text);
+    const hintProvider = extractConnectServiceHint(text);
 
     expect(text).toContain("OpenAI, Google Gemini");
-    expect(payload.providers).toEqual(["chatgpt", "openai", "gemini"]);
+    expect(text).toContain("ConnectService");
+    expect(hintProvider).toBe("chatgpt");
   });
 });
 

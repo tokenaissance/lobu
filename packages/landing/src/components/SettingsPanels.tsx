@@ -65,9 +65,8 @@ export function ConnectionsPanel() {
   const connections = [
     {
       platform: "telegram",
-      icon: "✈️",
-      iconBg: "bg-sky-100",
-      botName: "DevOps",
+      faviconDomain: "telegram.org",
+      botName: "Support",
       online: true,
       chats: [
         { name: "Alice Chen", id: "8291045832" },
@@ -76,9 +75,8 @@ export function ConnectionsPanel() {
     },
     {
       platform: "discord",
-      icon: "🎮",
-      iconBg: "bg-indigo-100",
-      botName: "Marketing",
+      faviconDomain: "discord.com",
+      botName: "Internal Marketing",
       online: true,
       chats: [{ name: "#campaigns", id: "109284710" }],
     },
@@ -95,11 +93,14 @@ export function ConnectionsPanel() {
           >
             {/* Connection header */}
             <div class="flex items-center gap-2.5">
-              <div
-                class={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${c.iconBg}`}
-              >
-                {c.icon}
-              </div>
+              <img
+                src={`https://www.google.com/s2/favicons?domain=${c.faviconDomain}&sz=32`}
+                alt={c.platform}
+                width={20}
+                height={20}
+                class="w-5 h-5 rounded"
+                loading="lazy"
+              />
               <span class="text-xs font-semibold text-gray-800">
                 {c.botName}
               </span>

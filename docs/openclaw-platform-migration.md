@@ -187,7 +187,7 @@ The extension was written against a stale branch (17,987 commits behind main). I
 - **MCP proxy** — tool credential management and OAuth flows
 - **Settings page** — web UI for providers, models, skills, permissions
 - **Grant system** — network access approval with per-domain control
-- **Custom tools** — AskUser, UploadFile, SearchSkills, Sudo, ConnectService, etc.
+- **Custom tools** — AskUser, UploadFile, SearchSkills, InstallSkill, InstallPackage, RequestNetworkAccess, ConnectService, etc.
 - **Scheduling** — reminders and cron-based recurring tasks
 - **Session management** — persistent sessions across worker restarts
 

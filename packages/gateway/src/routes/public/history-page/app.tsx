@@ -184,7 +184,7 @@ function App() {
   if (!status.value?.connected) {
     return (
       <>
-        <StatusBar connected={false} stats={stats.value} />
+        <StatusBar connected={false} stats={stats.value} agentId={agentId} />
         <WakePrompt agentId={agentId} onWake={onWake} />
       </>
     );
@@ -192,7 +192,7 @@ function App() {
 
   return (
     <>
-      <StatusBar connected={true} stats={stats.value} />
+      <StatusBar connected={true} stats={stats.value} agentId={agentId} />
 
       {error.value && (
         <div class="mx-4 mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">

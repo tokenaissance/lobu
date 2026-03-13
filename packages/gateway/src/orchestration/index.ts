@@ -18,6 +18,7 @@ import type {
 import { buildModuleEnvVars } from "./deployment-utils";
 import {
   DockerDeploymentManager,
+  EmbeddedDeploymentManager,
   FlyDeploymentManager,
   K8sDeploymentManager,
 } from "./impl";
@@ -117,6 +118,15 @@ export class Orchestrator {
     if (deploymentMode === "fly") {
       logger.info("🪁 Using Fly deployment mode (Machines API)");
       return new FlyDeploymentManager(
+        config,
+        buildModuleEnvVars,
+        providerModules
+      );
+    }
+
+    if (deploymentMode === "embedded") {
+      logger.info("⚡ Using embedded deployment mode (in-process workers)");
+      return new EmbeddedDeploymentManager(
         config,
         buildModuleEnvVars,
         providerModules

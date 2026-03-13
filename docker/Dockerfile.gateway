@@ -1,6 +1,6 @@
 FROM node:20-alpine
 
-# Install bun for fast dependency installation, docker-cli for runtime
+# Install bun for fast dependency installation and docker-cli for runtime
 RUN apk add --no-cache curl bash docker-cli && \
     curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash && \
     chmod +x /usr/local/bin/bun
@@ -8,28 +8,39 @@ ENV PATH="/usr/local/bin:${PATH}"
 
 WORKDIR /app
 
-# Set up workspace for gateway + core
+# Set up workspace for gateway + core + worker (worker needed for embedded deployment mode)
 COPY tsconfig.json ./
-RUN echo '{ "name": "@lobu/gateway-build", "private": true, "workspaces": [ "packages/core", "packages/gateway" ] }' > package.json
+COPY package.json ./
+COPY patches/ ./patches/
 COPY packages/core/package.json ./packages/core/
 COPY packages/gateway/package.json ./packages/gateway/
+COPY packages/worker/package.json ./packages/worker/
 
-# Install dependencies with Bun (faster than npm)
-RUN --mount=type=cache,target=/root/.bun/install/cache bun install || true
+# Create stubs for workspace packages not included in the gateway image
+RUN mkdir -p packages/cli packages/landing && \
+    echo '{"name":"@lobu/cli","version":"0.0.0"}' > packages/cli/package.json && \
+    echo '{"name":"@lobu/landing","version":"0.0.0"}' > packages/landing/package.json
+
+# Install dependencies with Bun (faster than npm, applies patchedDependencies)
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install
 
 # Copy source code
 COPY packages/core/ ./packages/core/
 COPY packages/gateway/ ./packages/gateway/
+COPY packages/worker/ ./packages/worker/
 # Copy CLI's mcp-servers.json (referenced by gateway's mcp-registry)
 COPY packages/cli/src/mcp-servers.json ./packages/cli/src/mcp-servers.json
 
 # Build core package dist (used by Node.js in production, Bun uses src/ via conditional exports)
 WORKDIR /app/packages/core
-RUN bun run build
+RUN bunx tsc
 
 # Generate Tailwind CSS for settings page
 WORKDIR /app/packages/gateway
-RUN bun run generate:css
+RUN bun run generate:css && \
+    bun run scripts/build-history.ts && \
+    bun run scripts/build-settings.ts && \
+    bun run scripts/build-admin.ts
 
 WORKDIR /app
 
@@ -42,4 +53,4 @@ RUN chmod -R a+rX /app
 
 # Run with bun for TypeScript support and hot reload in dev
 ENTRYPOINT []
-CMD ["bun", "--watch", "packages/gateway/src/index.ts"]
+CMD ["sh", "-lc", "cd /app/packages/gateway && bun run generate:css && bun run scripts/build-history.ts && bun run scripts/build-settings.ts && bun run scripts/build-admin.ts && cd /app && exec bun --watch packages/gateway/src/index.ts"]

@@ -28,7 +28,7 @@ build-packages:
 
 # Start dev environment with Docker Compose Watch
 dev:
-	docker compose -f docker/docker-compose.yml watch
+	docker compose --env-file .env -f docker/docker-compose.yml watch
 
 # Setup development environment (run once)
 setup:

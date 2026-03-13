@@ -313,6 +313,10 @@ export class WorkerGateway {
         availableProjects: [],
       };
 
+      // Build settings URL for soul-empty fallback
+      const settingsUrl = new URL("/settings", baseUrl);
+      if (agentId) settingsUrl.searchParams.set("agent", agentId);
+
       // Fetch MCP config and session context in parallel
       const [mcpConfig, contextData] = await Promise.all([
         this.mcpConfigService.getWorkerConfig({
@@ -322,7 +326,8 @@ export class WorkerGateway {
         }),
         this.instructionService.getSessionContext(
           platform || "unknown",
-          instructionContext
+          instructionContext,
+          { settingsUrl: settingsUrl.toString() }
         ),
       ]);
 
@@ -393,11 +398,21 @@ export class WorkerGateway {
               accountId: a.accountId,
               grantedScopes: a.credentials.grantedScopes,
             }));
+            // Resolve per-agent config to check OAuth credentials
+            const resolved = await this.integrationConfigService.getIntegration(
+              id,
+              agentId
+            );
+            const isOAuth = authType === "oauth";
+            const configured =
+              !isOAuth ||
+              !!(resolved?.oauth?.clientId && resolved?.oauth?.clientSecret);
             integrationStatus.push({
               id,
               label: config.label,
               authType,
               connected: accounts.length > 0,
+              configured,
               accounts,
               availableScopes: config.scopes?.available ?? [],
             });

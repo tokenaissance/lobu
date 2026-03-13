@@ -43,8 +43,11 @@ export class SystemConfigResolver {
     agentId?: string
   ): Promise<IntegrationConfig | null> {
     const all = await this.getIntegrationConfigs();
-    const config = all[id] ?? null;
+    let config = all[id] ?? null;
     if (!config || !agentId) return config;
+
+    // Overlay per-agent OAuth app credentials
+    config = await this.overlayAgentOAuthCredentials(config, id, agentId);
 
     const skillScopes = await this.getSkillScopesForIntegration(agentId, id);
     if (
@@ -55,6 +58,38 @@ export class SystemConfigResolver {
     }
 
     return this.mergeIntegrationWithSkillScopes(config, skillScopes);
+  }
+
+  /**
+   * Check if an OAuth integration has credentials configured for the given agent.
+   */
+  async isOAuthConfigured(id: string, agentId: string): Promise<boolean> {
+    const config = await this.getIntegrationConfig(id, agentId);
+    if (!config?.oauth) return true; // Non-OAuth integrations are always "configured"
+    return !!config.oauth.clientId && !!config.oauth.clientSecret;
+  }
+
+  private async overlayAgentOAuthCredentials(
+    config: IntegrationConfig,
+    integrationId: string,
+    agentId: string
+  ): Promise<IntegrationConfig> {
+    if (!config.oauth || !this.agentSettingsStore) return config;
+    // If the template already has credentials (e.g. from env substitution), use them
+    if (config.oauth.clientId && config.oauth.clientSecret) return config;
+
+    const settings = await this.agentSettingsStore.getSettings(agentId);
+    const agentCreds = settings?.oauthAppCredentials?.[integrationId];
+    if (!agentCreds) return config;
+
+    return {
+      ...config,
+      oauth: {
+        ...config.oauth,
+        clientId: agentCreds.clientId,
+        clientSecret: agentCreds.clientSecret,
+      },
+    };
   }
 
   async getSkillScopesForIntegration(

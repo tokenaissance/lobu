@@ -48,7 +48,7 @@ export interface SkillRegistry {
 /**
  * Config entry for a skill registry
  */
-interface RegistryConfig {
+export interface RegistryConfig {
   id: string;
   type: string;
   apiUrl: string;
@@ -98,7 +98,9 @@ export class SkillRegistryCoordinator {
         const config = JSON.parse(raw) as RegistriesConfig;
 
         if (config.registries?.length) {
-          return config.registries
+          // Filter out "lobu" type entries
+          const filtered = config.registries.filter((e) => e.type !== "lobu");
+          return filtered
             .map((entry) => this.createRegistry(entry))
             .filter(Boolean) as SkillRegistry[];
         }
@@ -129,12 +131,29 @@ export class SkillRegistryCoordinator {
     return new ClawHubRegistry(DEFAULT_CLAWHUB_API_URL);
   }
 
+  private buildExtraRegistries(extras?: RegistryConfig[]): SkillRegistry[] {
+    if (!extras?.length) return [];
+    return extras
+      .filter((e) => e.type !== "lobu")
+      .map((entry) => this.createRegistry(entry))
+      .filter(Boolean) as SkillRegistry[];
+  }
+
   /**
-   * Search all registries in parallel, dedupe by id
+   * Search all registries in parallel, dedupe by id.
+   * Optionally includes extra per-agent registries for this call.
    */
-  async search(query: string, limit: number): Promise<SkillRegistryResult[]> {
+  async search(
+    query: string,
+    limit: number,
+    extraRegistries?: RegistryConfig[]
+  ): Promise<SkillRegistryResult[]> {
+    const allRegistries = [
+      ...this.registries,
+      ...this.buildExtraRegistries(extraRegistries),
+    ];
     const results = await Promise.all(
-      this.registries.map((r) =>
+      allRegistries.map((r) =>
         r.search(query, limit).catch((error) => {
           logger.error(`Search failed for registry ${r.id}`, { error });
           return [] as SkillRegistryResult[];
@@ -158,10 +177,18 @@ export class SkillRegistryCoordinator {
   }
 
   /**
-   * Fetch skill content, trying each registry until one succeeds
+   * Fetch skill content, trying each registry until one succeeds.
+   * Optionally includes extra per-agent registries for this call.
    */
-  async fetch(id: string): Promise<SkillContent> {
-    for (const registry of this.registries) {
+  async fetch(
+    id: string,
+    extraRegistries?: RegistryConfig[]
+  ): Promise<SkillContent> {
+    const allRegistries = [
+      ...this.registries,
+      ...this.buildExtraRegistries(extraRegistries),
+    ];
+    for (const registry of allRegistries) {
       try {
         return await registry.fetch(id);
       } catch {

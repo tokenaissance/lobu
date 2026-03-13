@@ -12,8 +12,6 @@
           "oauth": {
             "authUrl": "https://accounts.google.com/o/oauth2/v2/auth",
             "tokenUrl": "https://oauth2.googleapis.com/token",
-            "clientId": "${env:GOOGLE_CLIENT_ID}",
-            "clientSecret": "${env:GOOGLE_CLIENT_SECRET}",
             "incrementalAuth": true
           },
           "scopesConfig": {
@@ -47,9 +45,7 @@
           "authType": "oauth",
           "oauth": {
             "authUrl": "https://github.com/login/oauth/authorize",
-            "tokenUrl": "https://github.com/login/oauth/access_token",
-            "clientId": "${env:GITHUB_CLIENT_ID}",
-            "clientSecret": "${env:GITHUB_CLIENT_SECRET}"
+            "tokenUrl": "https://github.com/login/oauth/access_token"
           },
           "scopesConfig": {
             "default": ["read:user", "user:email"],
@@ -78,9 +74,7 @@
           "authType": "oauth",
           "oauth": {
             "authUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-            "tokenUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-            "clientId": "${env:MICROSOFT_CLIENT_ID}",
-            "clientSecret": "${env:MICROSOFT_CLIENT_SECRET}"
+            "tokenUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
           },
           "scopesConfig": {
             "default": ["openid", "profile", "email", "offline_access"],
@@ -113,8 +107,6 @@
           "oauth": {
             "authUrl": "https://api.notion.com/v1/oauth/authorize",
             "tokenUrl": "https://api.notion.com/v1/oauth/token",
-            "clientId": "${env:NOTION_CLIENT_ID}",
-            "clientSecret": "${env:NOTION_CLIENT_SECRET}",
             "tokenEndpointAuthMethod": "client_secret_basic"
           },
           "apiDomains": ["api.notion.com"],
@@ -135,8 +127,6 @@
           "oauth": {
             "authUrl": "https://accounts.spotify.com/authorize",
             "tokenUrl": "https://accounts.spotify.com/api/token",
-            "clientId": "${env:SPOTIFY_CLIENT_ID}",
-            "clientSecret": "${env:SPOTIFY_CLIENT_SECRET}",
             "tokenEndpointAuthMethod": "client_secret_basic"
           },
           "scopesConfig": {
@@ -171,9 +161,7 @@
           "authType": "oauth",
           "oauth": {
             "authUrl": "https://linear.app/oauth/authorize",
-            "tokenUrl": "https://api.linear.app/oauth/token",
-            "clientId": "${env:LINEAR_CLIENT_ID}",
-            "clientSecret": "${env:LINEAR_CLIENT_SECRET}"
+            "tokenUrl": "https://api.linear.app/oauth/token"
           },
           "scopesConfig": {
             "default": ["read"],
@@ -196,9 +184,7 @@
           "authType": "oauth",
           "oauth": {
             "authUrl": "https://auth.atlassian.com/authorize",
-            "tokenUrl": "https://auth.atlassian.com/oauth/token",
-            "clientId": "${env:ATLASSIAN_CLIENT_ID}",
-            "clientSecret": "${env:ATLASSIAN_CLIENT_SECRET}"
+            "tokenUrl": "https://auth.atlassian.com/oauth/token"
           },
           "scopesConfig": {
             "default": ["read:me"],
@@ -226,9 +212,7 @@
           "authType": "oauth",
           "oauth": {
             "authUrl": "https://sentry.io/oauth/authorize/",
-            "tokenUrl": "https://sentry.io/oauth/token/",
-            "clientId": "${env:SENTRY_CLIENT_ID}",
-            "clientSecret": "${env:SENTRY_CLIENT_SECRET}"
+            "tokenUrl": "https://sentry.io/oauth/token/"
           },
           "scopesConfig": {
             "default": ["org:read", "project:read", "event:read"],
@@ -263,8 +247,6 @@
           "oauth": {
             "authUrl": "https://www.reddit.com/api/v1/authorize?duration=permanent",
             "tokenUrl": "https://www.reddit.com/api/v1/access_token",
-            "clientId": "${env:REDDIT_CLIENT_ID}",
-            "clientSecret": "${env:REDDIT_CLIENT_SECRET}",
             "tokenEndpointAuthMethod": "client_secret_basic"
           },
           "scopesConfig": {
@@ -298,8 +280,6 @@
           "oauth": {
             "authUrl": "https://twitter.com/i/oauth2/authorize",
             "tokenUrl": "https://api.twitter.com/2/oauth2/token",
-            "clientId": "${env:TWITTER_CLIENT_ID}",
-            "clientSecret": "${env:TWITTER_CLIENT_SECRET}",
             "tokenEndpointAuthMethod": "client_secret_basic"
           },
           "scopesConfig": {
@@ -508,9 +488,7 @@
           "authType": "oauth",
           "oauth": {
             "authUrl": "https://openrouter.ai/auth",
-            "tokenUrl": "https://openrouter.ai/api/v1/auth/keys",
-            "clientId": "${env:OPENROUTER_CLIENT_ID}",
-            "clientSecret": "${env:OPENROUTER_CLIENT_SECRET}"
+            "tokenUrl": "https://openrouter.ai/api/v1/auth/keys"
           },
           "apiDomains": ["openrouter.ai"],
           "apiBase": "https://openrouter.ai/api/v1",

@@ -96,7 +96,7 @@ class MessageHandlerBridge {
     );
 
     // Gap 6: Allowlist check
-    if (connection.settings.allowFrom?.length) {
+    if (connection.settings?.allowFrom?.length) {
       if (!connection.settings.allowFrom.includes(userId)) {
         logger.info({ userId }, "Blocked by allowlist");
         return;
@@ -104,7 +104,7 @@ class MessageHandlerBridge {
     }
 
     // Gap 6: Group check
-    if (isGroup && connection.settings.allowGroups === false) {
+    if (isGroup && connection.settings?.allowGroups === false) {
       logger.info({ channelId }, "Groups not allowed");
       return;
     }
@@ -139,10 +139,47 @@ class MessageHandlerBridge {
           agentId,
           agentName,
           platform,
-          userId
+          userId,
+          { parentConnectionId: this.connection.id }
         );
         await userAgentsStore?.addAgent(platform, userId, agentId);
         logger.info({ agentId, userId }, "Auto-created agent");
+
+        // Clone settings from template agent if connection has one
+        if (this.connection.templateAgentId) {
+          try {
+            const agentSettingsStore = this.services.getAgentSettingsStore();
+            if (agentSettingsStore) {
+              const templateSettings = await agentSettingsStore.getSettings(
+                this.connection.templateAgentId
+              );
+              if (templateSettings) {
+                const { buildDefaultSettingsFromSource } = await import(
+                  "../auth/settings/template-utils"
+                );
+                const cloned = buildDefaultSettingsFromSource(templateSettings);
+                cloned.templateAgentId = this.connection.templateAgentId;
+                await agentSettingsStore.saveSettings(agentId, cloned);
+                logger.info(
+                  {
+                    agentId,
+                    templateAgentId: this.connection.templateAgentId,
+                  },
+                  "Cloned settings from template agent"
+                );
+              }
+            }
+          } catch (error) {
+            logger.warn(
+              {
+                agentId,
+                templateAgentId: this.connection.templateAgentId,
+                error: String(error),
+              },
+              "Failed to clone template agent settings"
+            );
+          }
+        }
       }
     }
 
@@ -198,8 +235,15 @@ class MessageHandlerBridge {
       messageText = messageText.replace(`@${botUsername}`, "").trim();
     }
 
+    // Intercept /new before slash dispatch — triggers memory flush + session reset
+    let sessionReset = false;
+    if (messageText.trim().toLowerCase() === "/new") {
+      messageText = "Starting new session.";
+      sessionReset = true;
+    }
+
     // Slash command dispatch — intercept before queueing to worker
-    if (this.commandDispatcher) {
+    if (!sessionReset && this.commandDispatcher) {
       const handled = await this.commandDispatcher.tryHandleSlashText(
         messageText,
         {
@@ -208,6 +252,7 @@ class MessageHandlerBridge {
           channelId,
           isGroup,
           conversationId: messageId,
+          connectionId: this.connection.id,
           reply: createChatReply((content) => thread.post(content)),
         }
       );
@@ -257,6 +302,7 @@ class MessageHandlerBridge {
         responseId: messageId,
         conversationHistory:
           conversationHistory.length > 0 ? conversationHistory : undefined,
+        ...(sessionReset && { sessionReset: true }),
       },
       agentOptions,
     });
@@ -289,12 +335,14 @@ class MessageHandlerBridge {
     const settingsUrl = new URL("/settings", baseUrl);
     settingsUrl.searchParams.set("platform", this.connection.platform);
     settingsUrl.searchParams.set("chat", channelId);
+    settingsUrl.searchParams.set("connectionId", this.connection.id);
+    settingsUrl.searchParams.set("agent", agentId);
     const configUrl = settingsUrl.toString();
 
     const message =
       "Welcome! To get started, set up an AI provider (like Claude or OpenAI) so I can respond to your messages.";
 
-    // Gap 4: Settings link generation
+    let buttonUrl = configUrl;
     if (isGroup) {
       const claimService = this.services.getClaimService();
       if (claimService) {
@@ -306,14 +354,38 @@ class MessageHandlerBridge {
         const { buildClaimSettingsUrl } = await import(
           "../auth/settings/claim-service"
         );
-        const claimUrl = buildClaimSettingsUrl(claimCode, { agentId });
-        await thread.post(`${message}\n\nSet up: ${claimUrl}`);
-      } else {
-        await thread.post(`${message}\n\nSet up: ${configUrl}`);
+        buttonUrl = buildClaimSettingsUrl(claimCode, { agentId });
       }
-    } else {
-      await thread.post(`${message}\n\nSet up: ${configUrl}`);
     }
+
+    // For Telegram, use native API to send web_app button (Chat SDK doesn't support it)
+    if (this.connection.platform === "telegram") {
+      const botToken = this.manager.getConnectionConfigSecret(
+        this.connection.id,
+        "botToken"
+      );
+      if (botToken) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: channelId,
+            text: message,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "Set up", web_app: { url: buttonUrl } }],
+              ],
+            },
+          }),
+        });
+        logger.info({ agentId, channelId }, "Sent provider setup prompt");
+        return;
+      }
+    }
+
+    // Fallback for non-Telegram platforms
+    const reply = createChatReply((content) => thread.post(content));
+    await reply(message, { url: buttonUrl, urlLabel: "Set up" });
 
     logger.info({ agentId, channelId }, "Sent provider setup prompt");
   }

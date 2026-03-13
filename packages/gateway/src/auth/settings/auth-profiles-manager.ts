@@ -22,7 +22,17 @@ export class AuthProfilesManager {
 
   async listProfiles(agentId: string): Promise<AuthProfile[]> {
     const settings = await this.agentSettingsStore.getSettings(agentId);
-    return this.normalizeProfiles(settings?.authProfiles);
+    const profiles = this.normalizeProfiles(settings?.authProfiles);
+    if (profiles.length > 0) return profiles;
+
+    // Fallback: check template agent's credentials for sandbox agents
+    if (settings?.templateAgentId) {
+      const templateSettings = await this.agentSettingsStore.getSettings(
+        settings.templateAgentId
+      );
+      return this.normalizeProfiles(templateSettings?.authProfiles);
+    }
+    return profiles;
   }
 
   async hasProviderProfiles(

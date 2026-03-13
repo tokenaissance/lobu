@@ -80,6 +80,14 @@ export interface SettingsTokenPayload {
   prefillGrants?: string[];
   /** Optional source context for post-install notifications */
   sourceContext?: SettingsSourceContext;
+  /** Settings mode: "admin" has full access, "user" is restricted by allowedScopes */
+  settingsMode?: "admin" | "user";
+  /** Scopes the user is allowed to configure (only relevant when settingsMode is "user") */
+  allowedScopes?: string[];
+  /** Connection ID that triggered this settings session */
+  connectionId?: string;
+  /** Whether this session has admin access */
+  isAdmin?: boolean;
 }
 
 /**

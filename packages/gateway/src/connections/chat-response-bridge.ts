@@ -3,6 +3,8 @@
  * Covers gaps 8 (markdown→HTML) and 9 (message chunking).
  */
 
+import { resolve } from "node:path";
+import { unlink } from "node:fs/promises";
 import { createLogger } from "@lobu/core";
 import type { ThreadResponsePayload } from "../infrastructure/queue";
 import { extractSettingsLinkButtons } from "../platform/link-buttons";
@@ -77,7 +79,7 @@ export class ChatResponseBridge implements ResponseRenderer {
         );
 
         if (target) {
-          const sentMessage = await target.post(payload.delta);
+          const sentMessage = await target.post({ markdown: payload.delta });
           stream = {
             buffer: payload.delta,
             sentMessage,
@@ -151,6 +153,45 @@ export class ChatResponseBridge implements ResponseRenderer {
     if (stream?.buffer.trim()) {
       const redis = this.manager.getServices().getQueue().getRedisClient();
       await storeOutgoingHistory(redis, connectionId, channelId, stream.buffer);
+    }
+
+    // Session reset: clear Redis history and delete session file
+    if ((payload.platformMetadata as any)?.sessionReset) {
+      const agentId = (payload.platformMetadata as any)?.agentId;
+      try {
+        const redis = this.manager.getServices().getQueue().getRedisClient();
+        await redis.del(`chat:history:${connectionId}:${channelId}`);
+        logger.info(
+          { connectionId, channelId },
+          "Cleared chat history for session reset"
+        );
+      } catch (error) {
+        logger.warn(
+          { error: String(error) },
+          "Failed to clear chat history on session reset"
+        );
+      }
+      if (agentId) {
+        try {
+          const sessionPath = resolve(
+            "workspaces",
+            agentId,
+            ".openclaw",
+            "session.jsonl"
+          );
+          await unlink(sessionPath);
+          logger.info(
+            { agentId, sessionPath },
+            "Deleted session file for session reset"
+          );
+        } catch (error) {
+          // File may not exist — that's fine
+          logger.debug(
+            { agentId, error: String(error) },
+            "No session file to delete on reset"
+          );
+        }
+      }
     }
 
     logger.info(
@@ -299,7 +340,7 @@ export class ChatResponseBridge implements ResponseRenderer {
   ): Promise<void> {
     if (!stream.sentMessage?.edit) return;
     try {
-      await stream.sentMessage.edit(stream.buffer);
+      await stream.sentMessage.edit({ markdown: stream.buffer });
       stream.lastEditTime = Date.now();
     } catch (error) {
       logger.debug(

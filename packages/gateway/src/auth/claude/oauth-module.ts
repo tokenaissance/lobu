@@ -1,6 +1,7 @@
 import { createLogger } from "@lobu/core";
 import type { ModelOption } from "../../modules/module-system";
 import { BaseProviderModule } from "../base-provider-module";
+import { resolveEnv } from "../mcp/string-substitution";
 import type { OAuthCredentials } from "../oauth/credentials";
 import {
   type AuthProfilesManager,
@@ -54,7 +55,8 @@ export class ClaudeOAuthModule extends BaseProviderModule {
 
   override hasSystemKey(): boolean {
     return !!(
-      process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_CODE_OAUTH_TOKEN
+      resolveEnv("ANTHROPIC_AUTH_TOKEN") ||
+      resolveEnv("CLAUDE_CODE_OAUTH_TOKEN")
     );
   }
 
@@ -65,8 +67,8 @@ export class ClaudeOAuthModule extends BaseProviderModule {
       // Prefer ANTHROPIC_AUTH_TOKEN (explicit user config in .env) over
       // ANTHROPIC_API_KEY (which may be injected by Claude Code's shell env).
       const systemApiKey =
-        process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
-      const systemOAuthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+        resolveEnv("ANTHROPIC_AUTH_TOKEN") || resolveEnv("ANTHROPIC_API_KEY");
+      const systemOAuthToken = resolveEnv("CLAUDE_CODE_OAUTH_TOKEN");
 
       if (systemApiKey) {
         envVars.ANTHROPIC_API_KEY = systemApiKey;

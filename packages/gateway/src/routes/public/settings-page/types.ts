@@ -139,7 +139,9 @@ export interface PermissionGrant {
 }
 
 export interface IntegrationStatusEntry {
+  label: string;
   connected: boolean;
+  configured: boolean;
   accounts: { accountId: string; grantedScopes: string[] }[];
   availableScopes: string[];
 }
@@ -188,6 +190,35 @@ export interface SettingsState {
   providerIconUrls: Record<string, string>;
   // Integration connection status keyed by integration ID
   integrationStatus: Record<string, IntegrationStatusEntry>;
+  // Settings mode and scoped access
+  settingsMode: "admin" | "user";
+  allowedScopes?: string[];
+  // Whether the user has admin access (authenticated via OAuth or admin password)
+  isAdmin?: boolean;
+  // Whether this agent is a sandbox (auto-created under a connection)
+  isSandbox?: boolean;
+  // Platform of the sandbox agent's owner (for displaying platform icon)
+  ownerPlatform?: string;
+  // Skill registries
+  globalRegistries: { id: string; type: string; apiUrl: string }[];
+  initialRegistries: { id: string; type: string; apiUrl: string }[];
+}
+
+export interface Connection {
+  id: string;
+  platform: string;
+  templateAgentId?: string;
+  config: Record<string, any>;
+  settings: {
+    allowFrom?: string[];
+    allowGroups?: boolean;
+    userConfigScopes?: string[];
+  };
+  metadata: Record<string, any>;
+  status: "active" | "stopped" | "error";
+  errorMessage?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface SettingsSnapshot {
@@ -202,4 +233,5 @@ export interface SettingsSnapshot {
   mcpServers: string;
   permissions: string;
   providerModelPreferences: string;
+  registries: string;
 }

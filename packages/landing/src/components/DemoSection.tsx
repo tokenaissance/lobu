@@ -141,7 +141,7 @@ export function DemoSection() {
           class="text-2xl sm:text-3xl font-bold text-center mb-12 tracking-tight"
           style={{ color: "var(--color-page-text)" }}
         >
-          Your users' experience
+          How it works
         </h2>
 
         {/* Single grid — timeline column is continuous across all rows */}

@@ -138,13 +138,26 @@ export class IntegrationOAuthModule {
       tokenData;
 
     try {
-      const config = await this.configService.getIntegration(integrationId);
+      const config = await this.configService.getIntegration(
+        integrationId,
+        agentId
+      );
       if (!config) {
         return c.json({ error: "Integration not found" }, 404);
       }
 
       if (!config.oauth) {
         return c.json({ error: "Integration does not support OAuth" }, 400);
+      }
+
+      if (!config.oauth.clientId || !config.oauth.clientSecret) {
+        return c.html(
+          renderOAuthErrorPage(
+            "missing_credentials",
+            "OAuth app credentials are not configured for this integration. Set them up in the settings page."
+          ),
+          400
+        );
       }
 
       // Check if incremental auth: user already has credentials with some scopes
@@ -183,13 +196,13 @@ export class IntegrationOAuthModule {
         redirectPath: threadContext ? JSON.stringify(threadContext) : undefined,
       });
 
-      // Build auth URL
+      // Build auth URL (clientId/clientSecret validated above)
       const authUrl = this.oauth2Client.buildAuthUrl(
         {
           authUrl: config.oauth.authUrl,
           tokenUrl: config.oauth.tokenUrl,
-          clientId: config.oauth.clientId,
-          clientSecret: config.oauth.clientSecret,
+          clientId: config.oauth.clientId!,
+          clientSecret: config.oauth.clientSecret!,
           scopes: scopesForRequest,
           grantType: "authorization_code",
           responseType: "code",
@@ -276,7 +289,10 @@ export class IntegrationOAuthModule {
         }
       }
 
-      const config = await this.configService.getIntegration(integrationId);
+      const config = await this.configService.getIntegration(
+        integrationId,
+        agentId
+      );
       if (!config) {
         return c.html(
           renderOAuthErrorPage(
@@ -297,14 +313,24 @@ export class IntegrationOAuthModule {
         );
       }
 
+      if (!config.oauth.clientId || !config.oauth.clientSecret) {
+        return c.html(
+          renderOAuthErrorPage(
+            "missing_credentials",
+            "OAuth app credentials are not configured for this integration."
+          ),
+          400
+        );
+      }
+
       // Exchange code for token
       const credentials = await this.oauth2Client.exchangeCodeForToken(
         code,
         {
           authUrl: config.oauth.authUrl,
           tokenUrl: config.oauth.tokenUrl,
-          clientId: config.oauth.clientId,
-          clientSecret: config.oauth.clientSecret,
+          clientId: config.oauth.clientId!,
+          clientSecret: config.oauth.clientSecret!,
           grantType: "authorization_code",
           responseType: "code",
           tokenEndpointAuthMethod: config.oauth.tokenEndpointAuthMethod,

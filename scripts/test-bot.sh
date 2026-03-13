@@ -6,41 +6,56 @@ set -e
 # Or: ./scripts/test-bot.sh (uses default test message)
 #
 # Environment variables:
-#   TEST_PLATFORM   - "slack", "whatsapp", or "telegram" (default: auto-detect from enabled platforms)
+#   TEST_PLATFORM   - "slack", "whatsapp", or "telegram" (default: auto-detect)
 #   TEST_CHANNEL    - Channel ID (Slack), phone number (WhatsApp), or peer/chat ID (Telegram)
 #   TEST_TIMEOUT    - Timeout in seconds (default: 30)
 #
 # Platform-specific:
-#   Slack: QA_SLACK_CHANNEL, SLACK_BOT_TOKEN
+#   Slack: QA_SLACK_CHANNEL, optional SLACK_BOT_TOKEN for reply polling
 #   WhatsApp: WHATSAPP_SELF_PHONE (defaults to bot's own number for self-chat)
 #   Telegram: TELEGRAM_TEST_CHAT_ID, TG_API_ID, TG_API_HASH (uses tguser to send as real user)
 
+GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
+
 # Load .env if it exists
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | grep -E 'SLACK_BOT_TOKEN|WHATSAPP_ENABLED|WHATSAPP_SELF_CHAT|QA_SLACK_CHANNEL|TELEGRAM_ENABLED|TELEGRAM_TEST_CHAT_ID|TG_API_ID|TG_API_HASH|TEST_PLATFORM|TEST_CHANNEL' | sed 's/#.*//' | xargs)
+    set -a
+    source <(grep -v '^\s*#' .env | grep -v '^\s*$')
+    set +a
 fi
 
-# Auto-detect platform if not specified
+# Auto-detect platform from active messaging connections, fall back to env vars
 if [ -z "$TEST_PLATFORM" ]; then
-    TELEGRAM_CHANNEL="${TEST_CHANNEL:-$TELEGRAM_TEST_CHAT_ID}"
-    TELEGRAM_READY="false"
-    if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_CHANNEL" ] && command -v tguser > /dev/null 2>&1 && [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
-        TELEGRAM_READY="true"
+    # Try querying gateway for active local test targets
+    TEST_TARGETS=$(curl -sf "$GATEWAY_URL/internal/connections/test-targets" 2>/dev/null || \
+        curl -sf "$GATEWAY_URL/api/internal/connections/test-targets" 2>/dev/null || \
+        echo "")
+
+    if [ -n "$TEST_TARGETS" ]; then
+        TEST_PLATFORM=$(echo "$TEST_TARGETS" | jq -r '.[0].platform // empty' 2>/dev/null || echo "")
+        if [ -z "$TEST_CHANNEL" ]; then
+            TEST_CHANNEL=$(echo "$TEST_TARGETS" | jq -r '.[0].defaultTarget // empty' 2>/dev/null || echo "")
+        fi
     fi
 
-    if [ "$WHATSAPP_ENABLED" = "true" ]; then
-        TEST_PLATFORM="whatsapp"
-    elif [ -n "$SLACK_BOT_TOKEN" ]; then
-        TEST_PLATFORM="slack"
-    elif [ "$TELEGRAM_READY" = "true" ]; then
-        TEST_PLATFORM="telegram"
-    elif [ "$TELEGRAM_ENABLED" = "true" ]; then
-        # Telegram is enabled but not fully configured for test-bot;
-        # keep telegram selected so validation below explains what's missing.
-        TEST_PLATFORM="telegram"
-    else
-        echo "❌ No platform configured. Set TEST_PLATFORM=slack, TEST_PLATFORM=whatsapp, or TEST_PLATFORM=telegram"
-        exit 1
+    # Fall back to env var detection if gateway didn't respond
+    if [ -z "$TEST_PLATFORM" ]; then
+        TELEGRAM_CHANNEL="${TEST_CHANNEL:-$TELEGRAM_TEST_CHAT_ID}"
+        TELEGRAM_READY="false"
+        if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHANNEL" ] && command -v tguser > /dev/null 2>&1 && [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
+            TELEGRAM_READY="true"
+        fi
+
+        if [ -n "$SLACK_BOT_TOKEN" ]; then
+            TEST_PLATFORM="slack"
+        elif [ "$TELEGRAM_READY" = "true" ]; then
+            TEST_PLATFORM="telegram"
+        elif [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            TEST_PLATFORM="telegram"
+        else
+            echo "❌ No platform detected. Set TEST_PLATFORM=slack|telegram|whatsapp"
+            exit 1
+        fi
     fi
 fi
 
@@ -49,11 +64,7 @@ TIMEOUT="${TEST_TIMEOUT:-30}"
 # Platform-specific setup
 case "$TEST_PLATFORM" in
     slack)
-        if [ -z "$SLACK_BOT_TOKEN" ]; then
-            echo "❌ SLACK_BOT_TOKEN environment variable is required for Slack"
-            exit 1
-        fi
-        AUTH_TOKEN="$SLACK_BOT_TOKEN"
+        AUTH_TOKEN="${TEST_AUTH_TOKEN:-local-test}"
         CHANNEL="${TEST_CHANNEL:-$QA_SLACK_CHANNEL}"
         if [ -z "$CHANNEL" ]; then
             echo "❌ QA_SLACK_CHANNEL or TEST_CHANNEL environment variable is required for Slack"
@@ -61,8 +72,7 @@ case "$TEST_PLATFORM" in
         fi
         ;;
     whatsapp)
-        # WhatsApp uses a simple auth token or empty (handled by gateway)
-        AUTH_TOKEN="${WHATSAPP_AUTH_TOKEN:-whatsapp-test}"
+        AUTH_TOKEN="${TEST_AUTH_TOKEN:-local-test}"
         CHANNEL="${TEST_CHANNEL:-$WHATSAPP_SELF_PHONE}"
         if [ -z "$CHANNEL" ]; then
             # For self-chat mode, we can use "self" as a special channel
@@ -75,17 +85,10 @@ case "$TEST_PLATFORM" in
         fi
         ;;
     telegram)
+        AUTH_TOKEN="${TEST_AUTH_TOKEN:-local-test}"
         CHANNEL="${TEST_CHANNEL:-$TELEGRAM_TEST_CHAT_ID}"
         if [ -z "$CHANNEL" ]; then
             echo "❌ TEST_CHANNEL or TELEGRAM_TEST_CHAT_ID environment variable is required for Telegram"
-            exit 1
-        fi
-        if ! command -v tguser > /dev/null 2>&1; then
-            echo "❌ tguser is required for Telegram testing but was not found in PATH"
-            exit 1
-        fi
-        if [ -z "$TG_API_ID" ] || [ -z "$TG_API_HASH" ]; then
-            echo "❌ TG_API_ID and TG_API_HASH are required for Telegram testing with tguser"
             exit 1
         fi
         ;;
@@ -117,7 +120,7 @@ for i in "${!MESSAGES[@]}"; do
 
     echo "[$MSG_NUM/${#MESSAGES[@]}] 📤 Sending: $MESSAGE"
 
-    if [ "$TEST_PLATFORM" = "telegram" ]; then
+    if [ "$TEST_PLATFORM" = "telegram" ] && command -v tguser > /dev/null 2>&1 && [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
         TGUSER_OUTPUT=$(TG_API_ID="$TG_API_ID" TG_API_HASH="$TG_API_HASH" tguser send "$CHANNEL" "$MESSAGE" 2>&1) || {
             echo "   ❌ Failed to send Telegram message $MSG_NUM:"
             echo "$TGUSER_OUTPUT"
@@ -131,6 +134,8 @@ for i in "${!MESSAGES[@]}"; do
         echo "   📋 Check Telegram chat for bot response"
         echo ""
         continue
+    elif [ "$TEST_PLATFORM" = "telegram" ]; then
+        echo "   ℹ️  TG_API_ID/TG_API_HASH not configured; falling back to gateway-side Telegram send"
     fi
 
     # Escape message for JSON (handle newlines, quotes, backslashes)
@@ -138,7 +143,7 @@ for i in "${!MESSAGES[@]}"; do
 
     # Build request body using jq for proper JSON
     # Use TEST_AGENT_ID or generate a default test agent ID
-    AGENT_ID="${TEST_AGENT_ID:-test-agent}"
+    AGENT_ID="${TEST_AGENT_ID:-test-$TEST_PLATFORM}"
 
     # Build request body (must match /api/v1/messaging/send schema)
     BODY=$(jq -n \
@@ -159,10 +164,13 @@ for i in "${!MESSAGES[@]}"; do
         whatsapp)
             BODY=$(echo "$BODY" | jq --arg chat "$CHANNEL" '. + {whatsapp: {chat: $chat}}')
             ;;
+        telegram)
+            BODY=$(echo "$BODY" | jq --arg chatId "$CHANNEL" '. + {telegram: {chatId: $chatId}}')
+            ;;
     esac
 
     # Send message
-    RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/messaging/send \
+    RESPONSE=$(curl -s -X POST "$GATEWAY_URL/api/v1/messaging/send" \
       -H "Authorization: Bearer $AUTH_TOKEN" \
       -H "Content-Type: application/json" \
       -d "$BODY")
@@ -187,10 +195,13 @@ for i in "${!MESSAGES[@]}"; do
     # Platform-specific response handling
     case "$TEST_PLATFORM" in
         slack)
-            # For Slack, we can poll for responses via API
+            # For Slack, we can optionally poll for responses when a bot token is available.
             if [ "$QUEUED" = "true" ]; then
                 echo "   📋 Queued directly - checking logs..."
                 sleep 2
+            elif [ -z "$SLACK_BOT_TOKEN" ]; then
+                echo "   📋 Sent via configured Slack connection"
+                echo "   ℹ️  Set SLACK_BOT_TOKEN to enable automatic reply polling"
             else
                 echo "   ⏳ Waiting for bot response..."
                 START_TIME=$(date +%s)
@@ -230,6 +241,10 @@ for i in "${!MESSAGES[@]}"; do
                 echo "   ⏳ Waiting for processing..."
                 sleep 5
             fi
+            ;;
+        telegram)
+            echo "   📋 Message sent to Telegram via configured connection"
+            echo "   ℹ️  Automatic reply polling is unavailable without tguser credentials"
             ;;
     esac
 

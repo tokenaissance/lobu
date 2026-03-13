@@ -17,6 +17,7 @@ import type { IntegrationCredentialStore } from "../../auth/integration/credenti
 import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
 import { McpDiscoveryService } from "../../services/mcp-discovery";
 import type { SkillRegistryCoordinator } from "../../services/skill-registry";
+import type { SystemConfigResolver } from "../../services/system-config-resolver";
 
 const logger = createLogger("internal-integrations-discovery");
 
@@ -36,6 +37,7 @@ export interface IntegrationsDiscoveryConfig {
   agentSettingsStore?: AgentSettingsStore;
   integrationConfigService?: IntegrationConfigService;
   integrationCredentialStore?: IntegrationCredentialStore;
+  systemConfigResolver?: SystemConfigResolver;
 }
 
 export function createIntegrationsDiscoveryRoutes(
@@ -83,8 +85,18 @@ export function createIntegrationsDiscoveryRoutes(
       ? Math.max(1, Math.min(requestedLimit, 10))
       : 5;
 
+    // Get per-agent registries if available
+    const worker = c.get("worker");
+    const searchAgentId = worker.agentId || worker.userId;
+    let extraRegistries;
+    if (config.agentSettingsStore) {
+      const settings =
+        await config.agentSettingsStore.getSettings(searchAgentId);
+      extraRegistries = settings?.skillRegistries;
+    }
+
     const [searchResults, mcps] = await Promise.all([
-      coordinator.search(query, limit),
+      coordinator.search(query, limit, extraRegistries),
       mcpDiscovery.search(query, limit),
     ]);
 
@@ -134,9 +146,19 @@ export function createIntegrationsDiscoveryRoutes(
     async (c) => {
       const id = c.req.param("id");
 
+      // Get per-agent registries if available
+      const worker = c.get("worker");
+      const resolveAgentId = worker.agentId || worker.userId;
+      let extraRegistries;
+      if (config.agentSettingsStore) {
+        const settings =
+          await config.agentSettingsStore.getSettings(resolveAgentId);
+        extraRegistries = settings?.skillRegistries;
+      }
+
       // Try skill registries first
       try {
-        const content = await coordinator.fetch(id);
+        const content = await coordinator.fetch(id, extraRegistries);
         return c.json({
           type: "skill",
           id,
@@ -187,6 +209,7 @@ export function createIntegrationsDiscoveryRoutes(
         label: string;
         authType: string;
         connected: boolean;
+        configured: boolean;
         accounts: Array<{ accountId: string; grantedScopes: string[] }>;
       }> = [];
       const mcpServers: Array<{
@@ -232,11 +255,20 @@ export function createIntegrationsDiscoveryRoutes(
             agentId,
             id
           );
+          // Check if OAuth credentials are configured for this agent
+          let configured = true;
+          if (config.systemConfigResolver) {
+            configured = await config.systemConfigResolver.isOAuthConfigured(
+              id,
+              agentId
+            );
+          }
           integrations.push({
             id,
             label: integrationConfig.label,
             authType: integrationConfig.authType || "oauth",
             connected: accounts.length > 0,
+            configured,
             accounts: accounts.map((a) => ({
               accountId: a.accountId,
               grantedScopes: a.credentials.grantedScopes || [],

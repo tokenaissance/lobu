@@ -22,6 +22,8 @@ export async function verifyAgentAccess(
   agentId: string,
   config: AgentAccessConfig
 ): Promise<boolean> {
+  if (session.isAdmin) return true;
+
   if (session.agentId) {
     return session.agentId === agentId;
   }

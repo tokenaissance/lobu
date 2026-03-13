@@ -59,6 +59,9 @@ export function registerBuiltInCommands(
           const settingsUrl = new URL("/settings", baseUrl);
           settingsUrl.searchParams.set("platform", ctx.platform);
           settingsUrl.searchParams.set("chat", ctx.channelId);
+          if (ctx.connectionId) {
+            settingsUrl.searchParams.set("connectionId", ctx.connectionId);
+          }
           await ctx.reply("Tap the button below to open settings.", {
             url: settingsUrl.toString(),
             urlLabel: "Open Settings",
@@ -95,6 +98,15 @@ export function registerBuiltInCommands(
         "Here's your settings link.\n\nUse this page to configure your agent's model, network access, and more.",
         { url: settingsUrl, urlLabel: "Open Settings" }
       );
+    },
+  });
+
+  registry.register({
+    name: "new",
+    description: "Save context to memory and start a fresh session",
+    handler: async (ctx: CommandContext) => {
+      // Handled by message-handler-bridge before slash dispatch
+      await ctx.reply("Starting new session...");
     },
   });
 

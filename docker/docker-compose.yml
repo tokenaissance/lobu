@@ -37,10 +37,8 @@ services:
     environment:
       # Docker context overrides (gateway loads mounted .env file via dotenv)
       NODE_ENV: development
-      DEPLOYMENT_MODE: docker
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-docker}
       QUEUE_URL: redis://redis:6379
-      # MCP servers are now configured via system-skills.json
-      LOBU_SYSTEM_SKILLS_URL: ${LOBU_SYSTEM_SKILLS_URL:-config/system-skills.json}
       # Host project path for worker bind mounts (Docker-in-Docker)
       LOBU_DEV_PROJECT_PATH: ${PWD}
     volumes:
@@ -56,6 +54,8 @@ services:
       # Mount worker source so spawned worker containers get latest code
       - ../packages/worker/src:/app/packages/worker/src
       - ../packages/worker/scripts:/app/packages/worker/scripts
+      # Mount workspaces for embedded mode session access
+      - ../workspaces:/app/workspaces
     ports:
       - "8080:8080"
       - "8118:8118" # HTTP proxy for workers
@@ -74,10 +74,15 @@ services:
         - action: sync
           path: ../packages/core/src
           target: /app/packages/core/src
+        - action: sync
+          path: ../packages/worker/src
+          target: /app/packages/worker/src
         - action: rebuild
           path: ../packages/gateway/package.json
         - action: rebuild
           path: ../packages/core/package.json
+        - action: rebuild
+          path: ../packages/worker/package.json
 
 volumes:
   redis-data:

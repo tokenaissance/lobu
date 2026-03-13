@@ -52,6 +52,8 @@ packages/gateway/src/routes/public/settings-page-styles.ts
 
 # Auto-generated history page JS bundle
 packages/gateway/src/routes/public/history-page-bundle.ts
+packages/gateway/src/routes/public/admin-page-bundle.ts
+packages/gateway/src/routes/public/admin-page-bundle.raw.js
 
 # Astro build artifacts
 packages/landing/.astro/

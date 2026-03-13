@@ -14,8 +14,8 @@ export type IntegrationAuthType = "oauth" | "api-key";
 export interface IntegrationOAuthConfig {
   authUrl: string;
   tokenUrl: string;
-  clientId: string;
-  clientSecret: string; // Supports ${env:VAR_NAME} substitution
+  clientId?: string;
+  clientSecret?: string;
   incrementalAuth?: boolean;
   tokenEndpointAuthMethod?: string; // "client_secret_post" (default), "client_secret_basic", or "none" (PKCE)
 }
@@ -109,6 +109,7 @@ export interface IntegrationInfo {
   label: string;
   authType: IntegrationAuthType;
   connected: boolean;
+  configured: boolean;
   accounts: IntegrationAccountInfo[];
   availableScopes: string[];
   apiBase?: string;

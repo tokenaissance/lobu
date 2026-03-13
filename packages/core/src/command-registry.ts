@@ -10,6 +10,7 @@ export interface CommandContext {
   userId: string;
   channelId: string;
   conversationId?: string;
+  connectionId?: string;
   agentId?: string;
   args: string;
   reply: (

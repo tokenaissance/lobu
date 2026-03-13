@@ -75,7 +75,8 @@ SECRET_ARGS=()
 
 # WhatsApp credentials - create separate secret (file too large for env var)
 WA_CREDS_FILE="${PROJECT_ROOT}/.lobu/whatsapp-credentials.txt"
-if [[ -n "$WHATSAPP_ENABLED" ]] && [[ -f "$WA_CREDS_FILE" ]]; then
+# WhatsApp credentials file (if it exists, create a separate secret)
+if [[ -f "$WA_CREDS_FILE" ]]; then
   echo "Creating WhatsApp credentials secret..." >&2
   kubectl delete secret lobu-whatsapp -n "$NAMESPACE" 2>/dev/null || true
   kubectl create secret generic lobu-whatsapp \
@@ -88,8 +89,6 @@ if [[ -n "$WHATSAPP_ENABLED" ]] && [[ -f "$WA_CREDS_FILE" ]]; then
     meta.helm.sh/release-name=lobu \
     meta.helm.sh/release-namespace="$NAMESPACE" --overwrite 2>/dev/null
   echo "✓ WhatsApp credentials secret created from $WA_CREDS_FILE" >&2
-elif [[ -n "$WHATSAPP_ENABLED" ]]; then
-  echo "⚠ WhatsApp enabled but credentials file not found: $WA_CREDS_FILE" >&2
 fi
 
 if [[ ${#SECRET_ARGS[@]} -eq 0 ]]; then

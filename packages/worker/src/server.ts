@@ -297,7 +297,8 @@ app.get("/session/stats", async (c) => {
 let server: ReturnType<typeof createServer> | null = null;
 
 export function startWorkerHttpServer(): Promise<number> {
-  const port = parseInt(process.env.WORKER_HTTP_PORT || "3100", 10);
+  // Use port 0 to let the OS assign a free port (multiple workers share the host network)
+  const port = parseInt(process.env.WORKER_HTTP_PORT || "0", 10);
 
   return new Promise((resolve, reject) => {
     const listener = getRequestListener(app.fetch);
@@ -309,8 +310,10 @@ export function startWorkerHttpServer(): Promise<number> {
     });
 
     server.listen(port, () => {
-      logger.info(`Worker HTTP server listening on port ${port}`);
-      resolve(port);
+      const addr = server!.address();
+      const actualPort = typeof addr === "object" && addr ? addr.port : port;
+      logger.info(`Worker HTTP server listening on port ${actualPort}`);
+      resolve(actualPort);
     });
   });
 }

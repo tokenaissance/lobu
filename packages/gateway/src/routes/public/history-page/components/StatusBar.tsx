@@ -3,15 +3,19 @@ import type { StatsResponse } from "../types";
 export function StatusBar({
   connected,
   stats,
+  agentId,
 }: {
   connected: boolean;
   stats: StatsResponse | null;
+  agentId: string;
 }) {
+  const backUrl = `/settings?agent=${encodeURIComponent(agentId)}`;
+
   return (
     <div class="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
       <div class="flex items-center gap-3">
         <a
-          href="/settings"
+          href={backUrl}
           class="text-gray-400 hover:text-gray-600 transition-colors"
           title="Back to settings"
           aria-label="Back to settings"

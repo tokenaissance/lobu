@@ -5,6 +5,7 @@ import {
   type ModelProviderModule,
   type ProviderUpstreamConfig,
 } from "../modules/module-system";
+import { resolveEnv } from "./mcp/string-substitution";
 import type { AuthProfilesManager } from "./settings/auth-profiles-manager";
 
 const logger = createLogger("base-provider-module");
@@ -116,7 +117,7 @@ export abstract class BaseProviderModule
     const envVar =
       this.providerConfig.systemEnvVarName ||
       this.providerConfig.credentialEnvVarName;
-    return !!process.env[envVar];
+    return !!resolveEnv(envVar);
   }
 
   getProxyBaseUrlMappings(
@@ -138,7 +139,7 @@ export abstract class BaseProviderModule
     const credVar = this.providerConfig.credentialEnvVarName;
     if (!envVars[credVar]) {
       const sysVar = this.providerConfig.systemEnvVarName || credVar;
-      const systemKey = process.env[sysVar];
+      const systemKey = resolveEnv(sysVar);
       if (systemKey) {
         envVars[credVar] = systemKey;
       }

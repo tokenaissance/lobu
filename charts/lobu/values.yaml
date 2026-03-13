@@ -99,19 +99,6 @@ ingress:
 limitRange:
   enabled: false
 
-slack:
-  enabled: false  # Disabled by default, enable with credentials
-  allowDirectMessages: true
-  allowPrivateChannels: true
-
-# WhatsApp configuration
-whatsapp:
-  enabled: false
-  selfChat: true  # Allow self-chat mode for testing
-  allowGroups: true
-  requireMention: true
-  # Credentials are stored in secrets.whatsappCredentials
-
 claude:
   model: "claude-sonnet-4-20250514"
   timeoutMinutes: "5" # Default timeout

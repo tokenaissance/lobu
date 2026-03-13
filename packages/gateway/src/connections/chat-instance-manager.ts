@@ -65,6 +65,41 @@ export class ChatInstanceManager {
         const connection = JSON.parse(raw) as PlatformConnection;
         connection.config = this.decryptConfig(connection.config);
 
+        // Migrate legacy agentId → templateAgentId
+        const legacy = connection as PlatformConnection & {
+          agentId?: string;
+        };
+        if (legacy.agentId && !connection.templateAgentId) {
+          connection.templateAgentId = legacy.agentId;
+          delete legacy.agentId;
+          await this.persistConnection(connection);
+          logger.info(
+            { id, templateAgentId: connection.templateAgentId },
+            "Migrated agentId → templateAgentId"
+          );
+        }
+
+        // Migrate legacy scope values: "mcp-servers"/"tools" → "skills"
+        if (connection.settings?.userConfigScopes?.length) {
+          const oldScopes = connection.settings.userConfigScopes as string[];
+          const hasLegacy = oldScopes.some(
+            (s) => s === "mcp-servers" || s === "tools"
+          );
+          if (hasLegacy) {
+            const migrated = new Set<string>();
+            for (const s of oldScopes) {
+              if (s === "mcp-servers" || s === "tools") {
+                migrated.add("skills");
+              } else {
+                migrated.add(s);
+              }
+            }
+            connection.settings.userConfigScopes = [...migrated] as any;
+            await this.persistConnection(connection);
+            logger.info({ id }, "Migrated legacy scopes → skills");
+          }
+        }
+
         if (connection.status === "active") {
           await this.startInstance(connection);
         }
@@ -97,7 +132,7 @@ export class ChatInstanceManager {
 
   async addConnection(
     platform: string,
-    agentId: string,
+    templateAgentId: string | undefined,
     config: PlatformAdapterConfig,
     settings?: ConnectionSettings,
     metadata: Record<string, any> = {}
@@ -117,7 +152,7 @@ export class ChatInstanceManager {
     const connection: PlatformConnection = {
       id,
       platform,
-      agentId,
+      ...(templateAgentId ? { templateAgentId } : {}),
       config,
       settings: settings ?? { allowGroups: true },
       metadata,
@@ -132,7 +167,7 @@ export class ChatInstanceManager {
     // Persist (secrets encrypted)
     await this.persistConnection(connection);
 
-    logger.info({ id, platform, agentId }, "Connection added");
+    logger.info({ id, platform, templateAgentId }, "Connection added");
     return connection;
   }
 
@@ -147,7 +182,9 @@ export class ChatInstanceManager {
     const raw = await this.redis.get(`connection:${id}`);
     if (raw) {
       const conn = JSON.parse(raw) as PlatformConnection;
-      await this.redis.srem(`connections:agent:${conn.agentId}`, id);
+      if (conn.templateAgentId) {
+        await this.redis.srem(`connections:agent:${conn.templateAgentId}`, id);
+      }
     }
     await this.redis.del(`connection:${id}`);
     await this.redis.srem("connections:all", id);
@@ -171,16 +208,41 @@ export class ChatInstanceManager {
     connection.errorMessage = undefined;
     connection.updatedAt = Date.now();
 
-    await this.startInstance(connection);
+    try {
+      await this.startInstance(connection);
+    } catch (error) {
+      // startInstance sets connection.status = "error" — persist so UI reflects it
+      await this.persistConnection(connection);
+      throw error;
+    }
     await this.persistConnection(connection);
 
     logger.info({ id }, "Connection restarted");
   }
 
+  async stopConnection(id: string): Promise<void> {
+    const instance = this.instances.get(id);
+    if (instance) {
+      await instance.cleanup?.();
+      this.instances.delete(id);
+    }
+
+    const raw = await this.redis.get(`connection:${id}`);
+    if (!raw) throw new Error(`Connection ${id} not found`);
+
+    const connection = JSON.parse(raw) as PlatformConnection;
+    connection.config = this.decryptConfig(connection.config);
+    connection.status = "stopped";
+    connection.updatedAt = Date.now();
+    await this.persistConnection(connection);
+
+    logger.info({ id }, "Connection stopped");
+  }
+
   async updateConnection(
     id: string,
     updates: {
-      agentId?: string;
+      templateAgentId?: string | null;
       config?: PlatformAdapterConfig;
       settings?: ConnectionSettings;
       metadata?: Record<string, any>;
@@ -196,14 +258,32 @@ export class ChatInstanceManager {
       updates.config !== undefined &&
       JSON.stringify(updates.config) !== JSON.stringify(connection.config);
 
-    if (updates.agentId !== undefined) {
-      // Update agent index
-      await this.redis.srem(`connections:agent:${connection.agentId}`, id);
-      connection.agentId = updates.agentId;
-      await this.redis.sadd(`connections:agent:${connection.agentId}`, id);
+    if (updates.templateAgentId !== undefined) {
+      // Update agent index — remove old, add new
+      if (connection.templateAgentId) {
+        await this.redis.srem(
+          `connections:agent:${connection.templateAgentId}`,
+          id
+        );
+      }
+      if (updates.templateAgentId) {
+        connection.templateAgentId = updates.templateAgentId;
+        await this.redis.sadd(
+          `connections:agent:${connection.templateAgentId}`,
+          id
+        );
+      } else {
+        delete connection.templateAgentId;
+      }
     }
     if (updates.config !== undefined) {
-      connection.config = updates.config;
+      const merged = { ...connection.config } as any;
+      for (const [key, value] of Object.entries(updates.config)) {
+        if (typeof value === "string" && value.startsWith("***")) continue;
+        merged[key] = value;
+      }
+      merged.platform = updates.config.platform;
+      connection.config = merged as PlatformAdapterConfig;
     }
     if (updates.settings !== undefined) {
       connection.settings = { ...connection.settings, ...updates.settings };
@@ -236,11 +316,13 @@ export class ChatInstanceManager {
 
   async listConnections(filter?: {
     platform?: string;
-    agentId?: string;
+    templateAgentId?: string;
   }): Promise<PlatformConnection[]> {
     let ids: string[];
-    if (filter?.agentId) {
-      ids = await this.redis.smembers(`connections:agent:${filter.agentId}`);
+    if (filter?.templateAgentId) {
+      ids = await this.redis.smembers(
+        `connections:agent:${filter.templateAgentId}`
+      );
     } else {
       ids = await this.redis.smembers("connections:all");
     }
@@ -268,6 +350,18 @@ export class ChatInstanceManager {
 
   getInstance(id: string): ManagedInstance | undefined {
     return this.instances.get(id);
+  }
+
+  /** Get a decrypted secret from a running connection's config. */
+  getConnectionConfigSecret(
+    connectionId: string,
+    field: string
+  ): string | undefined {
+    const instance = this.instances.get(connectionId);
+    if (!instance) return undefined;
+    const config = instance.connection.config as Record<string, unknown>;
+    const val = config[field];
+    return typeof val === "string" ? val : undefined;
   }
 
   async handleWebhook(
@@ -348,7 +442,7 @@ export class ChatInstanceManager {
     const existing = await this.findSlackConnectionByTeamId(teamId);
     if (existing) {
       const updated = await this.updateConnection(existing.id, {
-        agentId,
+        templateAgentId: agentId,
         config,
         metadata,
       });
@@ -499,7 +593,7 @@ export class ChatInstanceManager {
       const useWebhook =
         mode === "webhook" || (mode === "auto" && !!this.publicGatewayUrl);
       if (useWebhook && this.publicGatewayUrl) {
-        const webhookUrl = `${this.publicGatewayUrl}/api/chat/webhook/${connection.id}`;
+        const webhookUrl = `${this.publicGatewayUrl}/api/v1/webhooks/${connection.id}`;
         logger.info({ id: connection.id, webhookUrl }, "Setting webhook");
       }
 
@@ -734,12 +828,19 @@ export class ChatInstanceManager {
     };
     const json = JSON.stringify(encrypted);
 
-    await this.redis
+    const pipeline = this.redis
       .pipeline()
       .set(`connection:${connection.id}`, json)
-      .sadd("connections:all", connection.id)
-      .sadd(`connections:agent:${connection.agentId}`, connection.id)
-      .exec();
+      .sadd("connections:all", connection.id);
+
+    if (connection.templateAgentId) {
+      pipeline.sadd(
+        `connections:agent:${connection.templateAgentId}`,
+        connection.id
+      );
+    }
+
+    await pipeline.exec();
   }
 
   private encryptConfig(config: PlatformAdapterConfig): PlatformAdapterConfig {

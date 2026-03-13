@@ -1,7 +1,7 @@
 /**
  * Connection CRUD routes + webhook endpoint.
  *
- * Webhook: POST /api/chat/webhook/:connectionId
+ * Webhook: POST /api/v1/webhooks/:connectionId
  * CRUD (auth: settings session cookie):
  *   POST   /api/v1/connections
  *   GET    /api/v1/connections
@@ -9,16 +9,16 @@
  *   PATCH  /api/v1/connections/:id
  *   DELETE /api/v1/connections/:id
  *   POST   /api/v1/connections/:id/restart
+ *   POST   /api/v1/connections/:id/stop
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { createLogger } from "@lobu/core";
+import { createLogger, SUPPORTED_PLATFORMS } from "@lobu/core";
 import { Hono } from "hono";
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChatInstanceManager } from "../../connections/chat-instance-manager";
-import { SUPPORTED_PLATFORMS } from "../../connections/types";
-import { resolveSettingsLookupUserId, verifyAgentAccess } from "./agent-access";
+import { verifyAgentAccess } from "./agent-access";
 import { verifySettingsSession } from "./settings-auth";
 
 const logger = createLogger("connection-routes");
@@ -28,6 +28,15 @@ const SupportedPlatformSchema = z.enum(SUPPORTED_PLATFORMS);
 const ErrorResponseSchema = z.object({ error: z.string() });
 const FlexibleObjectSchema = z.record(z.string(), z.unknown());
 
+const UserConfigScopeSchema = z.enum([
+  "model",
+  "system-prompt",
+  "skills",
+  "schedules",
+  "permissions",
+  "packages",
+]);
+
 const ConnectionSettingsSchema = z.object({
   allowFrom: z.array(z.string()).optional().openapi({
     description:
@@ -36,9 +45,44 @@ const ConnectionSettingsSchema = z.object({
   allowGroups: z.boolean().optional().openapi({
     description: "Whether group messages are allowed (default true).",
   }),
+  userConfigScopes: z.array(UserConfigScopeSchema).optional().openapi({
+    description:
+      "Scopes that end users are allowed to customize. Empty = no restrictions.",
+  }),
 });
 
-// --- Per-platform config Zod schemas ---
+const LOCAL_TEST_PLATFORMS = ["slack", "telegram", "whatsapp"] as const;
+
+async function getLocalTestDefaultTarget(
+  manager: ChatInstanceManager,
+  connectionId: string
+): Promise<string | undefined> {
+  const redis = manager.getServices().getQueue().getRedisClient();
+  const prefix = `chat:history:${connectionId}:`;
+  let cursor = "0";
+
+  do {
+    const [nextCursor, keys] = await redis.scan(
+      cursor,
+      "MATCH",
+      `${prefix}*`,
+      "COUNT",
+      20
+    );
+    cursor = nextCursor;
+
+    const match = keys[0];
+    if (match) {
+      return match.slice(prefix.length);
+    }
+  } while (cursor !== "0");
+
+  return undefined;
+}
+
+// --- Per-platform config Zod schemas (with OpenAPI annotations + platform discriminator) ---
+// Field definitions mirror @lobu/core platform schemas; gateway adds .openapi()
+// and the `platform` literal discriminator for the API layer.
 
 const TelegramConfigSchema = z.object({
   platform: z.literal("telegram"),
@@ -175,7 +219,7 @@ const PlatformAdapterConfigSchema = z.discriminatedUnion("platform", [
 const PlatformConnectionSchema = z.object({
   id: z.string(),
   platform: SupportedPlatformSchema,
-  agentId: z.string(),
+  templateAgentId: z.string().optional(),
   config: PlatformAdapterConfigSchema,
   settings: ConnectionSettingsSchema,
   metadata: FlexibleObjectSchema,
@@ -187,13 +231,13 @@ const PlatformConnectionSchema = z.object({
 
 const CreateConnectionRequestSchema = z.object({
   platform: SupportedPlatformSchema,
-  agentId: z.string(),
+  templateAgentId: z.string().optional(),
   config: PlatformAdapterConfigSchema,
   settings: ConnectionSettingsSchema.optional(),
 });
 
 const UpdateConnectionRequestSchema = z.object({
-  agentId: z.string().optional(),
+  templateAgentId: z.string().nullable().optional(),
   config: PlatformAdapterConfigSchema.optional(),
   settings: ConnectionSettingsSchema.optional(),
 });
@@ -204,7 +248,7 @@ const ConnectionIdParamsSchema = z.object({
 
 const ListConnectionsQuerySchema = z.object({
   platform: SupportedPlatformSchema.optional(),
-  agentId: z.string().optional(),
+  templateAgentId: z.string().optional(),
 });
 
 const CreateConnectionRoute = createRoute({
@@ -507,12 +551,64 @@ const RestartConnectionRoute = createRoute({
   },
 });
 
+const StopConnectionRoute = createRoute({
+  method: "post",
+  path: "/api/v1/connections/{id}/stop",
+  tags: [TAG],
+  summary: "Stop a platform connection",
+  request: {
+    params: ConnectionIdParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Stopped connection",
+      content: {
+        "application/json": {
+          schema: PlatformConnectionSchema.nullable(),
+        },
+      },
+    },
+    400: {
+      description: "Invalid request",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Connection not found",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 export function createConnectionWebhookRoutes(
   manager: ChatInstanceManager
 ): Hono {
   const router = new Hono();
 
-  router.post("/api/chat/webhook/:connectionId", async (c) => {
+  router.post("/api/v1/webhooks/:connectionId", async (c) => {
     const connectionId = c.req.param("connectionId");
     if (!connectionId) {
       return c.json({ error: "Missing connectionId" }, 400);
@@ -539,6 +635,69 @@ export function createConnectionCrudRoutes(
 ): OpenAPIHono {
   const app = new OpenAPIHono();
 
+  const listLocalTestPlatforms = async (c: any): Promise<any> => {
+    if (process.env.NODE_ENV === "production") {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    const supported = new Set<string>(LOCAL_TEST_PLATFORMS);
+    const connections = await manager.listConnections();
+    const platforms = [
+      ...new Set(
+        connections
+          .filter(
+            (connection) =>
+              connection.status === "active" &&
+              manager.has(connection.id) &&
+              supported.has(connection.platform)
+          )
+          .map((connection) => connection.platform)
+      ),
+    ];
+
+    return c.json(platforms);
+  };
+
+  const listLocalTestTargets = async (c: any): Promise<any> => {
+    if (process.env.NODE_ENV === "production") {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    const supported = new Set<string>(LOCAL_TEST_PLATFORMS);
+    const connections = await manager.listConnections();
+    const targets = new Map<
+      string,
+      { platform: string; defaultTarget?: string }
+    >();
+
+    for (const connection of connections) {
+      if (
+        connection.status !== "active" ||
+        !manager.has(connection.id) ||
+        !supported.has(connection.platform)
+      ) {
+        continue;
+      }
+
+      if (!targets.has(connection.platform)) {
+        targets.set(connection.platform, {
+          platform: connection.platform,
+          defaultTarget: await getLocalTestDefaultTarget(
+            manager,
+            connection.id
+          ),
+        });
+      }
+    }
+
+    return c.json([...targets.values()]);
+  };
+
+  app.get("/internal/connections/platforms", listLocalTestPlatforms);
+  app.get("/api/internal/connections/platforms", listLocalTestPlatforms);
+  app.get("/internal/connections/test-targets", listLocalTestTargets);
+  app.get("/api/internal/connections/test-targets", listLocalTestTargets);
+
   app.openapi(CreateConnectionRoute, async (c): Promise<any> => {
     const session = verifySettingsSession(c);
     if (!session) {
@@ -548,19 +707,26 @@ export function createConnectionCrudRoutes(
     try {
       const body = c.req.valid("json");
 
-      if (!(await verifyAgentAccess(session, body.agentId, accessConfig))) {
+      if (
+        body.templateAgentId &&
+        !(await verifyAgentAccess(session, body.templateAgentId, accessConfig))
+      ) {
         return c.json({ error: "Forbidden" }, 403);
       }
 
       const connection = await manager.addConnection(
         body.platform,
-        body.agentId,
+        body.templateAgentId,
         body.config,
         body.settings
       );
 
       logger.info(
-        { id: connection.id, platform: body.platform, agentId: body.agentId },
+        {
+          id: connection.id,
+          platform: body.platform,
+          templateAgentId: body.templateAgentId,
+        },
         "Connection created via API"
       );
 
@@ -585,38 +751,23 @@ export function createConnectionCrudRoutes(
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const { platform, agentId } = c.req.valid("query");
+    const { platform, templateAgentId } = c.req.valid("query");
     let connections;
 
-    if (agentId) {
-      if (!(await verifyAgentAccess(session, agentId, accessConfig))) {
+    if (templateAgentId) {
+      if (!(await verifyAgentAccess(session, templateAgentId, accessConfig))) {
         return c.json({ error: "Forbidden" }, 403);
       }
 
       connections = await manager.listConnections({
         platform: platform || undefined,
-        agentId,
-      });
-    } else if (session.agentId) {
-      connections = await manager.listConnections({
-        platform: platform || undefined,
-        agentId: session.agentId,
+        templateAgentId,
       });
     } else {
-      const lookupUserId = resolveSettingsLookupUserId(session);
-      const agentIds = await accessConfig.userAgentsStore.listAgents(
-        session.platform,
-        lookupUserId
-      );
-      const results = await Promise.all(
-        agentIds.map((ownedAgentId) =>
-          manager.listConnections({
-            platform: platform || undefined,
-            agentId: ownedAgentId,
-          })
-        )
-      );
-      connections = results.flat();
+      // List all connections (admin view)
+      connections = await manager.listConnections({
+        platform: platform || undefined,
+      });
     }
 
     return c.json({ connections });
@@ -633,7 +784,14 @@ export function createConnectionCrudRoutes(
     if (!connection) {
       return c.json({ error: "Connection not found" }, 404);
     }
-    if (!(await verifyAgentAccess(session, connection.agentId, accessConfig))) {
+    if (
+      connection.templateAgentId &&
+      !(await verifyAgentAccess(
+        session,
+        connection.templateAgentId,
+        accessConfig
+      ))
+    ) {
       return c.json({ error: "Forbidden" }, 403);
     }
 
@@ -653,15 +811,22 @@ export function createConnectionCrudRoutes(
       if (!existing) {
         return c.json({ error: "Connection not found" }, 404);
       }
-      if (!(await verifyAgentAccess(session, existing.agentId, accessConfig))) {
+      if (
+        existing.templateAgentId &&
+        !(await verifyAgentAccess(
+          session,
+          existing.templateAgentId,
+          accessConfig
+        ))
+      ) {
         return c.json({ error: "Forbidden" }, 403);
       }
 
       const body = c.req.valid("json");
 
       if (
-        body.agentId &&
-        !(await verifyAgentAccess(session, body.agentId, accessConfig))
+        body.templateAgentId &&
+        !(await verifyAgentAccess(session, body.templateAgentId, accessConfig))
       ) {
         return c.json({ error: "Forbidden" }, 403);
       }
@@ -695,7 +860,14 @@ export function createConnectionCrudRoutes(
       if (!existing) {
         return c.json({ error: "Connection not found" }, 404);
       }
-      if (!(await verifyAgentAccess(session, existing.agentId, accessConfig))) {
+      if (
+        existing.templateAgentId &&
+        !(await verifyAgentAccess(
+          session,
+          existing.templateAgentId,
+          accessConfig
+        ))
+      ) {
         return c.json({ error: "Forbidden" }, 403);
       }
 
@@ -728,7 +900,14 @@ export function createConnectionCrudRoutes(
       if (!existing) {
         return c.json({ error: "Connection not found" }, 404);
       }
-      if (!(await verifyAgentAccess(session, existing.agentId, accessConfig))) {
+      if (
+        existing.templateAgentId &&
+        !(await verifyAgentAccess(
+          session,
+          existing.templateAgentId,
+          accessConfig
+        ))
+      ) {
         return c.json({ error: "Forbidden" }, 403);
       }
 
@@ -746,6 +925,73 @@ export function createConnectionCrudRoutes(
             error instanceof Error
               ? error.message
               : "Failed to restart connection",
+        },
+        400
+      );
+    }
+  });
+
+  // GET /api/v1/connections/:id/sandboxes — list sandbox agents for a connection
+  app.get("/api/v1/connections/:id/sandboxes", async (c): Promise<any> => {
+    const session = verifySettingsSession(c);
+    if (!session) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const id = c.req.param("id");
+    const connection = await manager.getConnection(id);
+    if (!connection) {
+      return c.json({ error: "Connection not found" }, 404);
+    }
+
+    const sandboxes = await accessConfig.agentMetadataStore.listSandboxes(id);
+    return c.json({
+      sandboxes: sandboxes.map((s) => ({
+        agentId: s.agentId,
+        name: s.name,
+        description: s.description || "",
+        owner: s.owner,
+        createdAt: s.createdAt,
+        lastUsedAt: s.lastUsedAt ?? null,
+      })),
+    });
+  });
+
+  app.openapi(StopConnectionRoute, async (c): Promise<any> => {
+    const session = verifySettingsSession(c);
+    if (!session) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const { id } = c.req.valid("param");
+
+    try {
+      const existing = await manager.getConnection(id);
+      if (!existing) {
+        return c.json({ error: "Connection not found" }, 404);
+      }
+      if (
+        existing.templateAgentId &&
+        !(await verifyAgentAccess(
+          session,
+          existing.templateAgentId,
+          accessConfig
+        ))
+      ) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+
+      await manager.stopConnection(id);
+      const connection = await manager.getConnection(id);
+      return c.json(connection);
+    } catch (error) {
+      logger.error({ id, error: String(error) }, "Failed to stop connection");
+      return c.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to stop connection",
         },
         400
       );

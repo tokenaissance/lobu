@@ -56,13 +56,22 @@ export async function validateCommand(cwd: string): Promise<boolean> {
     );
   }
 
+  // Collect configured platforms
+  const configuredPlatforms = config.platforms
+    ? Object.keys(config.platforms)
+    : [];
+
   // Print results
   console.log();
   if (errors.length === 0) {
+    const platformSummary =
+      configuredPlatforms.length > 0
+        ? `, ${configuredPlatforms.length} platform${configuredPlatforms.length > 1 ? "s" : ""}: ${configuredPlatforms.join(", ")}`
+        : "";
     console.log(chalk.green(`  lobu.toml is valid`));
     console.log(
       chalk.dim(
-        `  Agent: ${config.agent.name} (${config.providers.length} providers, ${config.skills.enabled.length} skills)`
+        `  Agent: ${config.agent.name} (${config.providers.length} providers, ${config.skills.enabled.length} skills${platformSummary})`
       )
     );
   } else {

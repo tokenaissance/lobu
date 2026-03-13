@@ -9,6 +9,7 @@ import {
   type NetworkConfig,
   type NixConfig,
   type PluginsConfig,
+  type RegistryEntry,
   type SkillsConfig,
   safeJsonParse,
   safeJsonStringify,
@@ -64,8 +65,17 @@ export interface AgentSettings {
   authProfiles?: AuthProfile[];
   /** Installed providers for this agent (index 0 = primary). */
   installedProviders?: InstalledProvider[];
+  /** Per-agent skill registries (in addition to global defaults) */
+  skillRegistries?: RegistryEntry[];
   /** Enable verbose logging (show tool calls, reasoning, etc.) */
   verboseLogging?: boolean;
+  /** Per-agent OAuth app credentials for integrations (clientId + encrypted clientSecret) */
+  oauthAppCredentials?: Record<
+    string,
+    { clientId: string; clientSecret: string }
+  >;
+  /** Template agent this sandbox was cloned from (for credential fallback) */
+  templateAgentId?: string;
   /** Last updated timestamp */
   updatedAt: number;
 }
@@ -251,118 +261,163 @@ export class AgentSettingsStore extends BaseRedisStore<AgentSettings> {
   }
 
   private encryptSettingsForStorage(settings: AgentSettings): AgentSettings {
+    let result = settings;
+
+    // Encrypt auth profile credentials
     if (
-      !Array.isArray(settings.authProfiles) ||
-      settings.authProfiles.length === 0
+      Array.isArray(settings.authProfiles) &&
+      settings.authProfiles.length > 0
     ) {
-      return settings;
-    }
-
-    let changed = false;
-    const authProfiles = settings.authProfiles.map((profile) => {
-      const encryptedCredential = this.encryptSensitiveValue(
-        profile.credential
-      );
-      const credentialChanged = encryptedCredential !== profile.credential;
-      let metadataChanged = false;
-      let metadata = profile.metadata;
-
-      if (profile.metadata?.refreshToken) {
-        const encryptedRefreshToken = this.encryptSensitiveValue(
-          profile.metadata.refreshToken
+      let profilesChanged = false;
+      const authProfiles = settings.authProfiles.map((profile) => {
+        const encryptedCredential = this.encryptSensitiveValue(
+          profile.credential
         );
-        if (encryptedRefreshToken !== profile.metadata.refreshToken) {
-          metadataChanged = true;
-          metadata = {
-            ...profile.metadata,
-            refreshToken: encryptedRefreshToken,
-          };
+        const credentialChanged = encryptedCredential !== profile.credential;
+        let metadataChanged = false;
+        let metadata = profile.metadata;
+
+        if (profile.metadata?.refreshToken) {
+          const encryptedRefreshToken = this.encryptSensitiveValue(
+            profile.metadata.refreshToken
+          );
+          if (encryptedRefreshToken !== profile.metadata.refreshToken) {
+            metadataChanged = true;
+            metadata = {
+              ...profile.metadata,
+              refreshToken: encryptedRefreshToken,
+            };
+          }
         }
+
+        if (!credentialChanged && !metadataChanged) {
+          return profile;
+        }
+
+        profilesChanged = true;
+        return {
+          ...profile,
+          credential: encryptedCredential,
+          metadata,
+        };
+      });
+
+      if (profilesChanged) {
+        result = { ...result, authProfiles };
       }
-
-      if (!credentialChanged && !metadataChanged) {
-        return profile;
-      }
-
-      changed = true;
-      return {
-        ...profile,
-        credential: encryptedCredential,
-        metadata,
-      };
-    });
-
-    if (!changed) {
-      return settings;
     }
 
-    return {
-      ...settings,
-      authProfiles,
-    };
+    // Encrypt OAuth app credential secrets
+    if (settings.oauthAppCredentials) {
+      let oauthChanged = false;
+      const encrypted: Record<
+        string,
+        { clientId: string; clientSecret: string }
+      > = {};
+      for (const [id, creds] of Object.entries(settings.oauthAppCredentials)) {
+        const encryptedSecret = this.encryptSensitiveValue(creds.clientSecret);
+        if (encryptedSecret !== creds.clientSecret) {
+          oauthChanged = true;
+        }
+        encrypted[id] = {
+          clientId: creds.clientId,
+          clientSecret: encryptedSecret,
+        };
+      }
+      if (oauthChanged) {
+        result = { ...result, oauthAppCredentials: encrypted };
+      }
+    }
+
+    return result;
   }
 
   private decryptSettingsForRuntime(settings: AgentSettings): {
     settings: AgentSettings;
     needsMigration: boolean;
   } {
-    if (
-      !Array.isArray(settings.authProfiles) ||
-      settings.authProfiles.length === 0
-    ) {
-      return { settings, needsMigration: false };
-    }
-
+    let result = settings;
     let changed = false;
     let needsMigration = false;
 
-    const authProfiles = settings.authProfiles.map((profile) => {
-      const credential = this.decryptSensitiveValue(profile.credential);
-      let metadata = profile.metadata;
-      let metadataChanged = false;
+    // Decrypt auth profile credentials
+    if (
+      Array.isArray(settings.authProfiles) &&
+      settings.authProfiles.length > 0
+    ) {
+      let profilesChanged = false;
 
-      if (profile.metadata?.refreshToken) {
-        const refreshToken = this.decryptSensitiveValue(
-          profile.metadata.refreshToken
-        );
-        if (refreshToken.value !== profile.metadata.refreshToken) {
-          metadataChanged = true;
-          metadata = {
-            ...profile.metadata,
-            refreshToken: refreshToken.value,
-          };
+      const authProfiles = settings.authProfiles.map((profile) => {
+        const credential = this.decryptSensitiveValue(profile.credential);
+        let metadata = profile.metadata;
+        let metadataChanged = false;
+
+        if (profile.metadata?.refreshToken) {
+          const refreshToken = this.decryptSensitiveValue(
+            profile.metadata.refreshToken
+          );
+          if (refreshToken.value !== profile.metadata.refreshToken) {
+            metadataChanged = true;
+            metadata = {
+              ...profile.metadata,
+              refreshToken: refreshToken.value,
+            };
+          }
+          needsMigration ||= refreshToken.needsMigration;
         }
-        needsMigration ||= refreshToken.needsMigration;
-      }
 
-      if (credential.value !== profile.credential || metadataChanged) {
+        if (credential.value !== profile.credential || metadataChanged) {
+          profilesChanged = true;
+        }
+
+        needsMigration ||= credential.needsMigration;
+
+        if (!metadataChanged && credential.value === profile.credential) {
+          return profile;
+        }
+
+        return {
+          ...profile,
+          credential: credential.value,
+          metadata,
+        };
+      });
+
+      if (profilesChanged) {
         changed = true;
+        result = { ...result, authProfiles };
       }
+    }
 
-      needsMigration ||= credential.needsMigration;
-
-      if (!metadataChanged && credential.value === profile.credential) {
-        return profile;
+    // Decrypt OAuth app credential secrets
+    if (settings.oauthAppCredentials) {
+      let oauthChanged = false;
+      const decrypted: Record<
+        string,
+        { clientId: string; clientSecret: string }
+      > = {};
+      for (const [id, creds] of Object.entries(settings.oauthAppCredentials)) {
+        const secret = this.decryptSensitiveValue(creds.clientSecret);
+        if (secret.value !== creds.clientSecret) {
+          oauthChanged = true;
+        }
+        needsMigration ||= secret.needsMigration;
+        decrypted[id] = {
+          clientId: creds.clientId,
+          clientSecret: secret.value,
+        };
       }
-
-      return {
-        ...profile,
-        credential: credential.value,
-        metadata,
-      };
-    });
+      if (oauthChanged) {
+        changed = true;
+        result = { ...result, oauthAppCredentials: decrypted };
+      }
+    }
 
     if (!changed) {
       return { settings, needsMigration };
     }
 
-    return {
-      settings: {
-        ...settings,
-        authProfiles,
-      },
-      needsMigration,
-    };
+    return { settings: result, needsMigration };
   }
 
   private encryptSensitiveValue(value: string): string {

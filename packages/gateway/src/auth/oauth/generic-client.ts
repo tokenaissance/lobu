@@ -76,11 +76,9 @@ export class GenericOAuth2Client extends BaseOAuth2Client {
 
     let clientSecret = "";
     if (!isPKCE) {
-      clientSecret = this.resolveClientSecret(oauth.clientSecret);
+      clientSecret = oauth.clientSecret || "";
       if (!clientSecret) {
-        throw new Error(
-          `Client secret could not be resolved from: ${oauth.clientSecret}`
-        );
+        throw new Error("Client secret is not configured");
       }
     }
 
@@ -151,15 +149,10 @@ export class GenericOAuth2Client extends BaseOAuth2Client {
     const authMethod = oauth.tokenEndpointAuthMethod || "client_secret_post";
     const isBasicAuth = authMethod === "client_secret_basic";
 
-    // Resolve client secret if needed (supports ${env:VAR} substitution)
-    const clientSecret = oauth.clientSecret
-      ? this.resolveClientSecret(oauth.clientSecret)
-      : undefined;
+    const clientSecret = oauth.clientSecret || undefined;
 
     if (!clientSecret && authMethod !== "none") {
-      throw new Error(
-        `Client secret could not be resolved from: ${oauth.clientSecret}`
-      );
+      throw new Error("Client secret is not configured");
     }
 
     // For basic auth, use Authorization header instead of body params
@@ -229,15 +222,5 @@ export class GenericOAuth2Client extends BaseOAuth2Client {
         refreshedAt: new Date().toISOString(),
       },
     };
-  }
-
-  /**
-   * Resolve client secret (supports ${env:VAR_NAME} substitution)
-   */
-  private resolveClientSecret(clientSecret: string): string {
-    // Simple ${env:VAR_NAME} substitution
-    return clientSecret.replace(/\$\{env:([^}]+)\}/g, (_match, varName) => {
-      return process.env[varName] || "";
-    });
   }
 }

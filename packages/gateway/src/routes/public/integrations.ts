@@ -6,6 +6,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
 import { McpRegistryService } from "../../services/mcp-registry";
 import { SkillRegistryCoordinator } from "../../services/skill-registry";
 import type { SystemConfigResolver } from "../../services/system-config-resolver";
@@ -133,8 +134,49 @@ const skillFetchRoute = createRoute({
   },
 });
 
+const oauthAppSaveRoute = createRoute({
+  method: "post",
+  path: "/oauth-app/save",
+  tags: [TAG],
+  summary: "Save per-agent OAuth app credentials",
+  description:
+    "Stores clientId and clientSecret for an integration on a specific agent",
+  request: {
+    query: z.object({ token: z.string().optional() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            agentId: z.string(),
+            integrationId: z.string(),
+            clientId: z.string(),
+            clientSecret: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Saved",
+      content: {
+        "application/json": { schema: z.object({ success: z.boolean() }) },
+      },
+    },
+    400: {
+      description: "Invalid",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+  },
+});
+
 export interface IntegrationsRoutesConfig {
   configResolver?: SystemConfigResolver;
+  agentSettingsStore?: AgentSettingsStore;
 }
 
 export function createIntegrationsRoutes(
@@ -183,8 +225,18 @@ export function createIntegrationsRoutes(
     const { repo } = c.req.valid("json");
     if (!repo?.trim()) return c.json({ error: "Missing skill slug" }, 400);
 
+    // Get per-agent registries if agentId is available in session
+    const session = verifySettingsSession(c);
+    let extraRegistries;
+    if (session?.agentId && config.agentSettingsStore) {
+      const settings = await config.agentSettingsStore.getSettings(
+        session.agentId
+      );
+      extraRegistries = settings?.skillRegistries;
+    }
+
     try {
-      const skillContent = await coordinator.fetch(repo);
+      const skillContent = await coordinator.fetch(repo, extraRegistries);
       return c.json({
         repo,
         name: skillContent.name,
@@ -200,6 +252,36 @@ export function createIntegrationsRoutes(
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "Failed" }, 400);
     }
+  });
+
+  app.openapi(oauthAppSaveRoute, async (c): Promise<any> => {
+    if (!verifySettingsSession(c))
+      return c.json({ error: "Unauthorized" }, 401);
+
+    const { agentId, integrationId, clientId, clientSecret } =
+      c.req.valid("json");
+
+    if (!agentId || !integrationId || !clientId || !clientSecret) {
+      return c.json(
+        { error: "Missing agentId, integrationId, clientId, or clientSecret" },
+        400
+      );
+    }
+
+    if (!config.agentSettingsStore) {
+      return c.json({ error: "Agent settings not configured" }, 500);
+    }
+
+    const settings = await config.agentSettingsStore.getSettings(agentId);
+    const existing = settings?.oauthAppCredentials || {};
+    await config.agentSettingsStore.updateSettings(agentId, {
+      oauthAppCredentials: {
+        ...existing,
+        [integrationId]: { clientId, clientSecret },
+      },
+    });
+
+    return c.json({ success: true });
   });
 
   return app;

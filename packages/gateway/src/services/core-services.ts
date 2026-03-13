@@ -412,8 +412,24 @@ export class CoreServices {
       `✅ ChatGPT OAuth module registered (system token: ${chatgptOAuthModule.hasSystemKey() ? "available" : "not available"})`
     );
 
-    const systemSkillsUrl =
-      process.env.LOBU_SYSTEM_SKILLS_URL || "config/system-skills.json";
+    // Read lobu registry URL from config file
+    let systemSkillsUrl = "config/system-skills.json";
+    try {
+      const { readFileSync, existsSync } = await import("node:fs");
+      const { resolve } = await import("node:path");
+      const configPath = resolve(process.cwd(), "config/skill-registries.json");
+      if (existsSync(configPath)) {
+        const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+        const lobuEntry = (raw.registries || []).find(
+          (r: any) => r.type === "lobu"
+        );
+        if (lobuEntry?.apiUrl) {
+          systemSkillsUrl = lobuEntry.apiUrl;
+        }
+      }
+    } catch (error) {
+      logger.warn("Failed to read skill registries config", { error });
+    }
     this.systemSkillsService = new SystemSkillsService(systemSkillsUrl);
     this.systemConfigResolver = new SystemConfigResolver(
       this.systemSkillsService,

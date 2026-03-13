@@ -185,12 +185,12 @@ export function enforceBashCommandPolicy(
     normalizedCommand.startsWith(prefix.toLowerCase())
   );
   if (denyMatchPrefix) {
-    const needsSudoToolHint = PACKAGE_MANAGER_HINT_PREFIXES.some((prefix) =>
+    const needsPackageToolHint = PACKAGE_MANAGER_HINT_PREFIXES.some((prefix) =>
       denyMatchPrefix.toLowerCase().startsWith(prefix)
     );
-    if (needsSudoToolHint) {
+    if (needsPackageToolHint) {
       throw new Error(
-        "Direct package manager commands are blocked in Bash. Use the Sudo tool with nixPackages instead."
+        "Direct package manager commands are blocked in Bash. Use the InstallPackage tool instead."
       );
     }
     throw new Error("Bash command denied by policy");

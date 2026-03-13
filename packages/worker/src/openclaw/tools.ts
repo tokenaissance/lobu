@@ -1,5 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import {
+  type BashOperations,
   createBashTool,
   createEditTool,
   createFindTool,
@@ -132,7 +133,10 @@ function buildEditSchema() {
   });
 }
 
-export function createOpenClawTools(cwd: string): AgentTool<any>[] {
+export function createOpenClawTools(
+  cwd: string,
+  options?: { bashOperations?: BashOperations }
+): AgentTool<any>[] {
   const read = wrapToolWithNormalization({
     tool: createReadTool(cwd),
     required: CLAUDE_PARAM_GROUPS.read,
@@ -151,7 +155,10 @@ export function createOpenClawTools(cwd: string): AgentTool<any>[] {
     schema: buildEditSchema(),
   });
 
-  const bash = wrapBashWithProxyHint(createBashTool(cwd));
+  const bashToolOpts = options?.bashOperations
+    ? { operations: options.bashOperations }
+    : undefined;
+  const bash = wrapBashWithProxyHint(createBashTool(cwd, bashToolOpts));
 
   return [
     read,
@@ -202,7 +209,7 @@ function wrapBashWithProxyHint(tool: AgentTool<any>): AgentTool<any> {
       const command = getCommand(params);
       if (command && isDirectPackageInstall(command)) {
         throw new Error(
-          "DIRECT PACKAGE INSTALL BLOCKED. Do not run apt/brew/nix install commands directly. Use the Sudo tool with nixPackages (for example: reason='Install ffmpeg', nixPackages=['ffmpeg']) so the user can approve the change."
+          "DIRECT PACKAGE INSTALL BLOCKED. Do not run apt/brew/nix install commands directly. Use the InstallPackage tool (for example: packages=['ffmpeg'], reason='Install ffmpeg') so the user can approve the change."
         );
       }
 
@@ -212,7 +219,7 @@ function wrapBashWithProxyHint(tool: AgentTool<any>): AgentTool<any> {
         const msg = err?.message ?? String(err);
         if (PROXY_403_PATTERN.test(msg)) {
           throw new Error(
-            `DOMAIN BLOCKED BY PROXY. You MUST call the Sudo tool with grants to request access for this domain. Do NOT retry curl — the domain is blocked at the network level.\n\n${msg}`
+            `DOMAIN BLOCKED BY PROXY. You MUST call the RequestNetworkAccess tool to request access for this domain. Do NOT retry curl — the domain is blocked at the network level.\n\n${msg}`
           );
         }
         throw err;

@@ -26,7 +26,7 @@ const EXCLUDED_PREFIXES = [
   "/ready", // K8s readiness probe
   "/metrics", // Prometheus scraping
   "/api/telegram", // Telegram webhook
-  "/api/chat/webhook", // Chat SDK connection webhooks
+  "/api/v1/webhooks", // Chat SDK connection webhooks
   "/slack/", // Slack events
   "/settings/oauth", // Settings OAuth flow
 ];
@@ -84,11 +84,6 @@ function deriveTag(path: string): string {
     return "Agents";
   }
 
-  // Agents — management CRUD
-  if (path.startsWith("/api/v1/manage/")) {
-    return "Agents";
-  }
-
   // Configuration — providers, packages, domain grants
   if (path.includes("/config")) {
     return "Configuration";
@@ -136,10 +131,10 @@ const ROUTE_SUMMARIES: Record<string, string> = {
   "post /settings/session": "Establish settings session",
 
   // Agents
-  "post /api/v1/manage/agents": "Create agent",
-  "get /api/v1/manage/agents": "List user agents",
-  "patch /api/v1/manage/agents/{agentId}": "Update agent metadata",
-  "delete /api/v1/manage/agents/{agentId}": "Delete agent",
+  "post /api/v1/agents": "Create agent",
+  "get /api/v1/agents": "List user agents",
+  "patch /api/v1/agents/{agentId}": "Update agent metadata",
+  "delete /api/v1/agents/{agentId}": "Delete agent",
 
   // Configuration
   "get /api/v1/agents/{agentId}/config/packages/search": "Search Nix packages",

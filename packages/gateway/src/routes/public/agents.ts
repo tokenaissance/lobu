@@ -2,16 +2,17 @@
  * Agent Management Routes - Create, list, update, and delete user agents
  *
  * Routes:
- * - POST /api/v1/manage/agents - Create a new agent
- * - GET /api/v1/manage/agents - List user's agents (requires token)
- * - PATCH /api/v1/manage/agents/{agentId} - Update agent name/description
- * - DELETE /api/v1/manage/agents/{agentId} - Delete an agent
+ * - POST /api/v1/agents - Create a new agent
+ * - GET /api/v1/agents - List user's agents (requires token)
+ * - PATCH /api/v1/agents/{agentId} - Update agent name/description
+ * - DELETE /api/v1/agents/{agentId} - Delete an agent
  */
 
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { AgentSettings, AgentSettingsStore } from "../../auth/settings";
+import { buildDefaultSettingsFromSource } from "../../auth/settings/template-utils";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChannelBindingService } from "../../channels";
 import { verifySettingsSession } from "./settings-auth";
@@ -40,49 +41,6 @@ function sanitizeAgentId(input: string): string | null {
   if (cleaned.length < 3 || cleaned.length > 60) return null;
   if (!/^[a-z]/.test(cleaned)) return null;
   return cleaned;
-}
-
-function cloneSettingValue<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function buildDefaultSettingsFromSource(
-  source: AgentSettings | null
-): Omit<AgentSettings, "updatedAt"> {
-  if (!source) return {};
-
-  const defaults: Omit<AgentSettings, "updatedAt"> = {};
-
-  if (source.model !== undefined) defaults.model = source.model;
-  if (source.modelSelection)
-    defaults.modelSelection = cloneSettingValue(source.modelSelection);
-  if (source.providerModelPreferences)
-    defaults.providerModelPreferences = cloneSettingValue(
-      source.providerModelPreferences
-    );
-  if (source.networkConfig)
-    defaults.networkConfig = cloneSettingValue(source.networkConfig);
-  if (source.nixConfig)
-    defaults.nixConfig = cloneSettingValue(source.nixConfig);
-  if (source.mcpServers)
-    defaults.mcpServers = cloneSettingValue(source.mcpServers);
-  if (source.soulMd !== undefined) defaults.soulMd = source.soulMd;
-  if (source.userMd !== undefined) defaults.userMd = source.userMd;
-  if (source.identityMd !== undefined) defaults.identityMd = source.identityMd;
-  if (source.skillsConfig)
-    defaults.skillsConfig = cloneSettingValue(source.skillsConfig);
-  if (source.toolsConfig)
-    defaults.toolsConfig = cloneSettingValue(source.toolsConfig);
-  if (source.pluginsConfig)
-    defaults.pluginsConfig = cloneSettingValue(source.pluginsConfig);
-  if (source.installedProviders) {
-    defaults.installedProviders = cloneSettingValue(source.installedProviders);
-  }
-  if (source.verboseLogging !== undefined) {
-    defaults.verboseLogging = source.verboseLogging;
-  }
-
-  return defaults;
 }
 
 export function createAgentRoutes(config: AgentRoutesConfig): Hono {
@@ -124,8 +82,8 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
         return c.json({ error: "An agent with this ID already exists" }, 409);
       }
 
-      // Check per-user limit
-      if (MAX_AGENTS_PER_USER > 0) {
+      // Check per-user limit (admins bypass)
+      if (!payload.isAdmin && MAX_AGENTS_PER_USER > 0) {
         const userAgents = await config.userAgentsStore.listAgents(
           payload.platform,
           payload.userId
@@ -230,6 +188,9 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
       for (const agentId of agentIds) {
         const metadata = await config.agentMetadataStore.getMetadata(agentId);
         if (metadata) {
+          // Skip sandbox agents (auto-created under a connection)
+          if (metadata.parentConnectionId) continue;
+
           const bindings =
             await config.channelBindingService.listBindings(agentId);
           agents.push({
@@ -251,7 +212,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
     }
   });
 
-  // PATCH /api/v1/manage/agents/{agentId} - Update agent name/description
+  // PATCH /api/v1/agents/{agentId} - Update agent name/description
   router.patch("/:agentId", async (c) => {
     const payload = verifySettingsSession(c);
     if (!payload) {
@@ -264,14 +225,16 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
     }
 
     try {
-      // Verify ownership
-      const owns = await config.userAgentsStore.ownsAgent(
-        payload.platform,
-        payload.userId,
-        agentId
-      );
-      if (!owns) {
-        return c.json({ error: "Agent not found or not owned by you" }, 404);
+      // Verify ownership (admins bypass)
+      if (!payload.isAdmin) {
+        const owns = await config.userAgentsStore.ownsAgent(
+          payload.platform,
+          payload.userId,
+          agentId
+        );
+        if (!owns) {
+          return c.json({ error: "Agent not found or not owned by you" }, 404);
+        }
       }
 
       const body = await c.req.json<{ name?: string; description?: string }>();
@@ -315,7 +278,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
     }
   });
 
-  // DELETE /api/v1/manage/agents/{agentId} - Delete an agent
+  // DELETE /api/v1/agents/{agentId} - Delete an agent
   router.delete("/:agentId", async (c) => {
     const payload = verifySettingsSession(c);
     if (!payload) {
@@ -328,17 +291,19 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
     }
 
     try {
-      // Verify ownership
-      const owns = await config.userAgentsStore.ownsAgent(
-        payload.platform,
-        payload.userId,
-        agentId
-      );
-      if (!owns) {
-        return c.json({ error: "Agent not found or not owned by you" }, 404);
+      // Verify ownership (admins bypass)
+      if (!payload.isAdmin) {
+        const owns = await config.userAgentsStore.ownsAgent(
+          payload.platform,
+          payload.userId,
+          agentId
+        );
+        if (!owns) {
+          return c.json({ error: "Agent not found or not owned by you" }, 404);
+        }
       }
 
-      // Auto-unbind all channels (Option A from plan)
+      // Auto-unbind all channels
       const unboundCount =
         await config.channelBindingService.deleteAllBindings(agentId);
 

@@ -82,66 +82,6 @@ spec:
           resources:
             {{- toYaml .Values.gateway.resources | nindent 12 }}
           env:
-            {{- if .Values.slack.enabled }}
-            # Slack configuration
-            - name: SLACK_BOT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-bot-token
-            - name: SLACK_SIGNING_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-signing-secret
-                  optional: true
-            - name: SLACK_APP_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-app-token
-                  optional: true
-            - name: SLACK_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-client-id
-                  optional: true
-            - name: SLACK_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-client-secret
-                  optional: true
-            - name: SLACK_ALLOW_DIRECT_MESSAGES
-              value: "{{ .Values.slack.allowDirectMessages }}"
-            - name: SLACK_ALLOW_PRIVATE_CHANNELS
-              value: "{{ .Values.slack.allowPrivateChannels }}"
-            {{- end }}
-
-            {{- if .Values.whatsapp.enabled }}
-            # WhatsApp configuration
-            - name: WHATSAPP_ENABLED
-              value: "true"
-            - name: WHATSAPP_SELF_CHAT
-              value: "{{ .Values.whatsapp.selfChat }}"
-            - name: WHATSAPP_ALLOW_GROUPS
-              value: "{{ .Values.whatsapp.allowGroups }}"
-            - name: WHATSAPP_REQUIRE_MENTION
-              value: "{{ .Values.whatsapp.requireMention }}"
-            # WhatsApp credentials mounted as file (too large for env var)
-            - name: WHATSAPP_CREDENTIALS
-              value: "/etc/whatsapp/credentials.txt"
-            {{- end }}
-
-            # Telegram configuration (auto-enabled when token is present)
-            - name: TELEGRAM_BOT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: telegram-bot-token
-                  optional: true
-
             # Kubernetes configuration
             - name: DEPLOYMENT_MODE
               value: "kubernetes"
@@ -276,23 +216,12 @@ spec:
             # Tmpfs for tsx and other temp files (required for readOnlyRootFilesystem)
             - name: tmp
               mountPath: /tmp
-            {{- if .Values.whatsapp.enabled }}
-            - name: whatsapp-credentials
-              mountPath: /etc/whatsapp
-              readOnly: true
-            {{- end }}
       volumes:
         # Tmpfs for temporary files (in-memory)
         - name: tmp
           emptyDir:
             medium: Memory
             sizeLimit: "256Mi"
-        {{- if .Values.whatsapp.enabled }}
-        - name: whatsapp-credentials
-          secret:
-            secretName: {{ include "lobu.fullname" . }}-whatsapp
-            optional: true
-        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

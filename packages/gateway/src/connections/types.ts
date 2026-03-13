@@ -36,7 +36,7 @@ export type PlatformAdapterConfig =
 export interface PlatformConnection {
   id: string;
   platform: string;
-  agentId: string;
+  templateAgentId?: string;
   config: PlatformAdapterConfig;
   settings: ConnectionSettings;
   metadata: Record<string, any>;
@@ -46,9 +46,18 @@ export interface PlatformConnection {
   updatedAt: number;
 }
 
+export type UserConfigScope =
+  | "model"
+  | "system-prompt"
+  | "skills"
+  | "schedules"
+  | "permissions"
+  | "packages";
+
 export interface ConnectionSettings {
   allowFrom?: string[];
   allowGroups?: boolean;
+  userConfigScopes?: UserConfigScope[];
 }
 
 /** Heuristic: field names matching these patterns contain secrets and must be encrypted at rest. */
@@ -65,13 +74,6 @@ export function isSecretField(fieldName: string): boolean {
   return SECRET_FIELD_PATTERNS.some((p) => lower.includes(p));
 }
 
-/** Supported platform names. */
-export const SUPPORTED_PLATFORMS = [
-  "telegram",
-  "slack",
-  "discord",
-  "whatsapp",
-  "teams",
-] as const;
-
-export type SupportedPlatform = (typeof SUPPORTED_PLATFORMS)[number];
+export type { SupportedPlatform } from "@lobu/core";
+// Re-export from core so existing gateway imports continue to work
+export { SUPPORTED_PLATFORMS } from "@lobu/core";

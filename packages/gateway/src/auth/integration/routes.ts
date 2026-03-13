@@ -77,11 +77,18 @@ export function createIntegrationRoutes(
           accountId: a.accountId,
           grantedScopes: a.credentials.grantedScopes,
         }));
+        // Resolve per-agent config to check if OAuth credentials are set
+        const resolved = await configService.getIntegration(id, agentId);
+        const isOAuth = authType === "oauth";
+        const configured =
+          !isOAuth ||
+          !!(resolved?.oauth?.clientId && resolved?.oauth?.clientSecret);
         integrations.push({
           id,
           label: config.label,
           authType,
           connected: accounts.length > 0,
+          configured,
           accounts,
           availableScopes: config.scopes?.available ?? [],
         });
@@ -131,7 +138,20 @@ export function createIntegrationRoutes(
         if ((config.authType || "oauth") === "api-key") {
           return c.json(
             {
-              error: `Integration "${integration}" uses API key auth. Use Sudo to set it up.`,
+              error: `Integration "${integration}" uses API key auth. Configure it in the settings page.`,
+            },
+            400
+          );
+        }
+
+        // Validate OAuth credentials are configured
+        if (
+          config.oauth &&
+          (!config.oauth.clientId || !config.oauth.clientSecret)
+        ) {
+          return c.json(
+            {
+              error: `Integration "${integration}" requires OAuth app credentials. Use InstallSkill to install it, then configure credentials in settings.`,
             },
             400
           );

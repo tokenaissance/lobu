@@ -536,6 +536,33 @@ export function createAgentConfigRoutes(
         existingSettings || {}
       );
 
+      // Scope enforcement: strip fields not in allowed scopes for "user" mode
+      if (payload.settingsMode === "user" && payload.allowedScopes?.length) {
+        const allowed = new Set(payload.allowedScopes);
+        // model scope controls: model, modelSelection, providerModelPreferences
+        if (!allowed.has("model")) {
+          delete body.model;
+          delete body.modelSelection;
+          delete body.providerModelPreferences;
+        }
+        // system-prompt scope controls: soulMd, userMd, identityMd
+        if (!allowed.has("system-prompt")) {
+          delete body.soulMd;
+          delete body.userMd;
+          delete body.identityMd;
+        }
+        // mcp-servers scope controls: mcpServers
+        if (!allowed.has("mcp-servers")) {
+          delete body.mcpServers;
+        }
+        // tools scope controls: skillsConfig, pluginsConfig, nixConfig
+        if (!allowed.has("tools")) {
+          delete body.skillsConfig;
+          delete body.pluginsConfig;
+          delete body.nixConfig;
+        }
+      }
+
       const updates: Partial<AgentSettings> = {};
 
       // Handle explicit null for nixConfig (clear)
@@ -687,6 +714,15 @@ export function createAgentConfigRoutes(
     const payload = await verifyToken(verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
 
+    // Scope enforcement: providers require "model" scope
+    if (
+      payload.settingsMode === "user" &&
+      payload.allowedScopes?.length &&
+      !payload.allowedScopes.includes("model")
+    ) {
+      return c.json({ error: "Scope not allowed" }, 403);
+    }
+
     if (!config.providerCatalogService) {
       return c.json({ error: "Provider catalog not available" }, 503);
     }
@@ -744,6 +780,15 @@ export function createAgentConfigRoutes(
     const agentId = c.req.param("agentId") || "";
     const payload = await verifyToken(verifySettingsSession(c), agentId);
     if (!payload) return c.json({ error: "Unauthorized" }, 401);
+
+    // Scope enforcement: provider reorder requires "model" scope
+    if (
+      payload.settingsMode === "user" &&
+      payload.allowedScopes?.length &&
+      !payload.allowedScopes.includes("model")
+    ) {
+      return c.json({ error: "Scope not allowed" }, 403);
+    }
 
     if (!config.providerCatalogService) {
       return c.json({ error: "Provider catalog not available" }, 503);

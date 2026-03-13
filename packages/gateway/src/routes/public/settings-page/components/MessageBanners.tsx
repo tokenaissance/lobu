@@ -158,6 +158,9 @@ function PrefillBanner() {
   const ctx = useSettings();
   const resolvedSkills = useSignal<ResolvedSkillDetail[]>([]);
   const skillsLoading = useSignal(false);
+  const oauthCredentials = useSignal<
+    Record<string, { clientId: string; clientSecret: string }>
+  >({});
 
   const hasPrefills =
     ctx.prefillGrants.value.length > 0 ||
@@ -210,6 +213,28 @@ function PrefillBanner() {
     ctx.errorMsg.value = "";
     ctx.successMsg.value = "";
     try {
+      // 0. Save any entered OAuth credentials first
+      for (const [integrationId, cred] of Object.entries(
+        oauthCredentials.value
+      )) {
+        const id = cred.clientId.trim();
+        const secret = cred.clientSecret.trim();
+        if (!id || !secret) continue;
+        await api.saveOAuthAppCredentials(
+          ctx.agentId,
+          integrationId,
+          id,
+          secret
+        );
+        ctx.integrationStatus.value = {
+          ...ctx.integrationStatus.value,
+          [integrationId]: {
+            ...ctx.integrationStatus.value[integrationId],
+            configured: true,
+          },
+        };
+      }
+
       // 1. Add grants to local state
       for (const d of ctx.prefillGrants.value) {
         if (!ctx.permissionGrants.value.some((g) => g.pattern === d)) {
@@ -341,6 +366,7 @@ function PrefillBanner() {
                     prefillMcpServers={ctx.prefillMcpServers.value}
                     prefillGrants={ctx.prefillGrants.value}
                     prefillNixPackages={ctx.prefillNixPackages.value}
+                    oauthCredentials={oauthCredentials}
                   />
                 ))
               ) : (
@@ -483,13 +509,17 @@ function PrefillSkillCard({
   prefillMcpServers,
   prefillGrants,
   prefillNixPackages,
+  oauthCredentials,
 }: {
   skill: ResolvedSkillDetail;
   prefillMcpServers: Array<{ id: string; name?: string; url?: string }>;
   prefillGrants: string[];
   prefillNixPackages: string[];
+  oauthCredentials: ReturnType<
+    typeof useSignal<Record<string, { clientId: string; clientSecret: string }>>
+  >;
 }) {
-  const contentExpanded = useSignal(false);
+  const ctx = useSettings();
 
   // Merge skill's own sub-items with prefill context data (deduped)
   const skillMcpIds = new Set(skill.mcpServers?.map((m) => m.id) || []);
@@ -503,6 +533,13 @@ function PrefillSkillCard({
   const skillPkgs = new Set(skill.nixPackages || []);
   const extraPkgs = prefillNixPackages.filter((p) => !skillPkgs.has(p));
   const allNixPackages = [...(skill.nixPackages || []), ...extraPkgs];
+
+  // Identify unconfigured OAuth integrations for this skill
+  const unconfiguredOAuth = (skill.integrations || []).filter((ig) => {
+    if (ig.authType === "api-key") return false;
+    const status = ctx.integrationStatus.value[ig.id];
+    return !status?.configured;
+  });
 
   const hasDetails =
     (skill.integrations && skill.integrations.length > 0) ||
@@ -534,27 +571,30 @@ function PrefillSkillCard({
 
       {hasDetails && (
         <div class="mt-2 ml-4 pl-2 border-l-2 border-purple-100 space-y-1">
-          {skill.integrations?.map((ig) => (
-            <div key={ig.id} class="flex items-center gap-2 py-0.5">
-              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-amber-50 text-amber-600">
-                {ig.authType || "oauth"}
+          {[
+            ...(skill.integrations || []).map((ig) => ({
+              key: ig.id,
+              badge: ig.authType || "oauth",
+              name: ig.label || ig.id,
+              detail: null as string | null,
+            })),
+            ...allMcps.map((m) => ({
+              key: m.id,
+              badge: "mcp",
+              name: m.name || m.id,
+              detail: m.url || null,
+            })),
+          ].map((item) => (
+            <div key={item.key} class="flex items-center gap-2 py-0.5">
+              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-600">
+                {item.badge}
               </span>
               <span class="text-[11px] text-gray-600 truncate">
-                {ig.label || ig.id}
+                {item.name}
               </span>
-            </div>
-          ))}
-          {allMcps.map((m) => (
-            <div key={m.id} class="flex items-center gap-2 py-0.5">
-              <span class="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-blue-50 text-blue-600">
-                mcp
-              </span>
-              <span class="text-[11px] text-gray-600 truncate">
-                {m.name || m.id}
-              </span>
-              {m.url && (
+              {item.detail && (
                 <span class="text-[10px] text-gray-400 font-mono truncate">
-                  {m.url}
+                  {item.detail}
                 </span>
               )}
             </div>
@@ -579,6 +619,59 @@ function PrefillSkillCard({
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {unconfiguredOAuth.length > 0 && (
+        <div class="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+          <p class="text-[11px] font-medium text-amber-800">
+            &#128273; OAuth credentials required
+          </p>
+          {unconfiguredOAuth.map((ig) => {
+            const cred = oauthCredentials.value[ig.id] || {
+              clientId: "",
+              clientSecret: "",
+            };
+            return (
+              <div key={ig.id} class="space-y-1">
+                <p class="text-[11px] font-medium text-amber-900">
+                  {ig.label || ig.id}
+                </p>
+                <div class="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={cred.clientId}
+                    onInput={(e) => {
+                      oauthCredentials.value = {
+                        ...oauthCredentials.value,
+                        [ig.id]: {
+                          ...cred,
+                          clientId: (e.target as HTMLInputElement).value,
+                        },
+                      };
+                    }}
+                    placeholder="Client ID"
+                    class="flex-1 px-2 py-1.5 border border-amber-200 rounded text-xs bg-white focus:border-amber-500 focus:ring-1 focus:ring-amber-200 outline-none"
+                  />
+                  <input
+                    type="password"
+                    value={cred.clientSecret}
+                    onInput={(e) => {
+                      oauthCredentials.value = {
+                        ...oauthCredentials.value,
+                        [ig.id]: {
+                          ...cred,
+                          clientSecret: (e.target as HTMLInputElement).value,
+                        },
+                      };
+                    }}
+                    placeholder="Client Secret"
+                    class="flex-1 px-2 py-1.5 border border-amber-200 rounded text-xs bg-white focus:border-amber-500 focus:ring-1 focus:ring-amber-200 outline-none"
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

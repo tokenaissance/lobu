@@ -15,6 +15,7 @@ export interface CommandDispatchInput {
   teamId?: string;
   isGroup: boolean;
   conversationId?: string;
+  connectionId?: string;
   reply: CommandContext["reply"];
 }
 
@@ -64,6 +65,7 @@ export class CommandDispatcher {
       userId: input.userId,
       channelId: input.channelId,
       conversationId: input.conversationId,
+      connectionId: input.connectionId,
       agentId,
       args: commandArgs,
       platform: input.platform,

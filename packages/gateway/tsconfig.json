@@ -26,7 +26,8 @@
     "**/*.test.ts",
     "**/__tests__/**",
     "src/routes/public/history-page/**/*.tsx",
-    "src/routes/public/settings-page/**/*.tsx"
+    "src/routes/public/settings-page/**/*.tsx",
+    "src/routes/public/admin-page/**/*.tsx"
   ],
   "references": [{ "path": "../core" }]
 }

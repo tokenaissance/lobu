@@ -2,7 +2,8 @@ import { type Signal, useSignal } from "@preact/signals";
 import { createContext, render } from "preact";
 import { useContext, useEffect, useRef } from "preact/hooks";
 import * as api from "./api";
-import { Header } from "./components/Header";
+import { ConnectionsSection } from "./components/ConnectionsSection";
+import { AdminBar } from "./components/Header";
 import { InstructionsSection } from "./components/InstructionsSection";
 import { MessageBanners } from "./components/MessageBanners";
 import { NixPackagesSection } from "./components/NixPackagesSection";
@@ -44,6 +45,12 @@ declare global {
 }
 
 // ─── Context ───────────────────────────────────────────────────────────────
+
+export interface RegistryEntry {
+  id: string;
+  type: string;
+  apiUrl: string;
+}
 
 export interface SettingsContextValue {
   agentId: string;
@@ -102,6 +109,10 @@ export interface SettingsContextValue {
 
   initialSettingsSnapshot: Signal<SettingsSnapshot | null>;
 
+  // Skill registries
+  registries: Signal<RegistryEntry[]>;
+  globalRegistries: RegistryEntry[];
+
   // Server-injected display data
   platform: string;
   userId: string;
@@ -111,6 +122,14 @@ export interface SettingsContextValue {
   showSwitcher: boolean;
   agents: SettingsState["agents"];
   providerIconUrls: Record<string, string>;
+
+  // Scoped settings
+  settingsMode: "admin" | "user";
+  allowedScopes?: string[];
+  isAdmin: boolean;
+  isSandbox: boolean;
+  ownerPlatform: string;
+  isScopeAllowed(scope: string): boolean;
 
   // Actions
   toggleSection(id: string): void;
@@ -214,6 +233,10 @@ function App() {
     state.integrationStatus || {}
   );
 
+  // Skill registries (per-agent custom registries)
+  const registries = useSignal<RegistryEntry[]>(state.initialRegistries || []);
+  const globalRegistries: RegistryEntry[] = state.globalRegistries || [];
+
   // Nix
   const nixPackages = useSignal<string[]>(
     Array.isArray(state.initialNixPackages)
@@ -298,6 +321,15 @@ function App() {
     );
   }
 
+  function registriesSignature(): string {
+    return JSON.stringify(
+      registries.value
+        .slice()
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((r) => ({ id: r.id, type: r.type, apiUrl: r.apiUrl }))
+    );
+  }
+
   function providerModelPreferencesSignature(): string {
     const preferences: Record<string, string> = {};
     for (const providerId of providerOrder.value) {
@@ -323,6 +355,7 @@ function App() {
       mcpServers: mcpServersSignature(),
       permissions: permissionsSignature(),
       providerModelPreferences: providerModelPreferencesSignature(),
+      registries: registriesSignature(),
     };
   }
 
@@ -395,10 +428,9 @@ function App() {
       openSections.value = sections;
     }
 
-    // Auto-open model section and provider catalog when no providers
+    // Auto-open model section when no providers
     if (state.hasNoProviders && !openParam) {
       openSections.value = { ...openSections.value, model: true };
-      showCatalog.value = true;
     }
 
     // Check providers
@@ -523,6 +555,9 @@ function App() {
 
     integrationStatus,
 
+    registries,
+    globalRegistries,
+
     nixPackages,
 
     permissionGrants,
@@ -552,6 +587,28 @@ function App() {
     agents: state.agents,
     providerIconUrls: state.providerIconUrls || {},
 
+    settingsMode: state.settingsMode || "admin",
+    allowedScopes: state.allowedScopes,
+    isAdmin: !!state.isAdmin,
+    isSandbox: !!state.isSandbox,
+    ownerPlatform: state.ownerPlatform || "",
+    isScopeAllowed(scope: string): boolean {
+      if (state.settingsMode !== "user") return true;
+      if (!state.allowedScopes?.length) return false;
+      if (state.allowedScopes.includes(scope)) return true;
+      // Backward compat: old "tools"/"mcp-servers" scopes map to new names
+      if (scope === "skills") {
+        return (
+          state.allowedScopes.includes("tools") ||
+          state.allowedScopes.includes("mcp-servers")
+        );
+      }
+      if (scope === "permissions" || scope === "packages") {
+        return state.allowedScopes.includes("tools");
+      }
+      return false;
+    },
+
     toggleSection,
     openExternal,
     reloadPage,
@@ -561,67 +618,72 @@ function App() {
 
   return (
     <SettingsContext.Provider value={ctx}>
-      <Header />
-      <MessageBanners />
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSave(ctx);
-        }}
-        onKeyDown={(e) => {
-          const target = e.target as HTMLElement;
-          if (
-            e.key === "Enter" &&
-            target.tagName !== "TEXTAREA" &&
-            (target as HTMLInputElement).type !== "submit"
-          ) {
+      <AdminBar />
+      <div class={ctx.isAdmin ? "p-6" : ""}>
+        <MessageBanners />
+        <form
+          onSubmit={(e) => {
             e.preventDefault();
-          }
-        }}
-        class="space-y-3"
-      >
-        <ProviderSection />
-        <InstructionsSection />
-        <SkillsSection />
-        <RemindersSection />
-        <PermissionsSection />
-        <NixPackagesSection />
-
-        {/* Verbose toggle */}
-        <div class="bg-gray-50 rounded-lg p-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={ctx.verboseLogging.value}
-              onChange={(e) => {
-                ctx.verboseLogging.value = (
-                  e.target as HTMLInputElement
-                ).checked;
-              }}
-              class="w-4 h-4 text-slate-600 rounded focus:ring-slate-500"
-            />
-            <span class="text-sm font-medium text-gray-800">
-              Verbose logging
-            </span>
-          </label>
-          <p class="text-xs text-gray-500 mt-1 ml-6">
-            Show tool calls, reasoning tokens, and detailed output
-          </p>
-        </div>
-
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={ctx.saving.value || !hasPendingSettingsChanges()}
-          class="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+            handleSave(ctx);
+          }}
+          onKeyDown={(e) => {
+            const target = e.target as HTMLElement;
+            if (
+              e.key === "Enter" &&
+              target.tagName !== "TEXTAREA" &&
+              (target as HTMLInputElement).type !== "submit"
+            ) {
+              e.preventDefault();
+            }
+          }}
+          class="space-y-3"
         >
-          {ctx.saving.value
-            ? "Saving..."
-            : hasPendingSettingsChanges()
-              ? "Save Settings"
-              : "No Changes"}
-        </button>
-      </form>
+          {ctx.isAdmin && !ctx.isSandbox && <ConnectionsSection />}
+          {ctx.isScopeAllowed("model") && <ProviderSection />}
+          {ctx.isScopeAllowed("system-prompt") && <InstructionsSection />}
+          {ctx.isScopeAllowed("skills") && <SkillsSection />}
+          {ctx.isScopeAllowed("schedules") && <RemindersSection />}
+          {ctx.isScopeAllowed("permissions") && <PermissionsSection />}
+          {ctx.isScopeAllowed("packages") && <NixPackagesSection />}
+
+          {/* Verbose toggle */}
+          <div
+            class={`bg-gray-50 rounded-lg p-3 ${ctx.settingsMode === "user" ? "hidden" : ""}`}
+          >
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={ctx.verboseLogging.value}
+                onChange={(e) => {
+                  ctx.verboseLogging.value = (
+                    e.target as HTMLInputElement
+                  ).checked;
+                }}
+                class="w-4 h-4 text-slate-600 rounded focus:ring-slate-500"
+              />
+              <span class="text-sm font-medium text-gray-800">
+                Verbose logging
+              </span>
+            </label>
+            <p class="text-xs text-gray-500 mt-1 ml-6">
+              Show tool calls, reasoning tokens, and detailed output
+            </p>
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={ctx.saving.value || !hasPendingSettingsChanges()}
+            class="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+          >
+            {ctx.saving.value
+              ? "Saving..."
+              : hasPendingSettingsChanges()
+                ? "Save Settings"
+                : "No Changes"}
+          </button>
+        </form>
+      </div>
     </SettingsContext.Provider>
   );
 }
@@ -670,6 +732,11 @@ async function handleSave(ctx: SettingsContextValue) {
       .map((pkg) => (pkg || "").trim())
       .filter(Boolean);
     settings.nixConfig = nixPkgs.length ? { packages: nixPkgs } : null;
+
+    // Per-agent skill registries
+    settings.skillRegistries = ctx.registries.value.length
+      ? ctx.registries.value
+      : null;
 
     await api.saveSettings(ctx.agentId, settings);
 

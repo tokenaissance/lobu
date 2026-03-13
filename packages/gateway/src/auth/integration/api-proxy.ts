@@ -248,8 +248,8 @@ async function refreshCredentials(
   config: {
     oauth?: {
       tokenUrl: string;
-      clientId: string;
-      clientSecret: string;
+      clientId?: string;
+      clientSecret?: string;
       tokenEndpointAuthMethod?: string;
     };
   },
@@ -266,8 +266,8 @@ async function refreshCredentials(
       {
         authUrl: config.oauth.tokenUrl, // not used for refresh, but required by interface
         tokenUrl: config.oauth.tokenUrl,
-        clientId: config.oauth.clientId,
-        clientSecret: config.oauth.clientSecret,
+        clientId: config.oauth.clientId || "",
+        clientSecret: config.oauth.clientSecret || "",
         tokenEndpointAuthMethod: config.oauth.tokenEndpointAuthMethod,
       }
     );

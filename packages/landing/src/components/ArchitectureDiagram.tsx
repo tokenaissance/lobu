@@ -62,10 +62,11 @@ const runtimeLayer = {
   sublabel: "per-user isolation",
   features: [
     "One sandbox per user and channel",
-    "Kata Containers / Firecracker microVMs",
-    "gVisor on GCP for lightweight sandboxing",
+    "Kata Containers / Firecracker microVMs / gVisor on GCP",
+    "virtualized bash for scaling beyond 1000 users",
     "No direct internet access (internal network)",
     "Nix reproducible environments",
+    "OpenTelemetry for observability",
   ],
 };
 
@@ -81,6 +82,10 @@ export const infraBadges = [
   {
     label: "gVisor",
     color: "bg-green-900/40 text-green-400 border-green-800/50",
+  },
+  {
+    label: "just-bash",
+    color: "bg-yellow-900/40 text-yellow-400 border-yellow-800/50",
   },
   {
     label: "OpenTelemetry",

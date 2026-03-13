@@ -21,25 +21,6 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function formatInstallSkillPayload(payload: {
-  reason: string;
-  message?: string;
-  providers?: string[];
-  skills?: Array<{ repo: string; name?: string; description?: string }>;
-  mcpServers?: Array<{
-    id: string;
-    name?: string;
-    url?: string;
-    type?: string;
-    command?: string;
-    args?: string[];
-  }>;
-  nixPackages?: string[];
-  grants?: string[];
-}): string {
-  return JSON.stringify(payload);
-}
-
 function withErrorHandling(
   label: string,
   fn: () => Promise<TextResult>
@@ -691,61 +672,6 @@ export interface ConfigureArgs {
   }>;
 }
 
-export interface InstallSkillArgs {
-  id?: string;
-  upgrade?: boolean;
-  reason?: string;
-  message?: string;
-  providers?: string[];
-  skills?: Array<{ repo: string; name?: string; description?: string }>;
-  nixPackages?: string[];
-  grants?: string[];
-  mcpServers?: Array<{
-    id: string;
-    name?: string;
-    url?: string;
-    type?: string;
-    command?: string;
-    args?: string[];
-  }>;
-}
-
-export async function installSkillTool(
-  gw: GatewayParams,
-  args: InstallSkillArgs
-): Promise<TextResult> {
-  return sudo(gw, args);
-}
-
-export async function sudo(
-  gw: GatewayParams,
-  args: InstallSkillArgs
-): Promise<TextResult> {
-  const id = args.id?.trim();
-  if (id) {
-    return installSkill(gw, {
-      id,
-      upgrade: args.upgrade,
-    });
-  }
-
-  if (!args.reason?.trim()) {
-    return textResult(
-      "Error: InstallSkill requires either an id (to install/upgrade a capability) or a reason (to open a settings link)."
-    );
-  }
-
-  return configure(gw, {
-    reason: args.reason!,
-    message: args.message,
-    providers: args.providers,
-    skills: args.skills,
-    nixPackages: args.nixPackages,
-    grants: args.grants,
-    mcpServers: args.mcpServers,
-  });
-}
-
 export async function installPackage(
   gw: GatewayParams,
   args: { packages: string[]; reason: string }
@@ -976,7 +902,6 @@ export async function generateImage(
 ): Promise<TextResult> {
   return withErrorHandling("GenerateImage", async () => {
     logger.info(`GenerateImage: ${args.prompt.substring(0, 80)}...`);
-    const providers = ["chatgpt", "openai"];
 
     const capResponse = await fetch(
       `${gw.gatewayUrl}/internal/images/capabilities`,
@@ -993,14 +918,8 @@ export async function generateImage(
       if (!capabilities.available) {
         const providerList =
           capabilities.providers?.map((p) => p.name).join(", ") || "OpenAI";
-        const sudoPayload = formatInstallSkillPayload({
-          reason: "Set up image generation",
-          message:
-            "Add an OpenAI or ChatGPT API key to enable image generation.",
-          providers,
-        });
         return textResult(
-          `Image generation is not configured. Supported providers: ${providerList}.\n\nCall Sudo next with this payload: ${sudoPayload}`
+          `Image generation is not configured. Supported providers: ${providerList}.\n\nConnect a provider using ConnectService (e.g. id='chatgpt') to enable image generation.`
         );
       }
     }
@@ -1035,26 +954,14 @@ export async function generateImage(
             lowerError.includes("model.request")));
 
       if (errorData.availableProviders?.length) {
-        const sudoPayload = formatInstallSkillPayload({
-          reason: "Set up image generation",
-          message:
-            "Add an OpenAI or ChatGPT API key to enable image generation.",
-          providers,
-        });
         return textResult(
-          `Image generation failed: ${errorMessage}.\n\nCall Sudo next with this payload: ${sudoPayload}`
+          `Image generation failed: ${errorMessage}.\n\nConnect a provider using ConnectService (e.g. id='chatgpt') to enable image generation.`
         );
       }
 
       if (missingImagePermission) {
-        const sudoPayload = formatInstallSkillPayload({
-          reason: "Fix OpenAI image-generation permission",
-          message:
-            "Your current ChatGPT/OpenAI credential cannot generate images. Switch to an OpenAI API key with image generation access.",
-          providers,
-        });
         return textResult(
-          `Image generation failed because the current credential lacks required image permissions.\n\nCall Sudo next with this payload: ${sudoPayload}`
+          `Image generation failed because the current credential lacks required image permissions.\n\nConnect a different provider using ConnectService (e.g. id='openai') with image generation access.`
         );
       }
 
@@ -1138,13 +1045,10 @@ export async function generateAudio(
       suggestions.providerDisplayList || "an audio-capable provider";
 
     if (suggestions.available === false) {
-      const sudoPayload = formatInstallSkillPayload({
-        reason: "Set up text-to-speech for voice responses",
-        message: `Add credentials for an available audio provider (${providerList}) to enable voice generation.`,
-        providers: providers.length > 0 ? providers : undefined,
-      });
+      const providerHint =
+        providers.length > 0 ? ` (e.g. id='${providers[0]}')` : "";
       return textResult(
-        `Audio generation is not configured. To enable it, connect one of the available providers: ${providerList}.\n\nCall Sudo next with this payload: ${sudoPayload}`
+        `Audio generation is not configured. To enable it, connect one of the available providers: ${providerList}.\n\nUse ConnectService${providerHint} to connect an audio provider.`
       );
     }
 
@@ -1174,24 +1078,18 @@ export async function generateAudio(
         lowerError.includes("api.model.audio.request");
 
       if (errorData.availableProviders?.length) {
-        const sudoPayload = formatInstallSkillPayload({
-          reason: "Set up text-to-speech for voice responses",
-          message: `Add credentials for an available audio provider (${providerList}) to enable voice generation.`,
-          providers: providers.length > 0 ? providers : undefined,
-        });
+        const providerHint =
+          providers.length > 0 ? ` (e.g. id='${providers[0]}')` : "";
         return textResult(
-          `Audio generation failed: ${errorMessage}. No provider configured.\n\nCall Sudo next with this payload: ${sudoPayload}`
+          `Audio generation failed: ${errorMessage}. No provider configured.\n\nUse ConnectService${providerHint} to connect an audio provider.`
         );
       }
 
       if (missingOpenAiAudioScope) {
-        const sudoPayload = formatInstallSkillPayload({
-          reason: "Fix OpenAI audio permission for voice generation",
-          message: `Your current OpenAI token is missing api.model.audio.request. Switch ChatGPT auth to an API key with audio permission, or connect an available audio provider (${providerList}).`,
-          providers: providers.length > 0 ? providers : undefined,
-        });
+        const providerHint =
+          providers.length > 0 ? ` (e.g. id='${providers[0]}')` : "";
         return textResult(
-          `Audio generation failed because the current OpenAI token lacks api.model.audio.request.\n\nCall Sudo next with this payload: ${sudoPayload}`
+          `Audio generation failed because the current OpenAI token lacks api.model.audio.request.\n\nUse ConnectService${providerHint} to connect a provider with audio permission, or connect an alternative audio provider (${providerList}).`
         );
       }
 

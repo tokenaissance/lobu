@@ -189,7 +189,7 @@ export interface HistoryMessage {
  * Network configuration for worker sandbox isolation.
  * Controls which domains the worker can access via HTTP proxy.
  *
- * Filtering rules (sandbox-runtime compatible):
+ * Filtering rules:
  * - deniedDomains are checked first (take precedence)
  * - allowedDomains are checked second
  * - If neither matches, request is denied
@@ -411,6 +411,15 @@ export interface ThreadResponsePayload {
 export interface SuggestedPrompt {
   title: string; // Short label shown as chip
   message: string; // Full message sent when clicked
+}
+
+/**
+ * Skill registry entry (global or per-agent).
+ */
+export interface RegistryEntry {
+  id: string;
+  type: string;
+  apiUrl: string;
 }
 
 /**

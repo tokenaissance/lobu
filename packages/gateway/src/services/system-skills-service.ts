@@ -21,6 +21,7 @@ export interface RuntimeSystemSkill {
 export class SystemSkillsService {
   private configUrl?: string;
   private loaded?: SystemSkillsConfigFile;
+  private rawLoaded?: SystemSkillsConfigFile;
 
   constructor(configUrl?: string) {
     this.configUrl = configUrl;
@@ -30,6 +31,16 @@ export class SystemSkillsService {
     const config = await this.loadConfig();
     if (!config) return [];
     return config.skills.map((entry) => this.toSkillConfig(entry));
+  }
+
+  /**
+   * Returns skills with original ${env:*} patterns intact (not substituted).
+   * Used by the admin env catalog to discover which env vars are referenced.
+   */
+  async getRawSystemSkills(): Promise<SkillConfig[]> {
+    await this.loadConfig();
+    if (!this.rawLoaded) return [];
+    return this.rawLoaded.skills.map((entry) => this.toSkillConfig(entry));
   }
 
   async getAllIntegrationConfigs(): Promise<Record<string, IntegrationConfig>> {
@@ -158,6 +169,18 @@ export class SystemSkillsService {
     };
   }
 
+  /**
+   * Clear cached config and optionally set a new URL.
+   * Next call to getSystemSkills() etc. will re-fetch.
+   */
+  reload(newUrl?: string): void {
+    this.loaded = undefined;
+    this.rawLoaded = undefined;
+    if (newUrl !== undefined) {
+      this.configUrl = newUrl;
+    }
+  }
+
   private async loadConfig(): Promise<SystemSkillsConfigFile | null> {
     if (this.loaded) return this.loaded;
     if (!this.configUrl) return null;
@@ -178,6 +201,7 @@ export class SystemSkillsService {
       } else {
         raw = await readFile(this.configUrl, "utf-8");
       }
+      this.rawLoaded = JSON.parse(raw) as SystemSkillsConfigFile;
       const substituted = raw.replace(
         /\$\{env:([^}]+)\}/g,
         (_match, varName) => process.env[varName] || ""
@@ -189,6 +213,21 @@ export class SystemSkillsService {
       }
       this.loaded = parsed;
       logger.info(`Loaded ${parsed.skills.length} system skill(s)`);
+
+      // Log integrations that need per-agent OAuth credentials
+      const needsCreds: string[] = [];
+      for (const skill of parsed.skills) {
+        for (const ig of skill.integrations || []) {
+          if (ig.oauth && (!ig.oauth.clientId || !ig.oauth.clientSecret)) {
+            needsCreds.push(ig.id);
+          }
+        }
+      }
+      if (needsCreds.length > 0) {
+        logger.info(
+          `Integrations requiring per-agent OAuth credentials: ${needsCreds.join(", ")}`
+        );
+      }
       return parsed;
     } catch (error) {
       logger.error("Failed to load system skills config", { error });

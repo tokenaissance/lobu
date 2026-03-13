@@ -6,13 +6,15 @@ export function createChatReply(
   return async (text, options) => {
     if (options?.url) {
       const { Card, CardText, Actions, LinkButton } = await import("chat");
+      const linkButton: any = LinkButton({
+        url: options.url,
+        label: options.urlLabel || "Open",
+      });
+      if (options.webApp) {
+        linkButton.webApp = true;
+      }
       const card = Card({
-        children: [
-          CardText(text),
-          Actions([
-            LinkButton({ url: options.url, label: options.urlLabel || "Open" }),
-          ]),
-        ],
+        children: [CardText(text), Actions([linkButton])],
       });
       await postFn({
         card,

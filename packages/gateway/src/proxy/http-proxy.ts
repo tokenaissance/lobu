@@ -366,7 +366,7 @@ export function matchesDomainPattern(
 
 /**
  * Check if a hostname is allowed based on allowlist/blocklist configuration.
- * Rules (sandbox-runtime compatible):
+ * Rules:
  * - deniedDomains are checked first (take precedence)
  * - allowedDomains are checked second
  * - If allowedDomains contains "*", unrestricted mode is enabled
@@ -453,7 +453,7 @@ async function handleConnect(
     );
     try {
       clientSocket.write(
-        `HTTP/1.1 403 Domain not allowed: ${hostname}. Use Sudo with grants to request access.\r\nContent-Type: text/plain\r\n\r\n403 Forbidden - Domain not allowed: ${hostname}. Use Sudo with grants to request access.\r\n`
+        `HTTP/1.1 403 Domain not allowed: ${hostname}. Use RequestNetworkAccess to request access.\r\nContent-Type: text/plain\r\n\r\n403 Forbidden - Domain not allowed: ${hostname}. Use RequestNetworkAccess to request access.\r\n`
       );
       clientSocket.end();
     } catch {
@@ -602,7 +602,7 @@ async function handleProxyRequest(
       "Content-Type": "text/plain",
     });
     res.end(
-      `403 Forbidden - Domain not allowed: ${hostname}. Use Sudo with grants to request access.\n`
+      `403 Forbidden - Domain not allowed: ${hostname}. Use RequestNetworkAccess to request access.\n`
     );
     return;
   }

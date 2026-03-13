@@ -145,7 +145,7 @@ You can access any external service without restrictions.`;
 
 **Internet Access:** Complete isolation (no external access)
 
-You do NOT have access to the internet. All external requests (curl, wget, npm, pip, etc.) will fail. If you need network access, use Sudo with grants to request it — this presents inline approval buttons to the user. Only local operations and MCP tools are available.`;
+You do NOT have access to the internet. All external requests (curl, wget, npm, pip, etc.) will fail. If you need network access, use RequestNetworkAccess to request it — this presents inline approval buttons to the user. Only local operations and MCP tools are available.`;
     }
 
     // Allowlist mode
@@ -176,7 +176,7 @@ ${blockedList}`;
 
     instructions += `
 
-You can only access the allowed domains listed above. All other external requests will be blocked by the proxy. If a domain is blocked, use Sudo with grants to request access — this presents inline approval buttons to the user (default grant: 1 hour). Plan your work accordingly and use available MCP tools when possible.`;
+You can only access the allowed domains listed above. All other external requests will be blocked by the proxy. If a domain is blocked, use RequestNetworkAccess to request access — this presents inline approval buttons to the user (default grant: 1 hour). Plan your work accordingly and use available MCP tools when possible.`;
 
     return instructions;
   }
@@ -220,7 +220,8 @@ export class InstructionService {
    */
   async getSessionContext(
     platform: string,
-    context: InstructionContext
+    context: InstructionContext,
+    options?: { settingsUrl?: string }
   ): Promise<SessionContextData> {
     // Get platform-specific instructions
     let platformInstructions = "";
@@ -271,6 +272,22 @@ export class InstructionService {
           }
           agentInstructions = sections.join("\n\n");
         }
+
+        // When soul is unconfigured, tell the agent about its settings page
+        if (!agentInstructions.trim()) {
+          const settingsUrl = options?.settingsUrl;
+          const settingsHint = settingsUrl
+            ? ` Your settings page is: ${settingsUrl}`
+            : "";
+          agentInstructions = `## Agent Configuration Notice
+
+Your identity, instructions, and user context (IDENTITY.md, SOUL.md, USER.md) are not configured yet. You are running without personality or behavioral instructions.
+
+To configure your soul, ask your admin to open the settings page and fill in the Instructions section.${settingsHint}
+
+Until configured, behave as a helpful, concise AI assistant.`;
+        }
+
         logger.info(
           `Built agent instructions (${agentInstructions.length} chars)`
         );

@@ -224,6 +224,7 @@ function setupServer(
       agentSettingsStore: coreServices?.getAgentSettingsStore(),
       integrationConfigService: coreServices?.getIntegrationConfigService(),
       integrationCredentialStore: coreServices?.getIntegrationCredentialStore(),
+      systemConfigResolver: coreServices?.getSystemConfigResolver(),
     });
     app.route("", integrationsDiscoveryRouter);
     logger.info(

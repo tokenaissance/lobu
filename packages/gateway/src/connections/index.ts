@@ -1,9 +1,6 @@
 export { ChatInstanceManager } from "./chat-instance-manager";
 export { ChatResponseBridge } from "./chat-response-bridge";
-export {
-  bootstrapConnectionsFromEnv,
-  ChatPlatformAdapter,
-} from "./platform-adapter";
+export { ChatPlatformAdapter } from "./platform-adapter";
 export type {
   ConnectionSettings,
   PlatformAdapterConfig,

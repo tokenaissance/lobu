@@ -10,6 +10,13 @@ import type { PlatformConnection } from "./types";
 
 const logger = createLogger("chat-interaction-bridge");
 
+// Deduplicate events across multiple connections for the same platform
+const handledEvents = new Set<string>();
+function markHandled(id: string): void {
+  handledEvents.add(id);
+  setTimeout(() => handledEvents.delete(id), 30_000);
+}
+
 export function registerInteractionBridge(
   interactionService: InteractionService,
   manager: ChatInstanceManager,
@@ -20,6 +27,8 @@ export function registerInteractionBridge(
 
   interactionService.on("question:created", async (event: PostedQuestion) => {
     if (!shouldHandle(event, platform, connectionId, manager)) return;
+    if (handledEvents.has(event.id)) return;
+    markHandled(event.id);
 
     const thread = await resolveThread(
       manager,
@@ -63,6 +72,8 @@ export function registerInteractionBridge(
     "grant:requested",
     async (event: PostedGrantRequest) => {
       if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (handledEvents.has(event.id)) return;
+      markHandled(event.id);
 
       const thread = await resolveThread(
         manager,
@@ -120,6 +131,8 @@ export function registerInteractionBridge(
     "link-button:created",
     async (event: PostedLinkButton) => {
       if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (handledEvents.has(event.id)) return;
+      markHandled(event.id);
 
       const thread = await resolveThread(
         manager,
@@ -191,12 +204,35 @@ function shouldHandle(
   connectionId: string,
   manager: ChatInstanceManager
 ): boolean {
-  if (!manager.has(connectionId)) return false;
-  if (event.teamId === "api") return false;
-  if (event.connectionId && event.connectionId !== connectionId) return false;
+  if (!manager.has(connectionId)) {
+    logger.debug(
+      { connectionId, eventConnectionId: event.connectionId },
+      "shouldHandle: manager does not have connection"
+    );
+    return false;
+  }
+  if (event.teamId === "api") {
+    logger.debug({ connectionId }, "shouldHandle: skipping api teamId");
+    return false;
+  }
   const instance = manager.getInstance(connectionId);
-  if (!instance) return false;
-  return instance.connection.platform === platform;
+  if (!instance) {
+    logger.debug({ connectionId }, "shouldHandle: no instance found");
+    return false;
+  }
+  const matches = instance.connection.platform === platform;
+  logger.debug({ connectionId, platform, matches }, "shouldHandle: result");
+  if (!matches) {
+    logger.debug(
+      {
+        connectionId,
+        instancePlatform: instance.connection.platform,
+        eventPlatform: platform,
+      },
+      "shouldHandle: platform mismatch"
+    );
+  }
+  return matches;
 }
 
 async function resolveThread(
@@ -206,17 +242,37 @@ async function resolveThread(
   conversationId: string
 ): Promise<any | null> {
   const instance = manager.getInstance(connectionId);
-  if (!instance) return null;
+  if (!instance) {
+    logger.debug({ connectionId }, "resolveThread: no instance for connection");
+    return null;
+  }
 
   try {
     const chat = instance.chat;
     const adapterKey = instance.connection.platform;
-    return (
-      (await chat.getThread?.(adapterKey, channelId, conversationId)) ?? null
+
+    // For DMs where conversationId === channelId, use channel directly
+    // (matches resolveTarget fallback in chat-response-bridge)
+    if (!conversationId || conversationId === channelId) {
+      const channel = chat.channel?.(`${adapterKey}:${channelId}`);
+      if (channel) return channel;
+    }
+
+    const thread = await chat.getThread?.(
+      adapterKey,
+      channelId,
+      conversationId
     );
+    if (!thread) {
+      logger.debug(
+        { connectionId, adapterKey, channelId, conversationId },
+        "resolveThread: getThread returned null"
+      );
+    }
+    return thread ?? null;
   } catch (error) {
     logger.debug(
-      { connectionId, error: String(error) },
+      { connectionId, channelId, conversationId, error: String(error) },
       "Failed to resolve thread for interaction"
     );
     return null;

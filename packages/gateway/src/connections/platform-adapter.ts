@@ -129,8 +129,10 @@ export class ChatPlatformAdapter implements PlatformAdapter {
       throw new Error("Cannot send an empty message");
     }
 
+    const useThread = this.name === "slack" && !!options.conversationId;
+
     let sent;
-    if (options.conversationId) {
+    if (useThread) {
       const adapter = instance.chat.getAdapter?.(connection.platform);
       const createThread = (instance.chat as any).createThread;
       const threadId = `${connection.platform}:${options.channelId}:${options.conversationId}`;

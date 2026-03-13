@@ -74,21 +74,6 @@ ingress:
       hosts:
         - community.lobu.ai
 
-# Slack configuration
-slack:
-  enabled: true  # Enable Slack platform
-  allowDirectMessages: true
-  allowPrivateChannels: true
-  enableStatusReactions: true
-  enableProgressUpdates: true
-
-# WhatsApp configuration
-whatsapp:
-  enabled: false
-  selfChat: true
-  allowGroups: true
-  requireMention: true
-
 # Claude configuration
 claude:
   model: "claude-sonnet-4-20250514"
