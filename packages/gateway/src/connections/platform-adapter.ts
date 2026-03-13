@@ -1,15 +1,6 @@
-import { createLogger } from "@lobu/core";
 import type { CoreServices, PlatformAdapter } from "../platform";
 import type { ChatInstanceManager } from "./chat-instance-manager";
-import type { PlatformAdapterConfig, PlatformConnection } from "./types";
-
-const logger = createLogger("chat-platform-adapter");
-
-const ENV_BOOTSTRAP_AGENT_IDS = {
-  slack: "system:connection:slack",
-  telegram: "system:connection:telegram",
-  whatsapp: "system:connection:whatsapp",
-} as const;
+import type { PlatformConnection } from "./types";
 
 type HistoryRecord = {
   role: "user" | "assistant";
@@ -258,105 +249,5 @@ export class ChatPlatformAdapter implements PlatformAdapter {
     }
 
     return activeConnections[0] || null;
-  }
-}
-
-async function ensureBootstrapConnection(
-  manager: ChatInstanceManager,
-  platform: keyof typeof ENV_BOOTSTRAP_AGENT_IDS,
-  config: PlatformAdapterConfig
-): Promise<void> {
-  const agentId = ENV_BOOTSTRAP_AGENT_IDS[platform];
-  const existing = await manager.listConnections({ agentId });
-  const alreadyBootstrapped = existing.find(
-    (connection) => connection.platform === platform
-  );
-  if (alreadyBootstrapped) {
-    return;
-  }
-
-  const created = await manager.addConnection(platform, agentId, config, {
-    allowGroups: true,
-  });
-  logger.info(
-    { connectionId: created.id, platform },
-    "Bootstrapped platform connection from environment"
-  );
-}
-
-export async function bootstrapConnectionsFromEnv(
-  manager: ChatInstanceManager
-): Promise<void> {
-  const publicGatewayUrl = process.env.PUBLIC_GATEWAY_URL;
-  const useWebhook = (() => {
-    if (!publicGatewayUrl) return false;
-    try {
-      const host = new URL(publicGatewayUrl).hostname;
-      return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
-    } catch {
-      return false;
-    }
-  })();
-
-  const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (telegramToken) {
-    await ensureBootstrapConnection(manager, "telegram", {
-      platform: "telegram",
-      botToken: telegramToken,
-      mode: useWebhook ? "webhook" : "polling",
-      ...(process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN
-        ? { secretToken: process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN }
-        : {}),
-      ...(process.env.TELEGRAM_BOT_USERNAME
-        ? { userName: process.env.TELEGRAM_BOT_USERNAME }
-        : {}),
-    });
-  }
-
-  const slackBotToken = process.env.SLACK_BOT_TOKEN;
-  if (slackBotToken) {
-    await ensureBootstrapConnection(manager, "slack", {
-      platform: "slack",
-      botToken: slackBotToken,
-      ...(process.env.SLACK_SIGNING_SECRET
-        ? { signingSecret: process.env.SLACK_SIGNING_SECRET }
-        : {}),
-      ...(process.env.SLACK_CLIENT_ID
-        ? { clientId: process.env.SLACK_CLIENT_ID }
-        : {}),
-      ...(process.env.SLACK_CLIENT_SECRET
-        ? { clientSecret: process.env.SLACK_CLIENT_SECRET }
-        : {}),
-      ...(process.env.SLACK_ENCRYPTION_KEY
-        ? { encryptionKey: process.env.SLACK_ENCRYPTION_KEY }
-        : {}),
-    });
-  }
-
-  const whatsappCloudConfig = {
-    accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
-    appSecret: process.env.WHATSAPP_APP_SECRET,
-    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
-    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
-  };
-  if (
-    whatsappCloudConfig.accessToken &&
-    whatsappCloudConfig.appSecret &&
-    whatsappCloudConfig.phoneNumberId &&
-    whatsappCloudConfig.verifyToken
-  ) {
-    await ensureBootstrapConnection(manager, "whatsapp", {
-      platform: "whatsapp",
-      accessToken: whatsappCloudConfig.accessToken,
-      appSecret: whatsappCloudConfig.appSecret,
-      phoneNumberId: whatsappCloudConfig.phoneNumberId,
-      verifyToken: whatsappCloudConfig.verifyToken,
-      userName: process.env.WHATSAPP_BOT_NAME || "lobu-whatsapp",
-      logger: console as any,
-    });
-  } else if (process.env.WHATSAPP_CREDENTIALS) {
-    logger.warn(
-      "WHATSAPP_CREDENTIALS is configured, but Chat SDK bootstrapping requires WhatsApp Cloud API credentials"
-    );
   }
 }

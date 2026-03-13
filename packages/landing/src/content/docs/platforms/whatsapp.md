@@ -5,6 +5,13 @@ description: WhatsApp integration capabilities for Lobu agents.
 
 Lobu's WhatsApp adapter is Baileys-based and optimized for practical chat automation.
 
+## Setup
+
+1. Obtain a WhatsApp Business **access token** and **phone number ID** from the [Meta Developer Portal](https://developers.facebook.com/).
+2. Open the admin page at `{PUBLIC_GATEWAY_URL}/agents`.
+3. Click **Add Connection**, select **WhatsApp**, and paste the access token and phone number ID.
+4. The bot starts handling messages on the configured phone number.
+
 ## Features
 
 - **Baileys integration** for WhatsApp Web-compatible messaging.

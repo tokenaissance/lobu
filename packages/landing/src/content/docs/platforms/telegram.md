@@ -5,6 +5,13 @@ description: Telegram integration capabilities for Lobu agents.
 
 Lobu's Telegram adapter uses Grammy and supports bot flows plus Mini App-secured experiences.
 
+## Setup
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) on Telegram and copy the bot token.
+2. Open the admin page at `{PUBLIC_GATEWAY_URL}/agents`.
+3. Click **Add Connection**, select **Telegram**, and paste the bot token.
+4. The bot starts receiving messages immediately.
+
 ## Features
 
 - **Grammy-based bot runtime** with long-polling or webhook handling.

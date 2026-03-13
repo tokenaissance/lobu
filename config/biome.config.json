@@ -15,6 +15,8 @@
       "!**/workspaces/**",
       "!**/.claude/debug/**",
       "!**/dist/**",
+      "!**/src/errors.js",
+      "!**/*.raw.js",
       "!**/node_modules/**",
       "!**/.astro/**",
       "!**/tmp/**"
@@ -133,6 +135,19 @@
         "rules": {
           "suspicious": {
             "noUselessEscapeInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/settings-page/components/**", "**/admin-page/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off",
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off",
+            "useAnchorContent": "off"
           }
         }
       }

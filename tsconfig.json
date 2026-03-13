@@ -42,6 +42,7 @@
     "packages/*/src/__tests__/**/*",
     "packages/landing/**/*",
     "packages/gateway/src/routes/public/settings-page/**/*",
-    "packages/gateway/src/routes/public/history-page/**/*"
+    "packages/gateway/src/routes/public/history-page/**/*",
+    "packages/gateway/src/routes/public/admin-page/**/*"
   ]
 }

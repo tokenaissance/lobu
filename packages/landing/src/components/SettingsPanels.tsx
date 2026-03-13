@@ -59,6 +59,81 @@ function SectionHeader({ emoji, label }: { emoji: string; label: string }) {
   );
 }
 
+// --- Connections: Platform connections ---
+
+export function ConnectionsPanel() {
+  const connections = [
+    {
+      platform: "telegram",
+      icon: "✈️",
+      iconBg: "bg-sky-100",
+      botName: "@yoursaasbot",
+      online: true,
+      chats: [
+        { name: "Alice Chen", id: "8291045832" },
+        { name: "DevOps Team", id: "-100204817" },
+      ],
+    },
+    {
+      platform: "slack",
+      icon: "💬",
+      iconBg: "bg-purple-100",
+      botName: "YourSaaS Bot",
+      online: true,
+      chats: [{ name: "#engineering", id: "C08NQKL" }],
+    },
+  ];
+
+  return (
+    <PanelShell title="Connections">
+      <SectionHeader emoji="🔗" label="Connections" />
+      <div class="space-y-2">
+        {connections.map((c) => (
+          <div
+            key={c.platform}
+            class="p-2.5 bg-white rounded-lg border border-gray-200"
+          >
+            {/* Connection header */}
+            <div class="flex items-center gap-2.5">
+              <div
+                class={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${c.iconBg}`}
+              >
+                {c.icon}
+              </div>
+              <span class="text-xs font-semibold text-gray-800">
+                {c.botName}
+              </span>
+              <span
+                class={`w-2 h-2 rounded-full ${c.online ? "bg-green-500" : "bg-gray-300"}`}
+              />
+            </div>
+            {/* Nested chats */}
+            {c.chats.length > 0 && (
+              <div class="ml-4 mt-2 space-y-1 border-l border-gray-200 pl-3">
+                {c.chats.map((chat) => (
+                  <div key={chat.id} class="flex items-center gap-2">
+                    <span class="text-[11px] text-gray-600">{chat.name}</span>
+                    <span class="text-[10px] text-gray-400 font-mono">
+                      {chat.id}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          class="w-full text-xs font-medium text-center py-1.5 rounded border border-dashed border-gray-300 text-gray-500"
+          disabled
+        >
+          + Add connection
+        </button>
+      </div>
+    </PanelShell>
+  );
+}
+
 // --- Setup: Model providers ---
 
 type LandingProviderSkill = {

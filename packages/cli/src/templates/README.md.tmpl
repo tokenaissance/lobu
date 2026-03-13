@@ -48,11 +48,12 @@ Check for new environment variables in release notes or the [Lobu documentation]
 ### Environment Variables
 
 Edit `.env` to configure:
-- `SLACK_BOT_TOKEN` - Your Slack bot token
-- `SLACK_APP_TOKEN` - Your Slack app token
-- `SLACK_SIGNING_SECRET` - Your Slack signing secret
 - `ANTHROPIC_API_KEY` - Your Anthropic API key (optional if users provide their own)
 - `PUBLIC_GATEWAY_URL` - Public URL for OAuth callbacks
+
+### Platform Connections
+
+Platforms (Slack, Telegram, Discord, WhatsApp, Teams) are configured via the admin page at `{PUBLIC_GATEWAY_URL}/agents`. No platform-specific env vars needed — just paste your bot token in the UI.
 
 ### Worker Customization
 

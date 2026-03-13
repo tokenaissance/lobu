@@ -22,7 +22,7 @@
 ### Architecture
 
 #### Platform
-All messaging platforms (Telegram, Slack, Discord, WhatsApp, Teams) are managed via Chat SDK adapters in `packages/gateway/src/connections/`. Each platform connection is created through the connections API with a typed config schema. There is also a public endpoint in gateway to trigger running the agent.
+All messaging platforms (Telegram, Slack, Discord, WhatsApp, Teams) are managed via Chat SDK adapters in `packages/gateway/src/connections/`. Connections are created via the admin page UI (`/agents`) or the connections CRUD API — no platform-specific env vars required. Each connection has a typed config schema (e.g. bot token for Telegram, signing secret + bot token for Slack). There is also a public endpoint in gateway to trigger running the agent.
 Settings page provider order is drag-sortable via handle, with per-provider model selection inline in each provider row.
 
 #### Orchestration

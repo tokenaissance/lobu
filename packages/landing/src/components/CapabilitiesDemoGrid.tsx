@@ -1,6 +1,7 @@
 import type { ComponentType } from "preact";
 import { useCases } from "../use-cases";
 import {
+  ConnectionsPanel,
   IntegrationsPanel,
   MemoryPanel,
   ModelsPanel,
@@ -11,6 +12,7 @@ import {
 import { TelegramChat } from "./TelegramChat";
 
 const PANEL_MAP: Record<string, ComponentType> = {
+  connections: ConnectionsPanel,
   setup: ModelsPanel,
   packages: PackagesPanel,
   skills: IntegrationsPanel,
@@ -28,6 +30,17 @@ type DemoItem = {
 };
 
 const demoItems: DemoItem[] = [
+  {
+    id: "platform-connections",
+    title: "Platform Connections",
+    useCaseId: "connections",
+    promptExamples: [
+      "Hey, I just added you on Telegram!",
+      "What platforms do you support?",
+    ],
+    behavior:
+      "Platforms are connected via the admin page — paste a bot token and the agent is live. No env vars or config files.",
+  },
   {
     id: "model-setup",
     title: "Model Setup and Provider Selection",

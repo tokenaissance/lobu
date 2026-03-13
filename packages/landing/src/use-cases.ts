@@ -2,6 +2,36 @@ import type { UseCase } from "./types";
 
 export const useCases: UseCase[] = [
   {
+    id: "connections",
+    tabLabel: "Connections",
+    title: "Connect any platform",
+    description:
+      "Add Telegram, Slack, Discord, WhatsApp, or Teams from the admin page. No env vars — just paste your bot token and go.",
+    settingsLabel: "Manage platform connections",
+    chatLabel: "Bot works instantly after connecting",
+    botName: "Lobu",
+    botInitial: "L",
+    botColor: "#0ea5e9",
+    messages: [
+      {
+        role: "user",
+        text: "Hey, I just added you on Telegram!",
+      },
+      {
+        role: "bot",
+        text: "I'm live! Your admin connected me in the admin page — no config files needed.\n\nHow can I help?",
+      },
+      {
+        role: "user",
+        text: "What platforms do you support?",
+      },
+      {
+        role: "bot",
+        text: "Telegram, Slack, Discord, WhatsApp, and Teams. Your admin can add more anytime from the admin page.",
+      },
+    ],
+  },
+  {
     id: "setup",
     tabLabel: "Setup",
     title: "Self-service setup",

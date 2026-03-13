@@ -595,6 +595,7 @@ function setupServer(
         connectionManager: coreServices
           .getWorkerGateway()
           ?.getConnectionManager(),
+        chatInstanceManager: chatInstanceManager ?? undefined,
         settingsOAuthClient: settingsOAuthClient ?? undefined,
         settingsOAuthStateStore: settingsOAuthStateStore ?? undefined,
         claimService: claimServiceForSettings,
@@ -614,10 +615,64 @@ function setupServer(
       // Admin page (system skills registry)
       const systemSkillsService = coreServices.getSystemSkillsService();
       if (systemSkillsService) {
+        // System env store (Redis-backed env var overrides)
+        const { SystemEnvStore } = require("../auth/system-env-store");
+        const { setEnvResolver } = require("../auth/mcp/string-substitution");
+        const systemEnvStore = new SystemEnvStore(
+          coreServices.getQueue().getRedisClient()
+        );
+        systemEnvStore.refreshCache().catch((e: any) => {
+          logger.error("Failed to refresh system env cache", { error: e });
+        });
+        setEnvResolver((key: string) => systemEnvStore.resolve(key));
+
+        const crypto = require("node:crypto");
+        const adminPassword =
+          process.env.ADMIN_PASSWORD ||
+          crypto.randomBytes(16).toString("base64url");
+        if (!process.env.ADMIN_PASSWORD) {
+          logger.info("═══════════════════════════════════════════════");
+          logger.info(`Admin password (auto-generated): ${adminPassword}`);
+          logger.info("Set ADMIN_PASSWORD env var to use a fixed password");
+          logger.info("═══════════════════════════════════════════════");
+        }
+
         const { createAdminPageRoutes } = require("../routes/public/admin");
-        const adminRouter = createAdminPageRoutes({ systemSkillsService });
+        const adminRouter = createAdminPageRoutes({
+          systemSkillsService,
+          userAgentsStore: coreServices.getUserAgentsStore(),
+          agentMetadataStore: coreServices.getAgentMetadataStore(),
+          chatInstanceManager: chatInstanceManager ?? undefined,
+          systemEnvStore,
+          adminPassword,
+          version: process.env.npm_package_version || "2.6.1",
+          githubUrl: "https://github.com/lobu-ai/lobu",
+        });
         app.route("", adminRouter);
-        logger.info("Admin page enabled at :8080/admin");
+
+        // Serve admin page JS bundle from disk (bypasses bun module cache)
+        const adminBundlePath = require("node:path").resolve(
+          __dirname,
+          "../routes/public/admin-page-bundle.raw.js"
+        );
+        app.get("/agents-bundle.js", (c: any) => {
+          try {
+            const js = require("node:fs").readFileSync(
+              adminBundlePath,
+              "utf-8"
+            );
+            return c.body(js, 200, {
+              "Content-Type": "application/javascript; charset=utf-8",
+              "Cache-Control": "no-store",
+            });
+          } catch {
+            return c.body("// bundle not found", 404, {
+              "Content-Type": "application/javascript",
+            });
+          }
+        });
+
+        logger.info("Admin page enabled at :8080/agents");
       }
     } else if (agentSettingsStore) {
       logger.warn(
@@ -628,10 +683,7 @@ function setupServer(
     // Landing page (docs + integrations)
     {
       const { createLandingRoutes } = require("../routes/public/landing");
-      const landingRouter = createLandingRoutes({
-        publicGatewayUrl: coreServices.getPublicGatewayUrl(),
-        githubUrl: "https://github.com/lobu-ai/lobu",
-      });
+      const landingRouter = createLandingRoutes();
       app.route("", landingRouter);
       logger.info("Landing page enabled at :8080/");
     }
@@ -647,6 +699,8 @@ function setupServer(
         } = require("../routes/public/agent-history");
         const agentHistoryRouter = createAgentHistoryRoutes({
           connectionManager,
+          chatInstanceManager: chatInstanceManager ?? undefined,
+          agentMetadataStore: coreServices.getAgentMetadataStore(),
         });
         app.route("/api/v1/agents/:agentId/history", agentHistoryRouter);
         logger.info(
@@ -720,6 +774,7 @@ function setupServer(
       } = require("../routes/public/integrations");
       const integrationsRouter = createIntegrationsRoutes({
         configResolver: coreServices.getSystemConfigResolver(),
+        agentSettingsStore: coreServices.getAgentSettingsStore(),
       });
       app.route("/api/v1/integrations", integrationsRouter);
       logger.info("Integrations routes enabled at :8080/api/v1/integrations/*");
@@ -778,10 +833,8 @@ function setupServer(
         agentSettingsStore,
         channelBindingService,
       });
-      app.route("/api/v1/manage/agents", agentManagementRouter);
-      logger.info(
-        "Agent management routes enabled at :8080/api/v1/manage/agents/*"
-      );
+      app.route("/api/v1/agents", agentManagementRouter);
+      logger.info("Agent management routes enabled at :8080/api/v1/agents/*");
     }
 
     // Agent selector is now handled by the unified settings page (/settings)
@@ -807,7 +860,7 @@ function setupServer(
       })
     );
     logger.info(
-      "Slack and connection routes enabled at :8080/slack/*, :8080/api/v1/connections/*, and :8080/api/chat/webhook/*"
+      "Slack and connection routes enabled at :8080/slack/*, :8080/api/v1/connections/*, and :8080/api/v1/webhooks/*"
     );
   }
 
@@ -1197,14 +1250,12 @@ export async function startGateway(config: GatewayConfig): Promise<void> {
   logger.info("Orchestrator configured with core services");
 
   // Initialize Chat SDK connection manager (API-driven platform connections)
-  const { bootstrapConnectionsFromEnv, ChatInstanceManager } = await import(
+  const { ChatInstanceManager, ChatResponseBridge } = await import(
     "../connections"
   );
-  const { ChatResponseBridge } = await import("../connections");
   const chatInstanceManager = new ChatInstanceManager();
   try {
     await chatInstanceManager.initialize(coreServices);
-    await bootstrapConnectionsFromEnv(chatInstanceManager);
     for (const adapter of chatPlatformAdapters) {
       adapter.setManager(chatInstanceManager);
     }

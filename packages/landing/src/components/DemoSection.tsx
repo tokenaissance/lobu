@@ -2,6 +2,7 @@ import type { ComponentType } from "preact";
 import { useState } from "preact/hooks";
 import { useCases } from "../use-cases";
 import {
+  ConnectionsPanel,
   IntegrationsPanel,
   MemoryPanel,
   ModelsPanel,
@@ -12,6 +13,7 @@ import {
 import { TelegramChat } from "./TelegramChat";
 
 const PANEL_MAP: Record<string, ComponentType> = {
+  connections: ConnectionsPanel,
   setup: ModelsPanel,
   packages: PackagesPanel,
   skills: IntegrationsPanel,
