@@ -25,18 +25,19 @@ jobs:
           echo "=== Clearing stale Redis locks ==="
           REDIS_POD=$(kubectl get pods -n lobu -l app.kubernetes.io/component=master,app.kubernetes.io/name=redis -o jsonpath='{.items[0].metadata.name}')
           REDIS_PASS=$(kubectl get secret lobu-redis -n lobu -o jsonpath='{.data.redis-password}' | base64 -d)
-          # Find and delete ALL lock keys (thread locks, chat-conn locks, etc.)
-          for pattern in "thread:*:lock" "chat-conn:*:lock*" "*lock*telegram*" "*telegram*lock*"; do
-            echo "Searching pattern: $pattern"
-            kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning KEYS "$pattern" | while read key; do
-              echo "  Deleting: $key"
-              kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning DEL "$key"
-            done
+          # Find and delete ALL lock keys
+          echo "=== All chat-conn lock keys ==="
+          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning KEYS "chat-conn:lock:*"
+
+          # Force delete all chat-conn lock keys
+          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning --scan --pattern "chat-conn:lock:*" | while read key; do
+            echo "  Deleting: $key"
+            kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning DEL "$key"
           done
 
-          # Also show all chat-conn keys for debugging
-          echo "=== Chat state keys ==="
-          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning KEYS "chat-conn*" | head -20
+          # Also try the exact key format
+          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning DEL "chat-conn:lock:telegram:6570514069"
+          echo "=== Direct lock key deleted ==="
           echo "=== Locks cleared ==="
 
           echo ""
