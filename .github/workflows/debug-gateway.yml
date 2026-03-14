@@ -1,0 +1,29 @@
+name: Debug Gateway Logs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    name: Get gateway logs
+    runs-on: ubuntu-latest
+    environment: community
+
+    steps:
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Setup Kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+
+      - name: Get full gateway logs
+        run: |
+          echo "=== Gateway Pod Logs (last 200 lines) ==="
+          kubectl logs -n lobu deployment/lobu-gateway --tail=200
+          echo ""
+          echo "=== K8s Secret Keys ==="
+          kubectl get secret lobu-secrets -n lobu -o jsonpath='{.data}' | python3 -c "import sys,json; [print(k) for k in json.loads(sys.stdin.read()).keys()]"
