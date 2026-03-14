@@ -566,7 +566,7 @@ export async function searchSkills(
       `${sections.join("\n\n")}\n\n` +
         `Prefer system skills (source: system) — they are curated and pre-configured.\n` +
         `Use InstallSkill with the selected id to install a skill from these results.\n` +
-        `If no result fits, you can define an inline skill with InstallSkill(reason, providers?, mcpServers?, skills?).`
+        `Use ConnectService to connect individual providers or integrations directly.`
     );
   });
 }
@@ -660,7 +660,7 @@ async function listInstalledCapabilities(
 // InstallSkill (resolve manifest, generate settings link for user confirmation)
 // ============================================================================
 
-export interface ConfigureArgs {
+interface ConfigureArgs {
   reason: string;
   message?: string;
   providers?: string[];
@@ -737,19 +737,20 @@ export async function installSkill(
   return withErrorHandling("InstallSkill", async () => {
     const action = args.upgrade ? "Upgrade" : "Install";
 
-    // Resolve the ID — could be a skill or an MCP server
-    interface ResolveResult {
-      type: "skill" | "mcp";
-      id: string;
+    interface InstallResult {
+      type: "auto_installed" | "needs_setup" | "manifest";
+      id?: string;
       name: string;
-      description: string;
-      // Skill-specific
+      source?: string;
+      uri?: string | null;
+      description?: string;
+      message?: string;
       integrations?: SkillIntegrationRef[];
       mcpServers?: SkillMcpServerRef[];
       nixPackages?: string[];
       permissions?: string[];
       providers?: string[];
-      // MCP-specific
+      missing?: string[];
       prefillMcpServer?: {
         id: string;
         name: string;
@@ -758,67 +759,79 @@ export async function installSkill(
       };
     }
 
-    const { data, error } = await gatewayFetch<ResolveResult>(
+    const { data, error } = await gatewayFetch<InstallResult>(
       gw,
-      `/internal/integrations/resolve/${encodeURIComponent(args.id)}`,
-      {},
-      "Failed to resolve integration"
+      "/internal/integrations/install",
+      {
+        method: "POST",
+        body: JSON.stringify({ id: args.id, upgrade: args.upgrade }),
+      },
+      "Failed to install integration"
     );
     if (error) return error;
-    const manifest = data!;
+    const result = data!;
 
-    const typeLabel = manifest.type === "skill" ? "skill" : "MCP server";
-
-    // Build settings link prefill from manifest
-    const prefill: ConfigureArgs = {
-      reason: `${action} ${typeLabel} "${manifest.name}"`,
-    };
-
-    if (manifest.type === "skill") {
-      prefill.skills = [
-        {
-          repo: manifest.id,
-          name: manifest.name,
-          description: manifest.description,
-        },
-      ];
-
-      // Collect grants from permissions + integration apiDomains
-      const grants: string[] = [...(manifest.permissions || [])];
-      if (manifest.integrations) {
-        for (const ig of manifest.integrations) {
-          if (ig.apiDomains) {
-            grants.push(...ig.apiDomains);
-          }
-        }
-      }
-      if (grants.length) {
-        prefill.grants = [...new Set(grants)];
-      }
-
-      if (manifest.nixPackages?.length) {
-        prefill.nixPackages = manifest.nixPackages;
-      }
-      if (manifest.providers?.length) {
-        prefill.providers = manifest.providers;
-      }
-
-      // Pre-fill MCP servers from skill manifest
-      if (manifest.mcpServers?.length) {
-        prefill.mcpServers = manifest.mcpServers.map((m) => ({
-          id: m.id,
-          name: m.name,
-          url: m.url,
-          type: m.type,
-          command: m.command,
-          args: m.args,
-        }));
-      }
-    } else if (manifest.type === "mcp" && manifest.prefillMcpServer) {
-      prefill.mcpServers = [manifest.prefillMcpServer];
+    // Auto-installed — no settings page needed
+    if (result.type === "auto_installed") {
+      return textResult(result.message || `${result.name} has been enabled.`);
     }
 
-    // Generate settings link for user confirmation
+    // needs_setup or manifest — build ConfigureArgs and show settings link
+    const skillId = result.id || args.id;
+    const prefill: ConfigureArgs = {
+      reason: `${action} "${result.name}"`,
+    };
+
+    // Add skill entry
+    if (!result.prefillMcpServer) {
+      prefill.skills = [
+        {
+          repo: skillId,
+          name: result.name,
+          description: result.description,
+        },
+      ];
+    }
+
+    // Collect grants from permissions + integration apiDomains
+    const grants: string[] = [...(result.permissions || [])];
+    if (result.integrations) {
+      for (const ig of result.integrations) {
+        if (ig.apiDomains) {
+          grants.push(...ig.apiDomains);
+        }
+      }
+    }
+    if (grants.length) {
+      prefill.grants = [...new Set(grants)];
+    }
+
+    if (result.nixPackages?.length) {
+      prefill.nixPackages = result.nixPackages;
+    }
+    if (result.providers?.length) {
+      prefill.providers = result.providers;
+    }
+
+    // Pre-fill MCP servers
+    if (result.mcpServers?.length) {
+      prefill.mcpServers = result.mcpServers.map((m) => ({
+        id: m.id,
+        name: m.name,
+        url: m.url,
+        type: m.type,
+        command: m.command,
+        args: m.args,
+      }));
+    } else if (result.prefillMcpServer) {
+      prefill.mcpServers = [result.prefillMcpServer];
+    }
+
+    // Add missing info to the message for needs_setup
+    if (result.type === "needs_setup" && result.missing?.length) {
+      prefill.message = `Missing dependencies:\n${result.missing.map((m) => `- ${m}`).join("\n")}`;
+    }
+
     return configure(gw, prefill);
   });
 }

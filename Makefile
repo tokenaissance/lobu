@@ -128,12 +128,6 @@ deploy:
 			$$IMAGE_OVERRIDES \
 			--set secrets.encryptionKey="$$ENCRYPTION_KEY" \
 			--set secrets.adminPassword="$$ADMIN_PASSWORD" \
-			--set secrets.slackBotToken="$$SLACK_BOT_TOKEN" \
-			--set secrets.slackSigningSecret="$$SLACK_SIGNING_SECRET" \
-			--set secrets.slackAppToken="$$SLACK_APP_TOKEN" \
-			--set secrets.slackClientId="$$SLACK_CLIENT_ID" \
-			--set secrets.slackClientSecret="$$SLACK_CLIENT_SECRET" \
-			--set secrets.telegramBotToken="$$TELEGRAM_BOT_TOKEN" \
 			--set secrets.claudeCodeOAuthToken="$$CLAUDE_CODE_OAUTH_TOKEN" \
 			--wait \
 			--timeout "$${HELM_TIMEOUT:-10m}"

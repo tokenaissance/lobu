@@ -7,9 +7,9 @@ export const useCases: UseCase[] = [
     title: "Connect any platform",
     description:
       "Add Telegram, Slack, Discord, WhatsApp, or Teams from the admin page. No env vars — just paste your bot token and go.",
-    learnMoreUrl: "/getting-started/skills",
+    learnMoreUrl: "/deployment/docker/",
     settingsLabel: "Manage platform connections",
-    chatLabel: "What you see in the terminal",
+    chatLabel: "Connected message launches a sandbox",
     botName: "Lobu",
     botInitial: "L",
     botColor: "#0ea5e9",
@@ -40,8 +40,8 @@ export const useCases: UseCase[] = [
       "Users bring their own AI provider keys via a settings page you don't have to build. No config files, no terminal.",
     settingsLabel: "Pick your AI provider and model",
     chatLabel: "Bot walks users through setup",
-    botName: "YourSaaS",
-    botInitial: "Y",
+    botName: "Internal Marketing",
+    botInitial: "M",
     botColor: "#6366f1",
     messages: [
       {
@@ -71,7 +71,7 @@ export const useCases: UseCase[] = [
       "Agents start with no internet access and never see real credentials. The gateway proxy swaps in secrets at request time and enforces a domain allowlist.",
     settingsLabel: "Domains, MCP proxy, and tool permissions",
     chatLabel: "Agent asks for network access",
-    botName: "InfraBot",
+    botName: "Support",
     botInitial: "I",
     botColor: "#ef4444",
     messages: [
@@ -103,7 +103,7 @@ export const useCases: UseCase[] = [
     learnMoreUrl: "/skills",
     settingsLabel: "Review skills, MCP servers, and auth",
     chatLabel: "Agent configures dependencies",
-    botName: "OpsTriage",
+    botName: "Coding",
     botInitial: "O",
     botColor: "#f59e0b",
     messages: [
@@ -134,7 +134,7 @@ export const useCases: UseCase[] = [
       "Owletto memory plugin is enabled by default. PostgreSQL + pgvector for semantic search, BM25 for keyword recall, and an entity system — auto-recall on every turn, no setup required.",
     settingsLabel: "Choose and configure memory plugins",
     chatLabel: "Agent stores and recalls long-term context",
-    botName: "ReportBot",
+    botName: "AnalystBot",
     botInitial: "R",
     botColor: "#10b981",
     messages: [
@@ -164,7 +164,7 @@ export const useCases: UseCase[] = [
       "Users set reminders and recurring tasks in natural language. Agents run autonomously at the scheduled time — you don't build the scheduler.",
     settingsLabel: "View and manage scheduled jobs",
     chatLabel: "Schedule tasks in natural language",
-    botName: "TaskPilot",
+    botName: "Personal Assistant Bot",
     botInitial: "T",
     botColor: "#8b5cf6",
     messages: [
@@ -195,8 +195,8 @@ export const useCases: UseCase[] = [
       "Let users install system packages via Nix on demand. Environments persist across sessions and are fully reproducible.",
     settingsLabel: "Manage installed system packages",
     chatLabel: "Agent requests tools it needs",
-    botName: "MediaBot",
-    botInitial: "M",
+    botName: "Internal Marketing Bot",
+    botInitial: "N",
     botColor: "#ec4899",
     messages: [
       {

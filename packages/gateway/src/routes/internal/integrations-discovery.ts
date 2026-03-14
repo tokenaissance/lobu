@@ -8,6 +8,7 @@
 
 import {
   createLogger,
+  type SkillConfig,
   type SkillIntegration,
   verifyWorkerToken,
 } from "@lobu/core";
@@ -16,7 +17,10 @@ import type { IntegrationConfigService } from "../../auth/integration/config-ser
 import type { IntegrationCredentialStore } from "../../auth/integration/credential-store";
 import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
 import { McpDiscoveryService } from "../../services/mcp-discovery";
-import type { SkillRegistryCoordinator } from "../../services/skill-registry";
+import type {
+  SkillContent,
+  SkillRegistryCoordinator,
+} from "../../services/skill-registry";
 import type { SystemConfigResolver } from "../../services/system-config-resolver";
 
 const logger = createLogger("internal-integrations-discovery");
@@ -292,6 +296,253 @@ export function createIntegrationsDiscoveryRoutes(
     }
   );
 
+  // Install a skill or MCP — auto-enables system skills with satisfied deps
+  router.post(
+    "/internal/integrations/install",
+    authenticateWorker,
+    async (c) => {
+      const body = await c.req.json<{ id: string; upgrade?: boolean }>();
+      const { id, upgrade } = body;
+      if (!id?.trim()) {
+        return c.json({ error: "Missing required field: id" }, 400);
+      }
+
+      const worker = c.get("worker");
+      const agentId = worker.agentId || worker.userId;
+
+      // Get per-agent registries
+      let extraRegistries;
+      if (config.agentSettingsStore) {
+        const settings = await config.agentSettingsStore.getSettings(agentId);
+        extraRegistries = settings?.skillRegistries;
+      }
+
+      // Determine source by searching for the skill ID
+      let source = "clawhub";
+      try {
+        const searchResults = await coordinator.search(id, 1, extraRegistries);
+        const exactMatch = searchResults.find((r) => r.id === id);
+        if (exactMatch) {
+          source = exactMatch.source;
+        }
+      } catch {
+        // Search failed, default to clawhub
+      }
+
+      // Try skill registries first
+      let content: SkillContent | null = null;
+      try {
+        content = await coordinator.fetch(id, extraRegistries);
+      } catch {
+        // Not a skill, try MCP
+      }
+
+      if (content) {
+        // System skill with all deps satisfied → auto-install
+        if (
+          source === "system" &&
+          config.agentSettingsStore &&
+          config.integrationCredentialStore
+        ) {
+          const settings = await config.agentSettingsStore.getSettings(agentId);
+          const missing = await checkRequirements(
+            content,
+            settings,
+            config.integrationCredentialStore,
+            agentId
+          );
+
+          if (missing.length === 0) {
+            await applySkillToSettings(
+              config.agentSettingsStore,
+              agentId,
+              id,
+              content,
+              !!upgrade
+            );
+
+            logger.info("Auto-installed system skill", { id, agentId });
+            return c.json({
+              type: "auto_installed",
+              name: content.name,
+              uri: null,
+              message: `${content.name} has been enabled. All dependencies were already configured.`,
+            });
+          }
+
+          // System skill but missing deps
+          return c.json({
+            type: "needs_setup",
+            id,
+            name: content.name,
+            source,
+            uri: null,
+            description: content.description,
+            integrations: content.integrations || [],
+            mcpServers: content.mcpServers || [],
+            nixPackages: content.nixPackages || [],
+            permissions: content.permissions || [],
+            providers: content.providers || [],
+            missing,
+          });
+        }
+
+        // Non-system skill or missing stores → return manifest
+        return c.json({
+          type: "manifest",
+          id,
+          name: content.name,
+          source,
+          uri: null,
+          description: content.description,
+          integrations: content.integrations || [],
+          mcpServers: content.mcpServers || [],
+          nixPackages: content.nixPackages || [],
+          permissions: content.permissions || [],
+          providers: content.providers || [],
+        });
+      }
+
+      // Try MCP discovery
+      const mcp = await mcpDiscovery.getById(id);
+      if (mcp) {
+        return c.json({
+          type: "manifest",
+          id: mcp.id,
+          name: mcp.name,
+          source: "mcp-registry",
+          uri: null,
+          description: mcp.description,
+          integrations: [],
+          mcpServers: [],
+          nixPackages: [],
+          permissions: [],
+          providers: [],
+          prefillMcpServer: mcp.prefillMcpServer,
+        });
+      }
+
+      return c.json({ error: `"${id}" not found in any registry` }, 404);
+    }
+  );
+
   logger.info("Internal integrations discovery routes registered");
   return router;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for install endpoint
+// ---------------------------------------------------------------------------
+
+/** Check all skill requirements and return list of unsatisfied dependencies. */
+async function checkRequirements(
+  content: SkillContent,
+  settings: {
+    mcpServers?: Record<string, unknown>;
+    installedProviders?: Array<{ providerId: string }>;
+  } | null,
+  credentialStore: IntegrationCredentialStore,
+  agentId: string
+): Promise<string[]> {
+  const missing: string[] = [];
+
+  // Check integrations (needs credential store lookup)
+  if (content.integrations?.length) {
+    for (const integration of content.integrations) {
+      const accounts = await credentialStore.listAccounts(
+        agentId,
+        integration.id
+      );
+      if (accounts.length === 0) {
+        missing.push(`integration:${integration.id} (not connected)`);
+      }
+    }
+  }
+
+  // Check providers
+  if (content.providers?.length) {
+    const installedProviderIds = new Set(
+      (settings?.installedProviders || []).map((p) => p.providerId)
+    );
+    for (const provider of content.providers) {
+      if (!installedProviderIds.has(provider)) {
+        missing.push(`provider:${provider} (not configured)`);
+      }
+    }
+  }
+
+  // Check MCP servers
+  if (content.mcpServers?.length) {
+    const configuredMcps = settings?.mcpServers || {};
+    for (const mcp of content.mcpServers) {
+      if (!configuredMcps[mcp.id]) {
+        missing.push(`mcp:${mcp.id} (not configured)`);
+      }
+    }
+  }
+
+  return missing;
+}
+
+/** Enable a skill in agent settings (add or update). */
+async function applySkillToSettings(
+  store: AgentSettingsStore,
+  agentId: string,
+  skillId: string,
+  content: SkillContent,
+  upgrade: boolean
+): Promise<void> {
+  const settings = await store.getSettings(agentId);
+  const skills = settings?.skillsConfig?.skills || [];
+
+  const existingIdx = skills.findIndex((s) => s.repo === skillId);
+  const skillEntry: SkillConfig = {
+    repo: skillId,
+    name: content.name,
+    description: content.description,
+    enabled: true,
+    integrations: content.integrations,
+    mcpServers: content.mcpServers,
+    nixPackages: content.nixPackages,
+    permissions: content.permissions,
+    providers: content.providers,
+  };
+
+  if (existingIdx >= 0 && skills[existingIdx]) {
+    if (upgrade) {
+      skills[existingIdx] = {
+        ...skills[existingIdx],
+        ...skillEntry,
+        enabled: true,
+      };
+    } else {
+      skills[existingIdx].enabled = true;
+    }
+  } else {
+    skills.push(skillEntry);
+  }
+
+  // Also add MCP servers from skill manifest to agent's mcpServers config
+  const mcpServers = { ...(settings?.mcpServers || {}) } as Record<
+    string,
+    Record<string, unknown>
+  >;
+  if (content.mcpServers?.length) {
+    for (const mcp of content.mcpServers) {
+      if (!mcpServers[mcp.id]) {
+        const mcpEntry: Record<string, unknown> = { enabled: true };
+        if (mcp.url) mcpEntry.url = mcp.url;
+        if (mcp.type) mcpEntry.type = mcp.type;
+        if (mcp.command) mcpEntry.command = mcp.command;
+        if (mcp.args) mcpEntry.args = mcp.args;
+        if (mcp.name) mcpEntry.name = mcp.name;
+        mcpServers[mcp.id] = mcpEntry;
+      }
+    }
+  }
+
+  await store.updateSettings(agentId, {
+    skillsConfig: { skills },
+    mcpServers,
+  });
 }
