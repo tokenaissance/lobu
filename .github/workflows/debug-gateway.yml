@@ -29,16 +29,13 @@ jobs:
           echo "=== All chat-conn lock keys ==="
           kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning KEYS "chat-conn:lock:*"
 
-          # Force delete all chat-conn lock keys
-          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning --scan --pattern "chat-conn:lock:*" | while read key; do
+          # Delete ALL chat-conn state for this thread (locks, dedup cache, etc.)
+          echo "=== Deleting all chat-conn state ==="
+          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning --scan --pattern "chat-conn:*" | while read key; do
             echo "  Deleting: $key"
             kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning DEL "$key"
           done
-
-          # Also try the exact key format
-          kubectl exec -n lobu $REDIS_POD -- redis-cli -a "$REDIS_PASS" --no-auth-warning DEL "chat-conn:lock:telegram:6570514069"
-          echo "=== Direct lock key deleted ==="
-          echo "=== Locks cleared ==="
+          echo "=== All chat state cleared ==="
 
           echo ""
           echo "=== Gateway Pod Logs (last 200 lines) ==="
