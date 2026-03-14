@@ -218,32 +218,6 @@ spec:
             - name: ADMIN_PASSWORD
               value: "{{ .Values.secrets.adminPassword }}"
             {{- end }}
-
-            # Platform connection tokens
-            - name: TELEGRAM_BOT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: telegram-bot-token
-                  optional: true
-            - name: SLACK_BOT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-bot-token
-                  optional: true
-            - name: SLACK_SIGNING_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-signing-secret
-                  optional: true
-            - name: SLACK_APP_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "lobu.fullname" . }}-secrets
-                  key: slack-app-token
-                  optional: true
           volumeMounts:
             # Tmpfs for tsx and other temp files (required for readOnlyRootFilesystem)
             - name: tmp
