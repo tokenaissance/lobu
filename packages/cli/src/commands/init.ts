@@ -82,6 +82,23 @@ export async function initCommand(
     },
   ]);
 
+  // Gateway port selection
+  const { gatewayPort } = await inquirer.prompt([
+    {
+      type: "input",
+      name: "gatewayPort",
+      message: "Gateway port?",
+      default: "8080",
+      validate: (input: string) => {
+        const port = Number(input);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          return "Please enter a valid port number (1-65535)";
+        }
+        return true;
+      },
+    },
+  ]);
+
   // Worker network access — always filtered, configurable per-agent later
   const allowedDomains = [
     "registry.npmjs.org",
@@ -127,8 +144,8 @@ export async function initCommand(
       CLI_VERSION: cliVersion,
       DEPLOYMENT_MODE: answers.deploymentMode,
       ENCRYPTION_KEY: answers.encryptionKey,
-      PUBLIC_GATEWAY_URL: "http://localhost:8080",
-      GATEWAY_PORT: "8080",
+      PUBLIC_GATEWAY_URL: `http://localhost:${gatewayPort}`,
+      GATEWAY_PORT: gatewayPort,
       WORKER_ALLOWED_DOMAINS: answers.allowedDomains,
       WORKER_DISALLOWED_DOMAINS: answers.disallowedDomains,
     };
@@ -196,7 +213,7 @@ export async function initCommand(
     // Always generate docker-compose.yml (Redis is needed for all modes)
     const composeContent = generateDockerCompose({
       projectName,
-      gatewayPort: "8080",
+      gatewayPort,
       dockerfilePath: "./Dockerfile.worker",
       deploymentMode: answers.deploymentMode,
     });
@@ -347,7 +364,7 @@ services:
     image: ${gatewayImage}
     pull_policy: always
     ports:
-      - "${gatewayPort}:8080"${proxyPort}
+      - "\${GATEWAY_PORT:-${gatewayPort}}:8080"${proxyPort}
     environment:
       DEPLOYMENT_MODE: ${deploymentMode}${workerImageEnv}
       QUEUE_URL: redis://redis:6379/0
