@@ -8,14 +8,6 @@ import { GenericOAuth2Client } from "../oauth/generic-client";
 import type { McpConfigService } from "./config-service";
 import type { McpCredentialStore } from "./credential-store";
 import type { McpInputStore } from "./input-store";
-import {
-  isUnknownToolError,
-  isVirtualMemoryMcpId,
-  isVirtualMemoryTool,
-  MEMORY_TOOLS,
-  mapVirtualMemoryToolCall,
-  OWLETTO_MCP_ID,
-} from "./memory-tools";
 import { substituteObject, substituteString } from "./string-substitution";
 import type { CachedMcpServer, McpTool, McpToolCache } from "./tool-cache";
 
@@ -40,7 +32,6 @@ interface ResolvedMcp {
 }
 
 const oauth2Client = new GenericOAuth2Client();
-const MEMORY_AUTH_REQUIRED_ERROR = `MCP 'memory' requires authentication. Use ConnectService(id="${OWLETTO_MCP_ID}") to authenticate.`;
 
 function authenticateRequest(
   c: Context
@@ -243,14 +234,6 @@ export class McpProxy {
     const auth = authenticateRequest(c);
     if (!auth) return c.json({ error: "Invalid authentication token" }, 401);
 
-    if (isVirtualMemoryMcpId(mcpId)) {
-      const backend = await this.resolveVirtualMemoryBackend(auth.tokenData);
-      if (!backend) {
-        return c.json({ error: `MCP server '${mcpId}' not found` }, 404);
-      }
-      return c.json({ tools: MEMORY_TOOLS });
-    }
-
     const resolved = await this.resolveMcpServer(mcpId, auth.tokenData);
     if (!resolved) {
       return c.json({ error: `MCP server '${mcpId}' not found` }, 404);
@@ -313,10 +296,6 @@ export class McpProxy {
     const toolName = c.req.param("toolName");
     const auth = authenticateRequest(c);
     if (!auth) return c.json({ error: "Invalid authentication token" }, 401);
-
-    if (isVirtualMemoryMcpId(mcpId)) {
-      return this.handleVirtualMemoryToolCall(c, toolName, auth.tokenData);
-    }
 
     const resolved = await this.resolveMcpServer(mcpId, auth.tokenData);
     if (!resolved) {
@@ -468,191 +447,7 @@ export class McpProxy {
       }
     }
 
-    if (allHttpServers.has(OWLETTO_MCP_ID)) {
-      mcpServers.memory = { tools: MEMORY_TOOLS };
-    }
-
     return c.json({ mcpServers });
-  }
-
-  private async handleVirtualMemoryToolCall(
-    c: Context,
-    toolName: string,
-    tokenData: any
-  ): Promise<Response> {
-    if (!isVirtualMemoryTool(toolName)) {
-      return c.json(
-        {
-          error: `Unknown memory tool '${toolName}'`,
-          isError: true,
-          content: [],
-        },
-        404
-      );
-    }
-
-    let toolArguments: Record<string, unknown> = {};
-    try {
-      const body = await c.req.text();
-      if (body) {
-        toolArguments = JSON.parse(body);
-      }
-    } catch {
-      return c.json({ error: "Invalid JSON body" }, 400);
-    }
-
-    const resolved = await this.resolveVirtualMemoryBackend(tokenData);
-    if (!resolved) {
-      return c.json({ error: "MCP server 'memory' not found" }, 404);
-    }
-    if (!resolved.credentials) {
-      return c.json(
-        {
-          content: [{ type: "text", text: MEMORY_AUTH_REQUIRED_ERROR }],
-          isError: true,
-          error: MEMORY_AUTH_REQUIRED_ERROR,
-        },
-        401
-      );
-    }
-
-    const mapped = mapVirtualMemoryToolCall(toolName, toolArguments);
-    if (!mapped) {
-      return c.json(
-        {
-          error: `Failed to map memory tool '${toolName}'`,
-          isError: true,
-          content: [],
-        },
-        400
-      );
-    }
-
-    const primaryResult = await this.callResolvedTool(
-      resolved,
-      OWLETTO_MCP_ID,
-      mapped.backendToolName,
-      mapped.backendArgs
-    );
-
-    if (!primaryResult.isError) {
-      return c.json(primaryResult.payload);
-    }
-
-    const primaryError = String(
-      primaryResult.payload.error || "Upstream error"
-    );
-    if (mapped.fallbackSaveText && isUnknownToolError(primaryError)) {
-      const fallbackResult = await this.callResolvedTool(
-        resolved,
-        OWLETTO_MCP_ID,
-        "save_content",
-        { content: mapped.fallbackSaveText }
-      );
-
-      if (!fallbackResult.isError) {
-        return c.json(fallbackResult.payload);
-      }
-
-      return c.json(fallbackResult.payload, fallbackResult.status);
-    }
-
-    return c.json(primaryResult.payload, primaryResult.status);
-  }
-
-  private async resolveVirtualMemoryBackend(
-    tokenData: any
-  ): Promise<ResolvedMcp | null> {
-    const resolved = await this.resolveMcpServer(OWLETTO_MCP_ID, tokenData);
-    if (resolved) {
-      return resolved;
-    }
-
-    // Keep virtual memory visible even when Owletto exists but is not yet authenticated.
-    return this.resolveMcpServer(OWLETTO_MCP_ID, tokenData, {
-      discoveryOnly: true,
-    });
-  }
-
-  private async callResolvedTool(
-    resolved: ResolvedMcp,
-    mcpId: string,
-    toolName: string,
-    toolArguments: Record<string, unknown>
-  ): Promise<{
-    isError: boolean;
-    status: 200 | 502;
-    payload: { content: unknown[]; isError: boolean; error?: string };
-  }> {
-    try {
-      const jsonRpcBody = JSON.stringify({
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: toolName, arguments: toolArguments },
-        id: 1,
-      });
-
-      const response = await this.sendUpstreamRequest(
-        resolved.httpServer,
-        resolved.credentials,
-        resolved.inputValues,
-        resolved.agentId,
-        mcpId,
-        "POST",
-        jsonRpcBody
-      );
-
-      const data = (await response.json()) as JsonRpcResponse;
-      if (data?.error) {
-        const errorMsg =
-          data.error.message ||
-          (typeof data.error === "string" ? data.error : "Upstream error");
-
-        if (
-          /invalid.token|expired|unauthorized|unauthenticated/i.test(errorMsg)
-        ) {
-          await this.credentialStore.deleteCredentials(resolved.agentId, mcpId);
-        }
-
-        return {
-          isError: true,
-          status: 502,
-          payload: {
-            content: [],
-            isError: true,
-            error: errorMsg,
-          },
-        };
-      }
-
-      const result = data?.result || {};
-      const isToolError = !!result.isError;
-      const content = Array.isArray(result.content) ? result.content : [];
-      const toolErrorMessage =
-        isToolError && content.length > 0 && typeof content[0] === "object"
-          ? String((content[0] as { text?: unknown }).text || "")
-          : undefined;
-
-      return {
-        isError: isToolError,
-        status: 200,
-        payload: {
-          content,
-          isError: isToolError,
-          error: toolErrorMessage,
-        },
-      };
-    } catch (error) {
-      return {
-        isError: true,
-        status: 502,
-        payload: {
-          content: [],
-          isError: true,
-          error: `Failed to connect to MCP '${mcpId}': ${error instanceof Error ? error.message : "Unknown error"}`,
-        },
-      };
-    }
   }
 
   private async handleProxyRequest(c: Context): Promise<Response> {
@@ -793,11 +588,6 @@ export class McpProxy {
     agentId: string,
     tokenData: any
   ): Promise<{ found: boolean; annotations?: McpTool["annotations"] }> {
-    if (isVirtualMemoryMcpId(mcpId)) {
-      const tool = MEMORY_TOOLS.find((t) => t.name === toolName);
-      return { found: !!tool, annotations: tool?.annotations };
-    }
-
     let tools: McpTool[] | null = null;
     if (this.toolCache) {
       tools = await this.toolCache.get(mcpId, agentId);
@@ -950,18 +740,32 @@ export class McpProxy {
 
     if (!oauthConfig) throw new Error("No OAuth config available for refresh");
 
-    const refreshedCredentials = await oauth2Client.refreshToken(
-      refreshToken,
-      oauthConfig
-    );
+    try {
+      const refreshedCredentials = await oauth2Client.refreshToken(
+        refreshToken,
+        oauthConfig
+      );
 
-    await this.credentialStore.setCredentials(
-      agentId,
-      mcpId,
-      refreshedCredentials
-    );
-    logger.info("Successfully refreshed MCP access token", { agentId, mcpId });
-    return refreshedCredentials;
+      await this.credentialStore.setCredentials(
+        agentId,
+        mcpId,
+        refreshedCredentials
+      );
+      logger.info("Successfully refreshed MCP access token", {
+        agentId,
+        mcpId,
+      });
+      return refreshedCredentials;
+    } catch (error) {
+      // Clear stale credentials so getMcpStatuses correctly shows
+      // unauthenticated and the user can re-authenticate via the settings page.
+      await this.credentialStore.deleteCredentials(agentId, mcpId);
+      logger.warn(
+        "Cleared stale MCP credentials after refresh failure — user must re-authenticate",
+        { agentId, mcpId }
+      );
+      throw error;
+    }
   }
 
   private buildUpstreamHeaders(

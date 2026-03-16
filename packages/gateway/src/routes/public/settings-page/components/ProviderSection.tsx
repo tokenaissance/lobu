@@ -298,18 +298,37 @@ export function triggerProviderAuth(
 
 // ─── Components ───────────────────────────────────────────────────────────
 
-export function ProviderSection() {
+export function ProviderSection({ adminOnly }: { adminOnly?: boolean }) {
   const ctx = useSettings();
 
   return (
-    <Section id="model" title="Providers" icon="&#129302;">
+    <Section
+      id="model"
+      title="Providers"
+      icon="&#129302;"
+      adminOnly={adminOnly}
+    >
       <div id="provider-list">
         {ctx.providerOrder.value.length === 0 && (
           <div class="text-center py-6 text-gray-500">
-            <p class="text-sm font-medium text-gray-700 mb-1">
-              No model providers configured
-            </p>
-            <p class="text-xs">Add a provider below to get started.</p>
+            {ctx.baseProviderNames.length > 0 ? (
+              <>
+                <p class="text-sm font-medium text-gray-700 mb-1">
+                  Using base agent providers
+                </p>
+                <p class="text-xs">{ctx.baseProviderNames.join(", ")}</p>
+                <p class="text-xs text-gray-400 mt-1">
+                  Add a provider below to override.
+                </p>
+              </>
+            ) : (
+              <>
+                <p class="text-sm font-medium text-gray-700 mb-1">
+                  No model providers configured
+                </p>
+                <p class="text-xs">Add a provider below to get started.</p>
+              </>
+            )}
           </div>
         )}
         {ctx.providerOrder.value.map((pid, i) => (
@@ -505,7 +524,7 @@ function ProviderCard({
               Connect
             </button>
           )}
-          {!ctx.isSandbox && (
+          {(!ctx.isSandbox || ctx.isUserScope("model")) && (
             <button
               type="button"
               onClick={handleUninstall}
@@ -733,7 +752,7 @@ function AuthFlowContent({
 function ProviderCatalog() {
   const ctx = useSettings();
   if (ctx.catalogProviders.value.length === 0) return null;
-  if (ctx.isSandbox) {
+  if (ctx.isSandbox && !ctx.isUserScope("model")) {
     return (
       <div class="mt-3 pt-3 border-t border-gray-200">
         <p class="text-xs text-gray-500">

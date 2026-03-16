@@ -24,7 +24,7 @@ export class SystemSkillsRegistry implements SkillRegistry {
   }
 
   async search(query: string, limit: number): Promise<SkillRegistryResult[]> {
-    const skills = await this.service.getSystemSkills();
+    const skills = await this.service.getSearchableSkills();
     const q = query.toLowerCase().trim();
 
     const filtered = q

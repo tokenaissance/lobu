@@ -162,6 +162,7 @@ export interface SettingsState {
   modelSelection: ModelSelectionState;
   providerModelPreferences: Record<string, string>;
   catalogProviders: CatalogProvider[];
+  memoryEnabled: boolean;
   initialSkills: Skill[];
   initialMcpServers: Record<string, McpConfig>;
   prefillSkills: PrefillSkill[];
@@ -186,6 +187,7 @@ export interface SettingsState {
   showSwitcher: boolean;
   agents: AgentInfo[];
   hasNoProviders: boolean;
+  baseProviderNames: string[];
   // Provider icon URLs for rendering
   providerIconUrls: Record<string, string>;
   // Integration connection status keyed by integration ID

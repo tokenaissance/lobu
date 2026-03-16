@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { getToken } from "../api/credentials.js";
 import { isLoadError, loadConfig } from "../config/loader.js";
+import { renderMarkdown } from "../utils/markdown.js";
 
 /**
  * `lobu chat "prompt"` — send a prompt to an agent and stream the response.
@@ -165,11 +166,11 @@ async function streamResponse(
           switch (currentEvent) {
             case "output":
               if (typeof data.content === "string")
-                process.stdout.write(data.content);
+                process.stdout.write(renderMarkdown(data.content));
               break;
             case "ephemeral":
               if (typeof data.content === "string") {
-                console.error(chalk.yellow(`\n  ${data.content}\n`));
+                console.error(`\n${renderMarkdown(data.content)}\n`);
               }
               controller.abort();
               process.exit(1);

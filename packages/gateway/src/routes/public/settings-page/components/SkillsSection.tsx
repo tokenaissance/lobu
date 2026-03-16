@@ -62,7 +62,7 @@ function SubItem({
   );
 }
 
-export function SkillsSection() {
+export function SkillsSection({ adminOnly }: { adminOnly?: boolean }) {
   const ctx = useSettings();
 
   function toggleSkill(repo: string) {
@@ -95,7 +95,13 @@ export function SkillsSection() {
     ) : undefined;
 
   return (
-    <Section id="skills" title="Skills" icon="&#128218;" badge={badge}>
+    <Section
+      id="skills"
+      title="Skills"
+      icon="&#128218;"
+      badge={badge}
+      adminOnly={adminOnly}
+    >
       <div class="space-y-2">
         {ctx.skillsError.value && (
           <div class="bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs">
@@ -103,7 +109,28 @@ export function SkillsSection() {
           </div>
         )}
 
-        {count === 0 && (
+        {ctx.memoryEnabled && (
+          <div class="flex items-center justify-between p-2 bg-white rounded border border-gray-100">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded shrink-0 bg-amber-100 text-amber-700">
+                memory
+              </span>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-gray-800 truncate">
+                  Owletto Memory
+                </p>
+                <p class="text-xs text-gray-500 truncate">
+                  Long-term memory across conversations
+                </p>
+              </div>
+            </div>
+            <span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800">
+              Active
+            </span>
+          </div>
+        )}
+
+        {count === 0 && !ctx.memoryEnabled && (
           <p class="text-xs text-gray-500">
             No skills installed. Ask your agent to find and install skills for
             you.

@@ -285,9 +285,7 @@ function ConnectionCard({
       const settings: Record<string, any> = {
         allowGroups: allowGroups.value,
         ...(allowFromList.length > 0 ? { allowFrom: allowFromList } : {}),
-        ...(userConfigScopes.value.length > 0
-          ? { userConfigScopes: userConfigScopes.value }
-          : {}),
+        userConfigScopes: userConfigScopes.value,
       };
       const result = await api.updateConnection(connection.id, {
         config,
@@ -323,20 +321,37 @@ function ConnectionCard({
             />
           )}
 
-          {botName &&
-            (botLink ? (
-              <a
-                href={botLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-xs text-blue-600 hover:text-blue-800 font-mono"
-                onClick={(e) => e.stopPropagation()}
-              >
-                @{botName}
-              </a>
-            ) : (
+          {botName && (
+            <>
+              {botLink && (
+                <a
+                  href={botLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-gray-400 hover:text-gray-600 shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Open ${botLink}`}
+                >
+                  <svg
+                    class="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <title>Open bot link</title>
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
+              )}
               <span class="text-xs text-gray-600 font-mono">@{botName}</span>
-            ))}
+            </>
+          )}
 
           <span
             class={`inline-block w-2 h-2 rounded-full shrink-0 ${statusDotColor}`}
@@ -722,9 +737,7 @@ function NewConnectionForm({
       const settings: Record<string, any> = {
         allowGroups: allowGroups.value,
         ...(allowFromList.length > 0 ? { allowFrom: allowFromList } : {}),
-        ...(userConfigScopes.value.length > 0
-          ? { userConfigScopes: userConfigScopes.value }
-          : {}),
+        userConfigScopes: userConfigScopes.value,
       };
       const result = await api.createConnection({
         platform: platform.value,

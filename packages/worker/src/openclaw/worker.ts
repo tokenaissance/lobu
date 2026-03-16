@@ -38,7 +38,10 @@ import {
   type GatewayParams,
   generateImage,
 } from "../shared/tool-implementations";
-import { createOpenClawCustomTools } from "./custom-tools";
+import {
+  createMcpToolDefinitions,
+  createOpenClawCustomTools,
+} from "./custom-tools";
 import { OpenClawCoreInstructionProvider } from "./instructions";
 import {
   DEFAULT_PROVIDER_BASE_URL_ENV,
@@ -707,6 +710,15 @@ export class OpenClawWorker implements WorkerExecutor {
         process.env[envVar] = url;
       }
     }
+    if (pc.credentialPlaceholders) {
+      for (const [envVar, placeholder] of Object.entries(
+        pc.credentialPlaceholders
+      )) {
+        if (!process.env[envVar]) {
+          process.env[envVar] = placeholder;
+        }
+      }
+    }
 
     // Register config-driven providers so resolveModelRef() can handle them
     if (pc.configProviders) {
@@ -751,11 +763,33 @@ export class OpenClawWorker implements WorkerExecutor {
       }
     }
 
-    const baseModel = getModel(provider as any, modelId as any) as any;
+    let baseModel = getModel(provider as any, modelId as any) as any;
     if (!baseModel) {
-      throw new Error(
-        `Model "${modelId}" not found for provider "${provider}". Check that the model ID is valid and registered in the model registry.`
-      );
+      // For OpenAI-compatible providers (e.g. nvidia, together-ai), create a
+      // dynamic model entry since these models aren't in the static registry.
+      const registryProvider =
+        PROVIDER_REGISTRY_ALIASES[rawProvider] || rawProvider;
+      if (registryProvider === "openai" || rawProvider !== provider) {
+        logger.info(
+          `Creating dynamic model entry for ${rawProvider}/${modelId} (openai-compatible)`
+        );
+        baseModel = {
+          id: modelId,
+          name: modelId,
+          api: "openai-completions",
+          provider: registryProvider,
+          baseUrl: providerBaseUrl || "https://api.openai.com/v1",
+          reasoning: false,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128000,
+          maxTokens: 16384,
+        };
+      } else {
+        throw new Error(
+          `Model "${modelId}" not found for provider "${provider}". Check that the model ID is valid and registered in the model registry.`
+        );
+      }
     }
     const model = providerBaseUrl
       ? { ...baseModel, baseUrl: providerBaseUrl }
@@ -930,13 +964,24 @@ Use it when the user references past discussions or you need context.`);
 
     const finalInstructions = instructionParts.filter(Boolean).join("\n\n");
 
-    const customTools = createOpenClawCustomTools({
+    const gwParams = {
       gatewayUrl,
       workerToken,
       channelId: this.config.channelId,
       conversationId: this.config.conversationId,
       platform: this.config.platform,
-    });
+    };
+
+    const customTools = createOpenClawCustomTools(gwParams);
+
+    // Register MCP tools as first-class callable tools (alongside virtual memory wrappers)
+    const mcpToolDefs = createMcpToolDefinitions(context.mcpTools, gwParams);
+    if (mcpToolDefs.length > 0) {
+      customTools.push(...mcpToolDefs);
+      logger.info(
+        `Registered ${mcpToolDefs.length} MCP tool(s): ${mcpToolDefs.map((t) => t.name).join(", ")}`
+      );
+    }
 
     // Load OpenClaw plugins
     const pluginsConfig = rawOptions.pluginsConfig as PluginsConfig | undefined;

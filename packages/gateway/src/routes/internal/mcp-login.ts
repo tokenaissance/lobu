@@ -67,18 +67,19 @@ export function createMcpLoginRoutes(
       platform,
     });
 
-    // Get auth status which includes login URLs
-    const statuses = await mcpOAuthModule.getAuthStatus(userId, agentId);
+    // Get auth status which includes login URLs (thread context flows into the
+    // secure token so the OAuth callback can notify the originating conversation)
+    const statuses = await mcpOAuthModule.getAuthStatus(userId, agentId, {
+      conversationId: worker.conversationId,
+      channelId: worker.channelId,
+      teamId: worker.teamId,
+      platform,
+      connectionId: worker.connectionId,
+    });
     const mcpStatus = statuses.find((s) => s.id === mcpId);
 
     if (!mcpStatus) {
       return c.json({ error: `MCP '${mcpId}' not found` }, 404);
-    }
-
-    if (mcpStatus.isAuthenticated) {
-      return c.json({
-        message: `Already authenticated with ${mcpStatus.name}`,
-      });
     }
 
     if (!mcpStatus.loginUrl) {

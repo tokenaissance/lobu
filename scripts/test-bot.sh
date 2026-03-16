@@ -64,7 +64,7 @@ TIMEOUT="${TEST_TIMEOUT:-30}"
 # Platform-specific setup
 case "$TEST_PLATFORM" in
     slack)
-        AUTH_TOKEN="${TEST_AUTH_TOKEN:-local-test}"
+        AUTH_TOKEN="${TEST_AUTH_TOKEN:-$ADMIN_PASSWORD}"
         CHANNEL="${TEST_CHANNEL:-$QA_SLACK_CHANNEL}"
         if [ -z "$CHANNEL" ]; then
             echo "❌ QA_SLACK_CHANNEL or TEST_CHANNEL environment variable is required for Slack"
@@ -72,7 +72,7 @@ case "$TEST_PLATFORM" in
         fi
         ;;
     whatsapp)
-        AUTH_TOKEN="${TEST_AUTH_TOKEN:-local-test}"
+        AUTH_TOKEN="${TEST_AUTH_TOKEN:-$ADMIN_PASSWORD}"
         CHANNEL="${TEST_CHANNEL:-$WHATSAPP_SELF_PHONE}"
         if [ -z "$CHANNEL" ]; then
             # For self-chat mode, we can use "self" as a special channel
@@ -85,7 +85,7 @@ case "$TEST_PLATFORM" in
         fi
         ;;
     telegram)
-        AUTH_TOKEN="${TEST_AUTH_TOKEN:-local-test}"
+        AUTH_TOKEN="${TEST_AUTH_TOKEN:-$ADMIN_PASSWORD}"
         CHANNEL="${TEST_CHANNEL:-$TELEGRAM_TEST_CHAT_ID}"
         if [ -z "$CHANNEL" ]; then
             echo "❌ TEST_CHANNEL or TELEGRAM_TEST_CHAT_ID environment variable is required for Telegram"

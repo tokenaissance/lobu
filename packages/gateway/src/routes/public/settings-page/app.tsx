@@ -126,6 +126,8 @@ export interface SettingsContextValue {
   agents: SettingsState["agents"];
   providerIconUrls: Record<string, string>;
 
+  memoryEnabled: boolean;
+
   // Scoped settings
   settingsMode: "admin" | "user";
   allowedScopes?: string[];
@@ -133,8 +135,10 @@ export interface SettingsContextValue {
   isSandbox: boolean;
   ownerPlatform: string;
   templateAgentId?: string;
+  baseProviderNames: string[];
   promoting: Signal<boolean>;
   isScopeAllowed(scope: string): boolean;
+  isUserScope(scope: string): boolean;
 
   // Actions
   toggleSection(id: string): void;
@@ -597,15 +601,33 @@ function App() {
     agents: state.agents,
     providerIconUrls: state.providerIconUrls || {},
 
+    memoryEnabled: !!state.memoryEnabled,
     settingsMode: state.settingsMode || "admin",
     allowedScopes: state.allowedScopes,
     isAdmin: !!state.isAdmin,
     isSandbox: !!state.isSandbox,
     ownerPlatform: state.ownerPlatform || "",
     templateAgentId: state.templateAgentId,
+    baseProviderNames: state.baseProviderNames || [],
     promoting,
+    isUserScope(scope: string): boolean {
+      if (state.settingsMode !== "user") return true;
+      if (!state.allowedScopes?.length) return false;
+      if (state.allowedScopes.includes(scope)) return true;
+      if (scope === "skills") {
+        return (
+          state.allowedScopes.includes("tools") ||
+          state.allowedScopes.includes("mcp-servers")
+        );
+      }
+      if (scope === "permissions" || scope === "packages") {
+        return state.allowedScopes.includes("tools");
+      }
+      return false;
+    },
     isScopeAllowed(scope: string): boolean {
       if (state.settingsMode !== "user") return true;
+      if (state.isAdmin) return true;
       if (!state.allowedScopes?.length) return false;
       if (state.allowedScopes.includes(scope)) return true;
       // Backward compat: old "tools"/"mcp-servers" scopes map to new names
@@ -651,17 +673,53 @@ function App() {
           class="space-y-3"
         >
           {ctx.isAdmin && !ctx.isSandbox && <ConnectionsSection />}
-          {ctx.isScopeAllowed("model") && <ProviderSection />}
-          {ctx.isScopeAllowed("system-prompt") && <InstructionsSection />}
-          {ctx.isScopeAllowed("skills") && <SkillsSection />}
-          {ctx.isScopeAllowed("schedules") && <RemindersSection />}
-          {ctx.isScopeAllowed("permissions") && <PermissionsSection />}
-          {ctx.isScopeAllowed("packages") && <NixPackagesSection />}
+          {ctx.isScopeAllowed("model") && (
+            <ProviderSection
+              adminOnly={
+                ctx.isAdmin && ctx.isSandbox && !ctx.isUserScope("model")
+              }
+            />
+          )}
+          {ctx.isScopeAllowed("system-prompt") && (
+            <InstructionsSection
+              adminOnly={
+                ctx.isAdmin &&
+                ctx.isSandbox &&
+                !ctx.isUserScope("system-prompt")
+              }
+            />
+          )}
+          {ctx.isScopeAllowed("skills") && (
+            <SkillsSection
+              adminOnly={
+                ctx.isAdmin && ctx.isSandbox && !ctx.isUserScope("skills")
+              }
+            />
+          )}
+          {ctx.isScopeAllowed("schedules") && (
+            <RemindersSection
+              adminOnly={
+                ctx.isAdmin && ctx.isSandbox && !ctx.isUserScope("schedules")
+              }
+            />
+          )}
+          {ctx.isScopeAllowed("permissions") && (
+            <PermissionsSection
+              adminOnly={
+                ctx.isAdmin && ctx.isSandbox && !ctx.isUserScope("permissions")
+              }
+            />
+          )}
+          {ctx.isScopeAllowed("packages") && (
+            <NixPackagesSection
+              adminOnly={
+                ctx.isAdmin && ctx.isSandbox && !ctx.isUserScope("packages")
+              }
+            />
+          )}
 
           {/* Verbose toggle */}
-          <div
-            class={`bg-gray-50 rounded-lg p-3 ${ctx.settingsMode === "user" ? "hidden" : ""}`}
-          >
+          <div class="bg-gray-50 rounded-lg p-3">
             <label class="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

@@ -3,13 +3,45 @@ import type {
   InteractionService,
   PostedGrantRequest,
   PostedLinkButton,
+  PostedPackageRequest,
   PostedQuestion,
   PostedStatusMessage,
 } from "../interactions";
+import type { GrantStore } from "../permissions/grant-store";
 import type { ChatInstanceManager } from "./chat-instance-manager";
 import type { PlatformConnection } from "./types";
 
 const logger = createLogger("chat-interaction-bridge");
+
+/**
+ * Send a message with inline keyboard buttons via the Telegram Bot API.
+ * Used for interactive elements (grant/package requests, questions) since
+ * the Chat SDK does not support Telegram's inline keyboard natively.
+ */
+async function sendTelegramInlineKeyboard(
+  botToken: string,
+  chatId: string,
+  text: string,
+  buttons: Array<Array<{ text: string; callback_data: string }>>
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          reply_markup: { inline_keyboard: buttons },
+        }),
+      }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 // Deduplicate events across multiple connections for the same platform
 const handledEvents = new Set<string>();
@@ -18,11 +50,21 @@ function markHandled(id: string): void {
   setTimeout(() => handledEvents.delete(id), 30_000);
 }
 
+const pendingQuestionOptions = new Map<string, string[]>();
+
+// Track pending grant requests so the action handler can resolve them
+const pendingGrantRequests = new Map<
+  string,
+  { agentId: string; domains: string[] }
+>();
+const GRANT_REQUEST_TTL = 5 * 60_000; // 5 minutes
+
 export function registerInteractionBridge(
   interactionService: InteractionService,
   manager: ChatInstanceManager,
   connection: PlatformConnection,
-  chat: any
+  chat: any,
+  grantStore?: GrantStore
 ): void {
   const { id: connectionId, platform } = connection;
 
@@ -30,6 +72,37 @@ export function registerInteractionBridge(
     if (!shouldHandle(event, platform, connectionId, manager)) return;
     if (handledEvents.has(event.id)) return;
     markHandled(event.id);
+
+    if (platform === "telegram") {
+      const botToken = manager.getConnectionConfigSecret(
+        connectionId,
+        "botToken"
+      );
+      if (botToken) {
+        pendingQuestionOptions.set(event.id, [...event.options]);
+        setTimeout(
+          () => pendingQuestionOptions.delete(event.id),
+          GRANT_REQUEST_TTL
+        );
+        const buttons = event.options.map((option, i) => [
+          {
+            text: option,
+            callback_data: `question:${event.id}:${i}`,
+          },
+        ]);
+        const sent = await sendTelegramInlineKeyboard(
+          botToken,
+          event.channelId,
+          event.question,
+          buttons
+        );
+        if (sent) return;
+        logger.warn(
+          { connectionId },
+          "Telegram inline keyboard failed for question, falling back"
+        );
+      }
+    }
 
     const thread = await resolveThread(
       manager,
@@ -76,6 +149,44 @@ export function registerInteractionBridge(
       if (handledEvents.has(event.id)) return;
       markHandled(event.id);
 
+      // Track pending grant so the action handler can resolve it
+      pendingGrantRequests.set(event.id, {
+        agentId: event.agentId,
+        domains: event.domains,
+      });
+      setTimeout(
+        () => pendingGrantRequests.delete(event.id),
+        GRANT_REQUEST_TTL
+      );
+
+      const domainList = event.domains.join(", ");
+      const text = `Access Request\nDomains: ${domainList}\nReason: ${event.reason}`;
+
+      if (platform === "telegram") {
+        const botToken = manager.getConnectionConfigSecret(
+          connectionId,
+          "botToken"
+        );
+        if (botToken) {
+          const sent = await sendTelegramInlineKeyboard(
+            botToken,
+            event.channelId,
+            text,
+            [
+              [
+                { text: "Approve", callback_data: `grant:${event.id}:approve` },
+                { text: "Deny", callback_data: `grant:${event.id}:deny` },
+              ],
+            ]
+          );
+          if (sent) return;
+          logger.warn(
+            { connectionId },
+            "Telegram inline keyboard failed for grant, falling back"
+          );
+        }
+      }
+
       const thread = await resolveThread(
         manager,
         connectionId,
@@ -86,7 +197,6 @@ export function registerInteractionBridge(
 
       try {
         const { Card, CardText, Actions, Button } = await import("chat");
-        const domainList = event.domains.join(", ");
         const card = Card({
           children: [
             CardText(
@@ -110,17 +220,105 @@ export function registerInteractionBridge(
         });
         await thread.post({
           card,
-          fallbackText: `Access Request\nDomains: ${domainList}\nReason: ${event.reason}`,
+          fallbackText: text,
         });
       } catch (error) {
         logger.warn(
           { connectionId, error: String(error) },
-          "Failed to post grant interaction"
+          "Failed to post grant interaction with buttons"
         );
         try {
-          await thread.post(
-            `Access Request\nDomains: ${event.domains.join(", ")}\nReason: ${event.reason}\nReply "approve" or "deny".`
+          await thread.post(text);
+        } catch {
+          // give up
+        }
+      }
+    }
+  );
+
+  interactionService.on(
+    "package:requested",
+    async (event: PostedPackageRequest) => {
+      if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (handledEvents.has(event.id)) return;
+      markHandled(event.id);
+
+      const pkgList = event.packages.join(", ");
+      const text = `Package Install Request\nPackages: ${pkgList}\nReason: ${event.reason}`;
+
+      if (platform === "telegram") {
+        const botToken = manager.getConnectionConfigSecret(
+          connectionId,
+          "botToken"
+        );
+        if (botToken) {
+          const sent = await sendTelegramInlineKeyboard(
+            botToken,
+            event.channelId,
+            text,
+            [
+              [
+                {
+                  text: "Approve",
+                  callback_data: `package:${event.id}:approve`,
+                },
+                {
+                  text: "Deny",
+                  callback_data: `package:${event.id}:deny`,
+                },
+              ],
+            ]
           );
+          if (sent) return;
+          logger.warn(
+            { connectionId },
+            "Telegram inline keyboard failed for package request, falling back"
+          );
+        }
+      }
+
+      const thread = await resolveThread(
+        manager,
+        connectionId,
+        event.channelId,
+        event.conversationId
+      );
+      if (!thread) return;
+
+      try {
+        const { Card, CardText, Actions, Button } = await import("chat");
+        const card = Card({
+          children: [
+            CardText(
+              `*Package Install Request*\nPackages: ${pkgList}\nReason: ${event.reason}`
+            ),
+            Actions([
+              Button({
+                id: `package:${event.id}:approve`,
+                label: "Approve",
+                style: "primary",
+                value: "approve",
+              }),
+              Button({
+                id: `package:${event.id}:deny`,
+                label: "Deny",
+                style: "danger",
+                value: "deny",
+              }),
+            ]),
+          ],
+        });
+        await thread.post({
+          card,
+          fallbackText: text,
+        });
+      } catch (error) {
+        logger.warn(
+          { connectionId, error: String(error) },
+          "Failed to post package request interaction with buttons"
+        );
+        try {
+          await thread.post(text);
         } catch {
           // give up
         }
@@ -199,14 +397,15 @@ export function registerInteractionBridge(
     }
   );
 
-  registerActionHandlers(chat, connection);
+  registerActionHandlers(chat, connection, grantStore);
 
   logger.info({ connectionId, platform }, "Interaction bridge registered");
 }
 
 function registerActionHandlers(
   chat: any,
-  connection: PlatformConnection
+  connection: PlatformConnection,
+  grantStore?: GrantStore
 ): void {
   chat.onAction(async (event: any) => {
     const actionId: string = event.actionId ?? "";
@@ -215,8 +414,84 @@ function registerActionHandlers(
 
     if (!thread || !actionId) return;
 
-    if (actionId.startsWith("question:") || actionId.startsWith("grant:")) {
-      const responseText = value || actionId.split(":").pop() || "";
+    // Handle grant approval/denial — persist to GrantStore before echoing
+    if (actionId.startsWith("grant:")) {
+      const parts = actionId.split(":");
+      const grantRequestId = parts[1];
+      const decision = parts[2]; // "approve" or "deny"
+
+      if (grantRequestId && grantStore) {
+        const pending = pendingGrantRequests.get(grantRequestId);
+        if (pending) {
+          const approved = decision === "approve";
+          try {
+            for (const domain of pending.domains) {
+              await grantStore.grant(pending.agentId, domain, null, !approved);
+            }
+            logger.info(
+              {
+                grantRequestId,
+                agentId: pending.agentId,
+                domains: pending.domains,
+                approved,
+              },
+              "Grant request resolved via button"
+            );
+          } catch (error) {
+            logger.error(
+              {
+                grantRequestId,
+                error: String(error),
+              },
+              "Failed to persist grant decision"
+            );
+          }
+          pendingGrantRequests.delete(grantRequestId);
+        }
+      }
+
+      // Echo decision text back to thread so the worker receives it
+      const responseText = value || decision || "";
+      try {
+        await thread.post(responseText);
+      } catch (error) {
+        logger.debug(
+          { connectionId: connection.id, error: String(error) },
+          "Failed to post grant action response"
+        );
+      }
+      return;
+    }
+
+    // Handle package install approval/denial
+    if (actionId.startsWith("package:")) {
+      const decision = actionId.split(":")[2] || value || "";
+      const responseText = decision || "";
+      try {
+        await thread.post(responseText);
+      } catch (error) {
+        logger.debug(
+          { connectionId: connection.id, error: String(error) },
+          "Failed to post package action response"
+        );
+      }
+      return;
+    }
+
+    // Handle question responses
+    if (actionId.startsWith("question:")) {
+      const [, questionId, optionIndex] = actionId.split(":");
+      const optionIdx = Number.parseInt(optionIndex || "", 10);
+      const responseText =
+        value ||
+        (questionId &&
+        Number.isFinite(optionIdx) &&
+        pendingQuestionOptions.get(questionId)?.[optionIdx]
+          ? pendingQuestionOptions.get(questionId)![optionIdx]!
+          : optionIndex || "");
+      if (questionId) {
+        pendingQuestionOptions.delete(questionId);
+      }
       try {
         await thread.post(responseText);
       } catch (error) {

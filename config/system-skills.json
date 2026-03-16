@@ -304,13 +304,20 @@
       "id": "owletto",
       "name": "Owletto Memory",
       "description": "Long-term memory across conversations",
+      "hidden": true,
       "mcpServers": [
         {
           "id": "owletto",
           "name": "Owletto",
           "url": "${env:OWLETTO_MCP_URL}",
           "type": "sse",
-          "resource": "${env:OWLETTO_MCP_RESOURCE}"
+          "oauth": {
+            "authUrl": "${env:OWLETTO_OAUTH_AUTH_URL}",
+            "tokenUrl": "${env:OWLETTO_OAUTH_TOKEN_URL}",
+            "clientId": "${env:OWLETTO_OAUTH_CLIENT_ID}",
+            "scopes": ["mcp:read", "mcp:write"],
+            "tokenEndpointAuthMethod": "none"
+          }
         }
       ]
     },
@@ -383,11 +390,12 @@
           "displayName": "NVIDIA NIM (free)",
           "iconUrl": "https://www.google.com/s2/favicons?domain=nvidia.com&sz=128",
           "envVarName": "NVIDIA_API_KEY",
-          "upstreamBaseUrl": "https://integrate.api.nvidia.com",
+          "upstreamBaseUrl": "https://integrate.api.nvidia.com/v1",
           "apiKeyInstructions": "Get your API key from <a href=\"https://build.nvidia.com/settings/api-keys\" target=\"_blank\" class=\"text-blue-600 hover:underline\">NVIDIA Build</a>",
           "apiKeyPlaceholder": "nvapi-...",
           "sdkCompat": "openai",
-          "modelsEndpoint": "/v1/models"
+          "modelsEndpoint": "/v1/models",
+          "defaultModel": "nvidia/moonshotai/kimi-k2.5"
         }
       ]
     },

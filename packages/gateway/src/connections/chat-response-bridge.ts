@@ -1,6 +1,6 @@
 /**
  * Chat response bridge — handles outbound responses from workers back through Chat SDK.
- * Covers gaps 8 (markdown→HTML) and 9 (message chunking).
+ * Covers platform-specific markdown handling and message chunking.
  */
 
 import { unlink } from "node:fs/promises";
@@ -15,6 +15,14 @@ import { storeOutgoingHistory } from "./message-handler-bridge";
 
 const logger = createLogger("chat-response-bridge");
 
+function buildOutboundPayload(text: string): { markdown: string } {
+  return { markdown: text };
+}
+
+function shouldBufferUntilCompletion(platform: string): boolean {
+  return platform === "telegram";
+}
+
 const MESSAGE_CHUNK_SIZE = 4096;
 const CHUNK_DELAY_MS = 500;
 
@@ -23,7 +31,7 @@ const CHUNK_DELAY_MS = 500;
  */
 interface StreamState {
   buffer: string;
-  sentMessage: any; // SentMessage from Chat SDK
+  sentMessage: any | null; // SentMessage from Chat SDK
   lastEditTime: number;
   editTimer?: NodeJS.Timeout;
 }
@@ -66,10 +74,22 @@ export class ChatResponseBridge implements ResponseRenderer {
       (payload.platformMetadata as any)?.responseChannel ??
       payload.channelId;
     const key = `${channelId}:${payload.conversationId}`;
+    const shouldBuffer = shouldBufferUntilCompletion(
+      instance.connection.platform
+    );
 
     let stream = this.streams.get(key);
 
     if (!stream) {
+      if (shouldBuffer) {
+        this.streams.set(key, {
+          buffer: payload.delta,
+          sentMessage: null,
+          lastEditTime: Date.now(),
+        });
+        return null;
+      }
+
       // First delta — send initial message
       try {
         const target = await this.resolveTarget(
@@ -79,7 +99,9 @@ export class ChatResponseBridge implements ResponseRenderer {
         );
 
         if (target) {
-          const sentMessage = await target.post({ markdown: payload.delta });
+          const sentMessage = await target.post(
+            buildOutboundPayload(payload.delta) as any
+          );
           stream = {
             buffer: payload.delta,
             sentMessage,
@@ -101,6 +123,10 @@ export class ChatResponseBridge implements ResponseRenderer {
       stream.buffer = payload.delta;
     } else {
       stream.buffer += payload.delta;
+    }
+
+    if (shouldBuffer) {
+      return null;
     }
 
     // Throttle edits
@@ -143,7 +169,13 @@ export class ChatResponseBridge implements ResponseRenderer {
       }
 
       if (stream.buffer.trim()) {
-        await this.sendFinalMessage(stream, instance, channelId, connectionId);
+        await this.sendFinalMessage(
+          stream,
+          instance,
+          channelId,
+          payload.conversationId,
+          connectionId
+        );
       }
 
       this.streams.delete(key);
@@ -340,7 +372,7 @@ export class ChatResponseBridge implements ResponseRenderer {
   ): Promise<void> {
     if (!stream.sentMessage?.edit) return;
     try {
-      await stream.sentMessage.edit({ markdown: stream.buffer });
+      await stream.sentMessage.edit(buildOutboundPayload(stream.buffer) as any);
       stream.lastEditTime = Date.now();
     } catch (error) {
       logger.debug(
@@ -354,22 +386,39 @@ export class ChatResponseBridge implements ResponseRenderer {
     stream: StreamState,
     instance: any,
     channelId: string,
+    conversationId: string,
     connectionId: string
   ): Promise<void> {
+    const shouldBuffer = shouldBufferUntilCompletion(
+      instance.connection.platform
+    );
+    const target = await this.resolveTarget(
+      instance,
+      channelId,
+      conversationId
+    );
+    if (!target) return;
+
     if (stream.buffer.length <= MESSAGE_CHUNK_SIZE) {
       try {
-        if (stream.sentMessage?.edit) {
-          await stream.sentMessage.edit({ markdown: stream.buffer });
+        if (!shouldBuffer && stream.sentMessage?.edit) {
+          await stream.sentMessage.edit(
+            buildOutboundPayload(stream.buffer) as any
+          );
+        } else {
+          await target.post(buildOutboundPayload(stream.buffer) as any);
         }
       } catch (error) {
         logger.debug(
           { connectionId, error: String(error) },
           "Failed final message edit"
         );
-        try {
-          await stream.sentMessage?.edit?.(stream.buffer);
-        } catch {
-          // give up
+        if (!shouldBuffer) {
+          try {
+            await stream.sentMessage?.edit?.(stream.buffer);
+          } catch {
+            // give up
+          }
         }
       }
       return;
@@ -377,36 +426,41 @@ export class ChatResponseBridge implements ResponseRenderer {
 
     const chunks = chunkMessage(stream.buffer, MESSAGE_CHUNK_SIZE);
     if (chunks.length === 0) return;
+    const [firstChunk, ...remainingChunks] = chunks;
+    if (!firstChunk) return;
 
     try {
-      await stream.sentMessage?.edit?.({ markdown: chunks[0] });
-    } catch {
-      try {
-        await stream.sentMessage?.edit?.(chunks[0]);
-      } catch {
-        // give up on first chunk
+      if (!shouldBuffer && stream.sentMessage?.edit) {
+        await stream.sentMessage.edit(buildOutboundPayload(firstChunk) as any);
+      } else {
+        await target.post(buildOutboundPayload(firstChunk) as any);
+      }
+    } catch (error) {
+      logger.debug(
+        { connectionId, error: String(error) },
+        "Failed to send first final chunk"
+      );
+      if (!shouldBuffer) {
+        try {
+          await stream.sentMessage?.edit?.(firstChunk);
+        } catch {
+          // give up on first chunk
+        }
       }
     }
 
-    const target = await this.resolveTarget(
-      instance,
-      channelId,
-      stream.sentMessage?.threadId
-    );
-
-    if (target) {
-      for (let i = 1; i < chunks.length; i++) {
-        try {
-          await target.post({ markdown: chunks[i] });
-        } catch (error) {
-          logger.debug(
-            { connectionId, error: String(error) },
-            "Failed to send chunk"
-          );
-        }
-        if (i < chunks.length - 1) {
-          await delay(CHUNK_DELAY_MS);
-        }
+    for (let i = 0; i < remainingChunks.length; i++) {
+      const chunk = remainingChunks[i]!;
+      try {
+        await target.post(buildOutboundPayload(chunk) as any);
+      } catch (error) {
+        logger.debug(
+          { connectionId, error: String(error) },
+          "Failed to send chunk"
+        );
+      }
+      if (i < remainingChunks.length - 1) {
+        await delay(CHUNK_DELAY_MS);
       }
     }
   }

@@ -22,7 +22,7 @@ function truncateText(text: string, maxLength: number): string {
   return `${text.slice(0, maxLength - 3)}...`;
 }
 
-export function RemindersSection() {
+export function RemindersSection({ adminOnly }: { adminOnly?: boolean }) {
   const ctx = useSettings();
 
   async function handleCancel(scheduleId: string) {
@@ -54,6 +54,7 @@ export function RemindersSection() {
       title="Schedules"
       icon="&#9200;"
       badge={loadingBadge}
+      adminOnly={adminOnly}
     >
       <div>
         {ctx.schedulesError.value && (

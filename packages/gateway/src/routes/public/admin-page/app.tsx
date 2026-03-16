@@ -22,12 +22,22 @@ interface AdminAgent {
   platforms: string[];
 }
 
+interface AdminPlugin {
+  source: string;
+  name: string;
+  slot: string;
+  enabled: boolean;
+  configured: boolean;
+  settingsUrl?: string;
+}
+
 interface AdminState {
   version: string;
   githubUrl: string;
   deploymentMode: string;
   uptime: number;
   agents: AdminAgent[];
+  plugins: AdminPlugin[];
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -342,6 +352,54 @@ function NewAgentForm({
   );
 }
 
+// ─── Plugins Section ─────────────────────────────────────────────────────────
+
+const SLOT_COLORS: Record<string, string> = {
+  memory: "bg-purple-100 text-purple-700",
+  tool: "bg-blue-100 text-blue-700",
+  provider: "bg-amber-100 text-amber-700",
+};
+
+function PluginsSection({ plugins }: { plugins: AdminPlugin[] }) {
+  if (plugins.length === 0) return null;
+  return (
+    <div class="bg-gray-50 rounded-lg p-3">
+      <div class="flex items-center gap-2 text-sm font-medium text-gray-800 mb-3">
+        Plugins
+        <span class="inline-flex items-center justify-center bg-slate-200 text-slate-600 text-[10px] font-semibold rounded-full min-w-[1.25rem] h-5 px-1.5">
+          {plugins.length}
+        </span>
+      </div>
+      <div class="bg-white rounded border border-gray-100 divide-y divide-gray-100">
+        {plugins.map((p) => (
+          <div key={p.source} class="flex items-center gap-3 px-4 py-2.5">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-gray-800">{p.name}</p>
+              <p class="text-[10px] text-gray-400 font-mono">{p.source}</p>
+            </div>
+            <span
+              class={`text-[10px] font-semibold rounded-full px-2 py-0.5 ${SLOT_COLORS[p.slot] || "bg-gray-100 text-gray-600"}`}
+            >
+              {p.slot}
+            </span>
+            {p.configured && p.enabled ? (
+              <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 rounded-full px-2 py-0.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500" />
+                Active
+              </span>
+            ) : (
+              <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-yellow-700 bg-yellow-100 rounded-full px-2 py-0.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                Not Configured
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Gateway Section ────────────────────────────────────────────────────────
 
 function GatewaySection({
@@ -432,6 +490,7 @@ function App() {
       <TopBar githubUrl={state.githubUrl} />
       <div class="p-6 space-y-3">
         <AgentList initialAgents={state.agents} />
+        <PluginsSection plugins={state.plugins} />
         <GatewaySection envVars={env.gateway} onRefreshEnv={env.loadVars} />
       </div>
     </div>

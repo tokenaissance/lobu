@@ -146,6 +146,9 @@ export class SystemConfigResolver {
         if (Array.isArray(mcp.args) && mcp.args.length > 0) {
           config.args = [...mcp.args];
         }
+        if (mcp.oauth) config.oauth = mcp.oauth;
+        if (mcp.resource) config.resource = mcp.resource;
+        if (mcp.inputs) config.inputs = mcp.inputs;
 
         mcpServers[mcp.id] = config;
       }

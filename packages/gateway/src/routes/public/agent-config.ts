@@ -719,6 +719,16 @@ export function createAgentConfigRoutes(
           updates.skillsConfig.skills || []
         );
 
+        // Auto-grant apiDomains from enabled skill integrations
+        if (config.grantStore) {
+          await syncSkillApiDomainGrants(
+            config.agentSettingsStore,
+            config.grantStore,
+            agentId,
+            updates.skillsConfig.skills || []
+          );
+        }
+
         // Cleanup orphaned dependencies from removed/disabled skills
         await cleanupOrphanedSkillDependencies(
           config.agentSettingsStore,
@@ -804,6 +814,14 @@ export function createAgentConfigRoutes(
       targetAgentId,
       sourceSettings?.skillsConfig?.skills || []
     );
+    if (config.grantStore) {
+      await syncSkillApiDomainGrants(
+        config.agentSettingsStore,
+        config.grantStore,
+        targetAgentId,
+        sourceSettings?.skillsConfig?.skills || []
+      );
+    }
     await cleanupOrphanedSkillDependencies(
       config.agentSettingsStore,
       targetAgentId,
@@ -1607,6 +1625,63 @@ async function autoRegisterSkillIntegrations(
     agentId,
     integrations: Object.keys(apiKeyIntegrations),
   });
+}
+
+/**
+ * Sync apiDomains from enabled skill integrations into the GrantStore.
+ * Tracks which domains were auto-granted so removed skills can clean them up.
+ */
+async function syncSkillApiDomainGrants(
+  agentSettingsStore: AgentSettingsStore,
+  grantStore: GrantStore,
+  agentId: string,
+  skills: SkillConfig[]
+): Promise<void> {
+  const settings = await agentSettingsStore.getSettings(agentId);
+  const previousDomains = new Set(settings?.skillAutoGrantedDomains || []);
+  const nextDomains = new Set(collectSkillApiDomains(skills));
+
+  const domainsToGrant = [...nextDomains].filter(
+    (domain) => !previousDomains.has(domain)
+  );
+  const domainsToRevoke = [...previousDomains].filter(
+    (domain) => !nextDomains.has(domain)
+  );
+
+  await Promise.all(
+    domainsToGrant.map((domain) => grantStore.grant(agentId, domain, null))
+  );
+  await Promise.all(
+    domainsToRevoke.map((domain) => grantStore.revoke(agentId, domain))
+  );
+
+  const previousList = [...previousDomains].sort();
+  const nextList = [...nextDomains].sort();
+  if (previousList.join("\n") !== nextList.join("\n")) {
+    await agentSettingsStore.updateSettings(agentId, {
+      skillAutoGrantedDomains: nextList,
+    });
+  }
+
+  logger.info("Synced apiDomains from skill integrations", {
+    agentId,
+    grantedDomains: domainsToGrant,
+    revokedDomains: domainsToRevoke,
+  });
+}
+
+function collectSkillApiDomains(skills: SkillConfig[]): string[] {
+  const domains = new Set<string>();
+  for (const skill of skills) {
+    if (!skill.enabled || !skill.integrations) continue;
+    for (const raw of skill.integrations) {
+      const ig = normalizeSkillIntegration(raw);
+      for (const domain of ig.apiDomains || []) {
+        domains.add(domain);
+      }
+    }
+  }
+  return [...domains].sort();
 }
 
 /**

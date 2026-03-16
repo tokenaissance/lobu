@@ -89,7 +89,13 @@ function setupServer(
 
   app.get("/ready", (c) => c.json({ ready: true }));
 
-  // Prometheus metrics endpoint
+  // Compute adminPassword once — used by Agent API, CLI auth, metrics, and messaging
+  const crypto = require("node:crypto");
+  const adminPassword: string =
+    process.env.ADMIN_PASSWORD || crypto.randomBytes(16).toString("base64url");
+
+  // Prometheus metrics endpoint.
+  // Keep auth optional so existing ServiceMonitor configs continue to scrape.
   app.get("/metrics", async (c) => {
     const metricsAuthToken = process.env.METRICS_AUTH_TOKEN;
     if (metricsAuthToken) {
@@ -225,6 +231,7 @@ function setupServer(
       integrationConfigService: coreServices?.getIntegrationConfigService(),
       integrationCredentialStore: coreServices?.getIntegrationCredentialStore(),
       systemConfigResolver: coreServices?.getSystemConfigResolver(),
+      grantStore: coreServices?.getGrantStore(),
     });
     app.route("", integrationsDiscoveryRouter);
     logger.info(
@@ -264,18 +271,24 @@ function setupServer(
     logger.info("Internal interaction routes enabled");
   }
 
+  // Create CLI token service early so it can be shared by messaging + agent API
+  let cliTokenService: any;
+  if (coreServices) {
+    const { CliTokenService } = require("../auth/cli/token-service");
+    const redisClient = coreServices.getQueue().getRedisClient();
+    cliTokenService = new CliTokenService(redisClient);
+  }
+
   // Messaging routes (already Hono)
   if (platformRegistry) {
     const { createMessagingRoutes } = require("../routes/public/messaging");
-    const messagingRouter = createMessagingRoutes(platformRegistry);
+    const messagingRouter = createMessagingRoutes(platformRegistry, {
+      adminPassword,
+      cliTokenService,
+    });
     app.route("", messagingRouter);
     logger.info("Messaging routes enabled at :8080/api/v1/messaging/send");
   }
-
-  // Compute adminPassword once — used by both Agent API and CLI auth
-  const crypto = require("node:crypto");
-  const adminPassword: string =
-    process.env.ADMIN_PASSWORD || crypto.randomBytes(16).toString("base64url");
 
   // Agent API routes (direct API access)
   if (coreServices) {
@@ -285,10 +298,6 @@ function setupServer(
     const publicUrl = coreServices.getPublicGatewayUrl();
 
     if (queueProducer && sessionMgr && interactionSvc) {
-      const { CliTokenService } = require("../auth/cli/token-service");
-      const redisClient = coreServices.getQueue().getRedisClient();
-      const cliTokenService = new CliTokenService(redisClient);
-
       const { createAgentApi } = require("../routes/public/agent");
       const agentApi = createAgentApi({
         queueProducer,
@@ -905,18 +914,20 @@ The Lobu API allows you to create and interact with AI agents programmatically.
 
 ## Authentication
 
-1. Create an agent with \`POST /api/v1/agents\` to get a token
-2. Use the token as a Bearer token for all subsequent requests
+1. Authenticate the agent-creation request with an admin password or CLI access token
+2. Create an agent with \`POST /api/v1/agents\` to get a worker token
+3. Use the returned worker token as a Bearer token for subsequent agent requests
 
 ## Quick Start
 
 \`\`\`bash
-# 1. Create an agent
+# 1. Create an agent (authenticate with admin password or CLI token)
 curl -X POST http://localhost:8080/api/v1/agents \\
+  -H "Authorization: Bearer $ADMIN_PASSWORD" \\
   -H "Content-Type: application/json" \\
   -d '{"provider": "claude"}'
 
-# 2. Send a message (use token from step 1)
+# 2. Send a message (use worker token from step 1)
 curl -X POST http://localhost:8080/api/v1/agents/{agentId}/messages \\
   -H "Authorization: Bearer {token}" \\
   -H "Content-Type: application/json" \\

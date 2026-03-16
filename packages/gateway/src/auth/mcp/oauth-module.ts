@@ -1,11 +1,15 @@
 import { createLogger, decrypt, encrypt } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
+import type { IMessageQueue } from "../../infrastructure/queue";
 import { BaseModule } from "../../modules/module-system";
 import type { GrantStore } from "../../permissions/grant-store";
 import { SETTINGS_SESSION_COOKIE_NAME } from "../../routes/public/settings-auth";
 import { GenericOAuth2Client } from "../oauth/generic-client";
-import type { McpOAuthStateStore } from "../oauth/state-store";
+import type {
+  McpOAuthStateStore,
+  McpOAuthThreadContext,
+} from "../oauth/state-store";
 import {
   formatMcpName,
   renderOAuthErrorPage,
@@ -44,7 +48,8 @@ export class McpOAuthModule extends BaseModule {
     private inputStore: McpInputStore,
     publicGatewayUrl: string,
     callbackUrl: string,
-    private grantStore?: GrantStore
+    private grantStore?: GrantStore,
+    private queue?: IMessageQueue
   ) {
     super();
 
@@ -69,29 +74,38 @@ export class McpOAuthModule extends BaseModule {
 
   /**
    * Generate a secure token for OAuth init URL
-   * Token contains encrypted userId, agentId, mcpId, and expiry
+   * Token contains encrypted userId, agentId, mcpId, thread context, and expiry
    */
   private generateSecureToken(
     userId: string,
     agentId: string,
-    mcpId: string
+    mcpId: string,
+    threadContext?: McpOAuthThreadContext
   ): string {
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-    const payload = JSON.stringify({ userId, agentId, mcpId, expiresAt });
+    const payload = JSON.stringify({
+      userId,
+      agentId,
+      mcpId,
+      threadContext,
+      expiresAt,
+    });
     return encrypt(payload);
   }
 
   /**
    * Validate and decode a secure token
-   * Returns { userId, agentId, mcpId } if valid, null if invalid or expired
    */
-  private validateSecureToken(
-    token: string
-  ): { userId: string; agentId: string; mcpId: string } | null {
+  private validateSecureToken(token: string): {
+    userId: string;
+    agentId: string;
+    mcpId: string;
+    threadContext?: McpOAuthThreadContext;
+  } | null {
     try {
       const decrypted = decrypt(token);
       const data = JSON.parse(decrypted);
-      const { userId, agentId, mcpId, expiresAt } = data;
+      const { userId, agentId, mcpId, threadContext, expiresAt } = data;
 
       // Check expiry
       if (Date.now() > expiresAt) {
@@ -99,7 +113,7 @@ export class McpOAuthModule extends BaseModule {
         return null;
       }
 
-      return { userId, agentId, mcpId };
+      return { userId, agentId, mcpId, threadContext };
     } catch (error) {
       logger.error("Failed to validate token", { error });
       return null;
@@ -137,7 +151,8 @@ export class McpOAuthModule extends BaseModule {
    */
   async getAuthStatus(
     userId: string,
-    agentId: string
+    agentId: string,
+    threadContext?: McpOAuthThreadContext
   ): Promise<
     Array<{
       id: string;
@@ -170,12 +185,14 @@ export class McpOAuthModule extends BaseModule {
           },
         };
 
-        // Add login URL for OAuth-based MCPs
-        if (
-          !mcp.isAuthenticated &&
-          (mcp.authType === "oauth" || mcp.authType === "discovered-oauth")
-        ) {
-          const token = this.generateSecureToken(userId, agentId, mcp.id);
+        // Add login URL for OAuth-based MCPs (always, so users can re-authenticate)
+        if (mcp.authType === "oauth" || mcp.authType === "discovered-oauth") {
+          const token = this.generateSecureToken(
+            userId,
+            agentId,
+            mcp.id,
+            threadContext
+          );
           provider.loginUrl = `${this.publicGatewayUrl}/api/v1/auth/mcp/init/${mcp.id}?token=${encodeURIComponent(token)}`;
         }
 
@@ -288,7 +305,7 @@ export class McpOAuthModule extends BaseModule {
       return c.json({ error: "Token mcpId mismatch" }, 400);
     }
 
-    const { userId, agentId } = tokenData;
+    const { userId, agentId, threadContext } = tokenData;
 
     try {
       // Get MCP config
@@ -409,6 +426,7 @@ export class McpOAuthModule extends BaseModule {
         mcpId,
         codeVerifier,
         resource,
+        threadContext,
       });
 
       // Build OAuth URL
@@ -574,6 +592,15 @@ export class McpOAuthModule extends BaseModule {
         });
       }
 
+      // Notify the originating conversation so the agent knows auth succeeded
+      await this.sendAuthNotification(
+        stateData.userId,
+        stateData.agentId,
+        stateData.mcpId,
+        mcpName,
+        stateData.threadContext
+      );
+
       // If user has a settings session, redirect to settings page
       const hasSession = !!c.req.raw.headers
         .get("cookie")
@@ -599,6 +626,62 @@ export class McpOAuthModule extends BaseModule {
         ),
         500
       );
+    }
+  }
+
+  /**
+   * Send a system message to the originating thread so the agent knows
+   * MCP authentication succeeded and can resume using the MCP tools.
+   */
+  private async sendAuthNotification(
+    userId: string,
+    agentId: string,
+    mcpId: string,
+    mcpName: string,
+    threadContext?: McpOAuthThreadContext
+  ): Promise<void> {
+    if (!this.queue || !threadContext) {
+      logger.info(
+        "Skipping MCP post-auth notification (no queue or thread context)"
+      );
+      return;
+    }
+
+    try {
+      const messageText = `[System] User authenticated with ${mcpName}. You can now use its tools.`;
+
+      await this.queue.createQueue("messages");
+      await this.queue.send("messages", {
+        userId,
+        conversationId: threadContext.conversationId,
+        messageId: `mcp_auth_${mcpId}_${Date.now()}`,
+        channelId: threadContext.channelId,
+        teamId: threadContext.teamId,
+        agentId,
+        botId: "system",
+        platform: threadContext.platform || "unknown",
+        messageText,
+        platformMetadata: {
+          isMcpAuth: true,
+          mcpId,
+          ...(threadContext.connectionId
+            ? { connectionId: threadContext.connectionId }
+            : {}),
+        },
+        agentOptions: {},
+      });
+
+      logger.info("Sent MCP post-auth notification", {
+        agentId,
+        mcpId,
+        conversationId: threadContext.conversationId,
+      });
+    } catch (error) {
+      logger.warn("Failed to send MCP post-auth notification", {
+        error: error instanceof Error ? error.message : String(error),
+        agentId,
+        mcpId,
+      });
     }
   }
 

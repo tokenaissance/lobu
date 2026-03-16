@@ -32,7 +32,8 @@ Settings page provider order is drag-sortable via handle, with per-provider mode
 
 #### MCP
 - MCP servers are registered via the skills registry (`config/system-skills.json`) or per-agent settings.
-- Workers get MCP settings from gateway's internal config endpoint and use their JWT token to perform MCP calls through the proxy.
+- Workers discover MCP tools at startup and register them as first-class agent tools (direct function calls, not curl instructions).
+- Workers call MCP tools through the gateway proxy using their JWT token.
 - Built-in MCPs available to workers: AskUser (request user input), UploadFile (share files with user).
 
 #### Network
@@ -263,6 +264,8 @@ Use the `test-bot.sh` script for easy bot testing. No manual curl commands neede
 **Platform self-testing behavior:**
 - **Slack**: Cannot trigger its own event handlers (Slack filters bot-to-self messages). The test script uses `/api/messaging/send` endpoint which posts via bot token, then gateway receives as normal Slack events.
 - **Telegram**: `test-bot.sh` supports Telegram via `TEST_PLATFORM=telegram` and `TEST_CHANNEL=<chat_id|@username>` (or `TELEGRAM_TEST_CHAT_ID`) and sends through `tguser` as a real user account. Requires `TG_API_ID` and `TG_API_HASH` env vars (stored in `.env`). In groups, @mention is always required; in DMs all messages are processed.
+
+The test script authenticates with `$ADMIN_PASSWORD` from `.env`.
 
 ### Basic Test
 ```bash

@@ -15,6 +15,7 @@ import type {
   AgentMetadataStore,
 } from "../../auth/agent-metadata-store";
 import type { OAuthStateStore } from "../../auth/oauth/state-store";
+import { resolveInstalledProviders } from "../../auth/provider-catalog";
 import { collectProviderModelOptions } from "../../auth/provider-model-options";
 import type { AgentSettingsStore } from "../../auth/settings";
 import type { ClaimService } from "../../auth/settings/claim-service";
@@ -428,11 +429,28 @@ async function renderSettingsForPayload(
     }
   }
 
+  // Resolve base agent's provider names for sandbox agents with no own providers
+  let baseProviderNames: string[] = [];
+  if (installedProviders.length === 0) {
+    const effective = await resolveInstalledProviders(
+      config.agentSettingsStore,
+      agentId
+    );
+    baseProviderNames = effective
+      .map(
+        (ip) =>
+          allProviderMeta.find((p) => p.id === ip.providerId)?.name ||
+          ip.providerId
+      )
+      .filter(Boolean);
+  }
+
   // Ensure the payload has agentId for the template (may have been resolved from binding)
   const effectivePayload = { ...payload, agentId };
 
   return c.html(
     renderSettingsPage(effectivePayload, settings, {
+      memoryEnabled: !!process.env.OWLETTO_MCP_URL,
       providers: installedProviders,
       catalogProviders,
       providerModelOptions,
@@ -444,6 +462,7 @@ async function renderSettingsForPayload(
       isSandbox: !!agentMetadata?.parentConnectionId,
       ownerPlatform: agentMetadata?.owner?.platform || "",
       integrationStatus,
+      baseProviderNames,
     })
   );
 }
@@ -1085,7 +1104,7 @@ export function createSettingsPageRoutes(
       if (resolvedConnectionId && config.chatInstanceManager) {
         const connection =
           await config.chatInstanceManager.getConnection(resolvedConnectionId);
-        if (connection?.settings?.userConfigScopes?.length) {
+        if (connection?.settings?.userConfigScopes) {
           payload.settingsMode = "user";
           payload.allowedScopes = connection.settings.userConfigScopes;
           payload.connectionId = resolvedConnectionId;

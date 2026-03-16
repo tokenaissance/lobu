@@ -112,6 +112,17 @@ export interface SkillMcpServer {
   type?: "sse" | "stdio";
   command?: string;
   args?: string[];
+  oauth?: {
+    authUrl: string;
+    tokenUrl: string;
+    clientId: string;
+    clientSecret?: string;
+    scopes?: string[];
+    grantType?: string;
+    responseType?: string;
+  };
+  resource?: string;
+  inputs?: Array<{ id: string; label?: string; type?: string }>;
 }
 
 /**

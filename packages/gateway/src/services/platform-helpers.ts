@@ -4,6 +4,7 @@
  */
 
 import { createLogger } from "@lobu/core";
+import { resolveInstalledProviders } from "../auth/provider-catalog";
 import type { AgentSettingsStore } from "../auth/settings";
 import { resolveEffectiveModelRef } from "../auth/settings/model-selection";
 import type { ChannelBindingService } from "../channels";
@@ -30,8 +31,17 @@ export async function resolveAgentOptions(
     return { ...baseOptions };
   }
 
+  // Resolve effective providers (falls back to base agent for sandboxes)
+  const effectiveProviders = await resolveInstalledProviders(
+    agentSettingsStore,
+    agentId
+  );
+  const modelSource = effectiveProviders.length
+    ? { ...settings, installedProviders: effectiveProviders }
+    : settings;
+
   const mergedOptions: Record<string, any> = { ...baseOptions };
-  const effectiveModelRef = resolveEffectiveModelRef(settings);
+  const effectiveModelRef = resolveEffectiveModelRef(modelSource);
   logger.info(
     {
       agentId,
@@ -43,7 +53,7 @@ export async function resolveAgentOptions(
 
   if (effectiveModelRef) {
     mergedOptions.model = effectiveModelRef;
-  } else if ((settings.installedProviders?.length ?? 0) > 0) {
+  } else if (effectiveProviders.length > 0) {
     // Auto mode with installed providers: let worker resolve default model.
     delete mergedOptions.model;
   }

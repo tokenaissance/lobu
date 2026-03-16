@@ -26,6 +26,7 @@ export const DEFAULT_PROVIDER_MODELS: Record<string, string> = {
   openai: "gpt-4.1",
   "openai-codex": "gpt-5.1-codex-max",
   google: "gemini-2.5-pro",
+  nvidia: "nvidia/moonshotai/kimi-k2.5",
   "z-ai": "glm-4.7",
 };
 
@@ -46,21 +47,28 @@ export function registerDynamicProvider(
   id: string,
   config: ConfigProviderMeta
 ): void {
-  if (DEFAULT_PROVIDER_BASE_URL_ENV[id]) return; // already registered
+  const alreadyRegistered = !!DEFAULT_PROVIDER_BASE_URL_ENV[id];
 
-  DEFAULT_PROVIDER_BASE_URL_ENV[id] = config.baseUrlEnvVar;
+  if (!alreadyRegistered) {
+    DEFAULT_PROVIDER_BASE_URL_ENV[id] = config.baseUrlEnvVar;
+  }
 
-  if (config.defaultModel) {
+  // Always update default model and alias even for pre-registered providers
+  if (config.defaultModel && !DEFAULT_PROVIDER_MODELS[id]) {
     DEFAULT_PROVIDER_MODELS[id] = config.defaultModel;
   }
 
   // Map to model registry name: explicit alias, or "openai" for sdkCompat providers
-  const alias =
-    config.registryAlias ||
-    (config.sdkCompat === "openai" ? "openai" : undefined);
-  if (alias) {
-    PROVIDER_REGISTRY_ALIASES[id] = alias;
+  if (!PROVIDER_REGISTRY_ALIASES[id]) {
+    const alias =
+      config.registryAlias ||
+      (config.sdkCompat === "openai" ? "openai" : undefined);
+    if (alias) {
+      PROVIDER_REGISTRY_ALIASES[id] = alias;
+    }
   }
+
+  if (alreadyRegistered) return;
 
   logger.info(
     `Registered dynamic provider: ${id} (baseUrlEnv=${config.baseUrlEnvVar}, sdkCompat=${config.sdkCompat || "none"})`

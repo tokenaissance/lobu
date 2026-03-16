@@ -10,6 +10,26 @@ import { reconcileModelSelectionForInstalledProviders } from "./settings/model-s
 const logger = createLogger("provider-catalog");
 
 /**
+ * Resolve an agent's installed providers, falling back to the base agent's
+ * providers for sandbox agents that have none of their own.
+ */
+export async function resolveInstalledProviders(
+  agentSettingsStore: AgentSettingsStore,
+  agentId: string
+): Promise<InstalledProvider[]> {
+  const settings = await agentSettingsStore.getSettings(agentId);
+  const installed = settings?.installedProviders || [];
+  if (installed.length > 0) return installed;
+  if (settings?.templateAgentId) {
+    const templateSettings = await agentSettingsStore.getSettings(
+      settings.templateAgentId
+    );
+    return templateSettings?.installedProviders || [];
+  }
+  return [];
+}
+
+/**
  * ProviderCatalogService wraps the module registry to provide
  * per-agent provider install/uninstall/reorder operations.
  *
@@ -34,8 +54,10 @@ export class ProviderCatalogService {
    * Returns modules in the agent's install order.
    */
   async getInstalledModules(agentId: string): Promise<ModelProviderModule[]> {
-    const settings = await this.agentSettingsStore.getSettings(agentId);
-    const installed = settings?.installedProviders || [];
+    const installed = await resolveInstalledProviders(
+      this.agentSettingsStore,
+      agentId
+    );
     if (installed.length === 0) return [];
 
     const allModules = getModelProviderModules();
@@ -50,8 +72,7 @@ export class ProviderCatalogService {
    * Get raw installed provider entries for an agent.
    */
   async getInstalledProviders(agentId: string): Promise<InstalledProvider[]> {
-    const settings = await this.agentSettingsStore.getSettings(agentId);
-    return settings?.installedProviders || [];
+    return resolveInstalledProviders(this.agentSettingsStore, agentId);
   }
 
   /**

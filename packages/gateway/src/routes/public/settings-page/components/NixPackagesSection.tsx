@@ -10,7 +10,7 @@ interface NixSuggestion {
   description: string;
 }
 
-export function NixPackagesSection() {
+export function NixPackagesSection({ adminOnly }: { adminOnly?: boolean }) {
   const ctx = useSettings();
   const nixPackageQuery = useSignal("");
   const nixPackageSuggestions = useSignal<NixSuggestion[]>([]);
@@ -86,7 +86,12 @@ export function NixPackagesSection() {
   }
 
   return (
-    <Section id="packages" title="System Packages" icon="&#128230;">
+    <Section
+      id="packages"
+      title="System Packages"
+      icon="&#128230;"
+      adminOnly={adminOnly}
+    >
       <div class="space-y-3">
         {ctx.nixPackages.value.length === 0 && (
           <p class="text-xs text-gray-400 italic">No packages added.</p>

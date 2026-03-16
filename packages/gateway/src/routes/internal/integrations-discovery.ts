@@ -16,6 +16,7 @@ import { Hono } from "hono";
 import type { IntegrationConfigService } from "../../auth/integration/config-service";
 import type { IntegrationCredentialStore } from "../../auth/integration/credential-store";
 import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
+import type { GrantStore } from "../../permissions/grant-store";
 import { McpDiscoveryService } from "../../services/mcp-discovery";
 import type {
   SkillContent,
@@ -42,6 +43,7 @@ export interface IntegrationsDiscoveryConfig {
   integrationConfigService?: IntegrationConfigService;
   integrationCredentialStore?: IntegrationCredentialStore;
   systemConfigResolver?: SystemConfigResolver;
+  grantStore?: GrantStore;
 }
 
 export function createIntegrationsDiscoveryRoutes(
@@ -361,6 +363,18 @@ export function createIntegrationsDiscoveryRoutes(
               !!upgrade
             );
 
+            // Sync auto-granted apiDomains from the full enabled skill set
+            if (config.grantStore && config.agentSettingsStore) {
+              const refreshedSettings =
+                await config.agentSettingsStore.getSettings(agentId);
+              await syncSkillApiDomainGrants(
+                config.agentSettingsStore,
+                config.grantStore,
+                agentId,
+                refreshedSettings?.skillsConfig?.skills || []
+              );
+            }
+
             logger.info("Auto-installed system skill", { id, agentId });
             return c.json({
               type: "auto_installed",
@@ -482,6 +496,59 @@ async function checkRequirements(
   }
 
   return missing;
+}
+
+/** Sync apiDomains from enabled skills into the GrantStore. */
+async function syncSkillApiDomainGrants(
+  agentSettingsStore: AgentSettingsStore,
+  grantStore: GrantStore,
+  agentId: string,
+  skills: SkillConfig[]
+): Promise<void> {
+  const settings = await agentSettingsStore.getSettings(agentId);
+  const previousDomains = new Set(settings?.skillAutoGrantedDomains || []);
+  const nextDomains = new Set(collectSkillApiDomains(skills));
+
+  const domainsToGrant = [...nextDomains].filter(
+    (domain) => !previousDomains.has(domain)
+  );
+  const domainsToRevoke = [...previousDomains].filter(
+    (domain) => !nextDomains.has(domain)
+  );
+
+  await Promise.all(
+    domainsToGrant.map((domain) => grantStore.grant(agentId, domain, null))
+  );
+  await Promise.all(
+    domainsToRevoke.map((domain) => grantStore.revoke(agentId, domain))
+  );
+
+  const previousList = [...previousDomains].sort();
+  const nextList = [...nextDomains].sort();
+  if (previousList.join("\n") !== nextList.join("\n")) {
+    await agentSettingsStore.updateSettings(agentId, {
+      skillAutoGrantedDomains: nextList,
+    });
+  }
+
+  logger.info("Synced apiDomains from skill integrations", {
+    agentId,
+    grantedDomains: domainsToGrant,
+    revokedDomains: domainsToRevoke,
+  });
+}
+
+function collectSkillApiDomains(skills: SkillConfig[]): string[] {
+  const domains = new Set<string>();
+  for (const skill of skills) {
+    if (!skill.enabled || !skill.integrations) continue;
+    for (const integration of skill.integrations) {
+      for (const domain of integration.apiDomains || []) {
+        domains.add(domain);
+      }
+    }
+  }
+  return [...domains].sort();
 }
 
 /** Enable a skill in agent settings (add or update). */

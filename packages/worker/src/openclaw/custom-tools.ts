@@ -1,3 +1,4 @@
+import type { McpToolDef } from "@lobu/core";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { Static } from "@sinclair/typebox";
@@ -5,6 +6,7 @@ import { type TSchema, Type } from "@sinclair/typebox";
 import type { GatewayParams, TextResult } from "../shared/tool-implementations";
 import {
   askUserQuestion,
+  callMcpTool,
   callService,
   cancelReminder,
   connectService,
@@ -401,6 +403,44 @@ export function createOpenClawCustomTools(params: {
       run: (args) => disconnectService(gw, args),
     }),
   ];
+
+  return tools;
+}
+
+/**
+ * Convert MCP tool definitions from session context into first-class
+ * OpenClaw ToolDefinition objects that call the MCP proxy directly.
+ * Tools are dynamically discovered from each MCP server (e.g. owletto).
+ */
+export function createMcpToolDefinitions(
+  mcpTools: Record<string, McpToolDef[]>,
+  gw: GatewayParams
+): ToolDefinition[] {
+  const tools: ToolDefinition[] = [];
+
+  for (const [mcpId, defs] of Object.entries(mcpTools)) {
+    for (const def of defs) {
+      const schema = def.inputSchema
+        ? Type.Unsafe(def.inputSchema)
+        : Type.Object({});
+
+      tools.push({
+        name: def.name,
+        label: `${mcpId}/${def.name}`,
+        description: def.description || `MCP tool from ${mcpId}`,
+        parameters: schema,
+        execute: async (_toolCallId, args) =>
+          toToolResult(
+            await callMcpTool(
+              gw,
+              mcpId,
+              def.name,
+              (args || {}) as Record<string, unknown>
+            )
+          ),
+      });
+    }
+  }
 
   return tools;
 }

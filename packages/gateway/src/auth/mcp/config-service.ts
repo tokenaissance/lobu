@@ -536,6 +536,7 @@ function normalizeConfig(config: { mcpServers: Record<string, any> }) {
                 scopes: cloned.oauth.scopes,
                 grantType: cloned.oauth.grantType || "authorization_code",
                 responseType: cloned.oauth.responseType || "code",
+                tokenEndpointAuthMethod: cloned.oauth.tokenEndpointAuthMethod,
               }
             : undefined,
         inputs: Array.isArray(cloned.inputs)
@@ -591,6 +592,7 @@ function toHttpServerConfig(
             scopes: cloned.oauth.scopes,
             grantType: cloned.oauth.grantType || "authorization_code",
             responseType: cloned.oauth.responseType || "code",
+            tokenEndpointAuthMethod: cloned.oauth.tokenEndpointAuthMethod,
           }
         : undefined,
     inputs: Array.isArray(cloned.inputs)

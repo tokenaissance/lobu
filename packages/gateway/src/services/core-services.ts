@@ -612,6 +612,22 @@ export class CoreServices {
     logger.info("MCP OAuth discovery completed");
 
     // Register MCP OAuth module
+    // Enable proactive MCP credential refresh in the token refresh job
+    if (
+      this.tokenRefreshJob &&
+      this.mcpCredentialStore &&
+      this.mcpConfigService
+    ) {
+      const { GenericOAuth2Client } = await import(
+        "../auth/oauth/generic-client"
+      );
+      this.tokenRefreshJob.setMcpDeps({
+        mcpCredentialStore: this.mcpCredentialStore,
+        mcpConfigService: this.mcpConfigService,
+        oauth2Client: new GenericOAuth2Client(),
+      });
+    }
+
     this.mcpOAuthModule = new McpOAuthModule(
       this.mcpConfigService,
       mcpCredentialStore,
@@ -619,7 +635,8 @@ export class CoreServices {
       mcpInputStore,
       this.config.mcp.publicGatewayUrl,
       this.config.mcp.callbackUrl,
-      this.grantStore
+      this.grantStore,
+      this.queue
     );
     moduleRegistry.register(this.mcpOAuthModule);
     logger.info("MCP OAuth module registered");

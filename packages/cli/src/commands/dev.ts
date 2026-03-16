@@ -70,8 +70,9 @@ export async function devCommand(
 
     // Check for docker-compose.yml
     const composePath = join(cwd, "docker-compose.yml");
+    let composeContent: string;
     try {
-      await readFile(composePath, "utf-8");
+      composeContent = await readFile(composePath, "utf-8");
     } catch {
       console.log(
         chalk.yellow(
@@ -80,6 +81,11 @@ export async function devCommand(
       );
       process.exit(1);
     }
+
+    // Parse gateway port from docker-compose.yml
+    const portMatch = composeContent.match(/"(\d+):8080"/);
+    const gatewayPort = portMatch ? portMatch[1] : "8080";
+    const gatewayUrl = `http://localhost:${gatewayPort}`;
 
     console.log(
       chalk.cyan(`\n  Starting ${manifest.agents.length} agent(s)...\n`)
@@ -98,6 +104,14 @@ export async function devCommand(
     });
 
     child.on("exit", (code) => {
+      if (code === 0 && passthroughArgs.includes("-d")) {
+        console.log(chalk.green("\n  Lobu is running!\n"));
+        console.log(chalk.cyan(`  Admin page:    ${gatewayUrl}/agents`));
+        console.log(chalk.cyan(`  Settings:      ${gatewayUrl}/settings`));
+        console.log(chalk.cyan(`  API docs:      ${gatewayUrl}/api/docs`));
+        console.log(chalk.dim(`\n  View logs:     docker compose logs -f`));
+        console.log(chalk.dim(`  Stop:          docker compose down\n`));
+      }
       process.exit(code ?? 0);
     });
   } catch (err) {

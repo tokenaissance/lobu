@@ -332,6 +332,17 @@ export function createAdminPageRoutes(config: AdminPageConfig) {
       };
     });
 
+    const plugins = [
+      {
+        source: "@lobu/owletto-openclaw",
+        name: "Owletto Memory",
+        slot: "memory",
+        enabled: true,
+        configured: !!process.env.OWLETTO_MCP_URL,
+        settingsUrl: "/settings#skills",
+      },
+    ];
+
     return {
       version: config.version || process.env.npm_package_version || "unknown",
       githubUrl: config.githubUrl || "",
@@ -339,6 +350,7 @@ export function createAdminPageRoutes(config: AdminPageConfig) {
       uptime: Math.floor(process.uptime()),
       skills: adminSkills,
       agents,
+      plugins,
     };
   }
 

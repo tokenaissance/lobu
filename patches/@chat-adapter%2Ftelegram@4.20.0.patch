@@ -29,16 +29,24 @@ index 2d48f2187a6f56d896a3459018ea53f637981484..a34bbcaeb2abf207524617b724cc2d89
      const card = extractCard(message);
      const replyMarkup = card ? cardToTelegramInlineKeyboard(card) : void 0;
 -    const parseMode = card ? TELEGRAM_MARKDOWN_PARSE_MODE : void 0;
-+    const parseMode = (card || (typeof message === "object" && message !== null && "markdown" in message)) ? TELEGRAM_MARKDOWN_PARSE_MODE : void 0;
++    const parseMode = card ? TELEGRAM_MARKDOWN_PARSE_MODE : (typeof message === "object" && message !== null && "html" in message ? "HTML" : (typeof message === "object" && message !== null && "markdown" in message ? TELEGRAM_MARKDOWN_PARSE_MODE : void 0));
      const text = this.truncateMessage(
        convertEmojiPlaceholders2(
-         card ? cardToFallbackText(card) : this.formatConverter.renderPostable(message),
+-        card ? cardToFallbackText(card) : this.formatConverter.renderPostable(message),
++        card ? cardToFallbackText(card) : (typeof message === "object" && message !== null && "html" in message ? message.html : this.formatConverter.renderPostable(message)),
+         "gchat"
+       )
+     );
 @@ -590,7 +597,7 @@ var TelegramAdapter = class {
      } = this.decodeCompositeMessageId(messageId, parsedThread.chatId);
      const card = extractCard(message);
      const replyMarkup = card ? cardToTelegramInlineKeyboard(card) : void 0;
 -    const parseMode = card ? TELEGRAM_MARKDOWN_PARSE_MODE : void 0;
-+    const parseMode = (card || (typeof message === "object" && message !== null && "markdown" in message)) ? TELEGRAM_MARKDOWN_PARSE_MODE : void 0;
++    const parseMode = card ? TELEGRAM_MARKDOWN_PARSE_MODE : (typeof message === "object" && message !== null && "html" in message ? "HTML" : (typeof message === "object" && message !== null && "markdown" in message ? TELEGRAM_MARKDOWN_PARSE_MODE : void 0));
      const text = this.truncateMessage(
        convertEmojiPlaceholders2(
-         card ? cardToFallbackText(card) : this.formatConverter.renderPostable(message),
+-        card ? cardToFallbackText(card) : this.formatConverter.renderPostable(message),
++        card ? cardToFallbackText(card) : (typeof message === "object" && message !== null && "html" in message ? message.html : this.formatConverter.renderPostable(message)),
+         "gchat"
+       )
+     );

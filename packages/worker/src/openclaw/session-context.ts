@@ -1,5 +1,4 @@
 import {
-  buildMcpToolInstructions,
   type ConfigProviderMeta,
   createLogger,
   type IntegrationInfo,
@@ -34,6 +33,8 @@ export interface ProviderConfig {
   providerBaseUrlMappings?: Record<string, string>;
   /** Dynamic provider metadata from config-driven providers */
   configProviders?: Record<string, ConfigProviderMeta>;
+  /** Credential env var placeholders for proxy mode (e.g. Z_AI_API_KEY → "lobu-proxy") */
+  credentialPlaceholders?: Record<string, string>;
 }
 
 interface SkillContent {
@@ -59,6 +60,7 @@ let cachedResult: {
   gatewayInstructions: string;
   providerConfig: ProviderConfig;
   skillsConfig: SkillContent[];
+  mcpTools: Record<string, McpToolDef[]>;
 } | null = null;
 
 /**
@@ -183,6 +185,7 @@ export async function getOpenClawSessionContext(): Promise<{
   gatewayInstructions: string;
   providerConfig: ProviderConfig;
   skillsConfig: SkillContent[];
+  mcpTools: Record<string, McpToolDef[]>;
 }> {
   if (cachedResult) {
     logger.debug("Returning cached session context");
@@ -194,7 +197,12 @@ export async function getOpenClawSessionContext(): Promise<{
 
   if (!dispatcherUrl || !workerToken) {
     logger.warn("Missing dispatcher URL or worker token for session context");
-    return { gatewayInstructions: "", providerConfig: {}, skillsConfig: [] };
+    return {
+      gatewayInstructions: "",
+      providerConfig: {},
+      skillsConfig: [],
+      mcpTools: {},
+    };
   }
 
   try {
@@ -212,7 +220,12 @@ export async function getOpenClawSessionContext(): Promise<{
       logger.warn("Gateway returned non-success status for session context", {
         status: response.status,
       });
-      return { gatewayInstructions: "", providerConfig: {}, skillsConfig: [] };
+      return {
+        gatewayInstructions: "",
+        providerConfig: {},
+        skillsConfig: [],
+        mcpTools: {},
+      };
     }
 
     const data = (await response.json()) as SessionContextResponse;
@@ -236,18 +249,12 @@ export async function getOpenClawSessionContext(): Promise<{
     }
     const mcpServerInstructions =
       buildMcpServerInstructions(instructionsOnlyMcps);
-    const mcpToolInstructions =
-      data.mcpTools && Object.keys(data.mcpTools).length > 0
-        ? buildMcpToolInstructions(
-            data.mcpTools,
-            dispatcherUrl,
-            data.mcpInstructions
-          )
-        : "";
     const integrationInstructions = buildIntegrationInstructions(
       data.integrationStatus || []
     );
 
+    // MCP tools are now exposed as first-class callable tools (not curl instructions).
+    // Only include server instructions for context.
     const gatewayInstructions = [
       data.agentInstructions,
       data.platformInstructions,
@@ -255,25 +262,32 @@ export async function getOpenClawSessionContext(): Promise<{
       data.skillsInstructions,
       mcpSetupInstructions,
       mcpServerInstructions,
-      mcpToolInstructions,
       integrationInstructions,
     ]
       .filter(Boolean)
       .join("\n\n");
 
+    const mcpTools = data.mcpTools || {};
+
     logger.info(
-      `Built gateway instructions: agent (${(data.agentInstructions || "").length} chars) + platform (${data.platformInstructions.length} chars) + network (${data.networkInstructions.length} chars) + skills (${(data.skillsInstructions || "").length} chars) + MCP setup (${mcpSetupInstructions.length} chars) + MCP server instructions (${mcpServerInstructions.length} chars) + integrations (${integrationInstructions.length} chars)`
+      `Built gateway instructions: agent (${(data.agentInstructions || "").length} chars) + platform (${data.platformInstructions.length} chars) + network (${data.networkInstructions.length} chars) + skills (${(data.skillsInstructions || "").length} chars) + MCP setup (${mcpSetupInstructions.length} chars) + MCP server instructions (${mcpServerInstructions.length} chars) + integrations (${integrationInstructions.length} chars), mcpTools: ${Object.keys(mcpTools).length} servers`
     );
 
     const result = {
       gatewayInstructions,
       providerConfig: data.providerConfig || {},
       skillsConfig: data.skillsConfig || [],
+      mcpTools,
     };
     cachedResult = result;
     return result;
   } catch (error) {
     logger.error("Failed to fetch session context from gateway", { error });
-    return { gatewayInstructions: "", providerConfig: {}, skillsConfig: [] };
+    return {
+      gatewayInstructions: "",
+      providerConfig: {},
+      skillsConfig: [],
+      mcpTools: {},
+    };
   }
 }

@@ -21,6 +21,7 @@ export interface ThreadContext {
   conversationId: string;
   teamId: string;
   platform: string;
+  connectionId?: string;
 }
 
 interface SecureTokenPayload {
@@ -464,6 +465,9 @@ export class IntegrationOAuthModule {
           isIntegrationAuth: true,
           integrationId,
           accountId,
+          ...(threadContext.connectionId
+            ? { connectionId: threadContext.connectionId }
+            : {}),
         },
         agentOptions: {},
       });

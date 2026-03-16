@@ -57,6 +57,8 @@ export interface AgentSettings {
   identityMd?: string;
   /** Skills configuration - enabled skills from skills.sh */
   skillsConfig?: SkillsConfig;
+  /** Internal marker: domains auto-granted from enabled skills */
+  skillAutoGrantedDomains?: string[];
   /** Tool permission configuration - allowed/denied tools */
   toolsConfig?: ToolsConfig;
   /** OpenClaw plugin configuration */

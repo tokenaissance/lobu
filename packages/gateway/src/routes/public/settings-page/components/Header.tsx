@@ -211,12 +211,14 @@ export function AdminBar() {
               Open Agent
             </a>
           )}
-          <a
-            href={`/agent/${ctx.agentId}/history`}
-            class="hover:text-slate-600 transition-colors"
-          >
-            History
-          </a>
+          {ctx.isSandbox && (
+            <a
+              href={`/agent/${ctx.agentId}/history`}
+              class="hover:text-slate-600 transition-colors"
+            >
+              History
+            </a>
+          )}
           <a
             href="/settings/logout"
             class="hover:text-red-500 transition-colors"

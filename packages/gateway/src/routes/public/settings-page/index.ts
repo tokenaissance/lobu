@@ -39,6 +39,7 @@ export interface ProviderMeta {
 }
 
 export interface SettingsPageOptions {
+  memoryEnabled?: boolean;
   providers?: ProviderMeta[];
   catalogProviders?: ProviderMeta[];
   providerModelOptions?: Record<string, ModelOption[]>;
@@ -49,6 +50,7 @@ export interface SettingsPageOptions {
   hasChannelId?: boolean;
   isSandbox?: boolean;
   ownerPlatform?: string;
+  baseProviderNames?: string[];
   integrationStatus?: Record<
     string,
     {
@@ -135,6 +137,7 @@ export function renderSettingsPage(
       apiKeyPlaceholder: p.apiKeyPlaceholder,
       capabilities: p.capabilities || [],
     })),
+    memoryEnabled: options?.memoryEnabled ?? false,
     initialSkills: s.skillsConfig?.skills || [],
     initialMcpServers: s.mcpServers || {},
     prefillSkills: payload.prefillSkills || [],
@@ -164,7 +167,9 @@ export function renderSettingsPage(
       channelCount: a.channelCount,
       description: a.description,
     })),
-    hasNoProviders: providers.length === 0,
+    hasNoProviders:
+      providers.length === 0 && !options?.baseProviderNames?.length,
+    baseProviderNames: options?.baseProviderNames || [],
     providerIconUrls: Object.fromEntries(
       providers.map((p) => [p.id, p.iconUrl])
     ),

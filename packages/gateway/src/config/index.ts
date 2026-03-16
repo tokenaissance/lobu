@@ -176,10 +176,6 @@ export function buildGatewayConfig(): GatewayConfig {
     );
   }
 
-  const defaultOwlettoMemoryEnabled = getOptionalBoolean(
-    "AGENT_DEFAULT_OWLETTO_MEMORY_ENABLED",
-    true
-  );
   const defaultMemoryFlushEnabled = getOptionalBoolean(
     "AGENT_DEFAULT_MEMORY_FLUSH_ENABLED",
     true
@@ -225,7 +221,7 @@ export function buildGatewayConfig(): GatewayConfig {
           {
             source: "@lobu/owletto-openclaw",
             slot: "memory",
-            enabled: defaultOwlettoMemoryEnabled,
+            enabled: true,
             config: {
               mcpUrl: "http://gateway:8080/mcp/owletto",
               tokenCommand: "echo $WORKER_TOKEN",

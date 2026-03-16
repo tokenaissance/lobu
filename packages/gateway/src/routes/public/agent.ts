@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import {
   createLogger,
@@ -6,11 +6,13 @@ import {
   generateWorkerToken,
   type McpServerConfig,
   type NetworkConfig,
-  verifyWorkerToken,
 } from "@lobu/core";
-import type { Context, Next } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+import {
+  TOKEN_EXPIRATION_MS,
+  createApiAuthMiddleware,
+} from "../../auth/api-auth-middleware";
 import type { CliTokenService } from "../../auth/cli/token-service";
 import type { QueueProducer } from "../../infrastructure/queue/queue-producer";
 import type { ISessionManager, ThreadSession } from "../../session";
@@ -21,7 +23,6 @@ const logger = createLogger("agent-api");
 // Constants
 // =============================================================================
 
-const TOKEN_EXPIRATION_MS = 24 * 60 * 60 * 1000;
 const MAX_CONNECTIONS_PER_AGENT = 5;
 const MAX_TOTAL_CONNECTIONS = 1000;
 
@@ -248,6 +249,7 @@ const createAgentRoute = createRoute({
   path: "/api/v1/agents",
   tags: ["Agents"],
   summary: "Create a new agent",
+  security: [{ bearerAuth: [] }],
   description:
     "Creates a new agent session and returns authentication credentials",
   request: {
@@ -411,41 +413,14 @@ export function createAgentApi(
   const app = new OpenAPIHono();
 
   // Unified auth middleware for all agent API routes
-  app.use("/api/v1/agents/*", async (c: Context, next: Next) => {
-    const authHeader = c.req.header("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ success: false, error: "Unauthorized" }, 401);
-    }
-    const token = authHeader.substring(7);
-
-    // 1. Try CLI JWT
-    if (cliTokenService) {
-      const identity = await cliTokenService.verifyAccessToken(token);
-      if (identity) {
-        return next();
-      }
-    }
-
-    // 2. Try admin password
-    if (adminPassword) {
-      const a = Buffer.from(token);
-      const b = Buffer.from(adminPassword);
-      if (a.length === b.length && timingSafeEqual(a, b)) {
-        return next();
-      }
-    }
-
-    // 3. Try worker token (covers SSE/messages/status/delete after create)
-    const workerData = verifyWorkerToken(token);
-    if (workerData) {
-      const tokenAge = Date.now() - workerData.timestamp;
-      if (tokenAge <= TOKEN_EXPIRATION_MS) {
-        return next();
-      }
-    }
-
-    return c.json({ success: false, error: "Unauthorized" }, 401);
-  });
+  app.use(
+    "/api/v1/agents/*",
+    createApiAuthMiddleware({
+      adminPassword,
+      cliTokenService,
+      allowSettingsSession: false,
+    })
+  );
 
   // =============================================================================
   // Route Handlers

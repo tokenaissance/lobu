@@ -627,7 +627,8 @@ export class ChatInstanceManager {
         this.services.getInteractionService(),
         this,
         connection,
-        chat
+        chat,
+        this.services.getGrantStore()
       );
 
       logger.info(

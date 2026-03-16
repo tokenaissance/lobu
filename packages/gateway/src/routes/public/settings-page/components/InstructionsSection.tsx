@@ -1,11 +1,16 @@
 import { useSettings } from "../app";
 import { Section } from "./Section";
 
-export function InstructionsSection() {
+export function InstructionsSection({ adminOnly }: { adminOnly?: boolean }) {
   const ctx = useSettings();
 
   return (
-    <Section id="instructions" title="Instructions" icon="&#128220;">
+    <Section
+      id="instructions"
+      title="Instructions"
+      icon="&#128220;"
+      adminOnly={adminOnly}
+    >
       <div class="space-y-3">
         <div>
           <label

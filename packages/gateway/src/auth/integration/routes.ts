@@ -209,6 +209,7 @@ export function createIntegrationRoutes(
             conversationId: worker.conversationId,
             teamId: worker.teamId || "",
             platform: worker.platform || "api",
+            connectionId: worker.connectionId,
           }
         );
         const oauthUrl = `${publicGatewayUrl}/api/v1/auth/integration/init/${integration}?token=${encodeURIComponent(token)}`;

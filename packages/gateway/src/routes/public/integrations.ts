@@ -272,6 +272,61 @@ export function createIntegrationsRoutes(
       return c.json({ error: "Agent settings not configured" }, 500);
     }
 
+    // Validate credentials against the OAuth provider's token endpoint
+    if (config.configResolver) {
+      const integrationConfig =
+        await config.configResolver.getIntegrationConfig(integrationId);
+      if (integrationConfig?.oauth?.tokenUrl) {
+        const { tokenUrl, tokenEndpointAuthMethod } = integrationConfig.oauth;
+        const authMethod = tokenEndpointAuthMethod || "client_secret_post";
+        try {
+          const body = new URLSearchParams({
+            grant_type: "authorization_code",
+            code: "__validation_probe__",
+            redirect_uri: "https://localhost/validate",
+          });
+          const headers: Record<string, string> = {
+            "Content-Type": "application/x-www-form-urlencoded",
+          };
+          if (authMethod === "client_secret_basic") {
+            headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+          } else {
+            body.set("client_id", clientId);
+            body.set("client_secret", clientSecret);
+          }
+          const resp = await fetch(tokenUrl, {
+            method: "POST",
+            headers,
+            body: body.toString(),
+          });
+          const text = await resp.text();
+          let errorCode = "";
+          try {
+            errorCode = JSON.parse(text)?.error || "";
+          } catch {
+            // Some providers return form-encoded or plain text
+            errorCode = new URLSearchParams(text).get("error") || "";
+          }
+          if (
+            errorCode === "invalid_client" ||
+            errorCode === "unauthorized_client" ||
+            resp.status === 401
+          ) {
+            return c.json(
+              {
+                error:
+                  "Invalid Client ID or Client Secret. Please check your credentials.",
+              },
+              400
+            );
+          }
+          // Any other error (invalid_grant, invalid_request, etc.) means the credentials are valid
+        } catch {
+          // Network error reaching token endpoint — skip validation, save anyway
+        }
+      }
+    }
+
     const settings = await config.agentSettingsStore.getSettings(agentId);
     const existing = settings?.oauthAppCredentials || {};
     await config.agentSettingsStore.updateSettings(agentId, {

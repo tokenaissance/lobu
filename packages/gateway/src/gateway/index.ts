@@ -640,6 +640,19 @@ export class WorkerGateway {
       }
     }
 
+    // Build credential placeholders for proxy mode — in-process workers need
+    // these so the runtime doesn't reject requests before they reach the proxy.
+    const credentialPlaceholders: Record<string, string> = {};
+    for (const provider of effectiveProviders) {
+      if (provider.hasSystemKey() || (await provider.hasCredentials(agentId))) {
+        const credVar = provider.getCredentialEnvVarName();
+        const placeholder = provider.buildCredentialPlaceholder
+          ? await provider.buildCredentialPlaceholder(agentId)
+          : "lobu-proxy";
+        credentialPlaceholders[credVar] = placeholder;
+      }
+    }
+
     const result: {
       credentialEnvVarName?: string;
       defaultProvider?: string;
@@ -647,6 +660,7 @@ export class WorkerGateway {
       cliBackends?: typeof cliBackends;
       providerBaseUrlMappings?: Record<string, string>;
       configProviders?: typeof configProviders;
+      credentialPlaceholders?: Record<string, string>;
     } = {};
 
     if (primaryProvider) {
@@ -671,6 +685,10 @@ export class WorkerGateway {
 
     if (Object.keys(configProviders).length > 0) {
       result.configProviders = configProviders;
+    }
+
+    if (Object.keys(credentialPlaceholders).length > 0) {
+      result.credentialPlaceholders = credentialPlaceholders;
     }
 
     return result;

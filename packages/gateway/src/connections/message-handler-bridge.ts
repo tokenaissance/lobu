@@ -183,11 +183,17 @@ class MessageHandlerBridge {
       }
     }
 
-    // Gap 3: Check if agent has providers configured
+    // Gap 3: Check if agent has providers configured (including base agent for sandboxes)
     const agentSettingsStore = this.services.getAgentSettingsStore();
     if (agentSettingsStore) {
-      const settings = await agentSettingsStore.getSettings(agentId);
-      if (!settings?.installedProviders?.length) {
+      const { resolveInstalledProviders } = await import(
+        "../auth/provider-catalog"
+      );
+      const installed = await resolveInstalledProviders(
+        agentSettingsStore,
+        agentId
+      );
+      if (installed.length === 0) {
         await this.sendProviderSetupPrompt(thread, channelId, isGroup, agentId);
         return;
       }

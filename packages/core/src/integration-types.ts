@@ -59,6 +59,7 @@ export interface SystemSkillEntry {
   id: string;
   name: string;
   description?: string;
+  hidden?: boolean;
   integrations?: SystemSkillIntegration[];
   mcpServers?: import("./types").SkillMcpServer[];
   providers?: ProviderConfigEntry[];

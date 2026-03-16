@@ -25,25 +25,6 @@ export type {
   SystemSkillsConfigFile,
 } from "./integration-types";
 export * from "./logger";
-// Typed memory contracts
-export type {
-  LinkMemoryRequest,
-  LinkMemoryResponse,
-  MemoryError,
-  MemoryFilter,
-  MemoryRecord,
-  MemoryRecordType,
-  MemoryRelationType,
-  MemorySort,
-  MemorySortDirection,
-  MemorySortField,
-  RecallMemoryRequest,
-  RecallMemoryResponse,
-  SaveMemoryRequest,
-  SaveMemoryResponse,
-  UpdateMemoryRequest,
-  UpdateMemoryResponse,
-} from "./memory-types";
 // Module system
 export type { ActionButton, ModuleSessionContext } from "./modules";
 export * from "./modules";
@@ -129,7 +110,6 @@ export * from "./utils/env";
 export * from "./utils/json";
 export * from "./utils/lock";
 export type { McpToolDef } from "./utils/mcp-tool-instructions";
-export { buildMcpToolInstructions } from "./utils/mcp-tool-instructions";
 export * from "./utils/retry";
 export * from "./utils/sanitize";
 export * from "./worker/auth";

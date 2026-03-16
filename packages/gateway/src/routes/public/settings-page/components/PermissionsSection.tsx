@@ -2,7 +2,7 @@ import { useSignal } from "@preact/signals";
 import { useSettings } from "../app";
 import { Section } from "./Section";
 
-export function PermissionsSection() {
+export function PermissionsSection({ adminOnly }: { adminOnly?: boolean }) {
   const ctx = useSettings();
   const showAddForm = useSignal(false);
   const newPattern = useSignal("");
@@ -64,7 +64,12 @@ export function PermissionsSection() {
   });
 
   return (
-    <Section id="permissions" title="Permissions" icon="&#128274;">
+    <Section
+      id="permissions"
+      title="Permissions"
+      icon="&#128274;"
+      adminOnly={adminOnly}
+    >
       <div class="space-y-2">
         {sorted.length === 0 && !ctx.permissionsLoading.value && (
           <p class="text-xs text-gray-500">

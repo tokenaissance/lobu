@@ -34,6 +34,18 @@ export class SystemSkillsService {
   }
 
   /**
+   * Returns only skills that are discoverable via SearchSkills.
+   * Filters out entries with `hidden: true` (e.g. Owletto which is embedded).
+   */
+  async getSearchableSkills(): Promise<SkillConfig[]> {
+    const config = await this.loadConfig();
+    if (!config) return [];
+    return config.skills
+      .filter((entry) => !entry.hidden)
+      .map((entry) => this.toSkillConfig(entry));
+  }
+
+  /**
    * Returns skills with original ${env:*} patterns intact (not substituted).
    * Used by the admin env catalog to discover which env vars are referenced.
    */

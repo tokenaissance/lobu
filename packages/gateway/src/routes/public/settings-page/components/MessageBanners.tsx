@@ -213,7 +213,23 @@ function PrefillBanner() {
     ctx.errorMsg.value = "";
     ctx.successMsg.value = "";
     try {
-      // 0. Save any entered OAuth credentials first
+      // 0. Validate and save OAuth credentials first
+      const allSkillIntegrations = resolvedSkills.value.flatMap((s) =>
+        (s.integrations || []).filter((ig) => ig.authType !== "api-key")
+      );
+      const requiredOAuth = allSkillIntegrations.filter((ig) => {
+        const status = ctx.integrationStatus.value[ig.id];
+        return !status?.connected;
+      });
+      for (const ig of requiredOAuth) {
+        const cred = oauthCredentials.value[ig.id];
+        if (!cred?.clientId?.trim() || !cred?.clientSecret?.trim()) {
+          ctx.errorMsg.value = `Please enter Client ID and Client Secret for ${ig.label || ig.id}`;
+          ctx.approvingPrefills.value = false;
+          return;
+        }
+      }
+
       for (const [integrationId, cred] of Object.entries(
         oauthCredentials.value
       )) {
@@ -540,10 +556,11 @@ function PrefillSkillCard({
   const allNixPackages = [...(skill.nixPackages || []), ...extraPkgs];
 
   // Identify unconfigured OAuth integrations for this skill
+  // Show credential form for OAuth integrations that are not yet connected
   const unconfiguredOAuth = (skill.integrations || []).filter((ig) => {
     if (ig.authType === "api-key") return false;
     const status = ctx.integrationStatus.value[ig.id];
-    return !status?.configured;
+    return !status?.connected;
   });
 
   const hasDetails =

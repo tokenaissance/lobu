@@ -769,7 +769,6 @@ export class MessageConsumer {
     const providerNames = unauthenticatedProviders.map(
       (provider) => provider.name
     );
-    const providerIds = unauthenticatedProviders.map((provider) => provider.id);
     const providerLabel =
       providerNames.length > 0 ? providerNames.join(", ") : "a model provider";
     const message = `Setup required: add ${providerLabel} in settings before this bot can respond.`;
@@ -787,9 +786,7 @@ export class MessageConsumer {
       buildClaimSettingsUrl(claimCode, { agentId: data.agentId })
     );
 
-    if (providerIds.length > 0) {
-      settingsUrl.searchParams.set("providers", providerIds.join(","));
-    }
+    settingsUrl.searchParams.set("open", "model");
 
     return `${message}\n\n[Open Settings](${settingsUrl.toString()})`;
   }

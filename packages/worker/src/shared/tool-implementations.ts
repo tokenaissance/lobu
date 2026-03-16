@@ -1430,3 +1430,45 @@ export async function getChannelHistory(
     return textResult(result);
   });
 }
+
+// ============================================================================
+// MCP Tools (route to MCP proxy /mcp/{mcpId}/tools/{toolName})
+// ============================================================================
+
+export async function callMcpTool(
+  gw: GatewayParams,
+  mcpId: string,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<TextResult> {
+  return withErrorHandling(`${mcpId}/${toolName}`, async () => {
+    const response = await fetch(
+      `${gw.gatewayUrl}/mcp/${mcpId}/tools/${toolName}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${gw.workerToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(args),
+      }
+    );
+
+    const data = (await response.json()) as {
+      content?: Array<{ type: string; text: string }>;
+      error?: string;
+      isError?: boolean;
+    };
+
+    if (!response.ok || data.isError) {
+      const errorMsg = data.error || `${toolName} failed (${response.status})`;
+      return textResult(`Error: ${errorMsg}`);
+    }
+
+    const text = data.content
+      ?.filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+    return textResult(text || `${toolName} completed.`);
+  });
+}

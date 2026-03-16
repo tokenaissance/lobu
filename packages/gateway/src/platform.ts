@@ -7,6 +7,7 @@ import type {
 } from "@lobu/core";
 import type { AdminStatusCache } from "./auth/admin-status-cache";
 import type { AgentMetadataStore } from "./auth/agent-metadata-store";
+import type { McpOAuthModule } from "./auth/mcp/oauth-module";
 import type { McpProxy } from "./auth/mcp/proxy";
 import type { ProviderOAuthStateStore } from "./auth/oauth/state-store";
 import type { AgentSettingsStore } from "./auth/settings";
@@ -54,6 +55,7 @@ export interface CoreServices {
   getCommandRegistry(): CommandRegistry;
   getGrantStore(): GrantStore | undefined;
   getClaimService(): ClaimService | undefined;
+  getMcpOAuthModule(): McpOAuthModule | undefined;
 }
 
 // ============================================================================

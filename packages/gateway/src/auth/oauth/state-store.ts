@@ -151,6 +151,14 @@ export function createSlackInstallStateStore(
 // MCP OAuth State Types and Factory
 // ============================================================================
 
+export interface McpOAuthThreadContext {
+  conversationId: string;
+  channelId: string;
+  teamId?: string;
+  platform?: string;
+  connectionId?: string;
+}
+
 export interface McpOAuthStateData {
   userId: string;
   agentId: string;
@@ -159,6 +167,7 @@ export interface McpOAuthStateData {
   redirectPath?: string;
   codeVerifier?: string;
   resource?: string;
+  threadContext?: McpOAuthThreadContext;
 }
 
 export type McpOAuthState = McpOAuthStateData & { createdAt: number };

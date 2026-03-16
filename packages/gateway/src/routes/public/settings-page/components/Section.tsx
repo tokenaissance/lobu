@@ -6,10 +6,18 @@ interface SectionProps {
   title: string;
   icon: string;
   badge?: ComponentChildren;
+  adminOnly?: boolean;
   children: ComponentChildren;
 }
 
-export function Section({ id, title, icon, badge, children }: SectionProps) {
+export function Section({
+  id,
+  title,
+  icon,
+  badge,
+  adminOnly,
+  children,
+}: SectionProps) {
   const { openSections, toggleSection } = useSettings();
   const isOpen = openSections.value[id];
 
@@ -25,6 +33,11 @@ export function Section({ id, title, icon, badge, children }: SectionProps) {
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: rendering pre-sanitized icon entity */}
         <span dangerouslySetInnerHTML={{ __html: icon }} />
         {title}
+        {adminOnly && (
+          <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+            hidden from user
+          </span>
+        )}
         {badge}
         <span
           class={`ml-auto text-xs text-gray-400 transition-transform ${isOpen ? "" : "rotate-[-90deg]"}`}

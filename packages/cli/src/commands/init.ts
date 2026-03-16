@@ -765,7 +765,7 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save 60 1 --dir /data
     volumes:
-      - redis_data:/data
+      - ./data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -790,8 +790,7 @@ services:
       WORKER_ALLOWED_DOMAINS: \${WORKER_ALLOWED_DOMAINS:-}
       WORKER_DISALLOWED_DOMAINS: \${WORKER_DISALLOWED_DOMAINS:-}
     volumes:${dockerSocketMount}
-      - ./.lobu:/app/.lobu:ro
-      - env_storage:/app/.lobu/env
+      - ./.lobu:/app/.lobu
     networks:
       - lobu-public
       - lobu-internal
@@ -807,8 +806,5 @@ networks:
     internal: true
     driver: bridge
 
-volumes:
-  redis_data:
-  env_storage:
 `;
 }

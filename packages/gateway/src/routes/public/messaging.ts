@@ -3,6 +3,8 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { createLogger } from "@lobu/core";
 import { z } from "zod";
+import { createApiAuthMiddleware } from "../../auth/api-auth-middleware";
+import type { CliTokenService } from "../../auth/cli/token-service";
 import type { PlatformRegistry } from "../../platform";
 
 const logger = createLogger("messaging-routes");
@@ -144,24 +146,27 @@ interface SendMessageRequest {
  * Create messaging routes (OpenAPI)
  */
 export function createMessagingRoutes(
-  platformRegistry: PlatformRegistry
+  platformRegistry: PlatformRegistry,
+  auth?: { adminPassword?: string; cliTokenService?: CliTokenService }
 ): OpenAPIHono {
   const app = new OpenAPIHono();
 
+  // Public messaging must not accept worker tokens, because this route can
+  // post messages into user-facing platform connections.
+  app.use(
+    "/api/v1/messaging/*",
+    createApiAuthMiddleware({
+      ...(auth ?? {}),
+      allowWorkerToken: false,
+      allowSettingsSession: false,
+    })
+  );
+
   app.openapi(sendMessageRoute, async (c): Promise<any> => {
     try {
+      // Platform token still comes from the Authorization header for the adapter call
       const authHeader = c.req.header("authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return c.json(
-          {
-            success: false,
-            error:
-              "Missing or invalid Authorization header. Use: Authorization: Bearer <token>",
-          },
-          401
-        );
-      }
-      const token = authHeader.substring(7);
+      const token = authHeader ? authHeader.substring(7) : "";
 
       // Handle multipart form data for file uploads
       const contentType = c.req.header("content-type") || "";
