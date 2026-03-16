@@ -249,11 +249,14 @@ export async function initCommand(
     }
     console.log();
 
+    const gatewayUrl = `http://localhost:${gatewayPort}`;
     console.log(chalk.cyan("  3. Start the services:"));
     console.log(chalk.dim("     lobu dev -d\n"));
-    console.log(chalk.cyan("  4. View logs:"));
+    console.log(chalk.cyan("  4. Open the admin page:"));
+    console.log(chalk.dim(`     ${gatewayUrl}/agents\n`));
+    console.log(chalk.cyan("  5. View logs:"));
     console.log(chalk.dim("     docker compose logs -f\n"));
-    console.log(chalk.cyan("  5. Stop the services:"));
+    console.log(chalk.cyan("  6. Stop the services:"));
     console.log(chalk.dim("     docker compose down\n"));
   } catch (error) {
     spinner.fail("Failed to create project");
