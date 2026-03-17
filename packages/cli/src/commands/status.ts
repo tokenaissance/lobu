@@ -1,109 +1,144 @@
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import chalk from "chalk";
 
-const exec = promisify(execFile);
+interface StatusResponse {
+  agents: Array<{
+    agentId: string;
+    name: string;
+    providers: string[];
+    model: string;
+  }>;
+  connections: Array<{
+    id: string;
+    platform: string;
+    status: string;
+    templateAgentId: string | null;
+    botUsername: string | null;
+  }>;
+  sandboxes: Array<{
+    agentId: string;
+    name: string;
+    parentConnectionId: string | null;
+    lastUsedAt: number | null;
+  }>;
+}
 
 export async function statusCommand(cwd: string): Promise<void> {
-  // Detect project name from .env or fallback
-  let projectName: string | undefined;
+  const { gatewayUrl, adminPassword } = await resolveConfig(cwd);
+
+  let status: StatusResponse;
+  try {
+    const res = await fetch(`${gatewayUrl}/internal/status`, {
+      headers: { Authorization: `Bearer ${adminPassword}` },
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        console.log(
+          chalk.red("\n  Unauthorized. Check ADMIN_PASSWORD in .env.\n")
+        );
+        return;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+    status = (await res.json()) as StatusResponse;
+  } catch {
+    console.log(chalk.yellow("\n  Gateway not reachable."));
+    console.log(chalk.dim("  Start with `lobu dev` to run your agents.\n"));
+    return;
+  }
+
+  // Agents
+  if (status.agents.length > 0) {
+    console.log(chalk.bold.cyan("\n  Agents"));
+    for (const a of status.agents) {
+      const providers =
+        a.providers.length > 0 ? a.providers.join(", ") : "none";
+      console.log(
+        `  ${chalk.green("●")} ${chalk.bold(a.name)} ${chalk.dim(`(${a.agentId})`)}  ${chalk.dim(`model:${a.model}  providers:${providers}`)}`
+      );
+    }
+  } else {
+    console.log(chalk.yellow("\n  No agents configured."));
+  }
+
+  // Connections
+  if (status.connections.length > 0) {
+    console.log(chalk.bold.cyan("\n  Connections"));
+    for (const conn of status.connections) {
+      const icon =
+        conn.status === "connected" ? chalk.green("●") : chalk.red("●");
+      const bot = conn.botUsername
+        ? `@${conn.botUsername}`
+        : conn.id.slice(0, 8);
+      const agent = conn.templateAgentId
+        ? chalk.dim(` → ${conn.templateAgentId}`)
+        : "";
+      console.log(
+        `  ${icon} ${chalk.bold(conn.platform)} ${bot}${agent} ${chalk.dim(conn.status)}`
+      );
+    }
+  }
+
+  // Sandboxes
+  if (status.sandboxes.length > 0) {
+    console.log(chalk.bold.cyan("\n  Sandboxes"));
+    for (const s of status.sandboxes) {
+      const lastUsed = s.lastUsedAt
+        ? chalk.dim(timeAgo(s.lastUsedAt))
+        : chalk.dim("never");
+      console.log(`  ${chalk.dim("○")} ${s.agentId} ${lastUsed}`);
+    }
+  }
+
+  console.log();
+}
+
+function timeAgo(ts: number): string {
+  const seconds = Math.floor((Date.now() - ts) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+async function resolveConfig(
+  cwd: string
+): Promise<{ gatewayUrl: string; adminPassword: string }> {
+  let gatewayPort = "8080";
+  let adminPassword = "";
+
   try {
     const envContent = await readFile(join(cwd, ".env"), "utf-8");
     for (const line of envContent.split("\n")) {
       const trimmed = line.trim();
-      if (trimmed.startsWith("COMPOSE_PROJECT_NAME=")) {
-        projectName = trimmed.slice("COMPOSE_PROJECT_NAME=".length);
-        if (
-          (projectName.startsWith('"') && projectName.endsWith('"')) ||
-          (projectName.startsWith("'") && projectName.endsWith("'"))
-        ) {
-          projectName = projectName.slice(1, -1);
-        }
-        break;
+      if (trimmed.startsWith("#")) continue;
+      const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)/);
+      if (!match) continue;
+      const key = match[1];
+      let val = match[2] || "";
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
       }
+      if (key === "GATEWAY_PORT" && val) gatewayPort = val;
+      if (key === "ADMIN_PASSWORD" && val) adminPassword = val;
     }
   } catch {
     // No .env file
   }
 
-  let output: string;
-  try {
-    const result = await exec("docker", ["compose", "ps", "--format", "json"], {
-      cwd,
-    });
-    output = result.stdout.trim();
-  } catch {
-    console.log(chalk.yellow("\n  No running containers found."));
-    console.log(chalk.dim("  Start with `lobu dev` to run your agents.\n"));
-    return;
+  if (!adminPassword) {
+    adminPassword = process.env.ADMIN_PASSWORD || "";
   }
 
-  if (!output) {
-    console.log(chalk.yellow("\n  No running containers found."));
-    console.log(chalk.dim("  Start with `lobu dev` to run your agents.\n"));
-    return;
-  }
-
-  // docker compose ps --format json outputs one JSON object per line
-  const containers = output
-    .split("\n")
-    .filter((line) => line.trim())
-    .map((line) => {
-      try {
-        return JSON.parse(line) as {
-          Name: string;
-          Service: string;
-          State: string;
-          Status: string;
-          Publishers?: Array<{ PublishedPort: number; TargetPort: number }>;
-        };
-      } catch {
-        return null;
-      }
-    })
-    .filter((c): c is NonNullable<typeof c> => c !== null);
-
-  if (containers.length === 0) {
-    console.log(chalk.yellow("\n  No running containers found."));
-    console.log(chalk.dim("  Start with `lobu dev` to run your agents.\n"));
-    return;
-  }
-
-  console.log(
-    chalk.bold.cyan(
-      `\n  ${projectName ? `${projectName} — ` : ""}${containers.length} container(s)\n`
-    )
-  );
-
-  for (const c of containers) {
-    const stateIcon = c.State === "running" ? chalk.green("●") : chalk.red("●");
-    const ports =
-      c.Publishers?.filter((p) => p.PublishedPort > 0)
-        .map((p) => `${p.PublishedPort}→${p.TargetPort}`)
-        .join(", ") || "";
-    const portStr = ports ? chalk.dim(` (${ports})`) : "";
-
-    console.log(
-      `  ${stateIcon} ${chalk.bold(c.Service)} ${chalk.dim(c.Status)}${portStr}`
-    );
-  }
-
-  // Show gateway URL if found
-  const gateway = containers.find((c) => c.Service === "gateway");
-  if (gateway) {
-    const pub = gateway.Publishers?.find(
-      (p) => p.PublishedPort > 0 && p.TargetPort === 8080
-    );
-    if (pub) {
-      console.log(
-        chalk.cyan(
-          `\n  Admin page: http://localhost:${pub.PublishedPort}/agents`
-        )
-      );
-    }
-  }
-
-  console.log();
+  return {
+    gatewayUrl: `http://localhost:${gatewayPort}`,
+    adminPassword,
+  };
 }

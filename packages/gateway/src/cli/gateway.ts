@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { createLogger } from "@lobu/core";
+import type { AgentMetadata } from "../auth/agent-metadata-store";
 import { apiReference } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
@@ -895,6 +896,82 @@ function setupServer(
       "Slack and connection routes enabled at :8080/slack/*, :8080/api/v1/connections/*, and :8080/api/v1/webhooks/*"
     );
   }
+
+  // ─── Internal CLI status endpoint ──────────────────────────────────────────
+  // Returns agents, connections, and sandboxes for `lobu status`.
+  // Only available in non-production, authenticated with ADMIN_PASSWORD.
+  app.get("/internal/status", async (c) => {
+    if (process.env.NODE_ENV === "production") {
+      return c.json({ error: "Not found" }, 404);
+    }
+    const authHeader = c.req.header("Authorization");
+    if (authHeader !== `Bearer ${adminPassword}`) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const agentMetadataStore = coreServices?.getAgentMetadataStore();
+    const agentSettingsStore = coreServices?.getAgentSettingsStore();
+
+    const allAgents: AgentMetadata[] = agentMetadataStore
+      ? await agentMetadataStore.listAllAgents()
+      : [];
+    const templateAgents = allAgents.filter(
+      (a: AgentMetadata) => !a.parentConnectionId
+    );
+    const sandboxAgents = allAgents.filter(
+      (a: AgentMetadata) => !!a.parentConnectionId
+    );
+
+    const connections = chatInstanceManager
+      ? await chatInstanceManager.listConnections()
+      : [];
+
+    const agentDetails = [];
+    for (const a of templateAgents) {
+      const settings = agentSettingsStore
+        ? await agentSettingsStore.getSettings(a.agentId)
+        : null;
+      const providers = (settings?.installedProviders || []).map(
+        (p: { providerId: string }) => p.providerId
+      );
+      agentDetails.push({
+        agentId: a.agentId,
+        name: a.name,
+        providers,
+        model:
+          settings?.modelSelection?.mode === "pinned"
+            ? (settings.modelSelection as { pinnedModel?: string })
+                .pinnedModel || "pinned"
+            : settings?.modelSelection?.mode || "auto",
+      });
+    }
+
+    return c.json({
+      agents: agentDetails,
+      connections: connections.map(
+        (conn: {
+          id: string;
+          platform: string;
+          templateAgentId?: string;
+          metadata?: Record<string, string>;
+        }) => ({
+          id: conn.id,
+          platform: conn.platform,
+          status: chatInstanceManager?.getInstance(conn.id)
+            ? "connected"
+            : "disconnected",
+          templateAgentId: conn.templateAgentId || null,
+          botUsername: conn.metadata?.botUsername || null,
+        })
+      ),
+      sandboxes: sandboxAgents.map((s: AgentMetadata) => ({
+        agentId: s.agentId,
+        name: s.name,
+        parentConnectionId: s.parentConnectionId || null,
+        lastUsedAt: s.lastUsedAt ?? null,
+      })),
+    });
+  });
 
   // Auto-register any non-openapi routes so everything shows up in the schema
   registerAutoOpenApiRoutes(app);
