@@ -17,9 +17,9 @@ model = "llama-3.3-70b-versatile"
 key = "$GROQ_API_KEY"
 
 # Platform connections (config values can reference $ENV_VAR)
-# [[agents.customer-agent.connections]]
-# type = "telegram"
-# config = { botToken = "$TELEGRAM_BOT_TOKEN" }
+[[agents.customer-agent.connections]]
+type = "telegram"
+config = { botToken = "$TELEGRAM_BOT_TOKEN" }
 
 # Skills from the registry
 [agents.customer-agent.skills]

@@ -309,28 +309,49 @@ export function ProviderSection({ adminOnly }: { adminOnly?: boolean }) {
       adminOnly={adminOnly}
     >
       <div id="provider-list">
-        {ctx.providerOrder.value.length === 0 && (
-          <div class="text-center py-6 text-gray-500">
-            {ctx.baseProviderNames.length > 0 ? (
-              <>
-                <p class="text-sm font-medium text-gray-700 mb-1">
-                  Using base agent providers
-                </p>
-                <p class="text-xs">{ctx.baseProviderNames.join(", ")}</p>
-                <p class="text-xs text-gray-400 mt-1">
-                  Add a provider below to override.
-                </p>
-              </>
-            ) : (
-              <>
-                <p class="text-sm font-medium text-gray-700 mb-1">
-                  No model providers configured
-                </p>
-                <p class="text-xs">Add a provider below to get started.</p>
-              </>
-            )}
-          </div>
-        )}
+        {ctx.providerOrder.value.length === 0 &&
+          ctx.baseProviderNames.length === 0 && (
+            <div class="text-center py-6 text-gray-500">
+              <p class="text-sm font-medium text-gray-700 mb-1">
+                No model providers configured
+              </p>
+              <p class="text-xs">Add a provider below to get started.</p>
+            </div>
+          )}
+        {ctx.providerOrder.value.length === 0 &&
+          ctx.baseProviderNames.map((pid, i) => {
+            const pInfo = ctx.PROVIDERS[pid];
+            const iconUrl = ctx.providerIconUrls[pid] || "";
+            return (
+              <div
+                key={pid}
+                class={i > 0 ? "mt-3 pt-3 border-t border-gray-200" : ""}
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-3 min-w-0">
+                    {iconUrl && (
+                      <img
+                        src={iconUrl}
+                        alt={pInfo?.name || pid}
+                        class="w-5 h-5 rounded"
+                      />
+                    )}
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-gray-800">
+                        {pInfo?.name || pid}
+                      </p>
+                      {pInfo?.capabilities && (
+                        <CapabilityChips capabilities={pInfo.capabilities} />
+                      )}
+                    </div>
+                  </div>
+                  <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                    from config
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         {ctx.providerOrder.value.map((pid, i) => (
           <ProviderCard key={pid} providerId={pid} index={i} />
         ))}
