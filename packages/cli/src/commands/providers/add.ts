@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
-import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import { parse as parseToml } from "smol-toml";
 import { CONFIG_FILENAME } from "../../config/loader.js";
 import { getSkillById, isProviderSkill } from "../skills/registry.js";
 
@@ -30,9 +30,18 @@ export async function providersAddCommand(
   }
 
   const parsed = parseToml(raw) as Record<string, unknown>;
-  const providers = (parsed.providers ?? []) as Array<Record<string, unknown>>;
+  const agents = parsed.agents as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (!agents || Object.keys(agents).length === 0) {
+    console.log(chalk.red("\n  No agents found in lobu.toml.\n"));
+    return;
+  }
 
-  // Check if already added
+  const agentId = Object.keys(agents)[0]!;
+  const agent = agents[agentId]!;
+  const providers = (agent.providers ?? []) as Array<Record<string, unknown>>;
+
   if (providers.some((p) => p.id === providerId)) {
     console.log(
       chalk.yellow(`\n  Provider "${providerId}" is already configured.\n`)
@@ -44,15 +53,18 @@ export async function providersAddCommand(
   if (!provider) return;
 
   const defaultModel = provider.defaultModel;
-  const entry: Record<string, unknown> = { id: providerId };
-  if (defaultModel) {
-    entry.model = defaultModel;
-  }
+  const envVar = provider.envVarName;
 
-  providers.push(entry);
-  parsed.providers = providers;
+  // Append provider entry to the TOML file (preserves comments/formatting)
+  const tomlBlock = [
+    "",
+    `[[agents.${agentId}.providers]]`,
+    `id = "${providerId}"`,
+    ...(defaultModel ? [`model = "${defaultModel}"`] : []),
+    `key = "$${envVar}"`,
+  ].join("\n");
 
-  await writeFile(configPath, stringifyToml(parsed));
+  await writeFile(configPath, `${raw.trimEnd()}\n${tomlBlock}\n`);
 
   console.log(
     chalk.green(`\n  Added provider "${providerId}" to ${CONFIG_FILENAME}`)
@@ -61,8 +73,6 @@ export async function providersAddCommand(
     console.log(chalk.dim(`  Default model: ${defaultModel}`));
   }
 
-  // Show required secret
-  const envVar = provider.envVarName;
   console.log(chalk.dim("\n  Set the API key:"));
   console.log(chalk.cyan(`    lobu secrets set ${envVar} <your-key>`));
   console.log();

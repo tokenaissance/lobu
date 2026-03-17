@@ -65,12 +65,8 @@ export async function devCommand(
       JSON.stringify(manifest, null, 2)
     );
 
-    // Write .env from lobu.toml-derived vars (merge with existing .env to preserve secrets)
-    const mergedVars = { ...dotenvVars, ...envVars };
-    const envContent = Object.entries(mergedVars)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("\n");
-    await writeFile(envPath, `${envContent}\n`);
+    // Merge derived vars into existing .env (preserves comments and formatting)
+    await mergeEnvFile(envPath, existingEnv, envVars);
 
     spinner.succeed("Environment prepared from lobu.toml");
 
@@ -86,7 +82,7 @@ export async function devCommand(
       process.exit(1);
     }
 
-    const fallbackPort = mergedVars.GATEWAY_PORT || "8080";
+    const fallbackPort = dotenvVars.GATEWAY_PORT || "8080";
 
     console.log(
       chalk.cyan(`\n  Starting ${manifest.agents.length} agent(s)...\n`)
@@ -330,7 +326,53 @@ function parseEnvFile(content: string): Record<string, string> {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const eqIdx = trimmed.indexOf("=");
     if (eqIdx === -1) continue;
-    vars[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1);
+    const key = trimmed.slice(0, eqIdx);
+    let value = trimmed.slice(eqIdx + 1);
+    // Strip surrounding quotes (double or single)
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    vars[key] = value;
   }
   return vars;
+}
+
+/**
+ * Merge derived env vars into an existing .env file.
+ * Updates existing keys in-place and appends new ones at the end.
+ * Preserves comments, blank lines, and formatting.
+ */
+async function mergeEnvFile(
+  envPath: string,
+  existingContent: string,
+  newVars: Record<string, string>
+): Promise<void> {
+  const remaining = { ...newVars };
+  const lines = existingContent.split("\n");
+
+  const updated = lines.map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return line;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) return line;
+    const key = trimmed.slice(0, eqIdx);
+    if (key in remaining) {
+      const val = remaining[key]!;
+      delete remaining[key];
+      return `${key}=${val}`;
+    }
+    return line;
+  });
+
+  // Append any new vars that weren't already in the file
+  for (const [key, value] of Object.entries(remaining)) {
+    updated.push(`${key}=${value}`);
+  }
+
+  // Ensure trailing newline
+  const content = `${updated.join("\n").trimEnd()}\n`;
+  await writeFile(envPath, content);
 }

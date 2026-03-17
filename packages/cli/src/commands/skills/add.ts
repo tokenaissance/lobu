@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
-import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import { parse as parseToml } from "smol-toml";
 import { CONFIG_FILENAME } from "../../config/loader.js";
 import { getSkillById } from "./registry.js";
 
@@ -30,7 +30,17 @@ export async function skillsAddCommand(
   }
 
   const parsed = parseToml(raw) as Record<string, unknown>;
-  const skills = (parsed.skills ?? {}) as Record<string, unknown>;
+  const agents = parsed.agents as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (!agents || Object.keys(agents).length === 0) {
+    console.log(chalk.red("\n  No agents found in lobu.toml.\n"));
+    return;
+  }
+
+  const agentId = Object.keys(agents)[0]!;
+  const agent = agents[agentId]!;
+  const skills = (agent.skills ?? { enabled: [] }) as Record<string, unknown>;
   const enabled = (skills.enabled ?? []) as string[];
 
   if (enabled.includes(skillId)) {
@@ -38,11 +48,26 @@ export async function skillsAddCommand(
     return;
   }
 
-  enabled.push(skillId);
-  skills.enabled = enabled;
-  parsed.skills = skills;
+  // Update the enabled array in-place via regex to preserve file formatting
+  const skillsKey = `agents.${agentId}.skills`;
+  const enabledPattern = new RegExp(
+    `(\\[${skillsKey.replace(/\./g, "\\.")}\\][^\\[]*enabled\\s*=\\s*\\[)([^\\]]*)\\]`
+  );
+  const match = raw.match(enabledPattern);
 
-  await writeFile(configPath, stringifyToml(parsed));
+  if (match) {
+    const existing = match[2]!.trim();
+    const newList = existing ? `${existing}, "${skillId}"` : `"${skillId}"`;
+    const updated = raw.replace(enabledPattern, `$1${newList}]`);
+    await writeFile(configPath, updated);
+  } else {
+    // No skills section yet — append one
+    const tomlBlock = ["", `[${skillsKey}]`, `enabled = ["${skillId}"]`].join(
+      "\n"
+    );
+    await writeFile(configPath, `${raw.trimEnd()}\n${tomlBlock}\n`);
+  }
+
   console.log(chalk.green(`\n  Added "${skillId}" to ${CONFIG_FILENAME}`));
 
   // Show required secrets if provider
