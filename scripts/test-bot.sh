@@ -17,11 +17,23 @@ set -e
 
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 
-# Load .env if it exists
+# Load .env if it exists (line-by-line to handle unquoted special chars)
 if [ -f .env ]; then
-    set -a
-    source <(grep -v '^\s*#' .env | grep -v '^\s*$')
-    set +a
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+        # Extract key=value, strip surrounding quotes from value
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*) ]]; then
+            key="${BASH_REMATCH[1]}"
+            val="${BASH_REMATCH[2]}"
+            # Strip surrounding quotes
+            if [[ "$val" =~ ^\"(.*)\"$ ]] || [[ "$val" =~ ^\'(.*)\'$ ]]; then
+                val="${BASH_REMATCH[1]}"
+            fi
+            export "$key=$val"
+        fi
+    done < .env
 fi
 
 # Auto-detect platform from active messaging connections, fall back to env vars
