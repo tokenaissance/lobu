@@ -418,7 +418,7 @@ export function createAgentApi(
     createApiAuthMiddleware({
       adminPassword,
       cliTokenService,
-      allowSettingsSession: false,
+      allowSettingsSession: true,
     })
   );
 
