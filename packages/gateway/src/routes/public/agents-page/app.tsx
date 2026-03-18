@@ -84,7 +84,7 @@ function TopBar({ githubUrl }: { githubUrl: string }) {
             GitHub
           </a>
         )}
-        <a href="/settings/logout" class="hover:text-red-500 transition-colors">
+        <a href="/agent/logout" class="hover:text-red-500 transition-colors">
           Logout
         </a>
       </div>
@@ -95,7 +95,7 @@ function TopBar({ githubUrl }: { githubUrl: string }) {
 // ─── Agent List ─────────────────────────────────────────────────────────────
 
 function AgentRow({ agent }: { agent: AdminAgent }) {
-  const settingsUrl = `/settings?agent=${encodeURIComponent(agent.agentId)}`;
+  const settingsUrl = `/agent/${encodeURIComponent(agent.agentId)}`;
 
   return (
     <a

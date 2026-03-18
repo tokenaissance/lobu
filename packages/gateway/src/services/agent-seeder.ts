@@ -61,6 +61,14 @@ interface AgentManifestEntry {
         args?: string[];
         env?: Record<string, string>;
         headers?: Record<string, string>;
+        oauth?: {
+          authUrl: string;
+          tokenUrl: string;
+          clientId?: string;
+          clientSecret?: string;
+          scopes?: string[];
+          tokenEndpointAuthMethod?: string;
+        };
       }
     >;
   };

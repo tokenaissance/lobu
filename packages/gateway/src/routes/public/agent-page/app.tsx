@@ -412,10 +412,12 @@ function App() {
     if (window.Telegram?.WebApp && state.platform && state.channelId) {
       // WebApp context: navigate to bootstrap URL instead of reloading,
       // because reload loses initData and crashes the mini app.
-      const url = new URL("/settings", window.location.origin);
+      const basePath = state.agentId
+        ? `/agent/${encodeURIComponent(state.agentId)}`
+        : "/agent";
+      const url = new URL(basePath, window.location.origin);
       url.searchParams.set("platform", state.platform);
       url.searchParams.set("chat", state.channelId);
-      if (state.agentId) url.searchParams.set("agent", state.agentId);
       window.location.href = url.toString();
     } else {
       window.location.reload();

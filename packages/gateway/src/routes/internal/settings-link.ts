@@ -192,9 +192,11 @@ export function createSettingsLinkRoutes(
       );
 
       const baseUrl = process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
-      const settingsUrl = new URL("/agent", baseUrl);
+      const settingsPath = agentId
+        ? `/agent/${encodeURIComponent(agentId)}`
+        : "/agent";
+      const settingsUrl = new URL(settingsPath, baseUrl);
       settingsUrl.searchParams.set("claim", claimCode);
-      if (agentId) settingsUrl.searchParams.set("agent", agentId);
 
       // Thread conversation context so the settings page can send
       // post-install notifications back to the originating conversation.

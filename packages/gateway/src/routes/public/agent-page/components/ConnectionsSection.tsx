@@ -930,7 +930,7 @@ function SandboxList({
         return (
           <a
             key={sb.agentId}
-            href={`/settings?agent=${encodeURIComponent(sb.agentId)}&back=${encodeURIComponent(`/settings?agent=${parentAgentId}&open=connections`)}`}
+            href={`/agent/${encodeURIComponent(sb.agentId)}?back=${encodeURIComponent(`/agent/${parentAgentId}?open=connections`)}`}
             class="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-100 transition-colors group text-[11px]"
           >
             <span class="text-gray-300 font-mono text-xs select-none">

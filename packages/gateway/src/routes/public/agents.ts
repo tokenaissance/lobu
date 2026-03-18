@@ -157,7 +157,7 @@ export function createAgentRoutes(config: AgentRoutesConfig): Hono {
       return c.json({
         agentId,
         name: body.name,
-        settingsUrl: `/agent?agentId=${encodeURIComponent(agentId)}`,
+        settingsUrl: `/agent/${encodeURIComponent(agentId)}`,
       });
     } catch (error) {
       logger.error("Failed to create agent", { error });

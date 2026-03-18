@@ -77,6 +77,16 @@ class MessageHandlerBridge {
     source: "mention" | "dm" | "subscribed"
   ): Promise<void> {
     const { connection } = this;
+
+    // Guard: drop messages if the connection was stopped/removed
+    if (!this.manager.has(connection.id)) {
+      logger.info(
+        { connectionId: connection.id },
+        "Connection no longer active, dropping message"
+      );
+      return;
+    }
+
     const platform = connection.platform;
     const userId = message.author?.userId ?? "unknown";
     const channelId = thread.channelId ?? thread.id ?? "unknown";
@@ -338,11 +348,13 @@ class MessageHandlerBridge {
   ): Promise<void> {
     const baseUrl =
       this.services.getPublicGatewayUrl() || "http://localhost:8080";
-    const settingsUrl = new URL("/agent", baseUrl);
+    const settingsUrl = new URL(
+      `/agent/${encodeURIComponent(agentId)}`,
+      baseUrl
+    );
     settingsUrl.searchParams.set("platform", this.connection.platform);
     settingsUrl.searchParams.set("chat", channelId);
     settingsUrl.searchParams.set("connectionId", this.connection.id);
-    settingsUrl.searchParams.set("agent", agentId);
     const configUrl = settingsUrl.toString();
 
     const message =

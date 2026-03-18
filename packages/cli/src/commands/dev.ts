@@ -262,7 +262,34 @@ async function buildManifest(
     }
 
     if (agentConfig.skills.mcp) {
-      entry.settings.mcpServers = agentConfig.skills.mcp;
+      const mcpServers: Record<string, any> = {};
+      for (const [id, mcp] of Object.entries(agentConfig.skills.mcp)) {
+        const mapped: Record<string, any> = { ...mcp };
+        if (mcp.oauth) {
+          mapped.oauth = {
+            authUrl: mcp.oauth.auth_url,
+            tokenUrl: mcp.oauth.token_url,
+            clientId: resolveEnvVar(mcp.oauth.client_id || "", dotenvVars),
+            clientSecret: resolveEnvVar(
+              mcp.oauth.client_secret || "",
+              dotenvVars
+            ),
+            scopes: mcp.oauth.scopes,
+            tokenEndpointAuthMethod: mcp.oauth.token_endpoint_auth_method,
+          };
+        }
+        // Resolve env vars in MCP env block
+        if (mcp.env) {
+          mapped.env = Object.fromEntries(
+            Object.entries(mcp.env).map(([k, v]) => [
+              k,
+              resolveEnvVar(v, dotenvVars),
+            ])
+          );
+        }
+        mcpServers[id] = mapped;
+      }
+      entry.settings.mcpServers = mcpServers;
     }
 
     // Resolve provider credentials from $ENV_VAR references

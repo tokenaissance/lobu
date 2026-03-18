@@ -13,6 +13,16 @@ const connectionSchema = z.object({
   config: z.record(z.string()), // platform-specific config (e.g. { botToken: "$BOT_TOKEN" })
 });
 
+// MCP server OAuth configuration
+const mcpOAuthSchema = z.object({
+  auth_url: z.string(),
+  token_url: z.string(),
+  client_id: z.string().optional(), // $ENV_VAR reference or literal
+  client_secret: z.string().optional(),
+  scopes: z.array(z.string()).optional(),
+  token_endpoint_auth_method: z.string().optional(), // "none", "client_secret_post", "client_secret_basic"
+});
+
 // Skills section
 const mcpServerSchema = z.object({
   url: z.string().optional(),
@@ -20,6 +30,7 @@ const mcpServerSchema = z.object({
   args: z.array(z.string()).optional(),
   env: z.record(z.string()).optional(),
   headers: z.record(z.string()).optional(),
+  oauth: mcpOAuthSchema.optional(),
 });
 
 const skillsSchema = z.object({

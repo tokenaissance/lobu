@@ -9,7 +9,7 @@ export function StatusBar({
   stats: StatsResponse | null;
   agentId: string;
 }) {
-  const backUrl = `/settings?agent=${encodeURIComponent(agentId)}`;
+  const backUrl = `/agent/${encodeURIComponent(agentId)}`;
 
   return (
     <div class="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">

@@ -205,7 +205,7 @@ export function AdminBar() {
         <div class="flex items-center gap-3 text-xs text-gray-400 flex-shrink-0">
           {ctx.isSandbox && ctx.templateAgentId && (
             <a
-              href={`/settings?agent=${encodeURIComponent(ctx.templateAgentId)}&back=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+              href={`/agent/${encodeURIComponent(ctx.templateAgentId)}?back=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
               class="hover:text-slate-600 transition-colors"
             >
               Open Agent
@@ -219,10 +219,7 @@ export function AdminBar() {
               History
             </a>
           )}
-          <a
-            href="/settings/logout"
-            class="hover:text-red-500 transition-colors"
-          >
+          <a href="/agent/logout" class="hover:text-red-500 transition-colors">
             Logout
           </a>
         </div>

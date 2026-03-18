@@ -405,7 +405,7 @@ export class IntegrationOAuthModule {
         ?.includes(SETTINGS_SESSION_COOKIE_NAME);
       if (hasSession) {
         return c.redirect(
-          `/agent?agent=${encodeURIComponent(agentId)}&open=skills&message=${encodeURIComponent(`Connected to ${config.label}`)}`
+          `/agent/${encodeURIComponent(agentId)}?open=skills&message=${encodeURIComponent(`Connected to ${config.label}`)}`
         );
       }
 

@@ -707,9 +707,9 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
   }
 
   // ====================================================================
-  // GET /agent — Main agent page
+  // GET /agent/:agentId? — Main agent page (agentId optional for picker)
   // ====================================================================
-  app.get("/agent", async (c) => {
+  const agentPageHandler = async (c: any) => {
     c.header("Referrer-Policy", "no-referrer");
     c.header("Cache-Control", "no-store, max-age=0");
     c.header("Pragma", "no-cache");
@@ -835,10 +835,10 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
           };
           setSettingsSessionCookie(c, claimedSession);
 
-          // If no agent was specified, resolve from the claimed channel binding.
-          if (!cleanUrl.searchParams.has("agent") && binding) {
-            cleanUrl.searchParams.set("agent", binding.agentId);
-          }
+          // Resolve agentId for the redirect path
+          const claimAgentId =
+            cleanUrl.searchParams.get("agent") || binding?.agentId;
+          cleanUrl.searchParams.delete("agent");
           if (!cleanUrl.searchParams.has("platform")) {
             cleanUrl.searchParams.set("platform", claimData.platform);
           }
@@ -846,15 +846,18 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
             cleanUrl.searchParams.set("channel", claimData.channelId);
           }
 
-          return c.redirect(`${cleanUrl.pathname}${cleanUrl.search}`, 303);
+          const redirectPath = claimAgentId
+            ? `/agent/${encodeURIComponent(claimAgentId)}`
+            : "/agent";
+          return c.redirect(`${redirectPath}${cleanUrl.search}`, 303);
         } else {
           logger.warn("Invalid or expired claim code", { claimCode });
         }
       }
     }
 
-    // 5. Session + ?agent= → render settings
-    const agentParam = c.req.query("agent");
+    // 5. Session + agent → render settings (path param or query fallback)
+    const agentParam = c.req.param?.("agentId") || c.req.query("agent");
     const channelParam = c.req.query("channel");
     const platformParam = c.req.query("platform");
 
@@ -1126,7 +1129,9 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
     }
 
     return await renderSettingsForPayload(c, config, payload, agentId);
-  });
+  };
+  app.get("/agent", agentPageHandler);
+  app.get("/agent/:agentId", agentPageHandler);
 
   // Save an API key for an api-key integration
   app.post("/api/v1/integrations/apikey/save", async (c) => {
@@ -1244,8 +1249,10 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
         if (config.interactionService) {
           const baseUrl =
             process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
-          const settingsUrl = new URL("/agent", baseUrl);
-          settingsUrl.searchParams.set("agent", agentId);
+          const settingsUrl = new URL(
+            `/agent/${encodeURIComponent(agentId)}`,
+            baseUrl
+          );
 
           const uniqueMissing = [...new Set(missingIntegrations)];
           const label = `Connect ${uniqueMissing.join(", ")}`;

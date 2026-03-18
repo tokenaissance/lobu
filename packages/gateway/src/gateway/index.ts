@@ -314,8 +314,10 @@ export class WorkerGateway {
       };
 
       // Build settings URL for soul-empty fallback
-      const settingsUrl = new URL("/agent", baseUrl);
-      if (agentId) settingsUrl.searchParams.set("agent", agentId);
+      const settingsUrl = new URL(
+        agentId ? `/agent/${encodeURIComponent(agentId)}` : "/agent",
+        baseUrl
+      );
 
       // Fetch MCP config and session context in parallel
       const [mcpConfig, contextData] = await Promise.all([
