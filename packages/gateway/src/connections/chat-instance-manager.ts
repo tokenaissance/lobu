@@ -810,6 +810,16 @@ export class ChatInstanceManager {
       return true;
     }
 
+    // Don't auto-restart intentionally stopped connections
+    const raw = await this.redis.get(`connection:${id}`);
+    if (raw) {
+      const connection = JSON.parse(raw) as PlatformConnection;
+      if (connection.status === "stopped") {
+        logger.info({ id }, "Connection is stopped, not auto-restarting");
+        return false;
+      }
+    }
+
     try {
       await this.restartConnection(id);
       return this.has(id);
