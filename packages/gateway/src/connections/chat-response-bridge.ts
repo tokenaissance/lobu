@@ -285,12 +285,10 @@ export class ChatResponseBridge implements ResponseRenderer {
             );
             if (botToken) {
               const isHttps = buttonUrl.startsWith("https://");
-              // Telegram requires HTTPS for all inline buttons
+              // Telegram requires HTTPS for all inline buttons and HTML links
               const body: Record<string, unknown> = {
                 chat_id: channelId,
-                text: isHttps
-                  ? errorText
-                  : `${errorText}\n\nOpen Settings: ${buttonUrl}`,
+                text: isHttps ? errorText : `${errorText}\n\n${buttonUrl}`,
               };
               if (isHttps) {
                 body.reply_markup = {
