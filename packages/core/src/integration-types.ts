@@ -18,6 +18,7 @@ export interface IntegrationOAuthConfig {
   clientSecret?: string;
   incrementalAuth?: boolean;
   tokenEndpointAuthMethod?: string; // "client_secret_post" (default), "client_secret_basic", or "none" (PKCE)
+  extraAuthParams?: Record<string, string>; // Extra query params for authorization URL (e.g. access_type, prompt)
 }
 
 export interface IntegrationApiKeyConfig {

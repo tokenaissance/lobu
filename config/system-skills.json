@@ -12,7 +12,11 @@
           "oauth": {
             "authUrl": "https://accounts.google.com/o/oauth2/v2/auth",
             "tokenUrl": "https://oauth2.googleapis.com/token",
-            "incrementalAuth": true
+            "incrementalAuth": true,
+            "extraAuthParams": {
+              "access_type": "offline",
+              "prompt": "consent"
+            }
           },
           "scopesConfig": {
             "default": ["openid", "profile", "email"],

@@ -213,8 +213,15 @@ export class IntegrationOAuthModule {
         this.callbackUrl
       );
 
-      // Append extra params (e.g., include_granted_scopes)
+      // Append extra params (e.g., include_granted_scopes, access_type, prompt)
       const url = new URL(authUrl);
+      if (config.oauth.extraAuthParams) {
+        for (const [key, value] of Object.entries(
+          config.oauth.extraAuthParams
+        )) {
+          url.searchParams.set(key, value);
+        }
+      }
       for (const [key, value] of Object.entries(extraParams)) {
         url.searchParams.set(key, value);
       }
