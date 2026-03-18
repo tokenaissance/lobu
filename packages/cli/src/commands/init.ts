@@ -717,6 +717,7 @@ services:
       DEPLOYMENT_MODE: ${deploymentMode}${workerImageEnv}
       QUEUE_URL: redis://redis:6379/0
       PUBLIC_GATEWAY_URL: \${PUBLIC_GATEWAY_URL:-}
+      GATEWAY_PORT: \${GATEWAY_PORT:-${gatewayPort}}
       NODE_ENV: production
       COMPOSE_PROJECT_NAME: ${projectName}
       ADMIN_PASSWORD: \${ADMIN_PASSWORD}

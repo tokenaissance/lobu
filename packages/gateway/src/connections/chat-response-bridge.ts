@@ -264,9 +264,10 @@ export class ChatResponseBridge implements ResponseRenderer {
       try {
         const connection = await this.manager.getConnection(connectionId);
         if (connection?.templateAgentId) {
+          const publicUrl = this.manager.getServices().getPublicGatewayUrl();
           const baseUrl =
-            this.manager.getServices().getPublicGatewayUrl() ||
-            "http://localhost:8080";
+            publicUrl ||
+            `http://localhost:${process.env.GATEWAY_PORT || "8080"}`;
           const settingsUrl = new URL(
             `/agent/${encodeURIComponent(connection.templateAgentId)}`,
             baseUrl
