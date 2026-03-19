@@ -8,6 +8,7 @@ import { Footer } from "../components/Footer";
 import { HeroSection } from "../components/HeroSection";
 
 import { Nav } from "../components/Nav";
+import { VideoSection } from "../components/VideoSection";
 ---
 
 <BaseLayout>
@@ -15,6 +16,8 @@ import { Nav } from "../components/Nav";
     <Nav />
     <main class="relative z-[1]">
       <HeroSection client:load />
+      <div class="section-divider" />
+      <VideoSection client:load />
       <div class="section-divider" />
       <DemoSection client:load />
       <div class="section-divider" />
