@@ -12,6 +12,7 @@ import {
 } from "@lobu/core";
 import { z } from "zod";
 import type { WorkerConfig, WorkerExecutor } from "../core/types";
+import { getWorkspaceDir } from "../core/workspace";
 import { HttpWorkerTransport } from "./gateway-integration";
 import { MessageBatcher } from "./message-batcher";
 import type { MessagePayload, QueuedMessage } from "./types";
@@ -524,7 +525,7 @@ export class GatewayClient {
     });
 
     // Determine working directory
-    const workingDir = execCwd || process.env.WORKSPACE_DIR || "/workspace";
+    const workingDir = execCwd || getWorkspaceDir();
     const timeout = execTimeout || 300000; // 5 minutes default
 
     // Create transport for sending responses back to gateway
@@ -834,7 +835,7 @@ export class GatewayClient {
       platformMetadata,
       agentOptions: JSON.stringify(payload.agentOptions || {}),
       workspace: {
-        baseDirectory: process.env.WORKSPACE_DIR || "/workspace",
+        baseDirectory: getWorkspaceDir(),
       },
     };
   }

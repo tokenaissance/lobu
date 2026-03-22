@@ -10,6 +10,12 @@ import type { WorkspaceInfo, WorkspaceSetupConfig } from "./types";
 
 const logger = createLogger("workspace");
 
+export const DEFAULT_WORKSPACE_DIR = "/workspace";
+
+export function getWorkspaceDir(): string {
+  return process.env.WORKSPACE_DIR || DEFAULT_WORKSPACE_DIR;
+}
+
 // ============================================================================
 // WORKSPACE UTILITIES
 // ============================================================================
@@ -34,7 +40,7 @@ export function setupWorkspaceEnv(deploymentName: string | undefined): void {
   const conversationId = process.env.CONVERSATION_ID;
 
   if (conversationId) {
-    const baseDir = process.env.WORKSPACE_DIR || "/workspace";
+    const baseDir = getWorkspaceDir();
     const workspaceDir = getWorkspacePathForThread(baseDir, conversationId);
     process.env.WORKSPACE_DIR = workspaceDir;
     logger.info(`📁 Set WORKSPACE_DIR for process manager: ${workspaceDir}`);

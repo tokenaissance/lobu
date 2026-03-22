@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { getRequestListener } from "@hono/node-server";
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
+import { getWorkspaceDir } from "./core/workspace";
 
 const logger = createLogger("worker-http");
 
@@ -16,7 +17,7 @@ const app = new Hono();
 
 async function findSessionFile(): Promise<string | null> {
   const { readdir, stat } = await import("node:fs/promises");
-  const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
+  const workspaceDir = getWorkspaceDir();
 
   // Direct path: {WORKSPACE_DIR}/.openclaw/session.jsonl
   const directPath = join(workspaceDir, ".openclaw", "session.jsonl");

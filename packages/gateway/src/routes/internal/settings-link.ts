@@ -14,6 +14,7 @@ import type {
 } from "../../auth/settings/token-service";
 import type { InteractionService } from "../../interactions";
 import type { GrantStore } from "../../permissions/grant-store";
+import { resolvePublicBaseUrl } from "../../utils/public-url";
 import { authenticateWorker } from "./worker-auth";
 
 const logger = createLogger("internal-settings-link-routes");
@@ -174,7 +175,7 @@ export function createSettingsLinkRoutes(
         userId
       );
 
-      const baseUrl = process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
+      const baseUrl = resolvePublicBaseUrl();
       const settingsPath = agentId
         ? `/agent/${encodeURIComponent(agentId)}`
         : "/agent";

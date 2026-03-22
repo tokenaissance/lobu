@@ -13,6 +13,7 @@ import {
   resolveEffectiveModelRef,
 } from "../auth/settings/model-selection";
 import { getAuthMethod } from "../connections/platform-auth-methods";
+import { resolvePublicBaseUrl } from "../utils/public-url";
 
 const logger = createLogger("built-in-commands");
 
@@ -54,8 +55,7 @@ export function registerBuiltInCommands(
 
         if (linkedOAuthUserId) {
           // Linked: use initData URL with web_app button (native mini app)
-          const baseUrl =
-            process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
+          const baseUrl = resolvePublicBaseUrl();
           const settingsUrl = new URL("/agent", baseUrl);
           settingsUrl.searchParams.set("platform", ctx.platform);
           settingsUrl.searchParams.set("chat", ctx.channelId);

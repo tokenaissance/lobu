@@ -7,6 +7,11 @@ import {
 } from "@lobu/core";
 import type { McpConfigService } from "../auth/mcp/config-service";
 import type { AgentSettingsStore } from "../auth/settings/agent-settings-store";
+import {
+  isUnrestrictedMode,
+  loadAllowedDomains,
+  loadDisallowedDomains,
+} from "../config/network-allowlist";
 
 const logger = createLogger("instruction-service");
 
@@ -114,18 +119,13 @@ class NetworkInstructionProvider implements InstructionProvider {
   priority = 20;
 
   getInstructions(): string {
-    const allowedDomains = process.env.WORKER_ALLOWED_DOMAINS?.trim() || "";
-    const disallowedDomains =
-      process.env.WORKER_DISALLOWED_DOMAINS?.trim() || "";
+    const allowed = loadAllowedDomains();
+    const disallowed = loadDisallowedDomains();
 
     // Unrestricted mode
-    if (allowedDomains === "*") {
-      if (disallowedDomains) {
-        const blockedList = disallowedDomains
-          .split(",")
-          .map((d) => `  - ${d.trim()}`)
-          .filter((d) => d.length > 4)
-          .join("\n");
+    if (isUnrestrictedMode(allowed)) {
+      if (disallowed.length > 0) {
+        const blockedList = disallowed.map((d) => `  - ${d}`).join("\n");
         return `## Network Access
 
 **Internet Access:** Unrestricted (all domains allowed)
@@ -143,7 +143,7 @@ You can access any external service without restrictions.`;
     }
 
     // Complete isolation
-    if (!allowedDomains) {
+    if (allowed.length === 0) {
       return `## Network Access
 
 **Internet Access:** Complete isolation (no external access)
@@ -152,11 +152,7 @@ You do NOT have access to the internet. All external requests (curl, wget, npm, 
     }
 
     // Allowlist mode
-    const allowedList = allowedDomains
-      .split(",")
-      .map((d) => `  - ${d.trim()}`)
-      .filter((d) => d.length > 4)
-      .join("\n");
+    const allowedList = allowed.map((d) => `  - ${d}`).join("\n");
 
     let instructions = `## Network Access
 
@@ -165,12 +161,8 @@ You do NOT have access to the internet. All external requests (curl, wget, npm, 
 **Allowed domains:**
 ${allowedList}`;
 
-    if (disallowedDomains) {
-      const blockedList = disallowedDomains
-        .split(",")
-        .map((d) => `  - ${d.trim()}`)
-        .filter((d) => d.length > 4)
-        .join("\n");
+    if (disallowed.length > 0) {
+      const blockedList = disallowed.map((d) => `  - ${d}`).join("\n");
       instructions += `
 
 **Blocked domains:**

@@ -29,6 +29,7 @@ import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChannelBindingService } from "../../channels";
 import { getAuthMethod } from "../../connections/platform-auth-methods";
 import { getModelProviderModules } from "../../modules/module-system";
+import { resolvePublicBaseUrl } from "../../utils/public-url";
 import {
   buildMessagePayload,
   resolveAgentOptions,
@@ -1247,8 +1248,7 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
       if (missingIntegrations.length > 0) {
         // Missing deps — send a button so the user can connect them
         if (config.interactionService) {
-          const baseUrl =
-            process.env.PUBLIC_GATEWAY_URL || "http://localhost:8080";
+          const baseUrl = resolvePublicBaseUrl();
           const settingsUrl = new URL(
             `/agent/${encodeURIComponent(agentId)}`,
             baseUrl

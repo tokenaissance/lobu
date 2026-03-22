@@ -51,6 +51,10 @@ class ResourceParser {
 
 const logger = createLogger("docker-deployment");
 
+function getComposeProjectName(): string {
+  return process.env.COMPOSE_PROJECT_NAME || "lobu";
+}
+
 export class DockerDeploymentManager extends BaseDeploymentManager {
   private docker: Docker;
   private gvisorAvailable = false;
@@ -106,7 +110,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
       return;
     }
 
-    const composeProjectName = process.env.COMPOSE_PROJECT_NAME || "lobu";
+    const composeProjectName = getComposeProjectName();
     const networkName = `${composeProjectName}_lobu-internal`;
 
     try {
@@ -386,7 +390,7 @@ export class DockerDeploymentManager extends BaseDeploymentManager {
         !!messageData?.nixConfig?.flakeUrl;
 
       // Get the Docker Compose project name from environment or use default
-      const composeProjectName = process.env.COMPOSE_PROJECT_NAME || "lobu";
+      const composeProjectName = getComposeProjectName();
 
       const createOptions: Docker.ContainerCreateOptions = {
         name: deploymentName,
