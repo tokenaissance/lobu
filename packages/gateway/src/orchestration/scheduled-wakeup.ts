@@ -363,11 +363,13 @@ export class ScheduledWakeupService {
   ): Promise<ScheduledWakeup[]> {
     const redis = this.queue.getRedisClient();
     const scheduleIds = await redis.smembers(indexKey);
-    const schedules: ScheduledWakeup[] = [];
+    if (scheduleIds.length === 0) return [];
 
-    for (const scheduleId of scheduleIds) {
-      const redisKey = `${REDIS_KEY_PREFIX}${scheduleId}`;
-      const data = await redis.get(redisKey);
+    const keys = scheduleIds.map((id: string) => `${REDIS_KEY_PREFIX}${id}`);
+    const values = await redis.mget(...keys);
+
+    const schedules: ScheduledWakeup[] = [];
+    for (const data of values) {
       if (data) {
         const schedule: ScheduledWakeup = JSON.parse(data);
         if (schedule.status === "pending") {
