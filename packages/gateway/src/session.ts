@@ -1,9 +1,4 @@
-import type {
-  AgentMcpConfig,
-  NetworkConfig,
-  NixConfig,
-  SessionContext,
-} from "@lobu/core";
+import type { AgentMcpConfig, NetworkConfig, NixConfig } from "@lobu/core";
 
 /**
  * Platform-agnostic session types and utilities
@@ -107,26 +102,4 @@ export interface ISessionManager {
   ): Promise<{ allowed: boolean; owner?: string }>;
   touchSession(sessionKey: string): Promise<void>;
   cleanupExpired(ttl: number): Promise<number>;
-}
-
-// ============================================================================
-// Utilities
-// ============================================================================
-
-/**
- * Generate session key from context
- */
-export function generateSessionKey(context: SessionContext): string {
-  // Use conversation ID as the session key (if in a conversation)
-  // Otherwise use message ID
-  const id = context.conversationId || context.messageId || "";
-
-  // If we have a conversation ID, use it directly as the session key
-  // This ensures consistency across all worker executions in the same conversation
-  if (context.conversationId) {
-    return context.conversationId;
-  }
-
-  // For direct messages (no conversation), use the channel and message ID
-  return `${context.channelId}-${id}`;
 }

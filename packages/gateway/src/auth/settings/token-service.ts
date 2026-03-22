@@ -1,5 +1,3 @@
-import { resolvePublicUrl } from "../../utils/public-url";
-
 /**
  * Pre-filled skill configuration for settings page
  */
@@ -88,17 +86,4 @@ export interface SettingsTokenPayload {
   connectionId?: string;
   /** Whether this session has admin access */
   isAdmin?: boolean;
-}
-
-/**
- * Build a stable (tokenless) settings URL for Telegram WebApp buttons.
- *
- * Authentication happens via Telegram's `initData` (HMAC-signed by bot token),
- * so the URL never expires and can be reused across button taps.
- */
-export function buildTelegramSettingsUrl(chatId: string): string {
-  const url = new URL(resolvePublicUrl("/agent"));
-  url.searchParams.set("platform", "telegram");
-  url.searchParams.set("chat", chatId);
-  return url.toString();
 }

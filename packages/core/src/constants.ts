@@ -21,26 +21,12 @@ export const TIME = {
   FIVE_SECONDS_MS: 5000,
   /** Thirty seconds */
   THIRTY_SECONDS: 30,
-  /** Three hours in milliseconds (for interaction timeout) */
-  THREE_HOURS_MS: 3 * 60 * 60 * 1000,
-  /** Three hours in seconds (for Redis TTL) */
-  THREE_HOURS_SECONDS: 3 * 60 * 60,
 } as const;
 
 // Redis key prefixes
 export const REDIS_KEYS = {
-  /** Prefix for bot message timestamps */
-  BOT_MESSAGES: "bot_messages:",
   /** Prefix for session data */
   SESSION: "session:",
-  /** Prefix for thread ownership */
-  THREAD_OWNER: "thread_owner:",
-  /** Prefix for MCP credentials */
-  MCP_CREDENTIAL: "mcp:credential:",
-  /** Prefix for MCP OAuth state */
-  MCP_OAUTH_STATE: "mcp:oauth:state:",
-  /** Prefix for MCP inputs */
-  MCP_INPUT: "mcp:input:",
 } as const;
 
 // Default configuration values
