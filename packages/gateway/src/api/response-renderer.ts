@@ -17,6 +17,14 @@ const logger = createLogger("api-response-renderer");
  * Broadcasts responses to SSE clients instead of external platforms
  */
 export class ApiResponseRenderer implements ResponseRenderer {
+  private extractSessionId(payload: ThreadResponsePayload): string | undefined {
+    return (
+      (payload.platformMetadata?.sessionId as string) ||
+      payload.conversationId ||
+      undefined
+    );
+  }
+
   /**
    * Handle streaming delta content
    * Broadcasts delta to SSE connections
@@ -25,8 +33,7 @@ export class ApiResponseRenderer implements ResponseRenderer {
     payload: ThreadResponsePayload,
     _sessionKey: string
   ): Promise<string | null> {
-    const sessionId =
-      (payload.platformMetadata?.sessionId as string) || payload.conversationId;
+    const sessionId = this.extractSessionId(payload);
 
     if (!sessionId) {
       logger.warn("No session ID found in payload for delta broadcast");
@@ -56,8 +63,7 @@ export class ApiResponseRenderer implements ResponseRenderer {
     payload: ThreadResponsePayload,
     _sessionKey: string
   ): Promise<void> {
-    const sessionId =
-      (payload.platformMetadata?.sessionId as string) || payload.conversationId;
+    const sessionId = this.extractSessionId(payload);
 
     if (!sessionId) {
       logger.warn("No session ID found in payload for completion broadcast");
@@ -83,8 +89,7 @@ export class ApiResponseRenderer implements ResponseRenderer {
     payload: ThreadResponsePayload,
     _sessionKey: string
   ): Promise<void> {
-    const sessionId =
-      (payload.platformMetadata?.sessionId as string) || payload.conversationId;
+    const sessionId = this.extractSessionId(payload);
 
     if (!sessionId) {
       logger.warn("No session ID found in payload for error broadcast");
@@ -107,8 +112,7 @@ export class ApiResponseRenderer implements ResponseRenderer {
    * Sends status event to SSE clients
    */
   async handleStatusUpdate(payload: ThreadResponsePayload): Promise<void> {
-    const sessionId =
-      (payload.platformMetadata?.sessionId as string) || payload.conversationId;
+    const sessionId = this.extractSessionId(payload);
 
     if (!sessionId) {
       return;
@@ -128,8 +132,7 @@ export class ApiResponseRenderer implements ResponseRenderer {
    * For API platform, these are just broadcast as regular events
    */
   async handleEphemeral(payload: ThreadResponsePayload): Promise<void> {
-    const sessionId =
-      (payload.platformMetadata?.sessionId as string) || payload.conversationId;
+    const sessionId = this.extractSessionId(payload);
 
     if (!sessionId) {
       return;

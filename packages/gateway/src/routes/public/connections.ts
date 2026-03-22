@@ -18,6 +18,7 @@ import { Hono } from "hono";
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { ChatInstanceManager } from "../../connections/chat-instance-manager";
+import { chatHistoryKey } from "../../connections/message-handler-bridge";
 import { verifyAgentAccess } from "./agent-access";
 import { verifySettingsSession } from "./settings-auth";
 
@@ -58,7 +59,7 @@ async function getLocalTestDefaultTarget(
   connectionId: string
 ): Promise<string | undefined> {
   const redis = manager.getServices().getQueue().getRedisClient();
-  const prefix = `chat:history:${connectionId}:`;
+  const prefix = chatHistoryKey(connectionId, "");
   let cursor = "0";
 
   do {

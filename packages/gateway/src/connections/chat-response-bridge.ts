@@ -11,7 +11,7 @@ import { extractSettingsLinkButtons } from "../platform/link-buttons";
 import { chunkMessage, delay } from "../platform/renderer-utils";
 import type { ResponseRenderer } from "../platform/response-renderer";
 import type { ChatInstanceManager } from "./chat-instance-manager";
-import { storeOutgoingHistory } from "./message-handler-bridge";
+import { chatHistoryKey, storeOutgoingHistory } from "./message-handler-bridge";
 
 const logger = createLogger("chat-response-bridge");
 
@@ -186,7 +186,7 @@ export class ChatResponseBridge implements ResponseRenderer {
       const agentId = (payload.platformMetadata as any)?.agentId;
       try {
         const redis = this.manager.getServices().getQueue().getRedisClient();
-        await redis.del(`chat:history:${connectionId}:${channelId}`);
+        await redis.del(chatHistoryKey(connectionId, channelId));
         logger.info(
           { connectionId, channelId },
           "Cleared chat history for session reset"

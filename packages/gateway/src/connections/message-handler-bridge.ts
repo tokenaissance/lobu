@@ -22,6 +22,13 @@ const logger = createLogger("chat-message-bridge");
 const MAX_HISTORY_MESSAGES = 10;
 const HISTORY_TTL_SECONDS = 86400; // 24 hours
 
+export function chatHistoryKey(
+  connectionId: string,
+  channelId: string
+): string {
+  return `chat:history:${connectionId}:${channelId}`;
+}
+
 interface HistoryEntry {
   role: "user" | "assistant";
   content: string;
@@ -260,7 +267,7 @@ class MessageHandlerBridge {
     }
 
     // Gap 1: Retrieve conversation history from Redis
-    const historyKey = `chat:history:${this.connection.id}:${channelId}`;
+    const historyKey = chatHistoryKey(this.connection.id, channelId);
     const conversationHistory = await this.getHistory(historyKey);
 
     // Gap 1: Store inbound message
@@ -362,7 +369,7 @@ export async function storeOutgoingHistory(
   channelId: string,
   text: string
 ): Promise<void> {
-  const key = `chat:history:${connectionId}:${channelId}`;
+  const key = chatHistoryKey(connectionId, channelId);
   const entry: HistoryEntry = {
     role: "assistant",
     content: text,

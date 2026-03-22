@@ -1,5 +1,6 @@
 import type { CoreServices, PlatformAdapter } from "../platform";
 import type { ChatInstanceManager } from "./chat-instance-manager";
+import { chatHistoryKey } from "./message-handler-bridge";
 import type { PlatformConnection } from "./types";
 
 type HistoryRecord = {
@@ -184,7 +185,7 @@ export class ChatPlatformAdapter implements PlatformAdapter {
     }
 
     const redis = this.manager.getServices().getQueue().getRedisClient();
-    const key = `chat:history:${connection.id}:${channelId}`;
+    const key = chatHistoryKey(connection.id, channelId);
     const raw = await redis.lrange(key, 0, -1);
     let entries = raw.map(
       (entry: string) => JSON.parse(entry) as HistoryRecord
@@ -243,7 +244,7 @@ export class ChatPlatformAdapter implements PlatformAdapter {
     const redis = this.manager.getServices().getQueue().getRedisClient();
     for (const connection of activeConnections) {
       const exists = await redis.exists(
-        `chat:history:${connection.id}:${channelId}`
+        chatHistoryKey(connection.id, channelId)
       );
       if (exists === 1) {
         return connection;
