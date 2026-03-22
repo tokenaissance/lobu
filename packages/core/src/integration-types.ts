@@ -23,6 +23,52 @@ export interface IntegrationApiKeyConfig {
   headerTemplate: string;
 }
 
+export type IntegrationAuthType = "oauth" | "api-key";
+
+export interface IntegrationScopesConfig {
+  default: string[];
+  available: string[];
+}
+
+export interface IntegrationConfig {
+  label?: string;
+  authType?: IntegrationAuthType;
+  oauth?: IntegrationOAuthConfig;
+  apiKey?: IntegrationApiKeyConfig;
+  scopes?: IntegrationScopesConfig;
+  apiDomains?: string[];
+}
+
+export interface IntegrationCredentialRecord {
+  accessToken: string;
+  tokenType?: string;
+  expiresAt?: number;
+  refreshToken?: string;
+  grantedScopes?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface IntegrationAccountInfo {
+  accountId: string;
+  grantedScopes?: string[];
+}
+
+export interface IntegrationInfo {
+  id: string;
+  label?: string;
+  authType: IntegrationAuthType;
+  connected: boolean;
+  configured: boolean;
+  accounts: IntegrationAccountInfo[];
+  availableScopes: string[];
+}
+
+export interface IntegrationApiResponse {
+  status: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
 /** Per-agent integration config (stored in AgentSettings, used by worker routes) */
 export interface AgentIntegrationConfig {
   label: string;

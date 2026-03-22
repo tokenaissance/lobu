@@ -69,13 +69,3 @@ export async function stopFilteringProxy(): Promise<void> {
   }
 }
 
-/**
- * Handle graceful shutdown
- */
-process.on("SIGTERM", async () => {
-  await stopFilteringProxy();
-});
-
-process.on("SIGINT", async () => {
-  await stopFilteringProxy();
-});

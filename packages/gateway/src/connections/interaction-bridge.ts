@@ -9,6 +9,7 @@ import type {
 } from "../interactions";
 import type { GrantStore } from "../permissions/grant-store";
 import type { ChatInstanceManager } from "./chat-instance-manager";
+import { resolveChatTarget } from "./chat-response-bridge";
 import type { PlatformConnection } from "./types";
 
 const logger = createLogger("chat-interaction-bridge");
@@ -511,34 +512,16 @@ function shouldHandle(
   manager: ChatInstanceManager
 ): boolean {
   if (!manager.has(connectionId)) {
-    logger.debug(
-      { connectionId, eventConnectionId: event.connectionId },
-      "shouldHandle: manager does not have connection"
-    );
     return false;
   }
   if (event.teamId === "api") {
-    logger.debug({ connectionId }, "shouldHandle: skipping api teamId");
     return false;
   }
-  const instance = manager.getInstance(connectionId);
-  if (!instance) {
-    logger.debug({ connectionId }, "shouldHandle: no instance found");
+  // If the event specifies a connectionId, only the matching connection should handle it
+  if (event.connectionId && event.connectionId !== connectionId) {
     return false;
   }
-  const matches = instance.connection.platform === platform;
-  logger.debug({ connectionId, platform, matches }, "shouldHandle: result");
-  if (!matches) {
-    logger.debug(
-      {
-        connectionId,
-        instancePlatform: instance.connection.platform,
-        eventPlatform: platform,
-      },
-      "shouldHandle: platform mismatch"
-    );
-  }
-  return matches;
+  return true;
 }
 
 async function resolveThread(
@@ -548,34 +531,10 @@ async function resolveThread(
   conversationId: string
 ): Promise<any | null> {
   const instance = manager.getInstance(connectionId);
-  if (!instance) {
-    logger.debug({ connectionId }, "resolveThread: no instance for connection");
-    return null;
-  }
+  if (!instance) return null;
 
   try {
-    const chat = instance.chat;
-    const adapterKey = instance.connection.platform;
-
-    // For DMs where conversationId === channelId, use channel directly
-    // (matches resolveTarget fallback in chat-response-bridge)
-    if (!conversationId || conversationId === channelId) {
-      const channel = chat.channel?.(`${adapterKey}:${channelId}`);
-      if (channel) return channel;
-    }
-
-    const thread = await chat.getThread?.(
-      adapterKey,
-      channelId,
-      conversationId
-    );
-    if (!thread) {
-      logger.debug(
-        { connectionId, adapterKey, channelId, conversationId },
-        "resolveThread: getThread returned null"
-      );
-    }
-    return thread ?? null;
+    return await resolveChatTarget(instance, channelId, conversationId);
   } catch (error) {
     logger.debug(
       { connectionId, channelId, conversationId, error: String(error) },

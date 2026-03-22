@@ -65,11 +65,14 @@ const TOOL_DISPLAY_CONFIG: Record<string, ToolDisplayEntry> = {
  * OpenClaw uses lowercase tool names (bash, read, write, etc.)
  * while some agents use PascalCase (Bash, Read, Write, etc.).
  */
+const TOOL_DISPLAY_CONFIG_LOWER = Object.fromEntries(
+  Object.entries(TOOL_DISPLAY_CONFIG).map(([k, v]) => [k.toLowerCase(), v])
+);
+
 export function getToolDisplayConfig(
   toolName: string
 ): ToolDisplayEntry | undefined {
   return (
-    TOOL_DISPLAY_CONFIG[toolName] ??
-    TOOL_DISPLAY_CONFIG[toolName.charAt(0).toUpperCase() + toolName.slice(1)]
+    TOOL_DISPLAY_CONFIG[toolName] ?? TOOL_DISPLAY_CONFIG_LOWER[toolName.toLowerCase()]
   );
 }

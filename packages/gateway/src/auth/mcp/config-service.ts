@@ -508,71 +508,10 @@ export class McpConfigService {
   }
 }
 
-function normalizeConfig(config: { mcpServers: Record<string, any> }) {
-  const rawServers: Record<string, any> = {};
-  const httpServers = new Map<string, HttpMcpServerConfig>();
-
-  for (const [id, serverConfig] of Object.entries(config.mcpServers)) {
-    if (!serverConfig || typeof serverConfig !== "object") {
-      continue;
-    }
-
-    const cloned = cloneConfig(serverConfig);
-    rawServers[id] = cloned;
-
-    if (typeof cloned.url === "string" && isHttpUrl(cloned.url)) {
-      httpServers.set(id, {
-        id,
-        upstreamUrl: cloned.url,
-        oauth:
-          cloned.oauth && typeof cloned.oauth === "object"
-            ? {
-                authUrl: cloned.oauth.authUrl,
-                tokenUrl: cloned.oauth.tokenUrl,
-                clientId: cloned.oauth.clientId,
-                clientSecret: cloned.oauth.clientSecret,
-                scopes: cloned.oauth.scopes,
-                grantType: cloned.oauth.grantType || "authorization_code",
-                responseType: cloned.oauth.responseType || "code",
-                tokenEndpointAuthMethod: cloned.oauth.tokenEndpointAuthMethod,
-              }
-            : undefined,
-        inputs: Array.isArray(cloned.inputs)
-          ? cloned.inputs.filter(
-              (input: any) =>
-                input &&
-                typeof input === "object" &&
-                input.type === "promptString"
-            )
-          : undefined,
-        headers:
-          cloned.headers && typeof cloned.headers === "object"
-            ? cloned.headers
-            : undefined,
-        loginUrl:
-          typeof cloned.loginUrl === "string" ? cloned.loginUrl : undefined,
-        resource:
-          typeof cloned.resource === "string" ? cloned.resource : undefined,
-      });
-    }
-  }
-
-  return { rawServers, httpServers };
-}
-
-function toHttpServerConfig(
+function buildHttpServerConfig(
   id: string,
-  serverConfig: any
+  cloned: any
 ): HttpMcpServerConfig | null {
-  if (!serverConfig || typeof serverConfig !== "object") {
-    return null;
-  }
-
-  if (serverConfig.enabled === false) {
-    return null;
-  }
-
-  const cloned = cloneConfig(serverConfig);
   if (typeof cloned.url !== "string" || !isHttpUrl(cloned.url)) {
     return null;
   }
@@ -604,7 +543,46 @@ function toHttpServerConfig(
         ? cloned.headers
         : undefined,
     loginUrl: typeof cloned.loginUrl === "string" ? cloned.loginUrl : undefined,
+    resource:
+      typeof cloned.resource === "string" ? cloned.resource : undefined,
   };
+}
+
+function normalizeConfig(config: { mcpServers: Record<string, any> }) {
+  const rawServers: Record<string, any> = {};
+  const httpServers = new Map<string, HttpMcpServerConfig>();
+
+  for (const [id, serverConfig] of Object.entries(config.mcpServers)) {
+    if (!serverConfig || typeof serverConfig !== "object") {
+      continue;
+    }
+
+    const cloned = cloneConfig(serverConfig);
+    rawServers[id] = cloned;
+
+    const httpServer = buildHttpServerConfig(id, cloned);
+    if (httpServer) {
+      httpServers.set(id, httpServer);
+    }
+  }
+
+  return { rawServers, httpServers };
+}
+
+function toHttpServerConfig(
+  id: string,
+  serverConfig: any
+): HttpMcpServerConfig | null {
+  if (!serverConfig || typeof serverConfig !== "object") {
+    return null;
+  }
+
+  if (serverConfig.enabled === false) {
+    return null;
+  }
+
+  const cloned = cloneConfig(serverConfig);
+  return buildHttpServerConfig(id, cloned);
 }
 
 function cloneConfig(config: any) {

@@ -189,11 +189,7 @@ export class ChatInstanceManager {
   }
 
   async removeConnection(id: string): Promise<void> {
-    const instance = this.instances.get(id);
-    if (instance) {
-      await instance.cleanup?.();
-      this.instances.delete(id);
-    }
+    await this.stopInstance(id);
 
     // Clean up Redis
     const raw = await this.redis.get(`connection:${id}`);
@@ -210,11 +206,7 @@ export class ChatInstanceManager {
   }
 
   async restartConnection(id: string): Promise<void> {
-    const instance = this.instances.get(id);
-    if (instance) {
-      await instance.cleanup?.();
-      this.instances.delete(id);
-    }
+    await this.stopInstance(id);
 
     const raw = await this.redis.get(`connection:${id}`);
     if (!raw) throw new Error(`Connection ${id} not found`);
@@ -238,11 +230,7 @@ export class ChatInstanceManager {
   }
 
   async stopConnection(id: string): Promise<void> {
-    const instance = this.instances.get(id);
-    if (instance) {
-      await instance.cleanup?.();
-      this.instances.delete(id);
-    }
+    await this.stopInstance(id);
 
     const raw = await this.redis.get(`connection:${id}`);
     if (!raw) throw new Error(`Connection ${id} not found`);
@@ -314,11 +302,7 @@ export class ChatInstanceManager {
     connection.updatedAt = Date.now();
 
     if (needsRestart && connection.status === "active") {
-      const instance = this.instances.get(id);
-      if (instance) {
-        await instance.cleanup?.();
-        this.instances.delete(id);
-      }
+      await this.stopInstance(id);
       await this.startInstance(connection);
     } else {
       const instance = this.instances.get(id);
@@ -567,6 +551,14 @@ export class ChatInstanceManager {
 
   // --- Private ---
 
+  private async stopInstance(id: string): Promise<void> {
+    const instance = this.instances.get(id);
+    if (instance) {
+      await instance.cleanup?.();
+      this.instances.delete(id);
+    }
+  }
+
   private async startInstance(connection: PlatformConnection): Promise<void> {
     try {
       const { Chat } = await import("chat");
@@ -628,9 +620,7 @@ export class ChatInstanceManager {
           const userName = adapter.userName || adapter.botUsername;
           if (userName) {
             connection.metadata.botUsername = userName;
-            await this.updateConnection(connection.id, {
-              metadata: { botUsername: userName },
-            });
+            await this.persistConnection(connection);
           }
         } catch {
           // non-critical

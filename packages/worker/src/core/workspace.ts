@@ -49,10 +49,7 @@ export function setupWorkspaceEnv(deploymentName: string | undefined): void {
  * Priority: CONVERSATION_ID > sessionKey > username
  */
 function getThreadIdentifier(sessionKey?: string, username?: string): string {
-  const conversationId =
-    process.env.CONVERSATION_ID || sessionKey || username || "default";
-
-  return conversationId;
+  return process.env.CONVERSATION_ID || sessionKey || username || "default";
 }
 
 // ============================================================================
@@ -122,13 +119,7 @@ export class WorkspaceManager {
    * Ensure directory exists
    */
   private async ensureDirectory(path: string): Promise<void> {
-    try {
-      await mkdir(path, { recursive: true });
-    } catch (error: any) {
-      if (error.code !== "EEXIST") {
-        throw error;
-      }
-    }
+    await mkdir(path, { recursive: true });
   }
 
   /**

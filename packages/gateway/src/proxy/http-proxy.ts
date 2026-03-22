@@ -489,16 +489,9 @@ async function handleConnect(
 
   logger.debug(`Allowing CONNECT to ${hostname} via ${resolvedIp}`);
 
-  // Parse host and port
-  const [host, portStr] = url.split(":");
-  const port = portStr ? parseInt(portStr, 10) || 443 : 443;
-
-  if (!host) {
-    logger.warn(`Invalid CONNECT host: ${url}`);
-    clientSocket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-    clientSocket.end();
-    return;
-  }
+  // Parse port from CONNECT "host:port" format
+  const colonIdx = url.lastIndexOf(":");
+  const port = colonIdx !== -1 ? parseInt(url.substring(colonIdx + 1), 10) || 443 : 443;
 
   // Establish connection to target
   const targetSocket = net.connect(port, resolvedIp, () => {

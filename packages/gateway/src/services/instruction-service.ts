@@ -113,7 +113,7 @@ class NetworkInstructionProvider implements InstructionProvider {
   name = "network";
   priority = 20;
 
-  getInstructions(_context: InstructionContext): string {
+  getInstructions(): string {
     const allowedDomains = process.env.WORKER_ALLOWED_DOMAINS?.trim() || "";
     const disallowedDomains =
       process.env.WORKER_DISALLOWED_DOMAINS?.trim() || "";
@@ -194,6 +194,7 @@ export class InstructionService {
   private mcpConfigService?: McpConfigService;
   private agentSettingsStore?: AgentSettingsStore;
   private skillsProvider: SkillsInstructionProvider;
+  private networkProvider = new NetworkInstructionProvider();
 
   constructor(
     mcpConfigService?: McpConfigService,
@@ -245,9 +246,8 @@ export class InstructionService {
 
     // Get network access instructions
     let networkInstructions = "";
-    const networkProvider = new NetworkInstructionProvider();
     try {
-      networkInstructions = await networkProvider.getInstructions(context);
+      networkInstructions = this.networkProvider.getInstructions();
       logger.info(
         `Got network instructions (${networkInstructions.length} chars)`
       );

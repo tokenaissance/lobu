@@ -39,10 +39,6 @@ const DEFAULT_PACKAGE_MANAGER_DENY_PREFIXES = [
   "sudo nix profile ",
 ];
 
-const PACKAGE_MANAGER_HINT_PREFIXES = DEFAULT_PACKAGE_MANAGER_DENY_PREFIXES.map(
-  (prefix) => prefix.toLowerCase()
-);
-
 function normalizePattern(pattern: string): string {
   return pattern.trim();
 }
@@ -185,8 +181,8 @@ export function enforceBashCommandPolicy(
     normalizedCommand.startsWith(prefix.toLowerCase())
   );
   if (denyMatchPrefix) {
-    const needsPackageToolHint = PACKAGE_MANAGER_HINT_PREFIXES.some((prefix) =>
-      denyMatchPrefix.toLowerCase().startsWith(prefix)
+    const needsPackageToolHint = DEFAULT_PACKAGE_MANAGER_DENY_PREFIXES.some(
+      (prefix) => denyMatchPrefix.toLowerCase().startsWith(prefix)
     );
     if (needsPackageToolHint) {
       throw new Error(

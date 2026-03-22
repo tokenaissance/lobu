@@ -282,16 +282,15 @@ export class Orchestrator {
 
     this.cleanupInterval = setInterval(async () => {
       if (this.shuttingDown) return;
-      try {
-        const p = this.deploymentManager.reconcileDeployments();
-        this.activeReconciliation = p;
-        await p;
-      } catch (error) {
+      const p = this.deploymentManager.reconcileDeployments().catch((error) => {
         logger.error(
           "Error during deployment reconciliation:",
           error instanceof Error ? error.message : String(error)
         );
-      } finally {
+      });
+      this.activeReconciliation = p;
+      await p;
+      if (this.activeReconciliation === p) {
         this.activeReconciliation = null;
       }
     }, intervalMs);

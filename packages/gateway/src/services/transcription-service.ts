@@ -92,9 +92,9 @@ function displayName(provider: TranscriptionProvider): string {
 }
 
 export class TranscriptionService {
-  private providerConfigSource?:
-    | (() => Promise<Record<string, ProviderConfigEntry>>)
-    | undefined;
+  private providerConfigSource?: () => Promise<
+    Record<string, ProviderConfigEntry>
+  >;
 
   constructor(
     private readonly authProfilesManager: AuthProfilesManager,

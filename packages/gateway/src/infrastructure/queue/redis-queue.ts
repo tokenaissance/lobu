@@ -84,6 +84,7 @@ export class RedisQueue implements IMessageQueue {
     }
 
     this.workers.clear();
+    this.pendingWorkers.clear();
     this.queueEvents.clear();
     this.queues.clear();
 

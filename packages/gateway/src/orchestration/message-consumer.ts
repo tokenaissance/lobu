@@ -246,6 +246,9 @@ export class MessageConsumer {
       logger.error({ traceId, jobId, error }, "Message job failed");
 
       // Re-throw for Redis retry handling
+      if (error instanceof OrchestratorError) {
+        throw error;
+      }
       throw new OrchestratorError(
         ErrorCode.QUEUE_JOB_PROCESSING_FAILED,
         `Failed to process message job: ${error instanceof Error ? error.message : String(error)}`,
@@ -290,6 +293,9 @@ export class MessageConsumer {
         `✅ Sent message to thread queue ${threadQueueName} for conversation ${data.conversationId}, jobId: ${jobId}`
       );
     } catch (error) {
+      if (error instanceof OrchestratorError) {
+        throw error;
+      }
       logger.error(`❌ [ERROR] sendToWorkerQueue failed:`, error);
       throw new OrchestratorError(
         ErrorCode.QUEUE_JOB_PROCESSING_FAILED,

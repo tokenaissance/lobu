@@ -1422,6 +1422,8 @@ export async function startGateway(config: GatewayConfig): Promise<void> {
     await chatInstanceManager.shutdown();
     await orchestrator.stop();
     await gateway.stop();
+    const { stopFilteringProxy } = await import("../proxy/proxy-manager");
+    await stopFilteringProxy();
     if (httpServer) {
       httpServer.close();
     }

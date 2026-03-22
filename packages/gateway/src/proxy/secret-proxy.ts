@@ -215,15 +215,12 @@ export class SecretProxy {
         headers["x-api-key"] = await this.swap(apiKey);
       }
 
-      const auth = headers.authorization || headers.Authorization;
+      const auth = headers.authorization;
       if (auth) {
         const parts = auth.split(" ");
         if (parts.length === 2 && parts[0]?.toLowerCase() === "bearer") {
           const swapped = await this.swap(parts[1]!);
-          const headerName = headers.authorization
-            ? "authorization"
-            : "Authorization";
-          headers[headerName] = `Bearer ${swapped}`;
+          headers.authorization = `Bearer ${swapped}`;
         }
       }
     }

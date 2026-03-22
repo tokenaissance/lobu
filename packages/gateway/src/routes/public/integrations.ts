@@ -219,14 +219,13 @@ export function createIntegrationsRoutes(
   });
 
   app.openapi(skillFetchRoute, async (c): Promise<any> => {
-    if (!verifySettingsSession(c))
-      return c.json({ error: "Unauthorized" }, 401);
+    const session = verifySettingsSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
 
     const { repo } = c.req.valid("json");
     if (!repo?.trim()) return c.json({ error: "Missing skill slug" }, 400);
 
     // Get per-agent registries if agentId is available in session
-    const session = verifySettingsSession(c);
     let extraRegistries;
     if (session?.agentId && config.agentSettingsStore) {
       const settings = await config.agentSettingsStore.getSettings(

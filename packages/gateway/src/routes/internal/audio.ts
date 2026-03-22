@@ -5,9 +5,10 @@
  * Used by the GenerateAudio custom MCP tool.
  */
 
-import { createLogger, verifyWorkerToken } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { TranscriptionService } from "../../services/transcription-service";
+import { authenticateWorker } from "./worker-auth";
 
 const logger = createLogger("internal-audio-routes");
 
@@ -25,28 +26,10 @@ type WorkerContext = {
   };
 };
 
-/**
- * Create internal audio routes (Hono)
- */
 export function createAudioRoutes(
   transcriptionService: TranscriptionService
 ): Hono<WorkerContext> {
   const router = new Hono<WorkerContext>();
-
-  // Worker authentication middleware
-  const authenticateWorker = async (c: any, next: () => Promise<void>) => {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ error: "Missing or invalid authorization" }, 401);
-    }
-    const workerToken = authHeader.substring(7);
-    const tokenData = verifyWorkerToken(workerToken);
-    if (!tokenData) {
-      return c.json({ error: "Invalid worker token" }, 401);
-    }
-    c.set("worker", tokenData);
-    await next();
-  };
 
   /**
    * Generate audio from text (TTS)

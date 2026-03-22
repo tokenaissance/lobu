@@ -2,26 +2,14 @@ import type {
   IntegrationConfig,
   IntegrationCredentialRecord,
 } from "@lobu/core";
-import { createLogger, verifyWorkerToken } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
+import { authenticateWorker } from "../../routes/internal/worker-auth";
 import { GenericOAuth2Client } from "../oauth/generic-client";
 import type { IntegrationConfigService } from "./config-service";
 import type { IntegrationCredentialStore } from "./credential-store";
 
 const logger = createLogger("integration-api-proxy");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      platform?: string;
-    };
-  };
-};
 
 /**
  * API proxy for integration requests.
@@ -31,24 +19,9 @@ type WorkerContext = {
 export function createIntegrationApiProxy(
   configService: IntegrationConfigService,
   credentialStore: IntegrationCredentialStore
-): Hono<WorkerContext> {
-  const router = new Hono<WorkerContext>();
+): Hono {
+  const router = new Hono();
   const oauth2Client = new GenericOAuth2Client();
-
-  // Worker authentication middleware
-  const authenticateWorker = async (c: any, next: () => Promise<void>) => {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ error: "Missing or invalid authorization" }, 401);
-    }
-    const workerToken = authHeader.substring(7);
-    const tokenData = verifyWorkerToken(workerToken);
-    if (!tokenData) {
-      return c.json({ error: "Invalid worker token" }, 401);
-    }
-    c.set("worker", tokenData);
-    await next();
-  };
 
   /**
    * POST /internal/integrations/:id/api

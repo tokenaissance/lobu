@@ -63,16 +63,13 @@ export class ChatResponseBridge implements ResponseRenderer {
     void sessionKey;
     if (payload.delta === undefined) return null;
 
-    const connectionId = (payload.platformMetadata as any)?.connectionId;
-    if (!connectionId) return null;
+    const routing = this.extractRouting(payload);
+    if (!routing) return null;
+    const { connectionId, channelId } = routing;
 
     const instance = this.manager.getInstance(connectionId);
     if (!instance) return null;
 
-    const channelId =
-      (payload.platformMetadata as any)?.chatId ??
-      (payload.platformMetadata as any)?.responseChannel ??
-      payload.channelId;
     const key = `${channelId}:${payload.conversationId}`;
     const shouldBuffer = shouldBufferUntilCompletion(
       instance.connection.platform
@@ -150,16 +147,13 @@ export class ChatResponseBridge implements ResponseRenderer {
     payload: ThreadResponsePayload,
     _sessionKey: string
   ): Promise<void> {
-    const connectionId = (payload.platformMetadata as any)?.connectionId;
-    if (!connectionId) return;
+    const routing = this.extractRouting(payload);
+    if (!routing) return;
+    const { connectionId, channelId } = routing;
 
     const instance = this.manager.getInstance(connectionId);
     if (!instance) return;
 
-    const channelId =
-      (payload.platformMetadata as any)?.chatId ??
-      (payload.platformMetadata as any)?.responseChannel ??
-      payload.channelId;
     const key = `${channelId}:${payload.conversationId}`;
 
     const stream = this.streams.get(key);
@@ -242,16 +236,13 @@ export class ChatResponseBridge implements ResponseRenderer {
   ): Promise<void> {
     if (!payload.error) return;
 
-    const connectionId = (payload.platformMetadata as any)?.connectionId;
-    if (!connectionId) return;
+    const routing = this.extractRouting(payload);
+    if (!routing) return;
+    const { connectionId, channelId } = routing;
 
     const instance = this.manager.getInstance(connectionId);
     if (!instance) return;
 
-    const channelId =
-      (payload.platformMetadata as any)?.chatId ??
-      (payload.platformMetadata as any)?.responseChannel ??
-      payload.channelId;
     const key = `${channelId}:${payload.conversationId}`;
 
     // Clean up stream
@@ -368,16 +359,15 @@ export class ChatResponseBridge implements ResponseRenderer {
   }
 
   async handleStatusUpdate(payload: ThreadResponsePayload): Promise<void> {
-    const connectionId = (payload.platformMetadata as any)?.connectionId;
-    if (!connectionId) return;
+    const routing = this.extractRouting(payload);
+    if (!routing) return;
+    const { connectionId, channelId } = routing;
 
     const instance = this.manager.getInstance(connectionId);
     if (!instance) return;
 
     // Show typing indicator
     try {
-      const channelId =
-        (payload.platformMetadata as any)?.chatId ?? payload.channelId;
       const target = await this.resolveTarget(
         instance,
         channelId,
@@ -394,15 +384,14 @@ export class ChatResponseBridge implements ResponseRenderer {
   async handleEphemeral(payload: ThreadResponsePayload): Promise<void> {
     if (!payload.content) return;
 
-    const connectionId = (payload.platformMetadata as any)?.connectionId;
-    if (!connectionId) return;
+    const routing = this.extractRouting(payload);
+    if (!routing) return;
+    const { connectionId, channelId } = routing;
 
     const instance = this.manager.getInstance(connectionId);
     if (!instance) return;
 
     try {
-      const channelId =
-        (payload.platformMetadata as any)?.chatId ?? payload.channelId;
       const target = await this.resolveTarget(
         instance,
         channelId,
@@ -455,6 +444,19 @@ export class ChatResponseBridge implements ResponseRenderer {
   }
 
   // --- Private ---
+
+  private extractRouting(payload: ThreadResponsePayload): {
+    connectionId: string;
+    channelId: string;
+  } | null {
+    const connectionId = (payload.platformMetadata as any)?.connectionId;
+    if (!connectionId) return null;
+    const channelId =
+      (payload.platformMetadata as any)?.chatId ??
+      (payload.platformMetadata as any)?.responseChannel ??
+      payload.channelId;
+    return { connectionId, channelId };
+  }
 
   private async editStreamMessage(
     stream: StreamState,
@@ -607,35 +609,24 @@ export class ChatResponseBridge implements ResponseRenderer {
     channelId: string,
     conversationId?: string
   ): Promise<any | null> {
-    const platform = instance.connection.platform;
-    const chat = instance.chat;
-
-    if (!conversationId || conversationId === channelId) {
-      const channelKey = `${platform}:${channelId}`;
-      const channel = chat.channel?.(channelKey);
-      if (channel) {
-        return channel;
-      }
-      logger.warn(
-        {
-          platform,
-          channelId,
-          channelKey,
-          conversationId,
-          hasChannelFn: !!chat.channel,
-        },
-        "chat.channel() returned null for DM"
-      );
-    }
-
-    const thread =
-      (await chat.getThread?.(platform, channelId, conversationId)) ?? null;
-    if (!thread) {
-      logger.warn(
-        { platform, channelId, conversationId, hasGetThread: !!chat.getThread },
-        "chat.getThread() also returned null"
-      );
-    }
-    return thread;
+    return resolveChatTarget(instance, channelId, conversationId);
   }
+}
+
+export async function resolveChatTarget(
+  instance: { connection: { platform: string }; chat: any },
+  channelId: string,
+  conversationId?: string
+): Promise<any | null> {
+  const platform = instance.connection.platform;
+  const chat = instance.chat;
+
+  if (!conversationId || conversationId === channelId) {
+    const channel = chat.channel?.(`${platform}:${channelId}`);
+    if (channel) {
+      return channel;
+    }
+  }
+
+  return (await chat.getThread?.(platform, channelId, conversationId)) ?? null;
 }

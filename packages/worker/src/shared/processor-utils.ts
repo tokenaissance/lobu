@@ -4,7 +4,7 @@ import { getToolDisplayConfig } from "./tool-display-config";
  * Format MCP-style tool names: prefix__server__tool -> prefix.server.tool
  */
 export function formatMcpToolName(toolName: string): string {
-  const match = toolName.match(/^([^_]+)__([^_]+)__(.+)$/);
+  const match = toolName.match(/^(.+?)__(.+?)__(.+)$/);
   if (!match) return toolName;
   const [, prefix, server, tool] = match;
   return `${prefix}.${server}.${tool}`;

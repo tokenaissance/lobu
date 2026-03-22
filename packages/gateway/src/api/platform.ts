@@ -230,10 +230,6 @@ export class ApiPlatform implements PlatformAdapter {
       logger.info(`Created new API session: ${agentId}`);
     }
 
-    if (!session) {
-      throw new Error("Session not found after creation");
-    }
-
     // Update session activity
     await sessionManager.touchSession(agentId);
 

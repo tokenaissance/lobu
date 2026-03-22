@@ -315,6 +315,9 @@ export abstract class BaseDeploymentManager {
 
       await this.createDeployment(deploymentName, userId, userId, messageData);
     } catch (error) {
+      if (error instanceof OrchestratorError) {
+        throw error;
+      }
       throw new OrchestratorError(
         ErrorCode.DEPLOYMENT_CREATE_FAILED,
         `Failed to create worker deployment: ${error instanceof Error ? error.message : String(error)}`,

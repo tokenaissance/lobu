@@ -21,7 +21,6 @@ export type {
   IntegrationOAuthConfig,
   IntegrationScopesConfig,
   SystemSkillEntry,
-  SystemSkillIntegration,
   SystemSkillsConfigFile,
 } from "./integration-types";
 export * from "./logger";

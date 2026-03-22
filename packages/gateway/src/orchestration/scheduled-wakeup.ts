@@ -150,12 +150,14 @@ export class ScheduledWakeupService {
     }
 
     // Validate: must have either delayMinutes OR cron, not both
-    if (params.delayMinutes && params.cron) {
+    const hasDelay = params.delayMinutes != null;
+    const hasCron = !!params.cron;
+    if (hasDelay && hasCron) {
       throw new Error(
         "Cannot specify both delayMinutes and cron - use one or the other"
       );
     }
-    if (!params.delayMinutes && !params.cron) {
+    if (!hasDelay && !hasCron) {
       throw new Error("Must specify either delayMinutes or cron");
     }
 
@@ -315,14 +317,14 @@ export class ScheduledWakeupService {
     }
   }
 
-  /**
-   * Cancel a scheduled wakeup
-   */
-  async cancel(scheduleId: string, deploymentName: string): Promise<boolean> {
+  private async cancelSchedule(
+    scheduleId: string,
+    ownerField: "deploymentName" | "agentId",
+    ownerValue: string
+  ): Promise<boolean> {
     const redis = this.queue.getRedisClient();
     const redisKey = `${REDIS_KEY_PREFIX}${scheduleId}`;
 
-    // Get current schedule
     const data = await redis.get(redisKey);
     if (!data) {
       return false;
@@ -330,119 +332,72 @@ export class ScheduledWakeupService {
 
     const schedule: ScheduledWakeup = JSON.parse(data);
 
-    // Verify ownership
-    if (schedule.deploymentName !== deploymentName) {
-      throw new Error("Schedule does not belong to this deployment");
+    if (schedule[ownerField] !== ownerValue) {
+      throw new Error(
+        `Schedule does not belong to this ${ownerField === "agentId" ? "agent" : "deployment"}`
+      );
     }
 
-    // Update status to cancelled
     schedule.status = "cancelled";
-    await redis.setex(redisKey, 60 * 60, JSON.stringify(schedule)); // Keep for 1 hour for auditing
+    await redis.setex(redisKey, 60 * 60, JSON.stringify(schedule));
 
-    // Remove from indices
-    const deploymentIndexKey = `${REDIS_INDEX_PREFIX}${deploymentName}`;
+    const deploymentIndexKey = `${REDIS_INDEX_PREFIX}${schedule.deploymentName}`;
     await redis.srem(deploymentIndexKey, scheduleId);
 
     const agentIndexKey = `${REDIS_AGENT_INDEX_PREFIX}${schedule.agentId}`;
     await redis.srem(agentIndexKey, scheduleId);
 
-    logger.info({ scheduleId, deploymentName }, "Scheduled wakeup cancelled");
+    logger.info(
+      { scheduleId, [ownerField]: ownerValue },
+      "Scheduled wakeup cancelled"
+    );
     return true;
   }
 
-  /**
-   * List pending schedules for a deployment
-   */
+  async cancel(scheduleId: string, deploymentName: string): Promise<boolean> {
+    return this.cancelSchedule(scheduleId, "deploymentName", deploymentName);
+  }
+
+  private async listPendingByIndexKey(
+    indexKey: string
+  ): Promise<ScheduledWakeup[]> {
+    const redis = this.queue.getRedisClient();
+    const scheduleIds = await redis.smembers(indexKey);
+    const schedules: ScheduledWakeup[] = [];
+
+    for (const scheduleId of scheduleIds) {
+      const redisKey = `${REDIS_KEY_PREFIX}${scheduleId}`;
+      const data = await redis.get(redisKey);
+      if (data) {
+        const schedule: ScheduledWakeup = JSON.parse(data);
+        if (schedule.status === "pending") {
+          schedules.push(schedule);
+        }
+      }
+    }
+
+    schedules.sort(
+      (a, b) =>
+        new Date(a.triggerAt).getTime() - new Date(b.triggerAt).getTime()
+    );
+
+    return schedules;
+  }
+
   async listPending(deploymentName: string): Promise<ScheduledWakeup[]> {
-    const redis = this.queue.getRedisClient();
-    const deploymentIndexKey = `${REDIS_INDEX_PREFIX}${deploymentName}`;
-
-    const scheduleIds = await redis.smembers(deploymentIndexKey);
-    const schedules: ScheduledWakeup[] = [];
-
-    for (const scheduleId of scheduleIds) {
-      const redisKey = `${REDIS_KEY_PREFIX}${scheduleId}`;
-      const data = await redis.get(redisKey);
-      if (data) {
-        const schedule: ScheduledWakeup = JSON.parse(data);
-        if (schedule.status === "pending") {
-          schedules.push(schedule);
-        }
-      }
-    }
-
-    // Sort by trigger time
-    schedules.sort(
-      (a, b) =>
-        new Date(a.triggerAt).getTime() - new Date(b.triggerAt).getTime()
+    return this.listPendingByIndexKey(
+      `${REDIS_INDEX_PREFIX}${deploymentName}`
     );
-
-    return schedules;
   }
 
-  /**
-   * List pending schedules for an agent (used by settings UI)
-   */
   async listPendingForAgent(agentId: string): Promise<ScheduledWakeup[]> {
-    const redis = this.queue.getRedisClient();
-    const agentIndexKey = `${REDIS_AGENT_INDEX_PREFIX}${agentId}`;
-
-    const scheduleIds = await redis.smembers(agentIndexKey);
-    const schedules: ScheduledWakeup[] = [];
-
-    for (const scheduleId of scheduleIds) {
-      const redisKey = `${REDIS_KEY_PREFIX}${scheduleId}`;
-      const data = await redis.get(redisKey);
-      if (data) {
-        const schedule: ScheduledWakeup = JSON.parse(data);
-        if (schedule.status === "pending") {
-          schedules.push(schedule);
-        }
-      }
-    }
-
-    // Sort by trigger time
-    schedules.sort(
-      (a, b) =>
-        new Date(a.triggerAt).getTime() - new Date(b.triggerAt).getTime()
+    return this.listPendingByIndexKey(
+      `${REDIS_AGENT_INDEX_PREFIX}${agentId}`
     );
-
-    return schedules;
   }
 
-  /**
-   * Cancel a schedule by ID (for settings UI - verifies agent ownership)
-   */
   async cancelByAgent(scheduleId: string, agentId: string): Promise<boolean> {
-    const redis = this.queue.getRedisClient();
-    const redisKey = `${REDIS_KEY_PREFIX}${scheduleId}`;
-
-    // Get current schedule
-    const data = await redis.get(redisKey);
-    if (!data) {
-      return false;
-    }
-
-    const schedule: ScheduledWakeup = JSON.parse(data);
-
-    // Verify agent ownership
-    if (schedule.agentId !== agentId) {
-      throw new Error("Schedule does not belong to this agent");
-    }
-
-    // Update status to cancelled
-    schedule.status = "cancelled";
-    await redis.setex(redisKey, 60 * 60, JSON.stringify(schedule));
-
-    // Remove from indices
-    const deploymentIndexKey = `${REDIS_INDEX_PREFIX}${schedule.deploymentName}`;
-    await redis.srem(deploymentIndexKey, scheduleId);
-
-    const agentIndexKey = `${REDIS_AGENT_INDEX_PREFIX}${agentId}`;
-    await redis.srem(agentIndexKey, scheduleId);
-
-    logger.info({ scheduleId, agentId }, "Scheduled wakeup cancelled by agent");
-    return true;
+    return this.cancelSchedule(scheduleId, "agentId", agentId);
   }
 
   /**

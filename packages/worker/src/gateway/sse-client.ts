@@ -813,18 +813,7 @@ export class GatewayClient {
     const conversationId = payload.conversationId || "default";
     const platformMetadata = payload.platformMetadata;
 
-    const agentOptions = {
-      ...(payload.agentOptions || {}),
-      ...(payload.agentOptions?.allowedTools
-        ? { allowedTools: payload.agentOptions.allowedTools }
-        : {}),
-      ...(payload.agentOptions?.disallowedTools
-        ? { disallowedTools: payload.agentOptions.disallowedTools }
-        : {}),
-      ...(payload.agentOptions?.timeoutMinutes
-        ? { timeoutMinutes: payload.agentOptions.timeoutMinutes }
-        : {}),
-    };
+    const rawTeamId = payload.teamId ?? platformMetadata.teamId;
 
     return {
       sessionKey: `session-${conversationId}`,
@@ -840,14 +829,10 @@ export class GatewayClient {
       botResponseId: platformMetadata.botResponseId
         ? String(platformMetadata.botResponseId)
         : undefined,
-      // Check both payload.teamId (WhatsApp) and platformMetadata.teamId (Slack)
-      teamId:
-        (payload.teamId ?? platformMetadata.teamId)
-          ? String(payload.teamId ?? platformMetadata.teamId)
-          : undefined,
+      teamId: rawTeamId ? String(rawTeamId) : undefined,
       platform: payload.platform,
-      platformMetadata: platformMetadata, // Include full platformMetadata for files and other metadata
-      agentOptions: JSON.stringify(agentOptions),
+      platformMetadata,
+      agentOptions: JSON.stringify(payload.agentOptions || {}),
       workspace: {
         baseDirectory: process.env.WORKSPACE_DIR || "/workspace",
       },

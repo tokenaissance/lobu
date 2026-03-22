@@ -7,3 +7,7 @@ export function ensureBaseUrl(url: string): string {
   }
   return url;
 }
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}

@@ -150,6 +150,7 @@ export class SystemSkillsService {
   reload(newUrl?: string): void {
     this.loaded = undefined;
     this.rawLoaded = undefined;
+    this.loadAttempted = false;
     if (newUrl !== undefined) {
       this.configUrl = newUrl;
     }

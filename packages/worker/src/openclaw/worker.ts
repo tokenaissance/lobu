@@ -26,6 +26,7 @@ import type {
   WorkerConfig,
   WorkerExecutor,
 } from "../core/types";
+import { isRecord } from "../core/url-utils";
 import { WorkspaceManager } from "../core/workspace";
 import { HttpWorkerTransport } from "../gateway/gateway-integration";
 import { generateCustomInstructions } from "../instructions/builder";
@@ -114,23 +115,12 @@ function extractToolTextContent(result: {
     .trim();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function readStringOrFallback(
-  value: unknown,
-  fallback: string,
-  allowEmpty = false
-): string {
+function readStringOrFallback(value: unknown, fallback: string): string {
   if (typeof value !== "string") {
     return fallback;
   }
   const trimmed = value.trim();
-  if (!trimmed && !allowEmpty) {
-    return fallback;
-  }
-  return allowEmpty ? value : trimmed;
+  return trimmed || fallback;
 }
 
 function readNonNegativeNumberOrFallback(
