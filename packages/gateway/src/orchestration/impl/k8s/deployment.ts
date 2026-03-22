@@ -183,6 +183,15 @@ export interface SimpleDeployment {
   };
 }
 
+export const WORKER_CONTAINER_SECURITY_CONTEXT = {
+  runAsUser: WORKER_SECURITY.USER_ID,
+  runAsGroup: WORKER_SECURITY.GROUP_ID,
+  runAsNonRoot: true,
+  readOnlyRootFilesystem: true,
+  allowPrivilegeEscalation: false,
+  capabilities: { drop: ["ALL"] },
+};
+
 export const IMAGE_PULL_FAILURE_REASONS = new Set([
   "ImagePullBackOff",
   "ErrImagePull",
@@ -618,19 +627,7 @@ export class K8sDeploymentManager extends BaseDeploymentManager {
                 image: workerImage,
                 imagePullPolicy:
                   this.config.worker.image.pullPolicy || "Always",
-                securityContext: {
-                  runAsUser: WORKER_SECURITY.USER_ID,
-                  runAsGroup: WORKER_SECURITY.GROUP_ID,
-                  runAsNonRoot: true,
-                  // Enable read-only root filesystem for security (matches Docker behavior)
-                  readOnlyRootFilesystem: true,
-                  // Prevent privilege escalation
-                  allowPrivilegeEscalation: false,
-                  // Drop all capabilities (matches Docker CAP_DROP: ALL)
-                  capabilities: {
-                    drop: ["ALL"],
-                  },
-                },
+                securityContext: WORKER_CONTAINER_SECURITY_CONTEXT,
                 env: [
                   // Common environment variables from base class
                   // (includes HTTP_PROXY, HTTPS_PROXY, NO_PROXY, NODE_ENV, DEBUG)

@@ -147,6 +147,18 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
     );
   }
 
+  private async stopWorker(
+    deploymentName: string,
+    entry: EmbeddedWorkerEntry
+  ): Promise<void> {
+    await entry.gatewayClient.stop();
+    this.workers.delete(deploymentName);
+    if (this.workers.size === 0) {
+      delete (globalThis as any).__lobuEmbeddedBashOps;
+    }
+    logger.info(`Stopped embedded worker ${deploymentName}`);
+  }
+
   async scaleDeployment(
     deploymentName: string,
     replicas: number
@@ -154,12 +166,7 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
     const entry = this.workers.get(deploymentName);
 
     if (replicas === 0 && entry) {
-      await entry.gatewayClient.stop();
-      this.workers.delete(deploymentName);
-      if (this.workers.size === 0) {
-        delete (globalThis as any).__lobuEmbeddedBashOps;
-      }
-      logger.info(`Stopped embedded worker ${deploymentName}`);
+      await this.stopWorker(deploymentName, entry);
     } else if (replicas === 1 && !entry) {
       logger.warn(
         `Cannot scale up ${deploymentName} — use createDeployment to re-spawn`
@@ -170,12 +177,7 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
   async deleteDeployment(deploymentName: string): Promise<void> {
     const entry = this.workers.get(deploymentName);
     if (entry) {
-      await entry.gatewayClient.stop();
-      this.workers.delete(deploymentName);
-      if (this.workers.size === 0) {
-        delete (globalThis as any).__lobuEmbeddedBashOps;
-      }
-      logger.info(`Stopped embedded worker: ${deploymentName}`);
+      await this.stopWorker(deploymentName, entry);
     }
   }
 

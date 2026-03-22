@@ -10,7 +10,7 @@ import { BASE_WORKER_LABELS } from "../../deployment-utils";
 import {
   IMAGE_PULL_FAILURE_REASONS,
   LOBU_FINALIZER,
-  WORKER_SECURITY,
+  WORKER_CONTAINER_SECURITY_CONTEXT,
 } from "./deployment";
 
 const logger = createLogger("k8s-deployment-helpers");
@@ -52,14 +52,7 @@ export async function runImagePullPreflight(
           image: imageName,
           imagePullPolicy: pullPolicy,
           command: ["/bin/sh", "-lc", "echo preflight"],
-          securityContext: {
-            runAsUser: WORKER_SECURITY.USER_ID,
-            runAsGroup: WORKER_SECURITY.GROUP_ID,
-            runAsNonRoot: true,
-            readOnlyRootFilesystem: true,
-            allowPrivilegeEscalation: false,
-            capabilities: { drop: ["ALL"] },
-          },
+          securityContext: WORKER_CONTAINER_SECURITY_CONTEXT,
         },
       ],
     },
