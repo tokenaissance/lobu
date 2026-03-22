@@ -15,7 +15,7 @@ import {
 } from "../deployment-utils";
 import { createJustBashOperations } from "./embedded-bash-ops";
 
-const logger = createLogger("orchestrator");
+const logger = createLogger("embedded-deployment");
 
 interface EmbeddedWorkerEntry {
   gatewayClient: { stop: () => Promise<void> };

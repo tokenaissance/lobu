@@ -1,6 +1,6 @@
 import { createLogger, type WorkerTransport } from "@lobu/core";
 
-const logger = createLogger("worker");
+const logger = createLogger("worker-error-handler");
 
 /**
  * Format error message for display

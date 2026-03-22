@@ -12,7 +12,7 @@ import { startGateway } from "./gateway";
 const logger = createLogger("cli");
 
 async function main() {
-  initSentry().catch(console.error);
+  initSentry().catch((e) => logger.error("Sentry init failed", e));
 
   const program = new Command();
 

@@ -66,7 +66,7 @@ import {
 } from "./tool-policy";
 import { createOpenClawTools } from "./tools";
 
-const logger = createLogger("worker");
+const logger = createLogger("openclaw-worker");
 
 const MEMORY_FLUSH_STATE_CUSTOM_TYPE = "lobu.memory_flush_state";
 const APPROX_IMAGE_TOKENS = 1200;

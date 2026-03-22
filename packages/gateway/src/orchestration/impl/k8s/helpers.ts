@@ -13,7 +13,7 @@ import {
   WORKER_SECURITY,
 } from "./deployment";
 
-const logger = createLogger("k8s-deployment");
+const logger = createLogger("k8s-deployment-helpers");
 
 /**
  * Run a short-lived preflight pod to verify the worker image can be pulled.

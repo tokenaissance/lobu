@@ -19,7 +19,7 @@ import { getScheduledWakeupService } from "./scheduled-wakeup";
 // Re-export MessagePayload for use by deployment implementations
 export type { MessagePayload };
 
-const logger = createLogger("orchestrator");
+const logger = createLogger("deployment-manager");
 
 export interface DeploymentIdentity {
   conversationId: string;

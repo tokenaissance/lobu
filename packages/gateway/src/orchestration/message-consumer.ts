@@ -23,7 +23,7 @@ import {
   type OrchestratorConfig,
 } from "./base-deployment-manager";
 
-const logger = createLogger("orchestrator");
+const logger = createLogger("message-consumer");
 
 export class MessageConsumer {
   private queue: IMessageQueue;

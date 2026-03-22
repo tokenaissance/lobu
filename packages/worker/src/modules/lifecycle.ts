@@ -5,7 +5,7 @@ import {
   type SessionContext,
 } from "@lobu/core";
 
-const logger = createLogger("worker");
+const logger = createLogger("worker-lifecycle");
 
 export async function onSessionStart(
   context: SessionContext

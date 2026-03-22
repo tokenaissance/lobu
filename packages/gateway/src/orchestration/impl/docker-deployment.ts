@@ -49,7 +49,7 @@ class ResourceParser {
   }
 }
 
-const logger = createLogger("orchestrator");
+const logger = createLogger("docker-deployment");
 
 export class DockerDeploymentManager extends BaseDeploymentManager {
   private docker: Docker;
