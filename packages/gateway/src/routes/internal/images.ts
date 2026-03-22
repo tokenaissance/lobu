@@ -7,23 +7,9 @@
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { ImageGenerationService } from "../../services/image-generation-service";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("internal-image-routes");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      deploymentName: string;
-      platform?: string;
-    };
-  };
-};
 
 export function createImageRoutes(
   imageGenerationService: ImageGenerationService

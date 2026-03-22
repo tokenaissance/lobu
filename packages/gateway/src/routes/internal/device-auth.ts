@@ -3,22 +3,12 @@ import { Hono } from "hono";
 import type Redis from "ioredis";
 import { GenericDeviceCodeClient } from "../../auth/external/device-code-client";
 import type { McpConfigService } from "../../auth/mcp/config-service";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("device-auth");
 
 const DEFAULT_MCP_SCOPE = "mcp:read mcp:write profile:read";
 const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      agentId?: string;
-      deploymentName: string;
-    };
-  };
-};
 
 interface StoredCredential {
   accessToken: string;

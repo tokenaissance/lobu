@@ -1,4 +1,10 @@
-import { verifyWorkerToken } from "@lobu/core";
+import { type WorkerTokenData, verifyWorkerToken } from "@lobu/core";
+
+export type WorkerContext = {
+  Variables: {
+    worker: WorkerTokenData;
+  };
+};
 
 export const authenticateWorker = async (
   c: any,

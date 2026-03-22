@@ -15,7 +15,7 @@ import type {
 import type { InteractionService } from "../../interactions";
 import type { GrantStore } from "../../permissions/grant-store";
 import { resolvePublicBaseUrl } from "../../utils/public-url";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("internal-settings-link-routes");
 
@@ -26,21 +26,6 @@ function encodePrefillMcpServers(
     "base64url"
   );
 }
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      connectionId?: string;
-      deploymentName: string;
-      platform?: string;
-    };
-  };
-};
 
 export function createSettingsLinkRoutes(
   interactionService?: InteractionService,

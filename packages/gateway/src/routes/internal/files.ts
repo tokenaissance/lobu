@@ -5,15 +5,9 @@ import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { PlatformRegistry } from "../../platform";
 import type { IFileHandler } from "../../platform/file-handler";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("file-routes");
-
-type WorkerContext = {
-  Variables: {
-    worker: any;
-  };
-};
 
 function resolveFileHandler(
   platformRegistry: PlatformRegistry,

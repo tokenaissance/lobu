@@ -2,27 +2,16 @@ import type { IntegrationAccountInfo, IntegrationInfo } from "@lobu/core";
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { InteractionService } from "../../interactions";
-import { authenticateWorker } from "../../routes/internal/worker-auth";
+import {
+  authenticateWorker,
+  type WorkerContext,
+} from "../../routes/internal/worker-auth";
 import type { AgentSettingsStore } from "../settings/agent-settings-store";
 import type { IntegrationConfigService } from "./config-service";
 import type { IntegrationCredentialStore } from "./credential-store";
 import type { IntegrationOAuthModule } from "./oauth-module";
 
 const logger = createLogger("integration-routes");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      connectionId?: string;
-      platform?: string;
-    };
-  };
-};
 
 /**
  * Create internal integration routes for workers.

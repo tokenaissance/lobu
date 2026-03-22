@@ -11,23 +11,9 @@ import { Hono } from "hono";
 import type { McpConfigService } from "../../auth/mcp/config-service";
 import type { McpCredentialStore } from "../../auth/mcp/credential-store";
 import { GenericOAuth2Client } from "../../auth/oauth/generic-client";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("internal-mcp-token-routes");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      deploymentName: string;
-      platform?: string;
-    };
-  };
-};
 
 export function createMcpTokenRoutes(
   credentialStore: McpCredentialStore,

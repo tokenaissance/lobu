@@ -22,19 +22,9 @@ import type {
   SkillRegistryCoordinator,
 } from "../../services/skill-registry";
 import type { SystemConfigResolver } from "../../services/system-config-resolver";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("internal-integrations-discovery");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      agentId?: string;
-      deploymentName: string;
-    };
-  };
-};
 
 export interface IntegrationsDiscoveryConfig {
   coordinator: SkillRegistryCoordinator;

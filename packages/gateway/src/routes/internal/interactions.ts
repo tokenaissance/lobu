@@ -3,21 +3,9 @@
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { InteractionService } from "../../interactions";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("internal-interaction-routes");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId: string;
-      connectionId?: string;
-    };
-  };
-};
 
 /**
  * Create internal interaction routes (Hono)

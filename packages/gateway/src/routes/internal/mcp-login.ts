@@ -9,24 +9,9 @@ import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { McpOAuthModule } from "../../auth/mcp/oauth-module";
 import type { InteractionService } from "../../interactions";
-import { authenticateWorker } from "./worker-auth";
+import { authenticateWorker, type WorkerContext } from "./worker-auth";
 
 const logger = createLogger("internal-mcp-login-routes");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      connectionId?: string;
-      deploymentName: string;
-      platform?: string;
-    };
-  };
-};
 
 export function createMcpLoginRoutes(
   mcpOAuthModule: McpOAuthModule,

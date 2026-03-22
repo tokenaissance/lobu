@@ -4,25 +4,15 @@ import type {
 } from "@lobu/core";
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
-import { authenticateWorker } from "../../routes/internal/worker-auth";
+import {
+  authenticateWorker,
+  type WorkerContext,
+} from "../../routes/internal/worker-auth";
 import { GenericOAuth2Client } from "../oauth/generic-client";
 import type { IntegrationConfigService } from "./config-service";
 import type { IntegrationCredentialStore } from "./credential-store";
 
 const logger = createLogger("integration-api-proxy");
-
-type WorkerContext = {
-  Variables: {
-    worker: {
-      userId: string;
-      conversationId: string;
-      channelId: string;
-      teamId?: string;
-      agentId?: string;
-      platform?: string;
-    };
-  };
-};
 
 export function createIntegrationApiProxy(
   configService: IntegrationConfigService,
