@@ -585,7 +585,7 @@ function toHttpServerConfig(
 }
 
 function cloneConfig(config: any) {
-  return JSON.parse(JSON.stringify(config));
+  return structuredClone(config);
 }
 
 function isHttpUrl(candidate: string): boolean {

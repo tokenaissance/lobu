@@ -660,6 +660,13 @@ async function listInstalledCapabilities(
 // InstallSkill (resolve manifest, generate settings link for user confirmation)
 // ============================================================================
 
+interface SettingsLinkResult {
+  url?: string;
+  expiresAt?: string;
+  type?: string;
+  message?: string;
+}
+
 interface ConfigureArgs {
   reason: string;
   message?: string;
@@ -687,11 +694,6 @@ export async function installPackage(
 ): Promise<TextResult> {
   return withErrorHandling("InstallPackage", async () => {
     logger.info(`InstallPackage: ${args.packages.join(", ")} — ${args.reason}`);
-
-    interface SettingsLinkResult {
-      type?: string;
-      message?: string;
-    }
 
     const { data, error } = await gatewayFetch<SettingsLinkResult>(
       gw,
@@ -841,13 +843,6 @@ export async function configure(
 ): Promise<TextResult> {
   return withErrorHandling("Configure", async () => {
     logger.info(`Configure: ${args.reason}`);
-
-    interface SettingsLinkResult {
-      url?: string;
-      expiresAt?: string;
-      type?: string;
-      message?: string;
-    }
 
     const { data, error } = await gatewayFetch<SettingsLinkResult>(
       gw,
