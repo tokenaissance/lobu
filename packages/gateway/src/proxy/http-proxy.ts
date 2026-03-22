@@ -491,7 +491,8 @@ async function handleConnect(
 
   // Parse port from CONNECT "host:port" format
   const colonIdx = url.lastIndexOf(":");
-  const port = colonIdx !== -1 ? parseInt(url.substring(colonIdx + 1), 10) || 443 : 443;
+  const port =
+    colonIdx !== -1 ? parseInt(url.substring(colonIdx + 1), 10) || 443 : 443;
 
   // Establish connection to target
   const targetSocket = net.connect(port, resolvedIp, () => {

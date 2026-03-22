@@ -67,6 +67,11 @@ export interface AgentSettings {
   authProfiles?: AuthProfile[];
   /** Installed providers for this agent (index 0 = primary). */
   installedProviders?: InstalledProvider[];
+  /** Per-agent OAuth app credentials for integrations */
+  oauthAppCredentials?: Record<
+    string,
+    { clientId: string; clientSecret: string }
+  >;
   /** Per-agent skill registries (in addition to global defaults) */
   skillRegistries?: RegistryEntry[];
   /** Enable verbose logging (show tool calls, reasoning, etc.) */

@@ -412,12 +412,12 @@ async function renderSettingsForPayload(
           !isOAuth ||
           !!(resolved?.oauth?.clientId && resolved?.oauth?.clientSecret);
         integrationStatus[id] = {
-          label: cfg.label,
+          label: cfg.label ?? id,
           connected: accountList.length > 0,
           configured,
           accounts: accountList.map((a) => ({
             accountId: a.accountId,
-            grantedScopes: a.credentials.grantedScopes,
+            grantedScopes: a.credentials.grantedScopes ?? [],
           })),
           availableScopes: cfg.scopes?.available ?? [],
         };

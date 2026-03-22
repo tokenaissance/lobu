@@ -275,7 +275,7 @@ export function createIntegrationsDiscoveryRoutes(
           }
           integrations.push({
             id,
-            label: integrationConfig.label,
+            label: integrationConfig.label ?? id,
             authType: integrationConfig.authType || "oauth",
             connected: accounts.length > 0,
             configured,

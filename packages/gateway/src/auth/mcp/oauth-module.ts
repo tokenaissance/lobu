@@ -137,15 +137,6 @@ export class McpOAuthModule extends BaseModule {
   }
 
   /**
-   * Register OAuth endpoints (for backward compatibility with module system)
-   */
-  registerEndpoints(_app: any): void {
-    // Routes are already registered in constructor via setupRoutes()
-    // This method is kept for module interface compatibility
-    logger.debug("MCP OAuth endpoints registered via module system");
-  }
-
-  /**
    * Get platform-agnostic authentication status for all MCP servers
    * Returns abstract provider data that can be rendered by any platform adapter
    */
@@ -400,14 +391,6 @@ export class McpOAuthModule extends BaseModule {
         } else {
           return c.json({ error: "MCP has no OAuth configuration" }, 404);
         }
-      }
-
-      // Check if we have valid OAuth config
-      if (!oauthConfig) {
-        return c.json(
-          { error: "No OAuth configuration available for this MCP" },
-          400
-        );
       }
 
       // Generate PKCE verifier+challenge if using PKCE (auth method "none")

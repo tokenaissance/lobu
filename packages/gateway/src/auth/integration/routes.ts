@@ -1,7 +1,8 @@
 import type { IntegrationAccountInfo, IntegrationInfo } from "@lobu/core";
-import { createLogger, verifyWorkerToken } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { InteractionService } from "../../interactions";
+import { authenticateWorker } from "../../routes/internal/worker-auth";
 import type { AgentSettingsStore } from "../settings/agent-settings-store";
 import type { IntegrationConfigService } from "./config-service";
 import type { IntegrationCredentialStore } from "./credential-store";
@@ -38,21 +39,6 @@ export function createIntegrationRoutes(
   agentSettingsStore?: AgentSettingsStore
 ): Hono<WorkerContext> {
   const router = new Hono<WorkerContext>();
-
-  // Worker authentication middleware
-  const authenticateWorker = async (c: any, next: () => Promise<void>) => {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ error: "Missing or invalid authorization" }, 401);
-    }
-    const workerToken = authHeader.substring(7);
-    const tokenData = verifyWorkerToken(workerToken);
-    if (!tokenData) {
-      return c.json({ error: "Invalid worker token" }, 401);
-    }
-    c.set("worker", tokenData);
-    await next();
-  };
 
   /**
    * GET /internal/integrations
@@ -185,8 +171,9 @@ export function createIntegrationRoutes(
           accountId
         );
         if (existing?.grantedScopes?.length) {
+          const granted = existing.grantedScopes;
           const allGranted = requestedScopes.every((s: string) =>
-            existing.grantedScopes.includes(s)
+            granted.includes(s)
           );
           if (allGranted) {
             return c.json({

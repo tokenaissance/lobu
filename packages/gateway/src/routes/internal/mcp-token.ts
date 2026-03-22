@@ -6,11 +6,12 @@
  * bearer tokens without going through the MCP proxy.
  */
 
-import { createLogger, verifyWorkerToken } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { McpConfigService } from "../../auth/mcp/config-service";
 import type { McpCredentialStore } from "../../auth/mcp/credential-store";
 import { GenericOAuth2Client } from "../../auth/oauth/generic-client";
+import { authenticateWorker } from "./worker-auth";
 
 const logger = createLogger("internal-mcp-token-routes");
 
@@ -34,23 +35,6 @@ export function createMcpTokenRoutes(
 ): Hono<WorkerContext> {
   const router = new Hono<WorkerContext>();
   const oauth2Client = new GenericOAuth2Client();
-
-  // Worker authentication middleware
-  const authenticateWorker = async (c: any, next: () => Promise<void>) => {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.text("Unauthorized", 401);
-    }
-
-    const token = authHeader.substring(7);
-    const tokenData = verifyWorkerToken(token);
-    if (!tokenData) {
-      return c.text("Invalid or expired token", 401);
-    }
-
-    c.set("worker", tokenData);
-    await next();
-  };
 
   router.get("/internal/mcp-token/:mcpId", authenticateWorker, async (c) => {
     const worker = c.get("worker");

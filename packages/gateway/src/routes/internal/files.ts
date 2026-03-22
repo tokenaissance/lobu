@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 import { Readable } from "node:stream";
-import { createLogger, verifyWorkerToken } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { PlatformRegistry } from "../../platform";
 import type { IFileHandler } from "../../platform/file-handler";
+import { authenticateWorker } from "./worker-auth";
 
 const logger = createLogger("file-routes");
 
@@ -14,9 +15,6 @@ type WorkerContext = {
   };
 };
 
-/**
- * Resolve the file handler for a given platform from the registry.
- */
 function resolveFileHandler(
   platformRegistry: PlatformRegistry,
   platformName?: string
@@ -26,28 +24,10 @@ function resolveFileHandler(
   return platform?.getFileHandler?.() ?? null;
 }
 
-/**
- * Create internal file routes (Hono)
- */
 export function createFileRoutes(
   platformRegistry: PlatformRegistry
 ): Hono<WorkerContext> {
   const router = new Hono<WorkerContext>();
-
-  // Worker authentication middleware
-  const authenticateWorker = async (c: any, next: () => Promise<void>) => {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ error: "Missing or invalid authorization" }, 401);
-    }
-    const workerToken = authHeader.substring(7);
-    const tokenData = verifyWorkerToken(workerToken);
-    if (!tokenData) {
-      return c.json({ error: "Invalid worker token" }, 401);
-    }
-    c.set("worker", tokenData);
-    await next();
-  };
 
   /**
    * Download file endpoint for workers

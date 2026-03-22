@@ -68,4 +68,3 @@ export async function stopFilteringProxy(): Promise<void> {
     proxyServer = null;
   }
 }
-

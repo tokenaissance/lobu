@@ -172,10 +172,8 @@ export class IntegrationOAuthModule {
           accountId
         );
         if (existing?.grantedScopes?.length) {
-          // Only request the new scopes, include_granted_scopes preserves old ones
-          const newScopes = requestedScopes.filter(
-            (s) => !existing.grantedScopes.includes(s)
-          );
+          const granted = existing.grantedScopes;
+          const newScopes = requestedScopes.filter((s) => !granted.includes(s));
           if (newScopes.length === 0) {
             // All scopes already granted
             return c.json({
@@ -395,11 +393,13 @@ export class IntegrationOAuthModule {
         changes: [`integration:${integrationId}:${accountId}:connected`],
       });
 
+      const label = config.label || integrationId;
+
       // Send post-auth notification to resume the agent session
       await this.sendAuthNotification(
         userId,
         agentId,
-        config.label,
+        label,
         integrationId,
         accountId,
         finalScopes,
@@ -412,12 +412,12 @@ export class IntegrationOAuthModule {
         ?.includes(SETTINGS_SESSION_COOKIE_NAME);
       if (hasSession) {
         return c.redirect(
-          `/agent/${encodeURIComponent(agentId)}?open=skills&message=${encodeURIComponent(`Connected to ${config.label}`)}`
+          `/agent/${encodeURIComponent(agentId)}?open=skills&message=${encodeURIComponent(`Connected to ${label}`)}`
         );
       }
 
       // No session — show success page (no settings link since it requires auth)
-      return c.html(renderOAuthSuccessPage(config.label));
+      return c.html(renderOAuthSuccessPage(label));
     } catch (error) {
       logger.error("Failed to handle integration OAuth callback", { error });
       return c.html(

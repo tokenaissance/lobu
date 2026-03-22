@@ -25,12 +25,10 @@ export function sanitizeFilename(
   // Prevent hidden files and parent directory references
   const safe = sanitized.replace(/^\.+/, "").replace(/\.{2,}/g, ".");
 
-  // Ensure filename is not empty after sanitization
-  if (!safe || safe.length === 0) {
+  if (!safe) {
     return "unnamed_file";
   }
 
-  // Limit filename length
   return safe.length > maxLength ? safe.substring(0, maxLength) : safe;
 }
 
@@ -86,18 +84,21 @@ export function sanitizeForLogging(
   const defaultSensitiveKeys = [
     "anthropic_api_key",
     "api_key",
-    "apiKey",
+    "apikey",
     "token",
     "password",
     "secret",
     "authorization",
     "bearer",
     "credentials",
-    "privateKey",
+    "privatekey",
     "private_key",
   ];
 
-  const sensitiveKeys = [...defaultSensitiveKeys, ...additionalSensitiveKeys];
+  const sensitiveKeys = [
+    ...defaultSensitiveKeys,
+    ...additionalSensitiveKeys.map((k) => k.toLowerCase()),
+  ];
 
   const sanitized = Array.isArray(obj) ? [...obj] : { ...obj };
 
@@ -106,16 +107,8 @@ export function sanitizeForLogging(
     const isSensitive = sensitiveKeys.some((k) => lowerKey.includes(k));
 
     if (isSensitive && typeof sanitized[key] === "string") {
-      // Redact but show length for debugging
       sanitized[key] = `[REDACTED:${sanitized[key].length}]`;
-    } else if (key === "env" && typeof sanitized[key] === "object") {
-      // Recursively sanitize env object
-      sanitized[key] = sanitizeForLogging(
-        sanitized[key],
-        additionalSensitiveKeys
-      );
     } else if (typeof sanitized[key] === "object") {
-      // Recursively sanitize nested objects
       sanitized[key] = sanitizeForLogging(
         sanitized[key],
         additionalSensitiveKeys

@@ -70,7 +70,7 @@ export function registerInteractionBridge(
   const { id: connectionId, platform } = connection;
 
   interactionService.on("question:created", async (event: PostedQuestion) => {
-    if (!shouldHandle(event, platform, connectionId, manager)) return;
+    if (!shouldHandle(event, connectionId, manager)) return;
     if (handledEvents.has(event.id)) return;
     markHandled(event.id);
 
@@ -146,7 +146,7 @@ export function registerInteractionBridge(
   interactionService.on(
     "grant:requested",
     async (event: PostedGrantRequest) => {
-      if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (!shouldHandle(event, connectionId, manager)) return;
       if (handledEvents.has(event.id)) return;
       markHandled(event.id);
 
@@ -240,7 +240,7 @@ export function registerInteractionBridge(
   interactionService.on(
     "package:requested",
     async (event: PostedPackageRequest) => {
-      if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (!shouldHandle(event, connectionId, manager)) return;
       if (handledEvents.has(event.id)) return;
       markHandled(event.id);
 
@@ -330,7 +330,7 @@ export function registerInteractionBridge(
   interactionService.on(
     "link-button:created",
     async (event: PostedLinkButton) => {
-      if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (!shouldHandle(event, connectionId, manager)) return;
       if (handledEvents.has(event.id)) return;
       markHandled(event.id);
 
@@ -375,7 +375,7 @@ export function registerInteractionBridge(
   interactionService.on(
     "status-message:created",
     async (event: PostedStatusMessage) => {
-      if (!shouldHandle(event, platform, connectionId, manager)) return;
+      if (!shouldHandle(event, connectionId, manager)) return;
       if (handledEvents.has(event.id)) return;
       markHandled(event.id);
 
@@ -507,7 +507,6 @@ function registerActionHandlers(
 
 function shouldHandle(
   event: { teamId?: string; channelId: string; connectionId?: string },
-  platform: string,
   connectionId: string,
   manager: ChatInstanceManager
 ): boolean {

@@ -301,6 +301,6 @@ export function getTraceparent(span: Span | null): string | null {
   return `00-${ctx.traceId}-${ctx.spanId}-01`;
 }
 
+export type { Span, Tracer };
 // Re-export OpenTelemetry types for convenience
 export { SpanKind, SpanStatusCode };
-export type { Span, Tracer };

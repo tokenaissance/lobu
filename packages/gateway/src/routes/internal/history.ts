@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
-import { createLogger, verifyWorkerToken } from "@lobu/core";
+import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import { platformRegistry } from "../../platform";
+import { authenticateWorker } from "./worker-auth";
 
 const logger = createLogger("history-routes");
 
@@ -17,27 +18,8 @@ type WorkerContext = {
   };
 };
 
-/**
- * Create internal history routes (Hono)
- * Provides channel history to workers via MCP tool
- */
 export function createHistoryRoutes(): Hono<WorkerContext> {
   const router = new Hono<WorkerContext>();
-
-  // Worker authentication middleware
-  const authenticateWorker = async (c: any, next: () => Promise<void>) => {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ error: "Missing or invalid authorization" }, 401);
-    }
-    const workerToken = authHeader.substring(7);
-    const tokenData = verifyWorkerToken(workerToken);
-    if (!tokenData) {
-      return c.json({ error: "Invalid worker token" }, 401);
-    }
-    c.set("worker", tokenData);
-    await next();
-  };
 
   /**
    * Get channel history

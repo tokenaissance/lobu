@@ -730,7 +730,6 @@ function SkillContentToggle({ content }: { content: string }) {
       {expanded.value && (
         <div
           class="skill-content mt-1.5 p-2.5 bg-gray-50 border border-gray-200 rounded max-h-72 overflow-y-auto text-[11px] text-gray-700 leading-relaxed"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized markdown from skill manifest
           dangerouslySetInnerHTML={{ __html: html }}
         />
       )}

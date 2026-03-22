@@ -385,15 +385,11 @@ export class ScheduledWakeupService {
   }
 
   async listPending(deploymentName: string): Promise<ScheduledWakeup[]> {
-    return this.listPendingByIndexKey(
-      `${REDIS_INDEX_PREFIX}${deploymentName}`
-    );
+    return this.listPendingByIndexKey(`${REDIS_INDEX_PREFIX}${deploymentName}`);
   }
 
   async listPendingForAgent(agentId: string): Promise<ScheduledWakeup[]> {
-    return this.listPendingByIndexKey(
-      `${REDIS_AGENT_INDEX_PREFIX}${agentId}`
-    );
+    return this.listPendingByIndexKey(`${REDIS_AGENT_INDEX_PREFIX}${agentId}`);
   }
 
   async cancelByAgent(scheduleId: string, agentId: string): Promise<boolean> {

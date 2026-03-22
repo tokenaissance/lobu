@@ -8,11 +8,7 @@ const PROVIDER_API_KEY_ENV_VARS: Record<string, string> = {
 };
 
 function sanitizeProviderToken(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  return value.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 export function getApiKeyEnvVarForProvider(providerName: string): string {
@@ -22,7 +18,7 @@ export function getApiKeyEnvVarForProvider(providerName: string): string {
     return mapped;
   }
 
-  const sanitized = sanitizeProviderToken(providerName);
+  const sanitized = sanitizeProviderToken(normalizedProvider);
   if (!sanitized || sanitized === "provider") {
     return "API_KEY";
   }

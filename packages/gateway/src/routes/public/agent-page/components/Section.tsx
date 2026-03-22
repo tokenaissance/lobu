@@ -30,7 +30,6 @@ export function Section({
           if (e.key === "Enter" || e.key === " ") toggleSection(id);
         }}
       >
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: rendering pre-sanitized icon entity */}
         <span dangerouslySetInnerHTML={{ __html: icon }} />
         {title}
         {adminOnly && (

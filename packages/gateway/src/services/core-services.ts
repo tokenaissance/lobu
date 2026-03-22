@@ -196,18 +196,6 @@ export class CoreServices {
     await this.initializeIntegrationServices();
     logger.debug("Integration services initialized");
 
-    // Wire integration services into worker gateway (initialized in step 4)
-    if (
-      this.workerGateway &&
-      this.integrationConfigService &&
-      this.integrationCredentialStore
-    ) {
-      this.workerGateway.setIntegrationServices(
-        this.integrationConfigService,
-        this.integrationCredentialStore
-      );
-    }
-
     // Wire connection manager into integration OAuth module for config_changed notifications
     if (this.integrationOAuthModule && this.workerGateway) {
       this.integrationOAuthModule.setConnectionManager(
@@ -583,8 +571,6 @@ export class CoreServices {
     const mcpToolCache = new McpToolCache(redisClient);
     this.mcpProxy = new McpProxy(
       this.mcpConfigService,
-      mcpCredentialStore,
-      mcpInputStore,
       this.queue,
       mcpToolCache,
       this.grantStore

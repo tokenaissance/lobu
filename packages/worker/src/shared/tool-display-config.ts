@@ -73,6 +73,7 @@ export function getToolDisplayConfig(
   toolName: string
 ): ToolDisplayEntry | undefined {
   return (
-    TOOL_DISPLAY_CONFIG[toolName] ?? TOOL_DISPLAY_CONFIG_LOWER[toolName.toLowerCase()]
+    TOOL_DISPLAY_CONFIG[toolName] ??
+    TOOL_DISPLAY_CONFIG_LOWER[toolName.toLowerCase()]
   );
 }

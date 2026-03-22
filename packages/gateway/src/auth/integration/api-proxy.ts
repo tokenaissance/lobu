@@ -11,16 +11,24 @@ import type { IntegrationCredentialStore } from "./credential-store";
 
 const logger = createLogger("integration-api-proxy");
 
-/**
- * API proxy for integration requests.
- * Worker sends: POST /internal/integrations/:id/api
- * Gateway injects credentials and forwards to the actual API.
- */
+type WorkerContext = {
+  Variables: {
+    worker: {
+      userId: string;
+      conversationId: string;
+      channelId: string;
+      teamId?: string;
+      agentId?: string;
+      platform?: string;
+    };
+  };
+};
+
 export function createIntegrationApiProxy(
   configService: IntegrationConfigService,
   credentialStore: IntegrationCredentialStore
-): Hono {
-  const router = new Hono();
+): Hono<WorkerContext> {
+  const router = new Hono<WorkerContext>();
   const oauth2Client = new GenericOAuth2Client();
 
   /**
@@ -65,7 +73,8 @@ export function createIntegrationApiProxy(
 
         // Validate URL domain against configured apiDomains
         const parsedUrl = new URL(url);
-        const isAllowed = config.apiDomains.some((domain) => {
+        const apiDomains = config.apiDomains ?? [];
+        const isAllowed = apiDomains.some((domain) => {
           if (domain.startsWith(".")) {
             return parsedUrl.hostname.endsWith(domain);
           }
@@ -75,7 +84,7 @@ export function createIntegrationApiProxy(
         if (!isAllowed) {
           return c.json(
             {
-              error: `Domain ${parsedUrl.hostname} is not allowed for integration "${integrationId}". Allowed: ${config.apiDomains.join(", ")}`,
+              error: `Domain ${parsedUrl.hostname} is not allowed for integration "${integrationId}". Allowed: ${apiDomains.join(", ")}`,
             },
             403
           );

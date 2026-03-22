@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type {
+  IntegrationConfig,
   ProviderConfigEntry,
   SkillConfig,
   SystemSkillEntry,
@@ -56,6 +57,21 @@ export class SystemSkillsService {
     return this.rawLoaded.skills.map((entry) => this.toSkillConfig(entry));
   }
 
+  async getAllIntegrationConfigs(): Promise<Record<string, IntegrationConfig>> {
+    const config = await this.loadConfig();
+    if (!config) return {};
+    const result: Record<string, IntegrationConfig> = {};
+    for (const skill of config.skills) {
+      if (!skill.integrations) continue;
+      for (const [id, integrationConfig] of Object.entries(
+        skill.integrations
+      )) {
+        result[id] = integrationConfig;
+      }
+    }
+    return result;
+  }
+
   async getProviderConfigs(): Promise<Record<string, ProviderConfigEntry>> {
     const config = await this.loadConfig();
     if (!config) return {};
@@ -98,7 +114,7 @@ export class SystemSkillsService {
     ];
 
     if (entry.instructions?.trim()) {
-      lines.push("", "**Instructions:** " + entry.instructions.trim());
+      lines.push("", `**Instructions:** ${entry.instructions.trim()}`);
     }
 
     if (entry.description?.trim()) {

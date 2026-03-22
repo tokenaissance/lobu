@@ -89,6 +89,7 @@ export interface SystemSkillEntry {
   providers?: ProviderConfigEntry[];
   nixPackages?: string[];
   permissions?: string[];
+  integrations?: Record<string, IntegrationConfig>;
 }
 
 export interface SystemSkillsConfigFile {

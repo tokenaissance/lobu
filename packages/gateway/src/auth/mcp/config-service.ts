@@ -543,8 +543,7 @@ function buildHttpServerConfig(
         ? cloned.headers
         : undefined,
     loginUrl: typeof cloned.loginUrl === "string" ? cloned.loginUrl : undefined,
-    resource:
-      typeof cloned.resource === "string" ? cloned.resource : undefined,
+    resource: typeof cloned.resource === "string" ? cloned.resource : undefined,
   };
 }
 

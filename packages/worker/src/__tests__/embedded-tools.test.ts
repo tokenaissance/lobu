@@ -225,7 +225,7 @@ describe("callMcpTool", () => {
 
   test("uses correct URL format", async () => {
     let capturedUrl = "";
-    globalThis.fetch = async (url: any, opts: any) => {
+    globalThis.fetch = async (url: any) => {
       capturedUrl = typeof url === "string" ? url : url.toString();
       return new Response(
         JSON.stringify({
@@ -254,7 +254,7 @@ describe("callMcpTool", () => {
     };
 
     await callMcpTool(gw, "owletto", "test_tool", {});
-    expect(capturedHeaders["Authorization"]).toBe("Bearer test-token-123");
+    expect(capturedHeaders.Authorization).toBe("Bearer test-token-123");
     expect(capturedHeaders["Content-Type"]).toBe("application/json");
   });
 
