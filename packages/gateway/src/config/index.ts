@@ -162,7 +162,7 @@ export function loadEnvFile(envPath?: string): void {
  * "owletto" (default) → Owletto MCP plugin
  * "native" → @openclaw/native-memory (filesystem-based)
  */
-function buildMemoryPlugins(): PluginConfig[] {
+export function buildMemoryPlugins(): PluginConfig[] {
   const memoryPlugin = getOptionalEnv("MEMORY_PLUGIN", "owletto");
 
   if (memoryPlugin === "native") {

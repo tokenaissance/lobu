@@ -8,6 +8,7 @@ import { resolveInstalledProviders } from "../auth/provider-catalog";
 import type { AgentSettingsStore } from "../auth/settings";
 import { resolveEffectiveModelRef } from "../auth/settings/model-selection";
 import type { ChannelBindingService } from "../channels";
+import { buildMemoryPlugins } from "../config";
 import type { MessagePayload } from "../infrastructure/queue/queue-producer";
 import { platformAgentId } from "../spaces";
 
@@ -72,6 +73,10 @@ export async function resolveAgentOptions(
   }
   if (settings.pluginsConfig) {
     mergedOptions.pluginsConfig = settings.pluginsConfig;
+  }
+  // Apply default memory plugins if no pluginsConfig from settings or baseOptions
+  if (!mergedOptions.pluginsConfig) {
+    mergedOptions.pluginsConfig = { plugins: buildMemoryPlugins() };
   }
   if (settings.verboseLogging !== undefined) {
     mergedOptions.verboseLogging = settings.verboseLogging;

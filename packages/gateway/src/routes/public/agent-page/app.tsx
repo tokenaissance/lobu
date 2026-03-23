@@ -782,8 +782,75 @@ function App() {
             </div>
           )}
         </form>
+        {ctx.isAdmin && !ctx.isSandbox && <DeleteAgentSection />}
       </div>
     </SettingsContext.Provider>
+  );
+}
+
+function DeleteAgentSection() {
+  const ctx = useSettings();
+  const confirming = useSignal(false);
+  const deleting = useSignal(false);
+  const error = useSignal("");
+
+  async function handleDelete() {
+    deleting.value = true;
+    error.value = "";
+    try {
+      await api.deleteAgent(ctx.agentId);
+      window.location.href = "/agents";
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : "Failed to delete agent";
+      deleting.value = false;
+    }
+  }
+
+  return (
+    <div class="mt-8 border-t border-gray-200 pt-6">
+      {error.value && (
+        <div class="bg-red-100 text-red-800 px-3 py-2 rounded-lg text-xs mb-3">
+          {error.value}
+        </div>
+      )}
+      {confirming.value ? (
+        <div class="space-y-2">
+          <p class="text-xs text-gray-600">
+            This will permanently delete <strong>{ctx.agentId}</strong> and all
+            its data. This cannot be undone.
+          </p>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              disabled={deleting.value}
+              onClick={handleDelete}
+              class="px-4 py-2 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all disabled:opacity-60"
+            >
+              {deleting.value ? "Deleting..." : "Yes, Delete Agent"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                confirming.value = false;
+              }}
+              class="px-4 py-2 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            confirming.value = true;
+          }}
+          class="text-xs text-red-500 hover:text-red-700 transition-colors"
+        >
+          Delete this agent
+        </button>
+      )}
+    </div>
   );
 }
 
