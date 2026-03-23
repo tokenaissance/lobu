@@ -1,9 +1,9 @@
 ---
 title: MCP Proxy
-description: How the gateway proxies MCP requests and handles OAuth for integrations and MCP servers.
+description: How the gateway proxies MCP requests for workers.
 ---
 
-Workers never hold real credentials. The gateway resolves them at request time and proxies every outbound MCP and integration call.
+Workers never hold real credentials. The gateway resolves them at request time and proxies every outbound MCP call.
 
 ## Request flow
 
@@ -11,7 +11,7 @@ Every MCP URL a worker receives points back to the gateway with an `X-Mcp-Id` he
 
 1. Worker sends a JSON-RPC request to the gateway proxy.
 2. Gateway authenticates the worker JWT, extracts `agentId` / `userId`.
-3. Looks up credentials for that user — auto-refreshes expired tokens.
+3. Looks up credentials for that user via the device-auth flow — auto-refreshes expired tokens.
 4. Injects the `Authorization` header, forwards to the upstream MCP.
 5. Response flows back to the worker.
 
@@ -26,34 +26,16 @@ MCP servers come from two sources, merged per agent:
 
 Global MCPs take precedence when IDs collide.
 
-## OAuth for MCP servers
+## Authentication
 
-1. User clicks "Login" for an unauthenticated MCP.
-2. Gateway redirects to the OAuth provider.
-3. User grants permissions, provider redirects to `/api/v1/auth/mcp/callback`.
-4. Gateway exchanges the code for tokens, stores them in Redis keyed by `(agentId, mcpId)`.
-5. Future proxy requests inject the token automatically.
+MCP server authentication uses a device-code flow managed through Owletto:
 
-If an MCP has no static OAuth config, the gateway tries RFC 8414 discovery (`/.well-known/oauth-authorization-server`) and RFC 7591 dynamic client registration.
+1. Worker attempts to use an MCP tool that requires auth.
+2. Gateway initiates a device-code flow and sends the user a login link.
+3. User authenticates via the link, credentials are stored in Redis per `(agentId, userId, mcpId)`.
+4. Future proxy requests inject the token automatically, with auto-refresh on expiry.
 
-## OAuth integrations
-
-Integrations (Google, GitHub, Microsoft 365, etc.) use the same proxy pattern with extras:
-
-- **Incremental auth** — only requests new scopes, preserves existing grants.
-- **Multi-account** — users can connect multiple accounts per integration.
-- **Thread resumption** — after auth completes, the gateway notifies the agent's thread so it can retry.
-
-### How the agent triggers auth
-
-1. Worker calls the gateway's internal integration endpoint.
-2. If credentials exist, gateway injects them and proxies the request.
-3. If not, returns an auth-required response — agent sends the user a connect button.
-4. After OAuth, agent is notified and retries.
-
-### Scopes
-
-Each integration declares `default` and `available` scopes in `system-skills.json`. Agents request from the `available` list; the settings page shows users exactly what's being requested.
+Third-party API integrations (GitHub, Google, etc.) are handled entirely by Owletto MCP servers — the gateway acts as a thin proxy.
 
 ## Agent-driven installation
 
@@ -83,7 +65,7 @@ Agents can add MCPs at runtime:
 }
 ```
 
-With OAuth:
+With custom headers:
 
 ```json
 {
@@ -91,23 +73,10 @@ With OAuth:
   "name": "My MCP",
   "url": "https://mcp.example.com",
   "type": "sse",
-  "oauth": {
-    "authUrl": "https://provider.com/oauth/authorize",
-    "tokenUrl": "https://provider.com/oauth/token",
-    "clientId": "YOUR_CLIENT_ID",
-    "clientSecret": "${env:MY_CLIENT_SECRET}",
-    "scopes": ["read", "write"]
+  "headers": {
+    "Authorization": "Bearer ${env:MY_MCP_TOKEN}"
   }
 }
 ```
 
-Client secrets support `${env:VAR_NAME}` substitution so secrets stay in environment variables.
-
-### Environment variables
-
-| Variable | Purpose |
-|----------|---------|
-| `PUBLIC_GATEWAY_URL` | Public URL for OAuth callbacks |
-| `*_CLIENT_ID` / `*_CLIENT_SECRET` | Per-provider OAuth credentials via `${env:...}` |
-
-OAuth callback URL: `${PUBLIC_GATEWAY_URL}/api/v1/auth/mcp/callback`.
+Header values support `${env:VAR_NAME}` substitution so secrets stay in environment variables.

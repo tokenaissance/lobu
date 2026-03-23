@@ -84,11 +84,33 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
 
     // Create just-bash instance with ReadWriteFs scoped to workspace
     const bashFs = new ReadWriteFs({ root: workspaceDir });
+
+    // Build network config from allowed domains so curl works in just-bash
+    const allowedDomains = messageData?.networkConfig?.allowedDomains ?? [];
+    const network =
+      allowedDomains.length > 0
+        ? {
+            allowedUrlPrefixes: allowedDomains.flatMap((domain: string) => [
+              `https://${domain}/`,
+              `http://${domain}/`,
+            ]),
+            allowedMethods: [
+              "GET",
+              "HEAD",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+            ] as ("GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE")[],
+          }
+        : undefined;
+
     const bashInstance = new Bash({
       fs: bashFs,
       cwd: "/",
       env: commonEnvVars,
       executionLimits: EMBEDDED_BASH_LIMITS,
+      ...(network && { network }),
     });
     const bashOps = createJustBashOperations(bashInstance);
 

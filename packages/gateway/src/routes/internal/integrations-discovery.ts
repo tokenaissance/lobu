@@ -1,20 +1,18 @@
 /**
- * Unified Internal Integrations Discovery Routes
+ * Internal Integrations Discovery Routes
  *
  * Single search endpoint for workers to discover both skills and MCP servers.
  * Resolve endpoint for fetching full manifest of either type by ID.
  * Installed endpoint for listing agent's active capabilities.
+ * Install endpoint for auto-enabling system skills.
+ *
+ * NOTE: OAuth integration configs have moved to Owletto. Skills no longer
+ * declare `integrations` with OAuth/scopes/apiDomains. Auth for third-party
+ * APIs is handled by Owletto MCP tools at use time.
  */
 
-import {
-  createLogger,
-  type SkillConfig,
-  type SkillIntegration,
-  verifyWorkerToken,
-} from "@lobu/core";
+import { createLogger, type SkillConfig, verifyWorkerToken } from "@lobu/core";
 import { Hono } from "hono";
-import type { IntegrationConfigService } from "../../auth/integration/config-service";
-import type { IntegrationCredentialStore } from "../../auth/integration/credential-store";
 import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
 import type { GrantStore } from "../../permissions/grant-store";
 import { McpDiscoveryService } from "../../services/mcp-discovery";
@@ -40,8 +38,6 @@ export interface IntegrationsDiscoveryConfig {
   coordinator: SkillRegistryCoordinator;
   mcpDiscovery?: McpDiscoveryService;
   agentSettingsStore?: AgentSettingsStore;
-  integrationConfigService?: IntegrationConfigService;
-  integrationCredentialStore?: IntegrationCredentialStore;
   systemConfigResolver?: SystemConfigResolver;
   grantStore?: GrantStore;
 }
@@ -212,7 +208,6 @@ export function createIntegrationsDiscoveryRoutes(
         id: string;
         name: string;
         enabled: boolean;
-        integrations?: SkillIntegration[];
       }> = [];
       const integrations: Array<{
         id: string;
@@ -237,7 +232,6 @@ export function createIntegrationsDiscoveryRoutes(
             id: skill.repo,
             name: skill.name,
             enabled: skill.enabled,
-            integrations: skill.integrations,
           });
         }
 
@@ -250,39 +244,6 @@ export function createIntegrationsDiscoveryRoutes(
             id,
             enabled: cfg.enabled !== false,
             type: typeof cfg.url === "string" ? "sse" : "stdio",
-          });
-        }
-      }
-
-      // Connected OAuth integrations
-      if (
-        config.integrationConfigService &&
-        config.integrationCredentialStore
-      ) {
-        const allConfigs = await config.integrationConfigService.getAll();
-        for (const [id, integrationConfig] of Object.entries(allConfigs)) {
-          const accounts = await config.integrationCredentialStore.listAccounts(
-            agentId,
-            id
-          );
-          // Check if OAuth credentials are configured for this agent
-          let configured = true;
-          if (config.systemConfigResolver) {
-            configured = await config.systemConfigResolver.isOAuthConfigured(
-              id,
-              agentId
-            );
-          }
-          integrations.push({
-            id,
-            label: integrationConfig.label,
-            authType: integrationConfig.authType || "oauth",
-            connected: accounts.length > 0,
-            configured,
-            accounts: accounts.map((a) => ({
-              accountId: a.accountId,
-              grantedScopes: a.credentials.grantedScopes || [],
-            })),
           });
         }
       }
@@ -341,18 +302,9 @@ export function createIntegrationsDiscoveryRoutes(
 
       if (content) {
         // System skill with all deps satisfied → auto-install
-        if (
-          source === "system" &&
-          config.agentSettingsStore &&
-          config.integrationCredentialStore
-        ) {
+        if (source === "system" && config.agentSettingsStore) {
           const settings = await config.agentSettingsStore.getSettings(agentId);
-          const missing = await checkRequirements(
-            content,
-            settings,
-            config.integrationCredentialStore,
-            agentId
-          );
+          const missing = checkRequirements(content, settings);
 
           if (missing.length === 0) {
             await applySkillToSettings(
@@ -362,18 +314,6 @@ export function createIntegrationsDiscoveryRoutes(
               content,
               !!upgrade
             );
-
-            // Sync auto-granted apiDomains from the full enabled skill set
-            if (config.grantStore && config.agentSettingsStore) {
-              const refreshedSettings =
-                await config.agentSettingsStore.getSettings(agentId);
-              await syncSkillApiDomainGrants(
-                config.agentSettingsStore,
-                config.grantStore,
-                agentId,
-                refreshedSettings?.skillsConfig?.skills || []
-              );
-            }
 
             logger.info("Auto-installed system skill", { id, agentId });
             return c.json({
@@ -448,30 +388,18 @@ export function createIntegrationsDiscoveryRoutes(
 // Helpers for install endpoint
 // ---------------------------------------------------------------------------
 
-/** Check all skill requirements and return list of unsatisfied dependencies. */
-async function checkRequirements(
+/** Check skill requirements and return list of unsatisfied dependencies. */
+function checkRequirements(
   content: SkillContent,
   settings: {
     mcpServers?: Record<string, unknown>;
     installedProviders?: Array<{ providerId: string }>;
-  } | null,
-  credentialStore: IntegrationCredentialStore,
-  agentId: string
-): Promise<string[]> {
+  } | null
+): string[] {
   const missing: string[] = [];
 
-  // Check integrations (needs credential store lookup)
-  if (content.integrations?.length) {
-    for (const integration of content.integrations) {
-      const accounts = await credentialStore.listAccounts(
-        agentId,
-        integration.id
-      );
-      if (accounts.length === 0) {
-        missing.push(`integration:${integration.id} (not connected)`);
-      }
-    }
-  }
+  // Integration dependencies are handled by Owletto at use time.
+  // Skills install freely; auth errors surface when tools are called.
 
   // Check providers
   if (content.providers?.length) {
@@ -498,59 +426,6 @@ async function checkRequirements(
   return missing;
 }
 
-/** Sync apiDomains from enabled skills into the GrantStore. */
-async function syncSkillApiDomainGrants(
-  agentSettingsStore: AgentSettingsStore,
-  grantStore: GrantStore,
-  agentId: string,
-  skills: SkillConfig[]
-): Promise<void> {
-  const settings = await agentSettingsStore.getSettings(agentId);
-  const previousDomains = new Set(settings?.skillAutoGrantedDomains || []);
-  const nextDomains = new Set(collectSkillApiDomains(skills));
-
-  const domainsToGrant = [...nextDomains].filter(
-    (domain) => !previousDomains.has(domain)
-  );
-  const domainsToRevoke = [...previousDomains].filter(
-    (domain) => !nextDomains.has(domain)
-  );
-
-  await Promise.all(
-    domainsToGrant.map((domain) => grantStore.grant(agentId, domain, null))
-  );
-  await Promise.all(
-    domainsToRevoke.map((domain) => grantStore.revoke(agentId, domain))
-  );
-
-  const previousList = [...previousDomains].sort();
-  const nextList = [...nextDomains].sort();
-  if (previousList.join("\n") !== nextList.join("\n")) {
-    await agentSettingsStore.updateSettings(agentId, {
-      skillAutoGrantedDomains: nextList,
-    });
-  }
-
-  logger.info("Synced apiDomains from skill integrations", {
-    agentId,
-    grantedDomains: domainsToGrant,
-    revokedDomains: domainsToRevoke,
-  });
-}
-
-function collectSkillApiDomains(skills: SkillConfig[]): string[] {
-  const domains = new Set<string>();
-  for (const skill of skills) {
-    if (!skill.enabled || !skill.integrations) continue;
-    for (const integration of skill.integrations) {
-      for (const domain of integration.apiDomains || []) {
-        domains.add(domain);
-      }
-    }
-  }
-  return [...domains].sort();
-}
-
 /** Enable a skill in agent settings (add or update). */
 async function applySkillToSettings(
   store: AgentSettingsStore,
@@ -568,7 +443,6 @@ async function applySkillToSettings(
     name: content.name,
     description: content.description,
     enabled: true,
-    integrations: content.integrations,
     mcpServers: content.mcpServers,
     nixPackages: content.nixPackages,
     permissions: content.permissions,

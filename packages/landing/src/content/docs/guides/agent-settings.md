@@ -10,7 +10,7 @@ Agent settings control behavior of each worker session.
 - Provider and model
 - Allowed/disallowed tools
 - Skills/plugins and MCP server config
-- Integration connections and grants
+- Permission grants (network domains)
 - Environment variables needed by tools/providers
 
 ## How Settings Apply
@@ -23,7 +23,7 @@ Agent settings control behavior of each worker session.
 
 - Keep tool permissions minimal.
 - Add only required domains/grants.
-- Prefer explicit integrations over broad API-key exposure.
+- Prefer explicit permission grants over broad access.
 
 ## Memory Plugin Defaults
 

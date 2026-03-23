@@ -1,4 +1,4 @@
-import { createLogger, encrypt, decrypt, verifyWorkerToken } from "@lobu/core";
+import { createLogger, decrypt, encrypt, verifyWorkerToken } from "@lobu/core";
 import { Hono } from "hono";
 import type Redis from "ioredis";
 import { GenericDeviceCodeClient } from "../../auth/external/device-code-client";

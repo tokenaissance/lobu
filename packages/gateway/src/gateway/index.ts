@@ -351,17 +351,6 @@ export class WorkerGateway {
         }
       }
 
-      // Downgrade auth status when an authenticated MCP returned no tools
-      // (likely stale/expired credentials that the upstream rejected)
-      for (const mcp of contextData.mcpStatus) {
-        if (mcp.authenticated && mcp.requiresAuth && !mcpTools[mcp.id]) {
-          logger.warn(
-            `MCP "${mcp.id}" has stored credentials but returned no tools — marking as unauthenticated`
-          );
-          mcp.authenticated = false;
-        }
-      }
-
       // Resolve dynamic provider configuration
       const agentSettings =
         this.agentSettingsStore && agentId

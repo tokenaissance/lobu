@@ -6,20 +6,12 @@ import { AgentMetadataStore } from "../auth/agent-metadata-store";
 import { ApiKeyProviderModule } from "../auth/api-key-provider-module";
 import { ChatGPTOAuthModule } from "../auth/chatgpt";
 import { ClaudeOAuthModule } from "../auth/claude/oauth-module";
-import { IntegrationConfigService } from "../auth/integration/config-service";
-import { IntegrationCredentialStore } from "../auth/integration/credential-store";
-import { IntegrationOAuthModule } from "../auth/integration/oauth-module";
 import { McpConfigService } from "../auth/mcp/config-service";
-import { McpCredentialStore } from "../auth/mcp/credential-store";
-import { McpInputStore } from "../auth/mcp/input-store";
-import { McpOAuthModule } from "../auth/mcp/oauth-module";
 import { McpProxy } from "../auth/mcp/proxy";
 import { McpToolCache } from "../auth/mcp/tool-cache";
 import { OAuthClient } from "../auth/oauth/client";
-import { OAuthDiscoveryService } from "../auth/oauth/discovery";
 import { CLAUDE_PROVIDER } from "../auth/oauth/providers";
 import {
-  createMcpOAuthStateStore,
   createOAuthStateStore,
   OAuthStateStore,
   type ProviderOAuthStateStore,
@@ -61,17 +53,6 @@ const logger = createLogger("core-services");
 
 /**
  * Core Services - Centralized service initialization and lifecycle management
- *
- * Manages all platform-agnostic services shared across platform adapters.
- * Organized into logical groups:
- *
- * 1. Queue Services: Redis queue and producer for job management
- * 2. Session Services: Session tracking and instruction providers
- * 3. Claude Services: OAuth, credentials, model preferences, Anthropic proxy
- * 4. MCP Services: Config, discovery, OAuth, proxy for Model Context Protocol
- * 5. Worker Gateway: Worker connection management and routing
- *
- * Initialization order is important - dependencies are initialized in sequence.
  */
 export class CoreServices {
   // ============================================================================
@@ -100,7 +81,6 @@ export class CoreServices {
   // MCP Services
   // ============================================================================
   private mcpConfigService?: McpConfigService;
-  private mcpCredentialStore?: McpCredentialStore;
   private mcpProxy?: McpProxy;
 
   // ============================================================================
@@ -109,22 +89,10 @@ export class CoreServices {
   private grantStore?: GrantStore;
 
   // ============================================================================
-  // OAuth Modules
-  // ============================================================================
-  private mcpOAuthModule?: McpOAuthModule;
-
-  // ============================================================================
   // System Skills Service
   // ============================================================================
   private systemSkillsService?: SystemSkillsService;
   private systemConfigResolver?: SystemConfigResolver;
-
-  // ============================================================================
-  // Integration Services
-  // ============================================================================
-  private integrationConfigService?: IntegrationConfigService;
-  private integrationCredentialStore?: IntegrationCredentialStore;
-  private integrationOAuthModule?: IntegrationOAuthModule;
 
   // ============================================================================
   // Worker Gateway
@@ -191,29 +159,6 @@ export class CoreServices {
     // 4. MCP ecosystem (depends on queue and Claude services)
     await this.initializeMcpServices();
     logger.debug("MCP services initialized");
-
-    // 4b. Integration services (depends on queue)
-    await this.initializeIntegrationServices();
-    logger.debug("Integration services initialized");
-
-    // Wire integration services into worker gateway (initialized in step 4)
-    if (
-      this.workerGateway &&
-      this.integrationConfigService &&
-      this.integrationCredentialStore
-    ) {
-      this.workerGateway.setIntegrationServices(
-        this.integrationConfigService,
-        this.integrationCredentialStore
-      );
-    }
-
-    // Wire connection manager into integration OAuth module for config_changed notifications
-    if (this.integrationOAuthModule && this.workerGateway) {
-      this.integrationOAuthModule.setConnectionManager(
-        this.workerGateway.getConnectionManager()
-      );
-    }
 
     // 5. Queue producer (depends on queue being ready)
     await this.initializeQueueProducer();
@@ -443,24 +388,19 @@ export class CoreServices {
     }
     this.systemSkillsService = new SystemSkillsService(systemSkillsUrl);
     this.systemConfigResolver = new SystemConfigResolver(
-      this.systemSkillsService,
-      this.agentSettingsStore
+      this.systemSkillsService
     );
     logger.debug(`System skills config source: ${systemSkillsUrl}`);
 
-    if (!this.integrationConfigService) {
-      this.integrationConfigService = new IntegrationConfigService(
-        this.systemConfigResolver
-      );
-    }
     this.transcriptionService?.setProviderConfigSource(() =>
-      this.integrationConfigService
-        ? this.integrationConfigService.getProviders()
+      this.systemConfigResolver
+        ? this.systemConfigResolver.getProviderConfigs()
         : Promise.resolve({})
     );
 
     // Register config-driven providers from system skills
-    const configProviders = await this.integrationConfigService.getProviders();
+    const configProviders =
+      await this.systemConfigResolver.getProviderConfigs();
     const registeredIds = new Set(
       getModelProviderModules().map((m) => m.providerId)
     );
@@ -524,67 +464,23 @@ export class CoreServices {
 
     const redisClient = this.queue.getRedisClient();
 
-    // Initialize MCP credential and state management
-    this.mcpCredentialStore = new McpCredentialStore(redisClient);
-    const mcpCredentialStore = this.mcpCredentialStore;
-    const mcpOAuthStateStore = createMcpOAuthStateStore(redisClient);
-    const mcpInputStore = new McpInputStore(this.queue);
-
-    // Initialize MCP OAuth discovery service
-    const mcpDiscoveryService = new OAuthDiscoveryService({
-      cacheStore: {
-        get: async (key: string) => {
-          try {
-            return await redisClient.get(key);
-          } catch (error) {
-            logger.error("Failed to get from cache", { key, error });
-            return null;
-          }
-        },
-        set: async (key: string, value: string, ttl: number) => {
-          try {
-            await redisClient.set(key, value, "EX", ttl);
-          } catch (error) {
-            logger.error("Failed to set cache", { key, error });
-          }
-        },
-        delete: async (key: string) => {
-          try {
-            await redisClient.del(key);
-          } catch (error) {
-            logger.error("Failed to delete from cache", { key, error });
-          }
-        },
-      },
-      callbackUrl: this.config.mcp.callbackUrl,
-      protocolVersion: "2025-03-26",
-      cacheTtl: 86400,
-    });
-    logger.debug("MCP OAuth Discovery Service initialized");
-
-    // Initialize MCP config service
+    // Initialize simplified MCP config service (no OAuth discovery)
     this.mcpConfigService = new McpConfigService({
-      discoveryService: mcpDiscoveryService,
-      credentialStore: mcpCredentialStore,
-      inputStore: mcpInputStore,
       agentSettingsStore: this.agentSettingsStore,
       configResolver: this.systemConfigResolver,
     });
 
     // Initialize instruction service (needed by WorkerGateway)
-    // Pass agentSettingsStore so skills instructions can be fetched per-agent
     this.instructionService = new InstructionService(
       this.mcpConfigService,
       this.agentSettingsStore
     );
     logger.debug("Instruction service initialized");
 
-    // Initialize MCP tool cache and proxy (before worker gateway so it can use the proxy)
+    // Initialize MCP tool cache and proxy
     const mcpToolCache = new McpToolCache(redisClient);
     this.mcpProxy = new McpProxy(
       this.mcpConfigService,
-      mcpCredentialStore,
-      mcpInputStore,
       this.queue,
       mcpToolCache,
       this.grantStore
@@ -610,95 +506,10 @@ export class CoreServices {
     );
     logger.debug("Worker gateway initialized");
 
-    // Discover OAuth capabilities for all MCP servers
-    logger.debug("Discovering OAuth capabilities for MCP servers...");
-    await this.mcpConfigService.enrichWithDiscovery();
-    logger.debug("MCP OAuth discovery completed");
-
-    // Register MCP OAuth module
-    // Enable proactive MCP credential refresh in the token refresh job
-    if (
-      this.tokenRefreshJob &&
-      this.mcpCredentialStore &&
-      this.mcpConfigService
-    ) {
-      const { GenericOAuth2Client } = await import(
-        "../auth/oauth/generic-client"
-      );
-      this.tokenRefreshJob.setMcpDeps({
-        mcpCredentialStore: this.mcpCredentialStore,
-        mcpConfigService: this.mcpConfigService,
-        oauth2Client: new GenericOAuth2Client(),
-      });
-    }
-
-    this.mcpOAuthModule = new McpOAuthModule(
-      this.mcpConfigService,
-      mcpCredentialStore,
-      mcpOAuthStateStore,
-      mcpInputStore,
-      this.config.mcp.publicGatewayUrl,
-      this.config.mcp.callbackUrl,
-      this.grantStore,
-      this.queue
-    );
-    moduleRegistry.register(this.mcpOAuthModule);
-    logger.debug("MCP OAuth module registered");
-
     // Discover and initialize all available modules
     await moduleRegistry.registerAvailableModules();
     await moduleRegistry.initAll();
     logger.debug("Modules initialized");
-  }
-
-  // ============================================================================
-  // 4b. Integration Services Initialization
-  // ============================================================================
-
-  private async initializeIntegrationServices(): Promise<void> {
-    if (!this.queue) {
-      throw new Error("Queue must be initialized before integration services");
-    }
-
-    if (!this.integrationConfigService) {
-      logger.debug(
-        "No integration config service available, integrations disabled"
-      );
-      return;
-    }
-
-    // Check if there are any integrations configured
-    const integrationConfigs = await this.integrationConfigService.getAll();
-    if (Object.keys(integrationConfigs).length === 0) {
-      logger.debug(
-        "No integrations found in system skills, integration services disabled"
-      );
-      return;
-    }
-
-    const redisClient = this.queue.getRedisClient();
-
-    this.integrationCredentialStore = new IntegrationCredentialStore(
-      redisClient
-    );
-
-    // Reuse MCP OAuth state store for integration OAuth flows
-    const mcpOAuthStateStore = createMcpOAuthStateStore(redisClient);
-
-    const callbackUrl = `${this.config.mcp.publicGatewayUrl}/api/v1/auth/integration/callback`;
-
-    this.integrationOAuthModule = new IntegrationOAuthModule(
-      this.integrationConfigService,
-      this.integrationCredentialStore,
-      mcpOAuthStateStore,
-      this.config.mcp.publicGatewayUrl,
-      callbackUrl,
-      this.queue
-    );
-
-    logger.debug(
-      `Integration services initialized (${Object.keys(integrationConfigs).length} integration(s))`
-    );
   }
 
   // ============================================================================
@@ -749,7 +560,7 @@ export class CoreServices {
       await this.queue.stop();
     }
 
-    logger.info("✅ Core services shutdown complete");
+    logger.info("Core services shutdown complete");
   }
 
   // ============================================================================
@@ -782,10 +593,6 @@ export class CoreServices {
     return this.mcpConfigService;
   }
 
-  getMcpCredentialStore(): McpCredentialStore | undefined {
-    return this.mcpCredentialStore;
-  }
-
   getModelPreferenceStore(): ModelPreferenceStore | undefined {
     return this.modelPreferenceStore;
   }
@@ -812,10 +619,6 @@ export class CoreServices {
     if (!this.interactionService)
       throw new Error("Interaction service not initialized");
     return this.interactionService;
-  }
-
-  getMcpOAuthModule(): McpOAuthModule | undefined {
-    return this.mcpOAuthModule;
   }
 
   getAgentSettingsStore(): AgentSettingsStore {
@@ -886,18 +689,6 @@ export class CoreServices {
 
   getSystemConfigResolver(): SystemConfigResolver | undefined {
     return this.systemConfigResolver;
-  }
-
-  getIntegrationConfigService(): IntegrationConfigService | undefined {
-    return this.integrationConfigService;
-  }
-
-  getIntegrationCredentialStore(): IntegrationCredentialStore | undefined {
-    return this.integrationCredentialStore;
-  }
-
-  getIntegrationOAuthModule(): IntegrationOAuthModule | undefined {
-    return this.integrationOAuthModule;
   }
 
   getClaimService(): ClaimService | undefined {

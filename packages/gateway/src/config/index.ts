@@ -119,7 +119,6 @@ export interface GatewayConfig {
   orchestration: OrchestratorConfig;
   mcp: {
     publicGatewayUrl: string;
-    callbackUrl: string;
   };
   health: {
     checkIntervalMs: number;
@@ -196,10 +195,6 @@ export function buildGatewayConfig(): GatewayConfig {
     "PUBLIC_GATEWAY_URL",
     DEFAULTS.PUBLIC_GATEWAY_URL
   );
-  const callbackUrl = publicGatewayUrl
-    ? `${publicGatewayUrl}/api/v1/auth/mcp/callback`
-    : "";
-
   // Build configuration
   const config: GatewayConfig = {
     agentDefaults: {
@@ -226,7 +221,7 @@ export function buildGatewayConfig(): GatewayConfig {
             enabled: true,
             config: {
               mcpUrl: "http://gateway:8080/mcp/owletto",
-              tokenCommand: "echo $WORKER_TOKEN",
+              gatewayAuthUrl: "http://gateway:8080",
             },
           },
         ],
@@ -366,7 +361,6 @@ export function buildGatewayConfig(): GatewayConfig {
     },
     mcp: {
       publicGatewayUrl,
-      callbackUrl,
     },
     health: {
       checkIntervalMs: getOptionalNumber(
@@ -410,7 +404,6 @@ export function displayGatewayConfig(config: GatewayConfig): void {
   console.log(
     `  Public Gateway: ${config.mcp.publicGatewayUrl || "(not set)"}`
   );
-  console.log(`  OAuth Callback: ${config.mcp.callbackUrl || "(not set)"}`);
 
   console.log("\nOrchestration:");
   console.log(

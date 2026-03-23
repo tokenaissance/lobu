@@ -1,21 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  IntegrationConfig,
-  ProviderConfigEntry,
-  SkillConfig,
-} from "@lobu/core";
+import type { ProviderConfigEntry, SkillConfig } from "@lobu/core";
 import { SystemConfigResolver } from "../services/system-config-resolver";
 
 class MockSystemSkillsService {
   constructor(
-    private readonly integrations: Record<string, IntegrationConfig>,
     private readonly providers: Record<string, ProviderConfigEntry>,
     private readonly skills: SkillConfig[]
   ) {}
-
-  async getAllIntegrationConfigs(): Promise<Record<string, IntegrationConfig>> {
-    return this.integrations;
-  }
 
   async getProviderConfigs(): Promise<Record<string, ProviderConfigEntry>> {
     return this.providers;
@@ -26,107 +17,10 @@ class MockSystemSkillsService {
   }
 }
 
-class MockAgentSettingsStore {
-  constructor(private readonly settings: Record<string, any>) {}
-
-  async getSettings(agentId: string): Promise<any> {
-    return this.settings[agentId] || null;
-  }
-}
-
-describe("SystemConfigResolver integrations", () => {
-  test("merges skill-declared scopes and apiDomains into integration config", async () => {
-    const systemSkills = new MockSystemSkillsService(
-      {
-        github: {
-          label: "GitHub",
-          authType: "oauth",
-          scopes: {
-            default: ["read:user"],
-            available: ["read:user", "repo"],
-          },
-          apiDomains: ["api.github.com"],
-        },
-      },
-      {},
-      []
-    );
-
-    const settingsStore = new MockAgentSettingsStore({
-      "agent-1": {
-        skillsConfig: {
-          skills: [
-            {
-              enabled: true,
-              integrations: [
-                {
-                  id: "github",
-                  scopes: ["repo"],
-                  apiDomains: ["raw.githubusercontent.com"],
-                },
-              ],
-            },
-          ],
-        },
-      },
-    });
-
-    const resolver = new SystemConfigResolver(
-      systemSkills as any,
-      settingsStore as any
-    );
-
-    const merged = await resolver.getIntegrationConfig("github", "agent-1");
-
-    expect(merged).not.toBeNull();
-    expect(merged?.scopes?.default).toEqual(["read:user", "repo"]);
-    expect(merged?.apiDomains).toEqual([
-      "api.github.com",
-      "raw.githubusercontent.com",
-    ]);
-  });
-
-  test("creates scopes block when base config has no scopes", async () => {
-    const resolver = new SystemConfigResolver(
-      new MockSystemSkillsService(
-        {
-          notion: {
-            label: "Notion",
-            authType: "oauth",
-            apiDomains: ["api.notion.com"],
-          },
-        },
-        {},
-        []
-      ) as any,
-      new MockAgentSettingsStore({
-        "agent-1": {
-          skillsConfig: {
-            skills: [
-              {
-                enabled: true,
-                integrations: [{ id: "notion", scopes: ["pages.read"] }],
-              },
-            ],
-          },
-        },
-      }) as any
-    );
-
-    const merged = await resolver.getIntegrationConfig("notion", "agent-1");
-
-    expect(merged?.scopes).toEqual({
-      default: ["pages.read"],
-      available: ["pages.read"],
-    });
-  });
-});
-
 describe("SystemConfigResolver MCP and provider resolution", () => {
   test("builds global MCP server map and registry entries from system skills", async () => {
     const resolver = new SystemConfigResolver(
       new MockSystemSkillsService(
-        {},
         {
           groq: {
             displayName: "Groq",

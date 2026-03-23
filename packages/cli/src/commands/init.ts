@@ -5,13 +5,13 @@ import { join } from "node:path";
 import chalk from "chalk";
 import inquirer from "inquirer";
 import ora from "ora";
+import { secretsSetCommand } from "../commands/secrets.js";
 import {
   isIntegrationSkill,
   isProviderSkill,
   loadSkillsRegistry,
   type RegistrySkill,
 } from "../commands/skills/registry.js";
-import { secretsSetCommand } from "../commands/secrets.js";
 import { renderTemplate } from "../utils/template.js";
 
 export async function initCommand(

@@ -46,111 +46,8 @@ export function MessageBanners() {
           </div>
         </div>
       )}
-      <PendingApiKeysBanner />
       <PrefillBanner />
     </>
-  );
-}
-
-function PendingApiKeysBanner() {
-  const ctx = useSettings();
-
-  // Derive pending API-key integrations from skills + integrationStatus
-  const pending: { id: string; label: string }[] = [];
-  const seen = new Set<string>();
-  for (const skill of ctx.skills.value) {
-    if (!skill.enabled || !skill.integrations) continue;
-    for (const ig of skill.integrations) {
-      if (ig.authType !== "api-key" || seen.has(ig.id)) continue;
-      seen.add(ig.id);
-      const status = ctx.integrationStatus.value[ig.id];
-      if (!status?.connected) {
-        pending.push({ id: ig.id, label: ig.label || ig.id });
-      }
-    }
-  }
-
-  if (pending.length === 0) return null;
-
-  return (
-    <div class="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-4">
-      <div class="flex items-start gap-2 mb-3">
-        <span class="text-lg">&#128273;</span>
-        <div>
-          <h3 class="text-sm font-semibold text-amber-900">API key required</h3>
-          <p class="text-xs text-amber-700 mt-0.5">
-            Enter your API key to activate{" "}
-            {pending.length === 1 ? "this integration" : "these integrations"}.
-          </p>
-        </div>
-      </div>
-      <div class="space-y-2">
-        {pending.map((integration) => (
-          <PendingApiKeyRow key={integration.id} integration={integration} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PendingApiKeyRow({
-  integration,
-}: {
-  integration: { id: string; label: string };
-}) {
-  const ctx = useSettings();
-  const keyValue = useSignal("");
-  const saving = useSignal(false);
-  const error = useSignal("");
-
-  async function handleSave() {
-    const key = keyValue.value.trim();
-    if (!key) return;
-    saving.value = true;
-    error.value = "";
-    try {
-      await api.saveIntegrationApiKey(ctx.agentId, integration.id, key);
-      ctx.integrationStatus.value = {
-        ...ctx.integrationStatus.value,
-        [integration.id]: {
-          connected: true,
-          accounts: [{ accountId: "default", grantedScopes: [] }],
-          availableScopes:
-            ctx.integrationStatus.value[integration.id]?.availableScopes || [],
-        },
-      };
-      keyValue.value = "";
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "Failed to save";
-    } finally {
-      saving.value = false;
-    }
-  }
-
-  return (
-    <div class="space-y-1">
-      <p class="text-xs font-medium text-amber-900">{integration.label}</p>
-      <div class="flex items-center gap-1.5">
-        <input
-          type="password"
-          value={keyValue.value}
-          onInput={(e) => {
-            keyValue.value = (e.target as HTMLInputElement).value;
-          }}
-          placeholder="Paste API key..."
-          class="flex-1 px-2 py-1.5 border border-amber-200 rounded text-xs bg-white focus:border-amber-500 focus:ring-1 focus:ring-amber-200 outline-none"
-        />
-        <button
-          type="button"
-          disabled={saving.value || !keyValue.value.trim()}
-          onClick={handleSave}
-          class="px-3 py-1.5 text-xs font-semibold rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-        >
-          {saving.value ? "Saving..." : "Save"}
-        </button>
-      </div>
-      {error.value && <p class="text-xs text-red-600">{error.value}</p>}
-    </div>
   );
 }
 
@@ -158,10 +55,6 @@ function PrefillBanner() {
   const ctx = useSettings();
   const resolvedSkills = useSignal<ResolvedSkillDetail[]>([]);
   const skillsLoading = useSignal(false);
-  const oauthCredentials = useSignal<
-    Record<string, { clientId: string; clientSecret: string }>
-  >({});
-
   const hasPrefills =
     ctx.prefillGrants.value.length > 0 ||
     ctx.prefillNixPackages.value.length > 0 ||
@@ -213,44 +106,6 @@ function PrefillBanner() {
     ctx.errorMsg.value = "";
     ctx.successMsg.value = "";
     try {
-      // 0. Validate and save OAuth credentials first
-      const allSkillIntegrations = resolvedSkills.value.flatMap((s) =>
-        (s.integrations || []).filter((ig) => ig.authType !== "api-key")
-      );
-      const requiredOAuth = allSkillIntegrations.filter((ig) => {
-        const status = ctx.integrationStatus.value[ig.id];
-        return !status?.connected;
-      });
-      for (const ig of requiredOAuth) {
-        const cred = oauthCredentials.value[ig.id];
-        if (!cred?.clientId?.trim() || !cred?.clientSecret?.trim()) {
-          ctx.errorMsg.value = `Please enter Client ID and Client Secret for ${ig.label || ig.id}`;
-          ctx.approvingPrefills.value = false;
-          return;
-        }
-      }
-
-      for (const [integrationId, cred] of Object.entries(
-        oauthCredentials.value
-      )) {
-        const id = cred.clientId.trim();
-        const secret = cred.clientSecret.trim();
-        if (!id || !secret) continue;
-        await api.saveOAuthAppCredentials(
-          ctx.agentId,
-          integrationId,
-          id,
-          secret
-        );
-        ctx.integrationStatus.value = {
-          ...ctx.integrationStatus.value,
-          [integrationId]: {
-            ...ctx.integrationStatus.value[integrationId],
-            configured: true,
-          },
-        };
-      }
-
       // 1. Add grants to local state
       for (const d of ctx.prefillGrants.value) {
         if (!ctx.permissionGrants.value.some((g) => g.pattern === d)) {
@@ -387,7 +242,6 @@ function PrefillBanner() {
                     prefillMcpServers={ctx.prefillMcpServers.value}
                     prefillGrants={ctx.prefillGrants.value}
                     prefillNixPackages={ctx.prefillNixPackages.value}
-                    oauthCredentials={oauthCredentials}
                   />
                 ))
               ) : (
@@ -530,18 +384,12 @@ function PrefillSkillCard({
   prefillMcpServers,
   prefillGrants,
   prefillNixPackages,
-  oauthCredentials,
 }: {
   skill: ResolvedSkillDetail;
   prefillMcpServers: Array<{ id: string; name?: string; url?: string }>;
   prefillGrants: string[];
   prefillNixPackages: string[];
-  oauthCredentials: ReturnType<
-    typeof useSignal<Record<string, { clientId: string; clientSecret: string }>>
-  >;
 }) {
-  const ctx = useSettings();
-
   // Merge skill's own sub-items with prefill context data (deduped)
   const skillMcpIds = new Set(skill.mcpServers?.map((m) => m.id) || []);
   const extraMcps = prefillMcpServers.filter((m) => !skillMcpIds.has(m.id));
@@ -554,14 +402,6 @@ function PrefillSkillCard({
   const skillPkgs = new Set(skill.nixPackages || []);
   const extraPkgs = prefillNixPackages.filter((p) => !skillPkgs.has(p));
   const allNixPackages = [...(skill.nixPackages || []), ...extraPkgs];
-
-  // Identify unconfigured OAuth integrations for this skill
-  // Show credential form for OAuth integrations that are not yet connected
-  const unconfiguredOAuth = (skill.integrations || []).filter((ig) => {
-    if (ig.authType === "api-key") return false;
-    const status = ctx.integrationStatus.value[ig.id];
-    return !status?.connected;
-  });
 
   const hasDetails =
     (skill.integrations && skill.integrations.length > 0) ||
@@ -639,69 +479,6 @@ function PrefillSkillCard({
               </span>
             </div>
           )}
-        </div>
-      )}
-
-      {unconfiguredOAuth.length > 0 && (
-        <div class="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-          <p class="text-[11px] font-medium text-amber-800">
-            &#128273; OAuth credentials required
-          </p>
-          {unconfiguredOAuth.map((ig) => {
-            const cred = oauthCredentials.value[ig.id] || {
-              clientId: "",
-              clientSecret: "",
-            };
-            return (
-              <div key={ig.id} class="space-y-1">
-                <p class="text-[11px] font-medium text-amber-900">
-                  {ig.label || ig.id}
-                </p>
-                <div class="space-y-1.5">
-                  <label class="block">
-                    <span class="block text-[10px] text-amber-700 mb-0.5">
-                      Client ID
-                    </span>
-                    <input
-                      type="text"
-                      value={cred.clientId}
-                      onInput={(e) => {
-                        oauthCredentials.value = {
-                          ...oauthCredentials.value,
-                          [ig.id]: {
-                            ...cred,
-                            clientId: (e.target as HTMLInputElement).value,
-                          },
-                        };
-                      }}
-                      placeholder="Client ID"
-                      class="w-full px-2 py-1.5 border border-amber-200 rounded text-xs bg-white focus:border-amber-500 focus:ring-1 focus:ring-amber-200 outline-none"
-                    />
-                  </label>
-                  <label class="block">
-                    <span class="block text-[10px] text-amber-700 mb-0.5">
-                      Client Secret
-                    </span>
-                    <input
-                      type="password"
-                      value={cred.clientSecret}
-                      onInput={(e) => {
-                        oauthCredentials.value = {
-                          ...oauthCredentials.value,
-                          [ig.id]: {
-                            ...cred,
-                            clientSecret: (e.target as HTMLInputElement).value,
-                          },
-                        };
-                      }}
-                      placeholder="Client Secret"
-                      class="w-full px-2 py-1.5 border border-amber-200 rounded text-xs bg-white focus:border-amber-500 focus:ring-1 focus:ring-amber-200 outline-none"
-                    />
-                  </label>
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
 

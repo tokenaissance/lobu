@@ -4,6 +4,10 @@ import { Hono } from "hono";
 import type { IMessageQueue } from "../../infrastructure/queue";
 import { requiresToolApproval } from "../../permissions/approval-policy";
 import type { GrantStore } from "../../permissions/grant-store";
+import {
+  getStoredCredential,
+  refreshCredential,
+} from "../../routes/internal/device-auth";
 import type { CachedMcpServer, McpTool, McpToolCache } from "./tool-cache";
 
 const logger = createLogger("mcp-proxy");
@@ -104,7 +108,7 @@ export class McpProxy {
   async fetchToolsForMcp(
     mcpId: string,
     agentId: string,
-    _tokenData: any
+    tokenData: any
   ): Promise<{ tools: McpTool[]; instructions?: string }> {
     if (this.toolCache) {
       const cached = await this.toolCache.getServerInfo(mcpId, agentId);
@@ -115,6 +119,8 @@ export class McpProxy {
     if (!httpServer) {
       return { tools: [] };
     }
+
+    const userId = tokenData?.userId;
 
     try {
       // Clear any stale session before fresh tool discovery
@@ -142,7 +148,8 @@ export class McpProxy {
           agentId,
           mcpId,
           "POST",
-          initBody
+          initBody,
+          userId
         );
 
         const initData = (await initResponse.json()) as {
@@ -168,7 +175,8 @@ export class McpProxy {
           agentId,
           mcpId,
           "POST",
-          notifyBody
+          notifyBody,
+          userId
         ).catch(() => {
           /* noop */
         });
@@ -193,7 +201,8 @@ export class McpProxy {
         agentId,
         mcpId,
         "POST",
-        jsonRpcBody
+        jsonRpcBody,
+        userId
       );
 
       const data = (await response.json()) as JsonRpcResponse;
@@ -256,7 +265,8 @@ export class McpProxy {
         agentId,
         mcpId,
         "POST",
-        jsonRpcBody
+        jsonRpcBody,
+        auth.tokenData.userId
       );
 
       const data = (await response.json()) as JsonRpcResponse;
@@ -351,12 +361,15 @@ export class McpProxy {
         id: 1,
       });
 
+      const userId = auth.tokenData.userId;
+
       let response = await this.sendUpstreamRequest(
         httpServer,
         agentId,
         mcpId,
         "POST",
-        jsonRpcBody
+        jsonRpcBody,
+        userId
       );
 
       let data = (await response.json()) as JsonRpcResponse;
@@ -367,14 +380,15 @@ export class McpProxy {
           mcpId,
           toolName,
         });
-        await this.reinitializeSession(httpServer, agentId, mcpId);
+        await this.reinitializeSession(httpServer, agentId, mcpId, userId);
 
         response = await this.sendUpstreamRequest(
           httpServer,
           agentId,
           mcpId,
           "POST",
-          jsonRpcBody
+          jsonRpcBody,
+          userId
         );
         data = (await response.json()) as JsonRpcResponse;
       }
@@ -485,7 +499,13 @@ export class McpProxy {
     }
 
     try {
-      return await this.forwardRequest(c, httpServer, agentId, mcpId!);
+      return await this.forwardRequest(
+        c,
+        httpServer,
+        agentId,
+        mcpId!,
+        tokenData.userId
+      );
     } catch (error) {
       logger.error("Failed to proxy MCP request", { error, mcpId });
       return this.sendJsonRpcError(
@@ -522,7 +542,8 @@ export class McpProxy {
 
   private buildUpstreamHeaders(
     sessionId: string | null,
-    configHeaders?: Record<string, string>
+    configHeaders?: Record<string, string>,
+    credentialToken?: string
   ): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -536,6 +557,11 @@ export class McpProxy {
       }
     }
 
+    // Per-user credential takes precedence over config headers for Authorization
+    if (credentialToken) {
+      headers.Authorization = `Bearer ${credentialToken}`;
+    }
+
     if (sessionId) {
       headers["Mcp-Session-Id"] = sessionId;
     }
@@ -543,17 +569,58 @@ export class McpProxy {
     return headers;
   }
 
+  private async resolveCredentialToken(
+    agentId: string,
+    userId: string,
+    mcpId: string
+  ): Promise<string | null> {
+    const credential = await getStoredCredential(
+      this.redisClient,
+      agentId,
+      userId,
+      mcpId
+    );
+    if (!credential) return null;
+
+    // Check if token is still valid (5 minute buffer)
+    if (credential.expiresAt > Date.now() + 5 * 60 * 1000) {
+      return credential.accessToken;
+    }
+
+    // Token expired or expiring soon — refresh
+    const refreshed = await refreshCredential(
+      this.redisClient,
+      agentId,
+      userId,
+      mcpId,
+      credential
+    );
+    return refreshed?.accessToken ?? null;
+  }
+
   private async sendUpstreamRequest(
     httpServer: HttpMcpServerConfig,
     agentId: string,
     mcpId: string,
     method: string,
-    body?: string
+    body?: string,
+    userId?: string
   ): Promise<Response> {
     const sessionKey = `mcp:session:${agentId}:${mcpId}`;
     const sessionId = await this.getSession(sessionKey);
 
-    const headers = this.buildUpstreamHeaders(sessionId, httpServer.headers);
+    // Look up per-user credential for this MCP
+    let credentialToken: string | undefined;
+    if (userId) {
+      const token = await this.resolveCredentialToken(agentId, userId, mcpId);
+      if (token) credentialToken = token;
+    }
+
+    const headers = this.buildUpstreamHeaders(
+      sessionId,
+      httpServer.headers,
+      credentialToken
+    );
 
     const response = await fetch(httpServer.upstreamUrl, {
       method,
@@ -574,7 +641,8 @@ export class McpProxy {
     c: Context,
     httpServer: HttpMcpServerConfig,
     agentId: string,
-    mcpId: string
+    mcpId: string,
+    userId?: string
   ): Promise<Response> {
     const sessionKey = `mcp:session:${agentId}:${mcpId}`;
     let sessionId = await this.getSession(sessionKey);
@@ -584,7 +652,7 @@ export class McpProxy {
     // If no active session exists, re-initialize before forwarding
     if (!sessionId && c.req.method === "POST") {
       try {
-        await this.reinitializeSession(httpServer, agentId, mcpId);
+        await this.reinitializeSession(httpServer, agentId, mcpId, userId);
         sessionId = await this.getSession(sessionKey);
       } catch (error) {
         logger.warn("Pre-emptive MCP re-initialization failed", {
@@ -602,7 +670,18 @@ export class McpProxy {
       bodyLength: bodyText.length,
     });
 
-    const headers = this.buildUpstreamHeaders(sessionId, httpServer.headers);
+    // Look up per-user credential for this MCP
+    let credentialToken: string | undefined;
+    if (userId) {
+      const token = await this.resolveCredentialToken(agentId, userId, mcpId);
+      if (token) credentialToken = token;
+    }
+
+    const headers = this.buildUpstreamHeaders(
+      sessionId,
+      httpServer.headers,
+      credentialToken
+    );
 
     const response = await fetch(httpServer.upstreamUrl, {
       method: c.req.method,
@@ -654,7 +733,8 @@ export class McpProxy {
   private async reinitializeSession(
     httpServer: HttpMcpServerConfig,
     agentId: string,
-    mcpId: string
+    mcpId: string,
+    userId?: string
   ): Promise<void> {
     // Clear stale session
     const sessionKey = `mcp:session:${agentId}:${mcpId}`;
@@ -679,7 +759,8 @@ export class McpProxy {
       agentId,
       mcpId,
       "POST",
-      initBody
+      initBody,
+      userId
     );
 
     await initResponse.json(); // consume response
@@ -694,7 +775,8 @@ export class McpProxy {
       agentId,
       mcpId,
       "POST",
-      notifyBody
+      notifyBody,
+      userId
     ).catch(() => {
       /* noop */
     });

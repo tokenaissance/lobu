@@ -98,7 +98,7 @@ export class SystemSkillsService {
     ];
 
     if (entry.instructions?.trim()) {
-      lines.push("", "**Instructions:** " + entry.instructions.trim());
+      lines.push("", `**Instructions:** ${entry.instructions.trim()}`);
     }
 
     if (entry.description?.trim()) {

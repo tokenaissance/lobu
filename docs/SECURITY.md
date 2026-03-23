@@ -43,11 +43,12 @@ Workers do not have direct internet access. Outbound traffic is routed through t
 
 This is a core part of how Lobu makes "agentic" code execution safer in multi-tenant environments.
 
-## MCP OAuth And Credentials
+## Credentials
 
-Lobu centralizes credential flows in the gateway:
-- OAuth callbacks terminate at the gateway.
+Lobu centralizes credential flows:
 - Provider credentials and client secrets are stored/managed on the gateway side.
+- MCP server credentials are resolved per-user via the device-auth flow and injected by the gateway proxy.
+- Third-party API auth (GitHub, Google, etc.) is handled by Owletto — workers access these through Owletto MCP tools.
 - Workers receive only the minimum scoped tokens required to perform an action, and only via the proxy path.
 
 Result: a compromised worker session should not leak global platform tokens or MCP client secrets.

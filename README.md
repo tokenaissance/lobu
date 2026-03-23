@@ -5,7 +5,7 @@
 Computer-use agents via REST API, on Slack, Telegram, and WhatsApp.  
 Sandboxed, persistent, powered by the OpenClaw runtime and Lobu Skills.
 
-**Batteries included.** Lobu bundles sandboxed execution, MCP proxy with OAuth, and gateway-level network isolation. One deployment, everything included.
+**Batteries included.** Lobu bundles sandboxed execution, MCP proxy, and gateway-level network isolation. One deployment, everything included.
 
 ## Channels & API
 
@@ -81,19 +81,19 @@ Every Lobu agent comes equipped with a suite of tools for autonomous execution a
 | **Conversation Context** | Pull earlier thread messages when the user references prior work. | `GetChannelHistory` |
 | **File & Media Delivery** | Share reports, charts, or generated voice messages. | `UploadUserFile`, `GenerateAudio` |
 | **Self-Expansion** | Search and dynamically install new skills or MCP servers. | `SearchSkills`, `InstallSkill` |
-| **Connected APIs** | Authenticate and call OAuth/API-key backed services through gateway-managed credentials. | `ConnectService`, `CallService`, `DisconnectService` |
-| **Managed MCP Proxy** | Securely connect to any MCP server with OAuth. | [MCP Proxy](docs/SECURITY.md#mcp-oauth-and-credentials) |
+| **Connected APIs** | Access third-party APIs (GitHub, Google, etc.) through Owletto MCP tools with managed OAuth. | MCP tools via Owletto |
+| **Managed MCP Proxy** | Securely connect to any MCP server with secret injection. | [MCP Proxy](docs/SECURITY.md#mcp-oauth-and-credentials) |
 | **Advanced Capabilities** | Extend agent abilities with web browsing, headless UI interaction, and specialized utilities via Nix packages or external MCP servers. | `bash` (Nix), `SearchSkills`, `InstallSkill` (MCP) |
 
 ### Popular MCP Integrations
-Lobu's gateway handles OAuth and secret injection for any MCP server, including:
+Workers access third-party APIs through MCP servers. OAuth and credential management is handled by Owletto:
 - **Productivity:** Google Calendar, Slack, Jira, Notion
 - **Development:** GitHub, GitLab, Postgres, Docker
 - **Knowledge:** Wikipedia, Brave Search, YouTube, PDF Search
 
 **Gateway as single egress.** All worker traffic — internet and MCP — routes through the gateway. Workers have no direct network access. Domain filtering controls which external services workers can reach.
 
-**MCP Proxy.** Workers call MCP tools via the gateway. The gateway handles OAuth, injects scoped tokens, and resolves `${env:VAR}` secrets. Workers never see client secrets.
+**MCP Proxy.** Workers call MCP tools via the gateway. The gateway resolves `${env:VAR}` secrets and routes to upstream MCP servers. OAuth credentials for third-party APIs are managed by Owletto — workers never see tokens directly.
 
 **Multi-platform, multi-tenant.** One bot instance serves Slack, WhatsApp, and REST API. Each channel/DM gets its own isolated runtime, model, tools, credentials, and Nix packages.
 
@@ -119,7 +119,7 @@ Lobu is the **infrastructure layer** for autonomous agents. Unlike frameworks (L
 ## Security and Privacy
 
 - [**No direct worker egress**](docs/SECURITY.md#network-egress) — all traffic routes through the gateway proxy.
-- [**Secrets stay in gateway**](docs/SECURITY.md#mcp-oauth-and-credentials) — MCP OAuth, provider credentials, and `${env:}` substitution.
+- [**Secrets stay in gateway**](docs/SECURITY.md#mcp-oauth-and-credentials) — Provider credentials and `${env:}` substitution. OAuth for third-party APIs managed by Owletto.
 - [**Defense-in-depth on K8s**](docs/SECURITY.md#kubernetes) — NetworkPolicies, RBAC, and optional gVisor/Kata runtimes.
 - [**Nix system packages**](docs/SECURITY.md#skills-and-policy) — per-agent reproducible tooling and skills policy enforcement.
 

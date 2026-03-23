@@ -341,7 +341,7 @@ export function createAgentsPageRoutes(config: AgentsPageConfig) {
         name: "Owletto Memory",
         slot: "memory",
         enabled: true,
-        configured: !!process.env.OWLETTO_MCP_URL,
+        configured: !!process.env.AUTH_MCP_URL,
         settingsUrl: "/agent#skills",
       },
     ];

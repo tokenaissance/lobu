@@ -1,21 +1,21 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  readFileSync,
-  existsSync,
 } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { BashOperations } from "@mariozechner/pi-coding-agent";
-import { createOpenClawTools } from "../openclaw/tools";
-import { callMcpTool } from "../shared/tool-implementations";
 import { createMcpToolDefinitions } from "../openclaw/custom-tools";
 import {
   getOpenClawSessionContext,
   invalidateSessionContextCache,
 } from "../openclaw/session-context";
+import { createOpenClawTools } from "../openclaw/tools";
+import { callMcpTool } from "../shared/tool-implementations";
 
 let tempDir: string;
 
@@ -225,7 +225,7 @@ describe("callMcpTool", () => {
 
   test("uses correct URL format", async () => {
     let capturedUrl = "";
-    globalThis.fetch = async (url: any, opts: any) => {
+    globalThis.fetch = async (url: any, _opts: any) => {
       capturedUrl = typeof url === "string" ? url : url.toString();
       return new Response(
         JSON.stringify({
@@ -254,7 +254,7 @@ describe("callMcpTool", () => {
     };
 
     await callMcpTool(gw, "owletto", "test_tool", {});
-    expect(capturedHeaders["Authorization"]).toBe("Bearer test-token-123");
+    expect(capturedHeaders.Authorization).toBe("Bearer test-token-123");
     expect(capturedHeaders["Content-Type"]).toBe("application/json");
   });
 

@@ -33,7 +33,7 @@ The Lobu gateway is an entirely separate codebase — not a fork or wrapper arou
 
 1. **Platform adapters** — Slack (Events API + Socket Mode), Telegram (Grammy long-polling), WhatsApp (Cloud API webhooks), and a REST endpoint for programmatic access.
 2. **Worker lifecycle** — spawning, routing, health checks, idle timeouts, persistent volumes, and cleanup.
-3. **Auth & secrets** — OAuth flows for MCP integrations, provider key resolution by agent ID, and a settings UI per user.
+3. **Auth & secrets** — device-code auth for MCP servers, provider key resolution by agent ID, and a settings UI per user. Third-party API auth is handled by Owletto.
 4. **Proxy layer** — an HTTP proxy (port 8118) that enforces domain allowlists at the network layer. Workers send all outbound traffic through this proxy.
 5. **Skills registry** — a curated catalog of MCP servers and LLM providers that workers can use, managed via `lobu.toml` and the settings page.
 
@@ -46,7 +46,7 @@ Inside each worker, Lobu runs OpenClaw sessions and tool execution.
 1. Gateway receives user messages (Slack/Telegram/WhatsApp/API).
 2. Gateway routes jobs to isolated worker instances.
 3. Worker executes with OpenClaw using Lobu's tool policy and workspace model.
-4. Gateway streams responses and manages integrations/OAuth/secrets.
+4. Gateway streams responses and manages auth/secrets. Integration OAuth is handled by Owletto.
 
 ## Lobu vs OpenClaw
 

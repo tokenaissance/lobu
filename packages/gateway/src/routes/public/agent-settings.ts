@@ -34,7 +34,6 @@ import {
   resolveAgentOptions,
 } from "../../services/platform-helpers";
 import { platformAgentId } from "../../spaces";
-import { verifyAgentAccess } from "./agent-access";
 import type { ProviderMeta } from "./agent-page";
 import {
   renderErrorPage,
@@ -129,8 +128,6 @@ export interface SettingsPageConfig {
   userAgentsStore: UserAgentsStore;
   agentMetadataStore: AgentMetadataStore;
   channelBindingService: ChannelBindingService;
-  integrationConfigService?: import("../../auth/integration/config-service").IntegrationConfigService;
-  integrationCredentialStore?: import("../../auth/integration/credential-store").IntegrationCredentialStore;
   connectionManager?: import("../../gateway/connection-manager").WorkerConnectionManager;
   /** Chat instance manager for looking up connections (scopes, template agents) */
   chatInstanceManager?: import("../../connections/chat-instance-manager").ChatInstanceManager;
@@ -385,47 +382,8 @@ async function renderSettingsForPayload(
     }
   }
 
-  // Fetch integration status keyed by integration ID
-  const integrationStatus: Record<
-    string,
-    {
-      label: string;
-      connected: boolean;
-      configured: boolean;
-      accounts: { accountId: string; grantedScopes: string[] }[];
-      availableScopes: string[];
-    }
-  > = {};
-  if (config.integrationConfigService && config.integrationCredentialStore) {
-    try {
-      const allConfigs = await config.integrationConfigService.getAll();
-      for (const [id, cfg] of Object.entries(allConfigs)) {
-        const accountList =
-          await config.integrationCredentialStore.listAccounts(agentId, id);
-        // Resolve per-agent config to check if OAuth credentials exist
-        const resolved = await config.integrationConfigService.getIntegration(
-          id,
-          agentId
-        );
-        const isOAuth = (cfg.authType || "oauth") === "oauth";
-        const configured =
-          !isOAuth ||
-          !!(resolved?.oauth?.clientId && resolved?.oauth?.clientSecret);
-        integrationStatus[id] = {
-          label: cfg.label,
-          connected: accountList.length > 0,
-          configured,
-          accounts: accountList.map((a) => ({
-            accountId: a.accountId,
-            grantedScopes: a.credentials.grantedScopes,
-          })),
-          availableScopes: cfg.scopes?.available ?? [],
-        };
-      }
-    } catch {
-      // Integration services may not be configured
-    }
-  }
+  // Integration status (managed by Owletto)
+  const integrationStatus: Record<string, never> = {};
 
   // Determine config-managed providers from manifest credentials
   let configManagedProviders: string[] = [];
@@ -466,7 +424,7 @@ async function renderSettingsForPayload(
 
   return c.html(
     renderSettingsPage(effectivePayload, settings, {
-      memoryEnabled: !!process.env.OWLETTO_MCP_URL,
+      memoryEnabled: !!process.env.AUTH_MCP_URL,
       providers: installedProviders,
       catalogProviders,
       providerModelOptions,
@@ -1133,67 +1091,6 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
   app.get("/agent", agentPageHandler);
   app.get("/agent/:agentId", agentPageHandler);
 
-  // Save an API key for an api-key integration
-  app.post("/api/v1/integrations/apikey/save", async (c) => {
-    const session = verifySettingsSession(c);
-    if (!session) return c.json({ error: "Not authenticated" }, 401);
-
-    const { agentId, integrationId, apiKey } = await c.req.json<{
-      agentId: string;
-      integrationId: string;
-      apiKey: string;
-    }>();
-
-    if (!agentId || !integrationId || !apiKey) {
-      return c.json(
-        { error: "Missing agentId, integrationId, or apiKey" },
-        400
-      );
-    }
-
-    if (!(await verifyAgentAccess(session, agentId, config))) {
-      return c.json({ error: "Unauthorized" }, 403);
-    }
-
-    if (
-      !config.integrationConfigService ||
-      !config.integrationCredentialStore
-    ) {
-      return c.json({ error: "Integration services not configured" }, 500);
-    }
-
-    // Verify the integration exists and is api-key type
-    const integrationConfig =
-      await config.integrationConfigService.getIntegration(
-        integrationId,
-        agentId
-      );
-    if (!integrationConfig) {
-      return c.json({ error: "Integration not found" }, 404);
-    }
-    if ((integrationConfig.authType || "oauth") !== "api-key") {
-      return c.json({ error: "Integration is not an API key type" }, 400);
-    }
-
-    // Store the API key as a credential
-    await config.integrationCredentialStore.setCredentials(
-      agentId,
-      integrationId,
-      {
-        accessToken: apiKey,
-        tokenType: "api-key",
-        grantedScopes: [],
-      }
-    );
-
-    // Notify active workers
-    config.connectionManager?.notifyAgent(agentId, "config_changed", {
-      changes: [`integration:${integrationId}:default:connected`],
-    });
-
-    return c.json({ success: true });
-  });
-
   // POST /api/v1/agents/:agentId/install-callback — Notify conversation after skill install
   app.post("/api/v1/agents/:agentId/install-callback", async (c) => {
     const agentId = c.req.param("agentId");
@@ -1229,16 +1126,8 @@ export function createAgentPageRoutes(config: SettingsPageConfig): OpenAPIHono {
         if (!skill?.integrations) continue;
 
         for (const ig of skill.integrations) {
-          if (config.integrationCredentialStore && ig.authType !== "api-key") {
-            const accounts =
-              await config.integrationCredentialStore.listAccounts(
-                agentId,
-                ig.id
-              );
-            if (accounts.length === 0) {
-              missingIntegrations.push(ig.label || ig.id);
-            }
-          }
+          // Integration credentials are managed by Owletto; treat all as missing here
+          missingIntegrations.push(ig.label || ig.id);
         }
       }
 

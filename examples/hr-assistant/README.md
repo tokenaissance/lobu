@@ -1,0 +1,94 @@
+# hr-assistant
+
+Lobu instance created with `@lobu/cli` v3.0.3
+
+## Quick Start
+
+Make sure you have Docker CLI installed.
+
+```bash
+# Start the services
+lobu dev -d
+
+# View logs
+docker compose logs -f
+
+# Stop the services
+docker compose down
+```
+
+## Upgrading to Latest Version
+
+### Update Gateway and Pre-built Images
+Pull the latest images and restart services:
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### Rebuild Worker (when Dockerfile.worker changes)
+If you modified your `Dockerfile.worker` or want to use the latest base image:
+```bash
+docker compose build worker
+docker compose restart gateway
+```
+
+### Update Environment Variables
+Check for new environment variables in release notes or the [Lobu documentation](https://github.com/lobu-ai/lobu):
+1. Compare your `.env` with the latest `.env.example` from the repository
+2. Add any new required variables
+3. Restart services: `docker compose restart`
+
+**Tip**: Always use `latest` tags to ensure gateway and worker versions stay in sync.
+
+## Configuration
+
+### Environment Variables
+
+Edit `.env` to configure:
+- `PUBLIC_GATEWAY_URL` - Public URL for OAuth callbacks
+- `WORKER_ALLOWED_DOMAINS` - Allowed domains for worker network access
+
+### Platform Connections
+
+Platforms (Slack, Telegram, Discord, WhatsApp, Teams) are configured via the admin page at `{PUBLIC_GATEWAY_URL}/agents`. No platform-specific env vars needed — just paste your bot token in the UI.
+
+### Worker Customization
+
+Edit `Dockerfile.worker` to add custom tools and dependencies.
+
+Example customizations:
+```dockerfile
+# Add system packages
+RUN apt-get update && apt-get install -y postgresql-client
+
+# Add Python packages
+RUN pip install pandas matplotlib
+
+# Add Node.js packages
+RUN bun add @octokit/rest
+```
+
+When you modify `Dockerfile.worker` or context files, rebuild the worker image:
+```bash
+docker compose build worker
+```
+
+The gateway will automatically pick up the latest worker image.
+
+## Services
+
+The docker-compose.yml defines these services:
+- **redis** - Redis cache and queue
+- **gateway** - Slack integration and worker orchestration
+- **worker** - Claude worker (build-only, spawned dynamically)
+
+## Learn More
+
+- [Lobu Documentation](https://github.com/lobu-ai/lobu)
+- [CLI Reference](https://github.com/lobu-ai/lobu/tree/main/packages/cli)
+- [Examples](https://github.com/lobu-ai/lobu/tree/main/examples)
+
+## Support
+
+- [GitHub Issues](https://github.com/lobu-ai/lobu/issues)

@@ -11,17 +11,9 @@ export * from "./errors";
 // Integration types
 export type {
   AgentIntegrationConfig,
-  IntegrationAccountInfo,
   IntegrationApiKeyConfig,
-  IntegrationApiResponse,
-  IntegrationAuthType,
-  IntegrationConfig,
-  IntegrationCredentialRecord,
-  IntegrationInfo,
   IntegrationOAuthConfig,
-  IntegrationScopesConfig,
   SystemSkillEntry,
-  SystemSkillIntegration,
   SystemSkillsConfigFile,
 } from "./integration-types";
 export * from "./logger";

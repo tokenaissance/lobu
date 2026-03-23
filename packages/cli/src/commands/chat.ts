@@ -31,17 +31,20 @@ export async function chatCommand(
     process.exit(1);
   }
 
-  // Resolve agent ID from flag or first agent in lobu.toml
+  // Resolve agent ID from flag or first agent in lobu.toml (undefined = ephemeral)
   const agentId = options.agent ?? (await resolveAgentId(cwd));
 
   // 1. Create agent session
+  const createBody: Record<string, string> = {};
+  if (agentId) createBody.agentId = agentId;
+
   const createRes = await fetch(`${gatewayUrl}/api/v1/agents`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
     },
-    body: JSON.stringify({ agentId }),
+    body: JSON.stringify(createBody),
   });
 
   if (!createRes.ok) {
@@ -97,17 +100,16 @@ export async function chatCommand(
   await streaming;
 }
 
-async function resolveAgentId(cwd: string): Promise<string> {
+async function resolveAgentId(cwd: string): Promise<string | undefined> {
   const result = await loadConfig(cwd);
   if (isLoadError(result)) {
-    console.error(chalk.red(`\n  ${result.error}\n`));
-    return process.exit(1);
+    // No lobu.toml — use ephemeral agent
+    return undefined;
   }
 
   const ids = Object.keys(result.config.agents);
   if (ids.length === 0) {
-    console.error(chalk.red("\n  No agents found in lobu.toml\n"));
-    return process.exit(1);
+    return undefined;
   }
 
   return ids[0]!;
@@ -175,6 +177,13 @@ async function streamResponse(
               }
               controller.abort();
               process.exit(1);
+              break;
+            case "link-button":
+            case "question":
+            case "grant-request":
+            case "package-request":
+            case "suggestion":
+              console.error(JSON.stringify({ event: currentEvent, ...data }));
               break;
             case "complete":
               process.stdout.write("\n");

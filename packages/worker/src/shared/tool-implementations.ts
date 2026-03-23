@@ -565,8 +565,7 @@ export async function searchSkills(
     return textResult(
       `${sections.join("\n\n")}\n\n` +
         `Prefer system skills (source: system) — they are curated and pre-configured.\n` +
-        `Use InstallSkill with the selected id to install a skill from these results.\n` +
-        `Use ConnectService to connect individual providers or integrations directly.`
+        `Use InstallSkill with the selected id to install a skill from these results.`
     );
   });
 }
@@ -936,7 +935,7 @@ export async function generateImage(
         const providerList =
           capabilities.providers?.map((p) => p.name).join(", ") || "OpenAI";
         return textResult(
-          `Image generation is not configured. Supported providers: ${providerList}.\n\nConnect a provider using ConnectService (e.g. id='chatgpt') to enable image generation.`
+          `Image generation is not configured. Supported providers: ${providerList}.\n\nConnect a provider via the settings page to enable image generation.`
         );
       }
     }
@@ -972,13 +971,13 @@ export async function generateImage(
 
       if (errorData.availableProviders?.length) {
         return textResult(
-          `Image generation failed: ${errorMessage}.\n\nConnect a provider using ConnectService (e.g. id='chatgpt') to enable image generation.`
+          `Image generation failed: ${errorMessage}.\n\nConnect a provider via the settings page to enable image generation.`
         );
       }
 
       if (missingImagePermission) {
         return textResult(
-          `Image generation failed because the current credential lacks required image permissions.\n\nConnect a different provider using ConnectService (e.g. id='openai') with image generation access.`
+          `Image generation failed because the current credential lacks required image permissions.\n\nConnect a different provider with image generation access via the settings page.`
         );
       }
 
@@ -1057,15 +1056,12 @@ export async function generateAudio(
       gatewayUrl: gw.gatewayUrl,
       workerToken: gw.workerToken,
     });
-    const providers = suggestions.providerIds;
     const providerList =
       suggestions.providerDisplayList || "an audio-capable provider";
 
     if (suggestions.available === false) {
-      const providerHint =
-        providers.length > 0 ? ` (e.g. id='${providers[0]}')` : "";
       return textResult(
-        `Audio generation is not configured. To enable it, connect one of the available providers: ${providerList}.\n\nUse ConnectService${providerHint} to connect an audio provider.`
+        `Audio generation is not configured. To enable it, connect one of the available providers: ${providerList}.\n\nConnect an audio provider via the settings page.`
       );
     }
 
@@ -1095,18 +1091,14 @@ export async function generateAudio(
         lowerError.includes("api.model.audio.request");
 
       if (errorData.availableProviders?.length) {
-        const providerHint =
-          providers.length > 0 ? ` (e.g. id='${providers[0]}')` : "";
         return textResult(
-          `Audio generation failed: ${errorMessage}. No provider configured.\n\nUse ConnectService${providerHint} to connect an audio provider.`
+          `Audio generation failed: ${errorMessage}. No provider configured.\n\nConnect an audio provider via the settings page.`
         );
       }
 
       if (missingOpenAiAudioScope) {
-        const providerHint =
-          providers.length > 0 ? ` (e.g. id='${providers[0]}')` : "";
         return textResult(
-          `Audio generation failed because the current OpenAI token lacks api.model.audio.request.\n\nUse ConnectService${providerHint} to connect a provider with audio permission, or connect an alternative audio provider (${providerList}).`
+          `Audio generation failed because the current OpenAI token lacks api.model.audio.request.\n\nConnect a provider with audio permission via the settings page, or connect an alternative audio provider (${providerList}).`
         );
       }
 
@@ -1164,197 +1156,6 @@ export async function generateAudio(
     return textResult(
       `Voice message sent successfully (generated with ${provider}).`
     );
-  });
-}
-
-// ============================================================================
-// ConnectService (unified: tries OAuth integration first, falls back to MCP login)
-// ============================================================================
-
-export async function connectService(
-  gw: GatewayParams,
-  args: { id: string; scopes?: string[]; reason?: string; account?: string }
-): Promise<TextResult> {
-  return withErrorHandling("ConnectService", async () => {
-    logger.info(
-      `ConnectService: ${args.id}, scopes: ${args.scopes?.join(", ") || "default"}, account: ${args.account || "default"}`
-    );
-
-    // Try OAuth integration endpoint first
-    const integrationResponse = await fetch(
-      `${gw.gatewayUrl}/internal/integrations/connect`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${gw.workerToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          integration: args.id,
-          scopes: args.scopes,
-          reason: args.reason,
-          account: args.account,
-        }),
-      }
-    );
-
-    if (integrationResponse.ok) {
-      const result = (await integrationResponse.json()) as {
-        status: string;
-        message: string;
-        grantedScopes?: string[];
-      };
-      if (result.status === "already_connected") {
-        return textResult(result.message);
-      }
-      return textResult(
-        `${result.message} Your session will end now. The user will authenticate and your next message will arrive after they return.`
-      );
-    }
-
-    // If 404, fall back to MCP login
-    if (integrationResponse.status === 404) {
-      const mcpResponse = await gatewayFetch<{
-        type?: string;
-        message?: string;
-        url?: string;
-      }>(
-        gw,
-        "/internal/mcp-login",
-        {
-          method: "POST",
-          body: JSON.stringify({ mcpId: args.id }),
-        },
-        "Failed to connect service"
-      );
-      if (!mcpResponse.error) {
-        return textResult(
-          mcpResponse.data?.message || "Login link sent to the user."
-        );
-      }
-
-      // MCP login also failed — fall back to settings link as provider
-      const { data: settingsData, error: settingsError } = await gatewayFetch<{
-        type?: string;
-        message?: string;
-      }>(
-        gw,
-        "/internal/settings-link",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            reason: args.reason || `Connect ${args.id}`,
-            providers: [args.id],
-          }),
-        },
-        "Failed to send settings link"
-      );
-      if (settingsError) return settingsError;
-      return textResult(
-        settingsData?.message ||
-          "Settings link sent to the user to configure the provider."
-      );
-    }
-
-    // Other error
-    const errorData = (await integrationResponse
-      .json()
-      .catch(() => ({ error: integrationResponse.statusText }))) as {
-      error?: string;
-    };
-    return textResult(
-      `Error: ${errorData.error || "Failed to connect service"}`
-    );
-  });
-}
-
-// ============================================================================
-// CallService (authenticated API calls through connected integrations)
-// ============================================================================
-
-export async function callService(
-  gw: GatewayParams,
-  args: {
-    integration: string;
-    method: string;
-    url: string;
-    headers?: Record<string, string>;
-    body?: string;
-    account?: string;
-  }
-): Promise<TextResult> {
-  return withErrorHandling("CallService", async () => {
-    logger.info(
-      `CallService: ${args.method} ${args.url}, account: ${args.account || "default"}`
-    );
-
-    interface ApiResult {
-      status: number;
-      headers: Record<string, string>;
-      body: string;
-    }
-
-    const { data, error } = await gatewayFetch<ApiResult>(
-      gw,
-      `/internal/integrations/${encodeURIComponent(args.integration)}/api`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          method: args.method,
-          url: args.url,
-          headers: args.headers,
-          body: args.body,
-          account: args.account,
-        }),
-      },
-      "Failed to call service API"
-    );
-    if (error) return error;
-    const result = data!;
-
-    if (result.status >= 400) {
-      return textResult(
-        `API returned ${result.status}:\n${result.body}\n\nIf you need additional scopes, use ConnectService to request them.`
-      );
-    }
-
-    return textResult(result.body);
-  });
-}
-
-// ============================================================================
-// DisconnectService (revoke credentials for integration or MCP)
-// ============================================================================
-
-export async function disconnectService(
-  gw: GatewayParams,
-  args: { integration: string; account?: string }
-): Promise<TextResult> {
-  return withErrorHandling("DisconnectService", async () => {
-    logger.info(
-      `DisconnectService: ${args.integration}, account: ${args.account || "default"}`
-    );
-
-    interface DisconnectResult {
-      success: boolean;
-      message: string;
-    }
-
-    const { data, error } = await gatewayFetch<DisconnectResult>(
-      gw,
-      "/internal/integrations/disconnect",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          integration: args.integration,
-          account: args.account,
-        }),
-      },
-      "Failed to disconnect service"
-    );
-    if (error) return error;
-
-    return textResult(data!.message);
   });
 }
 

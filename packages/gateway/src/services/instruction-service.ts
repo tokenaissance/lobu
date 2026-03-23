@@ -15,8 +15,6 @@ interface McpStatus {
   name: string;
   requiresAuth: boolean;
   requiresInput: boolean;
-  authenticated: boolean;
-  configured: boolean;
 }
 
 interface SessionContextData {

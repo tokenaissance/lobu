@@ -60,11 +60,8 @@
         {
           "id": "owletto",
           "name": "Owletto",
-          "url": "${env:OWLETTO_MCP_URL}",
-          "type": "sse",
-          "headers": {
-            "Authorization": "Bearer ${env:OWLETTO_API_KEY}"
-          }
+          "url": "${env:AUTH_MCP_URL}",
+          "type": "sse"
         }
       ]
     },

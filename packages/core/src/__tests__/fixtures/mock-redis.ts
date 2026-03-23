@@ -171,6 +171,82 @@ export class MockRedisClient {
     return list.slice(start, end);
   }
 
+  // --- Scan ---
+
+  async scan(
+    _cursor: string,
+    ...args: (string | number)[]
+  ): Promise<[string, string[]]> {
+    // Extract pattern from args: "MATCH", pattern, "COUNT", count
+    let pattern = "*";
+    for (let i = 0; i < args.length - 1; i++) {
+      if (String(args[i]).toUpperCase() === "MATCH") {
+        pattern = String(args[i + 1]);
+        break;
+      }
+    }
+
+    const allKeys = new Set<string>();
+    for (const key of this.store.keys()) allKeys.add(key);
+    for (const key of this.sets.keys()) allKeys.add(key);
+    for (const key of this.lists.keys()) allKeys.add(key);
+
+    const matching: string[] = [];
+    for (const key of allKeys) {
+      if (pattern === "*") {
+        matching.push(key);
+      } else if (pattern.endsWith("*")) {
+        const prefix = pattern.slice(0, -1);
+        if (key.startsWith(prefix)) matching.push(key);
+      } else if (key === pattern) {
+        matching.push(key);
+      }
+    }
+
+    return ["0", matching];
+  }
+
+  // --- Batch get ---
+
+  async mget(...keys: string[]): Promise<(string | null)[]> {
+    return Promise.all(keys.map((key) => this.get(key)));
+  }
+
+  // --- Watch / Unwatch (no-ops) ---
+
+  async watch(..._keys: string[]): Promise<"OK"> {
+    return "OK";
+  }
+
+  async unwatch(): Promise<"OK"> {
+    return "OK";
+  }
+
+  // --- Multi ---
+
+  multi(): {
+    set(key: string, value: string): any;
+    exec(): Promise<[null, string][]>;
+  } {
+    const pending: Array<{ key: string; value: string }> = [];
+    const self = this;
+    const chain = {
+      set(key: string, value: string) {
+        pending.push({ key, value });
+        return chain;
+      },
+      async exec(): Promise<[null, string][]> {
+        const results: [null, string][] = [];
+        for (const op of pending) {
+          self.store.set(op.key, { value: op.value });
+          results.push([null, "OK"]);
+        }
+        return results;
+      },
+    };
+    return chain;
+  }
+
   // --- Test helpers ---
 
   advanceTime(ms: number): void {

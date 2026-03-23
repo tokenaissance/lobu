@@ -357,42 +357,6 @@ export async function saveMcpServers(
   }
 }
 
-// ─── Integrations ─────────────────────────────────────────────────────────
-
-export async function saveOAuthAppCredentials(
-  agentId: string,
-  integrationId: string,
-  clientId: string,
-  clientSecret: string
-): Promise<void> {
-  const resp = await jsonPost("/api/v1/integrations/oauth-app/save", {
-    agentId,
-    integrationId,
-    clientId,
-    clientSecret,
-  });
-  if (!resp.ok) {
-    const data = await parseJsonSafe(resp);
-    throw new Error(data.error || "Failed to save OAuth credentials");
-  }
-}
-
-export async function saveIntegrationApiKey(
-  agentId: string,
-  integrationId: string,
-  apiKey: string
-): Promise<void> {
-  const resp = await jsonPost("/api/v1/integrations/apikey/save", {
-    agentId,
-    integrationId,
-    apiKey,
-  });
-  if (!resp.ok) {
-    const data = await parseJsonSafe(resp);
-    throw new Error(data.error || "Failed to save API key");
-  }
-}
-
 // ─── Schedules ─────────────────────────────────────────────────────────────
 
 export async function fetchSchedules(agentId: string): Promise<

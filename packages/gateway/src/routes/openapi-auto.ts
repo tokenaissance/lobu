@@ -14,8 +14,6 @@ const EXCLUDED_ROUTES = [
   "/", // Landing page
   "/agent", // HTML agent page
   "/api/v1/auth/{provider}/login", // OAuth redirect (browser-only)
-  "/api/v1/auth/mcp/callback", // MCP OAuth callback
-  "/api/v1/auth/integration/callback", // Integration OAuth callback
   "/agent/{agentId}/history", // HTML history page
   "/slack/install", // Slack app install
   "/slack/oauth_callback", // Slack OAuth callback
@@ -166,8 +164,6 @@ const ROUTE_SUMMARIES: Record<string, string> = {
   "post /api/v1/auth/{provider}/start": "Start device code flow",
   "post /api/v1/auth/{provider}/poll": "Poll device code status",
   "post /api/v1/auth/{provider}/logout": "Disconnect provider",
-  "get /api/v1/auth/mcp/init/{mcpId}": "Start MCP OAuth flow",
-  "post /api/v1/auth/mcp/logout/{mcpId}": "Disconnect MCP server",
 };
 
 /**

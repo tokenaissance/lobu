@@ -191,31 +191,6 @@ function setupServer(
     );
   }
 
-  // MCP login routes (worker can trigger MCP OAuth login for users)
-  if (coreServices?.getMcpOAuthModule()) {
-    const { createMcpLoginRoutes } = require("../routes/internal/mcp-login");
-    const mcpLoginRouter = createMcpLoginRoutes(
-      coreServices.getMcpOAuthModule(),
-      interactionService
-    );
-    app.route("", mcpLoginRouter);
-    logger.debug("MCP login routes enabled at :8080/internal/mcp-login");
-  }
-
-  // MCP token routes (worker can retrieve stored MCP OAuth tokens)
-  if (
-    coreServices?.getMcpCredentialStore() &&
-    coreServices?.getMcpConfigService()
-  ) {
-    const { createMcpTokenRoutes } = require("../routes/internal/mcp-token");
-    const mcpTokenRouter = createMcpTokenRoutes(
-      coreServices.getMcpCredentialStore(),
-      coreServices.getMcpConfigService()
-    );
-    app.route("", mcpTokenRouter);
-    logger.debug("MCP token routes enabled at :8080/internal/mcp-token/:mcpId");
-  }
-
   // Integrations discovery routes (unified skills + MCP search for workers)
   {
     const {
@@ -231,8 +206,6 @@ function setupServer(
       coordinator: skillRegistryCoordinator,
       mcpDiscovery,
       agentSettingsStore: coreServices?.getAgentSettingsStore(),
-      integrationConfigService: coreServices?.getIntegrationConfigService(),
-      integrationCredentialStore: coreServices?.getIntegrationCredentialStore(),
       systemConfigResolver: coreServices?.getSystemConfigResolver(),
       grantStore: coreServices?.getGrantStore(),
     });
@@ -240,6 +213,25 @@ function setupServer(
     logger.debug(
       "Integrations discovery routes enabled at :8080/internal/integrations/*"
     );
+  }
+
+  // Device auth routes (gateway-mediated OAuth for workers)
+  if (coreServices) {
+    const {
+      createDeviceAuthRoutes,
+    } = require("../routes/internal/device-auth");
+    const redisClient = coreServices.getQueue().getRedisClient();
+    const mcpConfigService = coreServices.getMcpConfigService();
+    if (mcpConfigService) {
+      const deviceAuthRouter = createDeviceAuthRoutes({
+        redis: redisClient,
+        mcpConfigService,
+      });
+      app.route("", deviceAuthRouter);
+      logger.debug(
+        "Device auth routes enabled at :8080/internal/device-auth/*"
+      );
+    }
   }
 
   // Audio routes (TTS synthesis for workers)
@@ -308,6 +300,7 @@ function setupServer(
         publicGatewayUrl: publicUrl,
         adminPassword,
         cliTokenService,
+        agentSettingsStore: coreServices.getAgentSettingsStore(),
       });
       app.route("", agentApi);
       logger.debug(
@@ -552,55 +545,6 @@ function setupServer(
       }
     }
 
-    const mcpOAuthModule = coreServices.getMcpOAuthModule();
-    if (mcpOAuthModule) {
-      authRouter.route("/mcp", mcpOAuthModule.getApp());
-      registeredProviders.push("mcp");
-    }
-
-    // Integration OAuth + internal routes
-    const integrationConfigService = coreServices.getIntegrationConfigService();
-    const integrationCredentialStore =
-      coreServices.getIntegrationCredentialStore();
-    const integrationOAuthModule = coreServices.getIntegrationOAuthModule();
-
-    if (
-      integrationConfigService &&
-      integrationCredentialStore &&
-      integrationOAuthModule
-    ) {
-      // Internal routes for workers (list, connect, disconnect)
-      const { createIntegrationRoutes } = require("../auth/integration/routes");
-      const publicGatewayUrl = coreServices.getPublicGatewayUrl();
-      const integrationRouter = createIntegrationRoutes(
-        integrationConfigService,
-        integrationCredentialStore,
-        integrationOAuthModule,
-        publicGatewayUrl,
-        interactionService,
-        coreServices.getAgentSettingsStore()
-      );
-      app.route("", integrationRouter);
-
-      // API proxy (credential injection + forwarding)
-      const {
-        createIntegrationApiProxy,
-      } = require("../auth/integration/api-proxy");
-      const apiProxyRouter = createIntegrationApiProxy(
-        integrationConfigService,
-        integrationCredentialStore
-      );
-      app.route("", apiProxyRouter);
-
-      // OAuth routes (public, for user browser redirects)
-      authRouter.route("/integration", integrationOAuthModule.getApp());
-      registeredProviders.push("integration");
-
-      logger.debug(
-        "Integration routes enabled at :8080/internal/integrations/*, :8080/api/v1/auth/integration/*"
-      );
-    }
-
     // Get shared dependencies (needed before mounting auth router)
     const agentSettingsStore = coreServices.getAgentSettingsStore();
     const claudeOAuthStateStore = coreServices.getOAuthStateStore();
@@ -630,9 +574,6 @@ function setupServer(
         userAgentsStore: coreServices.getUserAgentsStore(),
         agentMetadataStore: coreServices.getAgentMetadataStore(),
         channelBindingService: coreServices.getChannelBindingService(),
-        integrationConfigService: coreServices.getIntegrationConfigService(),
-        integrationCredentialStore:
-          coreServices.getIntegrationCredentialStore(),
         connectionManager: coreServices
           .getWorkerGateway()
           ?.getConnectionManager(),

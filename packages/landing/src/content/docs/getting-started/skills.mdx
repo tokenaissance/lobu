@@ -15,7 +15,7 @@ A **skill** is a self-contained capability definition for a Lobu agent. Skills d
 
 ```
 SKILL.md (declarative config)
-  ├── integrations     → OAuth / API-key credentials, injected by gateway
+  ├── integrations     → third-party API access, managed by Owletto
   ├── mcpServers       → MCP tool servers, proxied through gateway
   ├── nixConfig        → system packages provisioned via Nix
   ├── networkConfig    → domain allowlist for the sandbox
@@ -25,7 +25,7 @@ SKILL.md (declarative config)
 When a user enables a skill in the settings page:
 
 1. **Gateway reads the skill manifest** and resolves each section.
-2. **Credentials** for integrations and MCP servers are fetched from the credential store (Redis) — the worker never sees raw secrets.
+2. **Credentials** for integrations are managed by Owletto; MCP server credentials are resolved by the gateway proxy — workers never see raw secrets.
 3. **Nix packages** are passed as environment variables (`NIX_PACKAGES`, `NIX_FLAKE_URL`) to the worker entrypoint.
 4. **Network and tool policies** are enforced at the orchestrator level (Docker / Kubernetes).
 5. The worker container starts with everything in place.
@@ -94,16 +94,7 @@ The worker runs `nix develop github:user/my-agent-env --command <entrypoint>`, g
 
 ## Integrations
 
-Integrations provide authenticated API access to external services. The gateway owns all credentials — workers only see the results of API calls, never raw tokens.
-
-**How it works:**
-
-1. User authenticates via OAuth or enters an API key on the settings page.
-2. Credentials are stored in Redis (`mcp:credential:{userId}:{integrationId}`).
-3. At runtime, the worker makes requests through the gateway proxy. The gateway injects the correct `Authorization` header before forwarding to the upstream API.
-4. The worker receives the API response — it never handles, stores, or sees the token.
-
-This model centralizes secret management and lets workers run with minimal privileges (read-only rootfs, no internet access except through the proxy).
+Integration auth for third-party APIs (GitHub, Google, Linear, etc.) is handled by **Owletto**. Workers access these APIs through Owletto MCP tools, which manage OAuth credentials, token refresh, and API proxying. Workers never see OAuth tokens directly.
 
 <SkillsRegistryTable client:load />
 
@@ -111,11 +102,10 @@ This model centralizes secret management and lets workers run with minimal privi
 
 ## MCP servers
 
-[MCP](https://modelcontextprotocol.io/) (Model Context Protocol) servers extend agent capabilities with additional tools. Skills can declare MCP servers, and the gateway handles discovery, proxying, and OAuth flows.
+[MCP](https://modelcontextprotocol.io/) (Model Context Protocol) servers extend agent capabilities with additional tools. Skills can declare MCP servers, and the gateway handles proxying and credential injection.
 
 - **HTTP/SSE transport**: workers connect to MCP servers through the gateway proxy. No direct outbound network required.
-- **OAuth**: if an MCP server requires authentication, the gateway manages the full OAuth flow (authorization URL, callback, token storage, refresh).
-- **Per-user credentials**: each user authenticates independently. The gateway injects the correct token when proxying MCP requests for a given user.
+- **Per-user credentials**: each user authenticates independently via a device-code flow. The gateway injects the correct token when proxying MCP requests for a given user.
 
 ```yaml
 mcpServers:
@@ -151,10 +141,6 @@ description: What this skill does
 integrations:
   - id: google
     authType: oauth
-    scopesConfig:
-      default: [gmail.readonly]
-      available: [gmail.send]
-    apiDomains: [gmail.googleapis.com]
 
 mcpServers:
   my-mcp:
@@ -190,11 +176,9 @@ uses the declared capabilities.
 |-------|------|-------------|
 | `name` | string | Display name shown in settings and search results |
 | `description` | string | Short summary for the skill registry |
-| `integrations` | array | OAuth / API-key services the skill requires |
+| `integrations` | array | Third-party services the skill requires (managed by Owletto) |
 | `integrations[].id` | string | Integration identifier (e.g. `google`, `github`) |
 | `integrations[].authType` | `oauth` \| `apiKey` | Authentication method |
-| `integrations[].scopesConfig` | object | Default and available OAuth scopes |
-| `integrations[].apiDomains` | string[] | Upstream API domains the gateway will proxy |
 | `mcpServers` | object | MCP server connections (keyed by server ID) |
 | `mcpServers.<id>.url` | string | Server endpoint URL |
 | `mcpServers.<id>.type` | `sse` \| `http` | Transport type |

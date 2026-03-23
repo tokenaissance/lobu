@@ -14,11 +14,6 @@ function extractText(result: {
   return result.content[0]?.text || "";
 }
 
-function extractConnectServiceHint(text: string): string | null {
-  const match = text.match(/ConnectService\s*\(e\.g\.\s*id='([^']+)'\)/);
-  return match?.[1] ?? null;
-}
-
 describe("audio provider suggestions", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -75,7 +70,7 @@ describe("GenerateAudio dynamic provider messaging", () => {
     mock.restore();
   });
 
-  test("uses dynamic capability providers in missing-scope guidance and ConnectService hint", async () => {
+  test("uses dynamic capability providers in missing-scope guidance", async () => {
     const fetchMock = mock(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
@@ -121,11 +116,9 @@ describe("GenerateAudio dynamic provider messaging", () => {
     );
 
     const text = extractText(result as any);
-    const hintProvider = extractConnectServiceHint(text);
 
     expect(text).toContain("OpenAI, Google Gemini");
-    expect(text).toContain("ConnectService");
-    expect(hintProvider).toBe("chatgpt");
+    expect(text).toContain("settings page");
   });
 });
 

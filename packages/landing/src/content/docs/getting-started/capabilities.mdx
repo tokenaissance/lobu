@@ -128,25 +128,6 @@ export const customTools = [
     response: "Before proceeding:\n\nRun full migration or dry run first?",
     buttons: [{ label: "Full Migration", action: "link" }, { label: "Dry Run", action: "link" }],
   },
-  {
-    name: "ConnectService",
-    how: "Starts OAuth/API-key connection flow for integrations and MCP servers.",
-    prompt: "Connect the user's GitHub account.",
-    response: "Starting GitHub OAuth flow. Click below to authorize.",
-    buttons: [{ label: "Connect GitHub", action: "link" }],
-  },
-  {
-    name: "CallService",
-    how: "Calls external APIs through gateway proxy, where auth and secrets are injected securely.",
-    prompt: "List open pull requests from the connected repo.",
-    response: "3 open PRs:\n• #142 — fix auth timeout (2 approvals)\n• #138 — add rate limiting (needs review)\n• #135 — update deps (CI failing)",
-  },
-  {
-    name: "DisconnectService",
-    how: "Revokes or removes an existing connected integration.",
-    prompt: "Disconnect my Linear integration.",
-    response: "Linear integration disconnected. Credentials removed.\n\nReconnect anytime via settings.",
-  },
 ];
 
 This page explains how Lobu capabilities run on top of the OpenClaw runtime and Lobu's API runtime.
@@ -174,10 +155,10 @@ The gateway sits between users and workers, handling everything outside of agent
 
 - **Platform adapters** — receives messages from Telegram, WhatsApp, Slack, or the REST API and normalizes them into a common job format.
 - **Provider proxying** — routes LLM API calls through the gateway proxy, injecting the user's provider credentials per-request. Workers only know placeholder URLs.
-- **Auth resolution** — manages OAuth flows, API key storage, and MCP server authentication. Connected services are available to workers via `CallService` without exposing tokens.
+- **Auth resolution** — manages provider credentials and MCP server authentication. Third-party API auth (GitHub, Google, etc.) is handled by Owletto.
 - **Scheduling** — `ScheduleReminder` and `CancelReminder` calls are handled by the gateway's job scheduler, which triggers worker sessions at the scheduled time.
 - **Policy enforcement** — network allowlists, tool permissions, and package approvals are enforced at the gateway layer before reaching the worker.
-- **Custom tools** — the 13 Lobu-specific tools (`UploadUserFile`, `ConnectService`, `AskUserQuestion`, etc.) are API calls from the worker back to the gateway.
+- **Custom tools** — the Lobu-specific tools (`UploadUserFile`, `AskUserQuestion`, etc.) are API calls from the worker back to the gateway.
 
 This split means agents evolve via config and user approvals — no new integration codepath needed for each provider or skill.
 
@@ -219,9 +200,6 @@ From `packages/worker/src/openclaw/custom-tools.ts`. These tools call back to th
 | `GenerateAudio` | Converts text to speech and returns audio. | Voice responses or spoken summaries. |
 | `GetChannelHistory` | Fetches prior messages in the conversation thread. | Recover context from earlier discussion. |
 | `AskUserQuestion` | Sends structured button-based questions to the user. | Branching choices and approvals without free-text ambiguity. |
-| `ConnectService` | Authenticates with a service (OAuth integration or MCP server). | Connect user account before API operations. |
-| `CallService` | Calls external APIs through gateway-managed auth. | Make authenticated API requests without exposing secrets. |
-| `DisconnectService` | Removes service connection/credentials. | Revoke or reset broken/stale integration access. |
 
 ## How each tool works
 

@@ -18,6 +18,7 @@ import type { CliTokenService } from "../../auth/cli/token-service";
 import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
 import type { QueueProducer } from "../../infrastructure/queue/queue-producer";
 import { getModelProviderModules } from "../../modules/module-system";
+import { resolveAgentOptions } from "../../services/platform-helpers";
 import type { ISessionManager, ThreadSession } from "../../session";
 
 const logger = createLogger("agent-api");
@@ -480,8 +481,14 @@ export function createAgentApi(
         }));
 
       if (systemProviders.length > 0) {
+        // Also inherit pluginsConfig from template agent if available
+        const templateId = await agentSettingsStore.findTemplateAgentId();
+        const templateSettings = templateId
+          ? await agentSettingsStore.getSettings(templateId)
+          : null;
         await agentSettingsStore.saveSettings(agentId, {
           installedProviders: systemProviders,
+          pluginsConfig: templateSettings?.pluginsConfig,
         });
         logger.info(
           `Ephemeral agent ${agentId}: provisioned system providers [${systemProviders.map((p) => p.providerId).join(", ")}]`
@@ -490,8 +497,11 @@ export function createAgentApi(
         // Fall back to using an existing agent as template (inherits its providers)
         const templateId = await agentSettingsStore.findTemplateAgentId();
         if (templateId) {
+          const templateSettings =
+            await agentSettingsStore.getSettings(templateId);
           await agentSettingsStore.saveSettings(agentId, {
             templateAgentId: templateId,
+            pluginsConfig: templateSettings?.pluginsConfig,
           });
           logger.info(
             `Ephemeral agent ${agentId}: using template ${templateId}`
@@ -707,6 +717,25 @@ export function createAgentApi(
 
     try {
       const channelId = session.channelId || `api-${agentId.slice(0, 8)}`;
+
+      // Merge agent settings (pluginsConfig, toolsConfig, etc.) like platform handlers do
+      const baseOptions: Record<string, any> = {
+        provider: session.provider || "claude",
+        model: session.model,
+      };
+      const agentOptions = await resolveAgentOptions(
+        agentId,
+        baseOptions,
+        agentSettingsStore
+      );
+
+      // Extract settings-level overrides that resolveAgentOptions may have added
+      const {
+        networkConfig: settingsNetwork,
+        mcpServers: settingsMcpServers,
+        ...remainingOptions
+      } = agentOptions;
+
       const jobId = await queueProducer.enqueueMessage({
         userId: session.userId,
         conversationId: session.conversationId || agentId,
@@ -722,12 +751,11 @@ export function createAgentApi(
           source: "direct-api",
           traceparent: traceparent || undefined,
         },
-        agentOptions: {
-          provider: session.provider || "claude",
-          model: session.model,
-        },
-        networkConfig: session.networkConfig,
-        mcpConfig: session.mcpConfig,
+        agentOptions: remainingOptions,
+        networkConfig: session.networkConfig || settingsNetwork,
+        mcpConfig:
+          session.mcpConfig ||
+          (settingsMcpServers ? { mcpServers: settingsMcpServers } : undefined),
       });
 
       rootSpan?.end();

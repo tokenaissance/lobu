@@ -15,14 +15,14 @@ For deeper details, see the repository security document: [docs/SECURITY.md](htt
 
 ## Secrets
 
-- Provider credentials and integration auth are managed on the gateway side.
+- Provider credentials are managed on the gateway side. Integration auth (GitHub, Google, etc.) is handled by Owletto.
 - Workers should not depend on long-lived raw credentials in their runtime context.
-- Settings links and integration flows are used to collect/refresh auth safely.
+- Device-code auth flows and settings links are used to collect/refresh auth safely.
 
 ## MCP Proxy
 
 - Workers access MCP capabilities through gateway-managed MCP config/proxy paths.
-- OAuth callbacks and token handling are centralized in the gateway.
+- Per-user credentials are resolved via the device-auth flow and injected by the gateway proxy.
 - This keeps tool access extensible without exposing global secrets directly to workers.
 
 ## Permissions Section
