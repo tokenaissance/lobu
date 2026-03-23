@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import { mkdir } from "node:fs/promises";
 import {
   createLogger,
