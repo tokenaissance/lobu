@@ -8,6 +8,7 @@ import { createLogger, generateTraceId } from "@lobu/core";
 import type Redis from "ioredis";
 import type { CommandDispatcher } from "../commands/command-dispatcher";
 import { createChatReply } from "../commands/command-reply-adapters";
+import { getModelProviderModules } from "../modules/module-system";
 import type { CoreServices } from "../platform";
 import {
   buildMessagePayload,
@@ -279,7 +280,8 @@ class MessageHandlerBridge {
     if (agentSettingsStore) {
       const settings = await agentSettingsStore.getSettings(agentId);
       const hasAuth =
-        settings?.authProfiles && settings.authProfiles.length > 0;
+        (settings?.authProfiles && settings.authProfiles.length > 0) ||
+        getModelProviderModules().some((m) => m.hasSystemKey());
       if (!hasAuth && settings?.templateAgentId) {
         const templateSettings = await agentSettingsStore.getSettings(
           settings.templateAgentId
