@@ -274,6 +274,33 @@ class MessageHandlerBridge {
     // Build payload and enqueue
     const traceId = generateTraceId(messageId);
     const agentSettingsStore = this.services.getAgentSettingsStore();
+
+    // Check if agent has any provider credentials before enqueuing
+    if (agentSettingsStore) {
+      const settings = await agentSettingsStore.getSettings(agentId);
+      const hasAuth =
+        settings?.authProfiles && settings.authProfiles.length > 0;
+      if (!hasAuth && settings?.templateAgentId) {
+        const templateSettings = await agentSettingsStore.getSettings(
+          settings.templateAgentId
+        );
+        if (
+          !templateSettings?.authProfiles ||
+          templateSettings.authProfiles.length === 0
+        ) {
+          await thread.post(
+            "No AI provider is configured yet. Open settings to add one: /configure"
+          );
+          return;
+        }
+      } else if (!hasAuth) {
+        await thread.post(
+          "No AI provider is configured yet. Open settings to add one: /configure"
+        );
+        return;
+      }
+    }
+
     const agentOptions = await resolveAgentOptions(
       agentId,
       {},
