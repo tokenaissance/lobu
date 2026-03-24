@@ -517,7 +517,7 @@ export class OpenClawWorker implements WorkerExecutor {
           throw new Error("SESSION_TIMEOUT");
         } else {
           const isAuthError =
-            /401|403|unauthorized|token.*expired|invalid.*key|invalid.*token/i.test(
+            /no.credentials.configured|no_credentials|invalid.*api.key|incorrect.*api.key|token.*expired/i.test(
               errorMsg
             );
           const userMessage = isAuthError

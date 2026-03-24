@@ -204,6 +204,17 @@ export class SecretProxy {
           logger.warn(
             `No auth profile for agent ${urlAgentId}, provider ${providerId}`
           );
+          return c.json(
+            {
+              error: {
+                message:
+                  "No provider credentials configured. Please add or update your API key in settings: /configure",
+                type: "authentication_error",
+                code: "no_credentials",
+              },
+            },
+            401
+          );
         }
       } else {
         logger.warn(`No providerId mapping for slug "${resolvedSlug}"`);
