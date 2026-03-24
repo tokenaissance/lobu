@@ -99,7 +99,7 @@ export function HeroSection() {
         </p>
 
         {/* CTA buttons */}
-        <div class="flex flex-wrap gap-3 mb-8 justify-center">
+        <div class="flex flex-wrap gap-3 mb-5 justify-center">
           <a
             href={TELEGRAM_BOT_URL}
             target="_blank"
@@ -126,6 +126,54 @@ export function HeroSection() {
             <ApiIcon />
             GitHub
           </a>
+        </div>
+
+        {/* Run locally */}
+        <div class="flex items-center justify-center gap-2 mb-8">
+          <span
+            class="text-xs"
+            style={{ color: "var(--color-page-text-muted)" }}
+          >
+            or run locally
+          </span>
+          <button
+            type="button"
+            class="hero-copy-btn inline-flex items-center gap-2 font-mono text-[13px] px-4 py-2 rounded-lg transition-all hover:opacity-80 cursor-pointer"
+            style={{
+              color: "rgba(255,255,255,0.75)",
+              backgroundColor: "rgba(0,0,0,0.3)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+            onClick={(e) => {
+              const button = e.currentTarget as HTMLButtonElement;
+              navigator.clipboard.writeText("npx @lobu/cli init").then(() => {
+                const original = button.innerHTML;
+                button.innerHTML =
+                  '<span style="color: var(--color-tg-accent)">Copied!</span>';
+                setTimeout(() => {
+                  button.innerHTML = original;
+                }, 2000);
+              });
+            }}
+          >
+            <span style={{ color: "var(--color-tg-accent)" }}>$</span> npx
+            @lobu/cli init
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style={{ opacity: 0.5 }}
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
         </div>
       </div>
     </section>
