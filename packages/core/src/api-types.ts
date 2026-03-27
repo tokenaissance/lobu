@@ -195,38 +195,51 @@ export interface Connection {
   updatedAt: number;
 }
 
+export interface ProviderStatus {
+  connected: boolean;
+  userConnected: boolean;
+  systemConnected: boolean;
+  activeAuthType?: string;
+  authMethods?: string[];
+}
+
 export interface AgentConfigResponse {
   agentId: string;
-  providers: Record<
-    string,
-    {
-      connected: boolean;
-      userConnected: boolean;
-      systemConnected: boolean;
-      activeAuthType?: string;
-      authMethods?: string[];
-    }
-  >;
-  PROVIDERS: Record<string, ProviderInfo>;
-  providerOrder: string[];
-  providerModels: Record<string, ModelOption[]>;
-  modelSelection: ModelSelectionState;
-  providerModelPreferences: Record<string, string>;
-  catalogProviders: CatalogProvider[];
-  providerIconUrls: Record<string, string>;
+
+  instructions: {
+    identity: string;
+    soul: string;
+    user: string;
+  };
+
+  providers: {
+    order: string[];
+    status: Record<string, ProviderStatus>;
+    catalog: CatalogProvider[];
+    meta: Record<string, ProviderInfo>;
+    models: Record<string, ModelOption[]>;
+    preferences: Record<string, string>;
+    icons: Record<string, string>;
+    modelSelection: ModelSelectionState;
+    baseNames: string[];
+    configManaged: string[];
+  };
+
   skills: Skill[];
   mcpServers: Record<string, McpConfig>;
-  nixPackages: string[];
-  identityMd: string;
-  soulMd: string;
-  userMd: string;
-  verboseLogging: boolean;
-  memoryEnabled: boolean;
+
+  tools: {
+    nixPackages: string[];
+    permissions: PermissionGrant[];
+    schedules: Schedule[];
+    registries: RegistryEntry[];
+    globalRegistries: RegistryEntry[];
+  };
+
+  settings: {
+    verboseLogging: boolean;
+    memoryEnabled: boolean;
+  };
+
   integrationStatus: Record<string, IntegrationStatusEntry>;
-  registries: RegistryEntry[];
-  globalRegistries: RegistryEntry[];
-  permissionGrants: PermissionGrant[];
-  schedules: Schedule[];
-  baseProviderNames: string[];
-  configManagedProviders: string[];
 }

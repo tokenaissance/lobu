@@ -15,7 +15,7 @@ import {
 import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
 import type { ProviderCatalogService } from "../../auth/provider-catalog";
 import { collectProviderModelOptions } from "../../auth/provider-model-options";
-import type { ProviderStatus } from "../../auth/provider-status";
+
 import type { AgentSettings, AgentSettingsStore } from "../../auth/settings";
 import type { AuthProfilesManager } from "../../auth/settings/auth-profiles-manager";
 import {
@@ -29,7 +29,11 @@ import type { SettingsTokenPayload } from "../../auth/settings/token-service";
 import type { UserAgentsStore } from "../../auth/user-agents-store";
 import type { WorkerConnectionManager } from "../../gateway/connection-manager";
 import type { IMessageQueue } from "../../infrastructure/queue";
-import type { ModelOption } from "../../modules/module-system";
+import {
+  getModelProviderModules,
+  type ModelOption,
+  type ModelProviderModule,
+} from "../../modules/module-system";
 import type { GrantStore } from "../../permissions/grant-store";
 import { verifySettingsSession } from "./settings-auth";
 
@@ -553,8 +557,17 @@ export function createAgentConfigRoutes(
 
     const settings = await config.agentSettingsStore.getSettings(agentId);
 
-    // Provider status
-    const providers: Record<string, ProviderStatus> = {};
+    // Provider status (API shape — simplified authMethods)
+    const providers: Record<
+      string,
+      {
+        connected: boolean;
+        userConnected: boolean;
+        systemConnected: boolean;
+        activeAuthType?: string;
+        authMethods?: string[];
+      }
+    > = {};
     if (config.providerStores) {
       for (const [name, store] of Object.entries(config.providerStores)) {
         try {
@@ -578,12 +591,7 @@ export function createAgentConfigRoutes(
             userConnected: hasUserCredentials,
             systemConnected: hasSystemCredentials,
             activeAuthType: validProfiles[0]?.authType,
-            authMethods: validProfiles.map((p, i) => ({
-              profileId: p.id,
-              authType: p.authType,
-              label: p.label,
-              isPrimary: i === 0,
-            })),
+            authMethods: validProfiles.map((p) => p.authType),
           };
         } catch {
           providers[name] = {
@@ -595,10 +603,105 @@ export function createAgentConfigRoutes(
       }
     }
 
+    // Build provider catalog from module registry
+    const allModules = getModelProviderModules();
+    const allProviderMeta = allModules
+      .filter((m) => m.catalogVisible !== false)
+      .map((m: ModelProviderModule) => ({
+        id: m.providerId,
+        name: m.providerDisplayName,
+        iconUrl: m.providerIconUrl || "",
+        authType: (m.authType || "oauth") as
+          | "oauth"
+          | "device-code"
+          | "api-key",
+        supportedAuthTypes: (m.supportedAuthTypes as (
+          | "oauth"
+          | "device-code"
+          | "api-key"
+        )[]) || [
+          (m.authType || "oauth") as "oauth" | "device-code" | "api-key",
+        ],
+        apiKeyInstructions: m.apiKeyInstructions || "",
+        apiKeyPlaceholder: m.apiKeyPlaceholder || "",
+        capabilities: [] as string[],
+      }));
+
+    const installedIds = (settings?.installedProviders || []).map(
+      (ip) => ip.providerId
+    );
+    const providerOrder = installedIds;
+    const catalogProviders = allProviderMeta.filter(
+      (p) => !new Set(installedIds).has(p.id)
+    );
+    const providerIconUrls: Record<string, string> = {};
+    for (const p of allProviderMeta) {
+      if (p.iconUrl) providerIconUrls[p.id] = p.iconUrl;
+    }
+
+    // Provider METADATA (name, authType, etc.) keyed by id
+    const PROVIDERS: Record<string, object> = {};
+    for (const p of allProviderMeta) {
+      PROVIDERS[p.id] = {
+        name: p.name,
+        authType: p.authType,
+        supportedAuthTypes: p.supportedAuthTypes,
+        apiKeyInstructions: p.apiKeyInstructions,
+        apiKeyPlaceholder: p.apiKeyPlaceholder,
+        capabilities: p.capabilities,
+      };
+    }
+
+    // Provider model options
+    const providerModels = await collectProviderModelOptions(
+      agentId,
+      payload.userId
+    );
+
+    // Model selection state
+    const providerModelPreferences: Record<string, string> = {};
+    for (const ip of settings?.installedProviders || []) {
+      if (ip.config?.modelPreference) {
+        providerModelPreferences[ip.providerId] = String(
+          ip.config.modelPreference
+        );
+      }
+    }
+
+    const sanitized = sanitizeSettingsForResponse(settings);
     return c.json({
       agentId,
-      settings: sanitizeSettingsForResponse(settings),
-      providers,
+      instructions: {
+        identity: sanitized.identityMd || "",
+        soul: sanitized.soulMd || "",
+        user: sanitized.userMd || "",
+      },
+      providers: {
+        order: providerOrder,
+        status: providers,
+        catalog: catalogProviders,
+        meta: PROVIDERS,
+        models: providerModels,
+        preferences: providerModelPreferences,
+        icons: providerIconUrls,
+        modelSelection: getModelSelectionState(settings || undefined),
+        baseNames: [] as string[],
+        configManaged: [] as string[],
+      },
+      skills: sanitized.skillsConfig?.skills || [],
+      mcpServers: sanitized.mcpServers || {},
+      tools: {
+        nixPackages: sanitized.nixConfig?.packages || [],
+        permissions: [] as any[],
+        schedules: [] as any[],
+        registries: sanitized.skillRegistries || [],
+        globalRegistries: [] as any[],
+      },
+      settings: {
+        verboseLogging: !!sanitized.verboseLogging,
+        memoryEnabled: !!process.env.AUTH_MCP_URL,
+      },
+      integrationStatus: {},
     });
   });
 

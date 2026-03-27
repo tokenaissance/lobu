@@ -125,6 +125,7 @@ export type {
   PrefillSkill,
   ProviderInfo,
   ProviderState,
+  ProviderStatus,
   Schedule,
   SettingsSnapshot,
   Skill,
