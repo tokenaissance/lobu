@@ -83,7 +83,7 @@ describe("encryption", () => {
 
   test("throws when ENCRYPTION_KEY has wrong length", () => {
     process.env.ENCRYPTION_KEY = "too-short";
-    expect(() => encrypt("test")).toThrow("must be exactly 32 bytes");
+    expect(() => encrypt("test")).toThrow("base64 or hex encoded 32-byte key");
   });
 
   test("accepts base64-encoded 32-byte key", () => {
@@ -93,10 +93,11 @@ describe("encryption", () => {
     expect(decrypt(encrypted)).toBe("base64 key test");
   });
 
-  test("accepts utf8 32-byte key", () => {
+  test("rejects utf8 32-byte key (only base64 and hex accepted)", () => {
     process.env.ENCRYPTION_KEY = "abcdefghijklmnopqrstuvwxyz012345";
-    // 32 ASCII chars = 32 bytes in utf8
-    const encrypted = encrypt("utf8 key test");
-    expect(decrypt(encrypted)).toBe("utf8 key test");
+    // 32 ASCII chars = 32 bytes in utf8, but utf8 keys are no longer accepted
+    expect(() => encrypt("utf8 key test")).toThrow(
+      "base64 or hex encoded 32-byte key"
+    );
   });
 });

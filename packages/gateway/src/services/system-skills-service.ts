@@ -9,13 +9,20 @@ import { createLogger } from "@lobu/core";
 
 const logger = createLogger("system-skills-service");
 
-const ENV_SUBSTITUTION_ALLOWLIST = new Set([
-  "NODE_ENV",
-  "PUBLIC_GATEWAY_URL",
-  "CLAWHUB_API_URL",
-  "TEMPO_ENDPOINT",
-  "MCP_API_KEY",
-  "SKILLS_REGISTRY_URL",
+// Block sensitive env vars from ${env:VAR} substitution in system skills config
+const ENV_SUBSTITUTION_BLOCKLIST = new Set([
+  "ENCRYPTION_KEY",
+  "ADMIN_PASSWORD",
+  "DATABASE_PASSWORD",
+  "DATABASE_URL",
+  "REDIS_URL",
+  "REDIS_PASSWORD",
+  "SLACK_CLIENT_SECRET",
+  "SLACK_SIGNING_SECRET",
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+  "AWS_SECRET_ACCESS_KEY",
+  "SENTRY_DSN",
 ]);
 
 export interface RuntimeSystemSkill {
@@ -196,9 +203,9 @@ export class SystemSkillsService {
       const substituted = raw.replace(
         /\$\{env:([^}]+)\}/g,
         (_match, varName) => {
-          if (!ENV_SUBSTITUTION_ALLOWLIST.has(varName)) {
+          if (ENV_SUBSTITUTION_BLOCKLIST.has(varName)) {
             logger.warn(
-              `Blocked env substitution for non-whitelisted var: ${varName}`
+              `Blocked env substitution for sensitive var: ${varName}`
             );
             return "";
           }

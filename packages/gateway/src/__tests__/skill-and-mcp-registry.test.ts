@@ -150,7 +150,7 @@ function createMockResolver(
     id: string;
     name: string;
     description: string;
-    type: "oauth" | "command" | "api-key" | "none";
+    type: "oauth" | "stdio" | "sse" | "api-key";
     config: Record<string, unknown>;
   }>
 ) {
@@ -164,21 +164,21 @@ const mcpEntries = [
     id: "github",
     name: "GitHub",
     description: "GitHub integration",
-    type: "command" as const,
+    type: "stdio" as const,
     config: { type: "stdio" },
   },
   {
     id: "sentry",
     name: "Sentry",
     description: "Error tracking",
-    type: "none" as const,
+    type: "sse" as const,
     config: { type: "sse" },
   },
   {
     id: "playwright",
     name: "Playwright",
     description: "Browser automation",
-    type: "command" as const,
+    type: "stdio" as const,
     config: {},
   },
   {
@@ -229,42 +229,42 @@ describe("McpRegistryService", () => {
         id: "custom1",
         name: "Custom 1",
         description: "Desc",
-        type: "none" as const,
+        type: "sse" as const,
         config: {},
       },
       {
         id: "custom2",
         name: "Custom 2",
         description: "Desc",
-        type: "none" as const,
+        type: "sse" as const,
         config: {},
       },
       {
         id: "custom3",
         name: "Custom 3",
         description: "Desc",
-        type: "none" as const,
+        type: "sse" as const,
         config: {},
       },
       {
         id: "custom4",
         name: "Custom 4",
         description: "Desc",
-        type: "none" as const,
+        type: "sse" as const,
         config: {},
       },
       {
         id: "custom5",
         name: "Custom 5",
         description: "Desc",
-        type: "none" as const,
+        type: "sse" as const,
         config: {},
       },
       {
         id: "custom6",
         name: "Custom 6",
         description: "Desc",
-        type: "none" as const,
+        type: "sse" as const,
         config: {},
       },
     ];

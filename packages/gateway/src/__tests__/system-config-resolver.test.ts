@@ -68,7 +68,7 @@ describe("SystemConfigResolver MCP and provider resolution", () => {
       "owletto",
       "local-tool",
     ]);
-    expect(registryEntries[1]?.type).toBe("command");
+    expect(registryEntries[1]?.type).toBe("stdio");
 
     expect(Object.keys(providers)).toEqual(["groq"]);
   });

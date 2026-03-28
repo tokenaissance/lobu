@@ -36,6 +36,8 @@ export interface ScheduledWakeup {
   iteration: number; // Current iteration (1-based, starts at 1)
   maxIterations: number; // Max iterations (default 1 for one-time, 10 for recurring)
   isRecurring: boolean; // Quick check flag
+  unlimited?: boolean; // No iteration cap, TTL refreshed each iteration
+  source?: string; // Caller identifier
 }
 
 export interface ScheduleParams {
@@ -52,6 +54,8 @@ export interface ScheduleParams {
   delayMinutes?: number; // Minutes from now (one-time)
   cron?: string; // Cron expression (recurring)
   maxIterations?: number; // Max iterations for recurring (default 10)
+  unlimited?: boolean; // Skip iteration cap, refresh TTL each iteration (for external/service schedules)
+  source?: string; // Caller identifier (e.g., "owletto:watcher:123")
 }
 
 interface ScheduledJobPayload {
@@ -185,12 +189,14 @@ export class ScheduledWakeupService {
       delayMs = params.delayMinutes! * 60 * 1000;
     }
 
-    // Validate maxIterations
-    const maxIterations = params.maxIterations
-      ? Math.min(Math.max(1, params.maxIterations), MAX_ITERATIONS)
-      : isRecurring
-        ? DEFAULT_RECURRING_ITERATIONS
-        : 1;
+    // Validate maxIterations (unlimited skips the cap)
+    const maxIterations = params.unlimited
+      ? Number.MAX_SAFE_INTEGER
+      : params.maxIterations
+        ? Math.min(Math.max(1, params.maxIterations), MAX_ITERATIONS)
+        : isRecurring
+          ? DEFAULT_RECURRING_ITERATIONS
+          : 1;
 
     // Check pending count limit
     const pending = await this.listPending(params.deploymentName);
@@ -223,6 +229,8 @@ export class ScheduledWakeupService {
       iteration: 1,
       maxIterations,
       isRecurring,
+      unlimited: params.unlimited,
+      source: params.source,
     };
 
     // Store in Redis with TTL
@@ -269,6 +277,37 @@ export class ScheduledWakeupService {
     );
 
     return schedule;
+  }
+
+  /**
+   * Schedule from an external service (no worker context needed).
+   * Synthesizes deployment/conversation context from agentId.
+   */
+  async scheduleExternal(params: {
+    agentId: string;
+    task: string;
+    context?: Record<string, unknown>;
+    cron?: string;
+    delayMinutes?: number;
+    maxIterations?: number;
+    source?: string;
+  }): Promise<ScheduledWakeup> {
+    return this.schedule({
+      deploymentName: `external-${params.agentId.slice(0, 8)}`,
+      conversationId: params.agentId,
+      channelId: params.agentId,
+      userId: "system",
+      agentId: params.agentId,
+      teamId: "external",
+      platform: "api",
+      task: params.task,
+      context: params.context,
+      cron: params.cron,
+      delayMinutes: params.delayMinutes,
+      maxIterations: params.maxIterations,
+      unlimited: !!params.cron, // cron schedules from external are unlimited by default
+      source: params.source,
+    });
   }
 
   /**
@@ -578,11 +617,9 @@ Schedule ID: ${schedule.id}`;
     );
 
     // Handle recurring: schedule next iteration or complete
-    if (
-      schedule.isRecurring &&
-      schedule.iteration < schedule.maxIterations &&
-      schedule.cron
-    ) {
+    const hasIterationsLeft =
+      schedule.unlimited || schedule.iteration < schedule.maxIterations;
+    if (schedule.isRecurring && hasIterationsLeft && schedule.cron) {
       try {
         // Calculate next trigger from cron
         const interval = CronExpressionParser.parse(schedule.cron);
