@@ -15,6 +15,7 @@ import {
   TOKEN_EXPIRATION_MS,
 } from "../../auth/api-auth-middleware";
 import type { CliTokenService } from "../../auth/cli/token-service";
+import type { ExternalAuthClient } from "../../auth/external/client";
 import type { AgentSettingsStore } from "../../auth/settings/agent-settings-store";
 import type { QueueProducer } from "../../infrastructure/queue/queue-producer";
 import { getModelProviderModules } from "../../modules/module-system";
@@ -389,6 +390,7 @@ export interface AgentApiConfig {
   publicGatewayUrl: string;
   adminPassword?: string;
   cliTokenService?: CliTokenService;
+  externalAuthClient?: ExternalAuthClient;
   agentSettingsStore?: AgentSettingsStore;
 }
 
@@ -424,6 +426,7 @@ export function createAgentApi(
     createApiAuthMiddleware({
       adminPassword,
       cliTokenService,
+      externalAuthClient: config.externalAuthClient,
       allowSettingsSession: true,
     })
   );

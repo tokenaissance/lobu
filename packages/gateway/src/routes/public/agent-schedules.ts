@@ -4,13 +4,13 @@
  * Schedule management endpoints mounted under /api/v1/agents/{agentId}/schedules
  */
 
-import { timingSafeEqual } from "node:crypto";
+import { createLogger } from "@lobu/core";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import type { AgentMetadataStore } from "../../auth/agent-metadata-store";
-import type { UserAgentsStore } from "../../auth/user-agents-store";
+import type { ExternalAuthClient } from "../../auth/external/client";
 import type { ScheduledWakeupService } from "../../orchestration/scheduled-wakeup";
-import { createTokenVerifier } from "../shared/token-verifier";
 import { verifySettingsSession } from "./settings-auth";
+
+const logger = createLogger("agent-schedules");
 
 const TAG = "Schedules";
 const ErrorResponse = z.object({ error: z.string() });
@@ -129,20 +129,7 @@ const createScheduleRoute = createRoute({
 
 export interface AgentSchedulesRoutesConfig {
   scheduledWakeupService?: ScheduledWakeupService;
-  userAgentsStore?: UserAgentsStore;
-  agentMetadataStore?: AgentMetadataStore;
-  adminPassword?: string;
-}
-
-function verifyAdminBearer(
-  authHeader: string | undefined,
-  adminPassword: string | undefined
-): boolean {
-  if (!authHeader?.startsWith("Bearer ") || !adminPassword) return false;
-  const token = authHeader.substring(7);
-  const a = Buffer.from(token);
-  const b = Buffer.from(adminPassword);
-  return a.length === b.length && timingSafeEqual(a, b);
+  externalAuthClient?: ExternalAuthClient;
 }
 
 export function createAgentSchedulesRoutes(
@@ -150,20 +137,37 @@ export function createAgentSchedulesRoutes(
 ): OpenAPIHono {
   const app = new OpenAPIHono();
 
-  const verifyToken = createTokenVerifier(config);
+  /**
+   * Auth: settings session (cookie/authProvider) OR external OAuth Bearer token
+   * (validated via AUTH_MCP_URL userinfo endpoint).
+   */
+  async function requireAuth(c: any, _agentId: string): Promise<boolean> {
+    // 1. Try settings session (cookie or injected authProvider)
+    const session = verifySettingsSession(c);
+    if (session) return true;
 
-  // POST / — create schedule (accepts admin Bearer OR settings session)
+    // 2. Try external OAuth Bearer token (validated via AUTH_MCP_URL)
+    if (config.externalAuthClient) {
+      const authHeader = c.req.header("Authorization");
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.substring(7);
+        try {
+          const userInfo = await config.externalAuthClient.fetchUserInfo(token);
+          if (userInfo?.sub) return true;
+        } catch (err) {
+          logger.debug({ err }, "Bearer token validation failed");
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // POST / — create schedule
   app.openapi(createScheduleRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-
-    // Auth: admin Bearer token OR settings session
-    const isAdmin = verifyAdminBearer(
-      c.req.header("Authorization"),
-      config.adminPassword
-    );
-    if (!isAdmin) {
-      const payload = await verifyToken(verifySettingsSession(c), agentId);
-      if (!payload) return c.json({ error: "Unauthorized" }, 401);
+    if (!(await requireAuth(c, agentId))) {
+      return c.json({ error: "Unauthorized" }, 401);
     }
 
     if (!config.scheduledWakeupService) {
@@ -214,8 +218,9 @@ export function createAgentSchedulesRoutes(
 
   app.openapi(listSchedulesRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
-    if (!payload) return c.json({ error: "Unauthorized" }, 401);
+    if (!(await requireAuth(c, agentId))) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
 
     if (!config.scheduledWakeupService) return c.json({ schedules: [] });
 
@@ -235,8 +240,9 @@ export function createAgentSchedulesRoutes(
 
   app.openapi(cancelScheduleRoute, async (c): Promise<any> => {
     const agentId = c.req.param("agentId") || "";
-    const payload = await verifyToken(verifySettingsSession(c), agentId);
-    if (!payload) return c.json({ error: "Unauthorized" }, 401);
+    if (!(await requireAuth(c, agentId))) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
 
     if (!config.scheduledWakeupService) {
       return c.json({ error: "Not configured" }, 500);

@@ -5,6 +5,7 @@ import { createLogger } from "@lobu/core";
 import { z } from "zod";
 import { createApiAuthMiddleware } from "../../auth/api-auth-middleware";
 import type { CliTokenService } from "../../auth/cli/token-service";
+import type { ExternalAuthClient } from "../../auth/external/client";
 import type { PlatformRegistry } from "../../platform";
 
 const logger = createLogger("messaging-routes");
@@ -147,7 +148,11 @@ interface SendMessageRequest {
  */
 export function createMessagingRoutes(
   platformRegistry: PlatformRegistry,
-  auth?: { adminPassword?: string; cliTokenService?: CliTokenService }
+  auth?: {
+    adminPassword?: string;
+    cliTokenService?: CliTokenService;
+    externalAuthClient?: ExternalAuthClient;
+  }
 ): OpenAPIHono {
   const app = new OpenAPIHono();
 

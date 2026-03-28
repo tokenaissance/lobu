@@ -300,6 +300,7 @@ export function createGatewayApp(
     const messagingRouter = createMessagingRoutes(platformRegistry, {
       adminPassword,
       cliTokenService,
+      externalAuthClient: coreServices?.getSettingsOAuthClient(),
     });
     app.route("", messagingRouter);
     logger.debug("Messaging routes enabled at :8080/api/v1/messaging/send");
@@ -320,6 +321,7 @@ export function createGatewayApp(
         publicGatewayUrl: publicUrl,
         adminPassword,
         cliTokenService,
+        externalAuthClient: coreServices.getSettingsOAuthClient(),
         agentSettingsStore: coreServices.getAgentSettingsStore(),
       });
       app.route("", agentApi);
@@ -753,8 +755,7 @@ export function createGatewayApp(
       } = require("../routes/public/agent-schedules");
       const agentSchedulesRouter = createAgentSchedulesRoutes({
         scheduledWakeupService,
-        userAgentsStore: coreServices.getUserAgentsStore(),
-        agentMetadataStore: coreServices.getAgentMetadataStore(),
+        externalAuthClient: coreServices.getSettingsOAuthClient(),
       });
       app.route("/api/v1/agents/:agentId/schedules", agentSchedulesRouter);
       logger.debug(

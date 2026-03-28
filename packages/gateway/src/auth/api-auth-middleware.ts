@@ -3,16 +3,18 @@ import { verifyWorkerToken } from "@lobu/core";
 import type { Context, Next } from "hono";
 import { verifySettingsSession } from "../routes/public/settings-auth";
 import type { CliTokenService } from "./cli/token-service";
+import type { ExternalAuthClient } from "./external/client";
 
 export const TOKEN_EXPIRATION_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Creates a Hono middleware that enforces the standard auth check:
- *   1. Settings session cookie  2. CLI JWT  3. Admin password  4. Worker token
+ *   1. Settings session cookie  2. CLI JWT  3. External OAuth  4. Admin password  5. Worker token
  */
 export function createApiAuthMiddleware(opts: {
   adminPassword?: string;
   cliTokenService?: CliTokenService;
+  externalAuthClient?: ExternalAuthClient;
   allowWorkerToken?: boolean;
   allowSettingsSession?: boolean;
 }) {
@@ -32,7 +34,17 @@ export function createApiAuthMiddleware(opts: {
       if (identity) return next();
     }
 
-    // 3. Try admin password
+    // 3. Try external OAuth token (validated against AUTH_MCP_URL userinfo)
+    if (opts.externalAuthClient) {
+      try {
+        const userInfo = await opts.externalAuthClient.fetchUserInfo(token);
+        if (userInfo?.sub) return next();
+      } catch {
+        // Token not valid for external auth, continue to next method
+      }
+    }
+
+    // 4. Try admin password
     if (opts.adminPassword) {
       const a = Buffer.from(token);
       const b = Buffer.from(opts.adminPassword);
@@ -41,7 +53,7 @@ export function createApiAuthMiddleware(opts: {
       }
     }
 
-    // 4. Try worker token when explicitly allowed for the route
+    // 5. Try worker token when explicitly allowed for the route
     if (opts.allowWorkerToken !== false) {
       const workerData = verifyWorkerToken(token);
       if (workerData) {
