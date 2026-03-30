@@ -1,8 +1,8 @@
-# Lobu - Serverless Openclaw Infrastructure
+# Lobu - Serverless OpenClaw Infrastructure
 
 **Lobu** helps you deploy **autonomous AI agents**.
 
-Computer-use agents via REST API, on Slack, Telegram, and WhatsApp.  
+Computer-use agents via REST API, on Slack, Telegram, WhatsApp, Discord, and Teams.
 Sandboxed, persistent, powered by the OpenClaw runtime and Lobu Skills.
 
 **Batteries included.** Lobu bundles sandboxed execution, MCP proxy, and gateway-level network isolation. One deployment, everything included.
@@ -20,6 +20,10 @@ Sandboxed, persistent, powered by the OpenClaw runtime and Lobu Skills.
 **Telegram** — Long-polling bot integration with interactive agent workflows.
 
 **WhatsApp** — Baileys-based integration with a unique self-chat mode.
+
+**Discord** — Bot integration with channel and DM support.
+
+**Teams** — Microsoft Teams bot integration.
 
 ## Quick Start
 
@@ -53,7 +57,9 @@ helm install lobu oci://ghcr.io/lobu-ai/charts/lobu \
 ```mermaid
 flowchart LR
   Slack[Slack] <--> GW[Gateway]
+  Telegram[Telegram] <--> GW
   WhatsApp[WhatsApp] <--> GW
+  Discord[Discord] <--> GW
   API[REST API] <--> GW
 
   GW <--> Redis[(Redis)]
@@ -82,7 +88,7 @@ Every Lobu agent comes equipped with a suite of tools for autonomous execution a
 | **File & Media Delivery** | Share reports, charts, or generated voice messages. | `UploadUserFile`, `GenerateAudio` |
 | **Self-Expansion** | Search and dynamically install new skills or MCP servers. | `SearchSkills`, `InstallSkill` |
 | **Connected APIs** | Access third-party APIs (GitHub, Google, etc.) through Owletto MCP tools with managed OAuth. | MCP tools via Owletto |
-| **Managed MCP Proxy** | Securely connect to any MCP server with secret injection. | [MCP Proxy](docs/SECURITY.md#mcp-oauth-and-credentials) |
+| **Managed MCP Proxy** | Securely connect to any MCP server with secret injection. | [MCP Proxy](docs/SECURITY.md#credentials) |
 | **Advanced Capabilities** | Extend agent abilities with web browsing, headless UI interaction, and specialized utilities via Nix packages or external MCP servers. | `bash` (Nix), `SearchSkills`, `InstallSkill` (MCP) |
 
 ### Popular MCP Integrations
@@ -95,7 +101,7 @@ Workers access third-party APIs through MCP servers. OAuth and credential manage
 
 **MCP Proxy.** Workers call MCP tools via the gateway. The gateway resolves `${env:VAR}` secrets and routes to upstream MCP servers. OAuth credentials for third-party APIs are managed by Owletto — workers never see tokens directly.
 
-**Multi-platform, multi-tenant.** One bot instance serves Slack, WhatsApp, and REST API. Each channel/DM gets its own isolated runtime, model, tools, credentials, and Nix packages.
+**Multi-platform, multi-tenant.** One bot instance serves Slack, Telegram, WhatsApp, Discord, Teams, and REST API. Each channel/DM gets its own isolated runtime, model, tools, credentials, and Nix packages.
 
 **OpenClaw runtime.** Workers run [OpenClaw Pi Agent](https://openclaw.ai/), with per-agent model selection via the settings page. Supports OpenClaw skills, `IDENTITY.md`, `SOUL.md`, and `USER.md` workspace files.
 
@@ -109,7 +115,7 @@ Lobu is the **infrastructure layer** for autonomous agents. Unlike frameworks (L
 |---|---|---|
 | **Scale to zero** | Workers scale down when idle | Requires always-on computer |
 | **Multi-tenant** | Single bot, per-channel/DM isolation | One instance per setup |
-| **Multi-platform** | Slack, WhatsApp, REST API | [15+ chat platforms](https://openclaw.ai/integrations) |
+| **Multi-platform** | Slack, Telegram, WhatsApp, Discord, Teams, REST API | [15+ chat platforms](https://openclaw.ai/integrations) |
 | **Runtime** | OpenClaw engine (sandboxed/proxied) | Native OpenClaw runtime |
 | **User onboarding** | Configure page with OAuth login per provider | CLI setup required |
 | **MCP access** | Proxied through gateway, secrets isolated | Direct from agent |
@@ -119,7 +125,7 @@ Lobu is the **infrastructure layer** for autonomous agents. Unlike frameworks (L
 ## Security and Privacy
 
 - [**No direct worker egress**](docs/SECURITY.md#network-egress) — all traffic routes through the gateway proxy.
-- [**Secrets stay in gateway**](docs/SECURITY.md#mcp-oauth-and-credentials) — Provider credentials and `${env:}` substitution. OAuth for third-party APIs managed by Owletto.
+- [**Secrets stay in gateway**](docs/SECURITY.md#credentials) — Provider credentials and `${env:}` substitution. OAuth for third-party APIs managed by Owletto.
 - [**Defense-in-depth on K8s**](docs/SECURITY.md#kubernetes) — NetworkPolicies, RBAC, and optional gVisor/Kata runtimes.
 - [**Nix system packages**](docs/SECURITY.md#skills-and-policy) — per-agent reproducible tooling and skills policy enforcement.
 

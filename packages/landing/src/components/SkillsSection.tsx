@@ -187,23 +187,6 @@ function SkillYaml() {
         {"    "}
         <span style={k}>authType</span>: <span style={s}>oauth</span>
         {"\n"}
-        {"    "}
-        <span style={k}>scopesConfig</span>:{"\n"}
-        {"      "}
-        <span style={k}>default</span>: <span style={d}>[</span>
-        <span style={s}>gmail.readonly</span>
-        <span style={d}>]</span>
-        {"\n"}
-        {"      "}
-        <span style={k}>available</span>: <span style={d}>[</span>
-        <span style={s}>gmail.send</span>
-        <span style={d}>]</span>
-        {"\n"}
-        {"    "}
-        <span style={k}>apiDomains</span>: <span style={d}>[</span>
-        <span style={s}>gmail.googleapis.com</span>
-        <span style={d}>]</span>
-        {"\n"}
         {"  "}- <span style={k}>id</span>: <span style={s}>linear</span>
         {"\n"}
         {"    "}
@@ -300,10 +283,8 @@ function LobuTomlExample() {
       style={{ backgroundColor: "rgba(0,0,0,0.3)", color: "#9aa5ce" }}
     >
       <code>
-        <span style={d}>{"# Agent config"}</span>
-        {"\n"}
         <span style={d}>[</span>
-        <span style={k}>agent</span>
+        <span style={k}>agents.acme-support</span>
         <span style={d}>]</span>
         {"\n"}
         <span style={k}>name</span>
@@ -313,37 +294,59 @@ function LobuTomlExample() {
         <span style={k}>description</span>
         {" = "}
         <span style={s}>"Customer support agent for Acme Corp"</span>
+        {"\n"}
+        <span style={k}>dir</span>
+        {" = "}
+        <span style={s}>"./agents/acme-support"</span>
         {"\n\n"}
         <span style={d}>{"# LLM providers (order = priority)"}</span>
         {"\n"}
         <span style={d}>[[</span>
-        <span style={k}>providers</span>
+        <span style={k}>agents.acme-support.providers</span>
         <span style={d}>]]</span>
         {"\n"}
         <span style={k}>id</span>
         {" = "}
         <span style={s}>"groq"</span>
         {"\n"}
-        <span style={k}>model</span>
+        <span style={k}>key</span>
         {" = "}
-        <span style={s}>"llama-3.3-70b-versatile"</span>
+        <span style={s}>"$GROQ_API_KEY"</span>
         {"\n\n"}
         <span style={d}>[[</span>
-        <span style={k}>providers</span>
+        <span style={k}>agents.acme-support.providers</span>
         <span style={d}>]]</span>
         {"\n"}
         <span style={k}>id</span>
         {" = "}
         <span style={s}>"gemini"</span>
         {"\n"}
-        <span style={k}>model</span>
+        <span style={k}>key</span>
         {" = "}
-        <span style={s}>"gemini-2.0-flash"</span>
+        <span style={s}>"$GEMINI_API_KEY"</span>
+        {"\n\n"}
+        <span style={d}>{"# Platform connection"}</span>
+        {"\n"}
+        <span style={d}>[[</span>
+        <span style={k}>agents.acme-support.connections</span>
+        <span style={d}>]]</span>
+        {"\n"}
+        <span style={k}>type</span>
+        {" = "}
+        <span style={s}>"telegram"</span>
+        {"\n"}
+        <span style={d}>[</span>
+        <span style={k}>agents.acme-support.connections.config</span>
+        <span style={d}>]</span>
+        {"\n"}
+        <span style={k}>botToken</span>
+        {" = "}
+        <span style={s}>"$TELEGRAM_BOT_TOKEN"</span>
         {"\n\n"}
         <span style={d}>{"# Skills from the registry"}</span>
         {"\n"}
         <span style={d}>[</span>
-        <span style={k}>skills</span>
+        <span style={k}>agents.acme-support.skills</span>
         <span style={d}>]</span>
         {"\n"}
         <span style={k}>enabled</span>
@@ -356,7 +359,7 @@ function LobuTomlExample() {
         <span style={d}>{"# Custom MCP server"}</span>
         {"\n"}
         <span style={d}>[</span>
-        <span style={k}>skills.mcp.my-kb</span>
+        <span style={k}>agents.acme-support.skills.mcp.my-kb</span>
         <span style={d}>]</span>
         {"\n"}
         <span style={k}>url</span>
@@ -366,7 +369,7 @@ function LobuTomlExample() {
         <span style={d}>{"# Network sandbox"}</span>
         {"\n"}
         <span style={d}>[</span>
-        <span style={k}>network</span>
+        <span style={k}>agents.acme-support.network</span>
         <span style={d}>]</span>
         {"\n"}
         <span style={k}>allowed</span>
@@ -375,18 +378,6 @@ function LobuTomlExample() {
         <span style={s}>"api.github.com"</span>
         <span style={d}>,</span> <span style={s}>"registry.npmjs.org"</span>
         <span style={d}>]</span>
-        {"\n\n"}
-        <span style={d}>[</span>
-        <span style={k}>platforms</span>
-        <span style={d}>]</span>
-        {"\n"}
-        <span style={k}>telegram</span>
-        {" = "}
-        <span style={o}>true</span>
-        {"\n"}
-        <span style={k}>api</span>
-        {" = "}
-        <span style={o}>true</span>
       </code>
     </pre>
   );
@@ -403,7 +394,7 @@ export function SkillsSection() {
             style={{ color: "var(--color-page-text)" }}
           >
             Build skills, bundle as{" "}
-            <span style={{ color: "var(--color-tg-accent)" }}>Openclaw</span>
+            <span style={{ color: "var(--color-tg-accent)" }}>OpenClaw</span>
           </h1>
           <p
             class="text-lg max-w-xl mx-auto mb-8 leading-relaxed"
@@ -889,9 +880,12 @@ export function SkillsSection() {
               </div>
               <div class="flex flex-wrap gap-1.5">
                 {[
+                  "OpenAI",
                   "Groq",
                   "Gemini",
                   "Together AI",
+                  "NVIDIA NIM",
+                  "z.ai",
                   "Fireworks",
                   "Mistral",
                   "DeepSeek",
@@ -901,6 +895,7 @@ export function SkillsSection() {
                   "xAI",
                   "Perplexity",
                   "Cohere",
+                  "ElevenLabs",
                 ].map((name) => (
                   <span
                     key={name}

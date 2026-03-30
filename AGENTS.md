@@ -13,7 +13,7 @@
 
 ### Repository Layout
 - Monorepo managed by Bun workspaces: `packages/gateway`, `packages/worker`, `packages/core`.
-- Top-level: `Makefile`, `scripts/` (CLI/setup), `charts/lobu` (Helm), `config/` (biome, knip, etc.), `docker/` (Dockerfiles, compose), `docs/` (CHANGELOG, SECURITY, etc.), `.env*`.
+- Top-level: `Makefile`, `scripts/` (CLI/setup), `charts/lobu` (Helm), `config/` (biome, knip, etc.), `docker/` (Dockerfiles, compose), `docs/` (CONTRIBUTING, SECURITY), `.env*`.
 - TypeScript sources under `packages/*/src`. Tests in `packages/*/src/__tests__` and `packages/core/tests`.
 - **ALWAYS prefer `bun` commands over `npm`**
 - When fixing unused parameter errors, remove the parameter entirely if possible rather than prefixing with underscore
@@ -79,8 +79,8 @@ docker compose -f docker/docker-compose.yml exec redis redis-cli DEL 'chat:histo
 ```
 
 - If you create ephemeral files, you MUST delete them when you're done with them.
-- Use Docker to build and run the Slack bot in development mode, K8S for production.
-- NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User. If you need to remember something, add it to CLAUDE.md as a a single sentence.
+- Use Docker to build and run the bot in development mode, K8S for production.
+- NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User. If you need to remember something, add it to CLAUDE.md as a single sentence.
 - ALWAYS ignore `/dist/` directories when analyzing code - these contain compiled artifacts, not source
 
 ## Development Mode
@@ -134,7 +134,7 @@ Worker deployments use persistent volumes for session continuity across scale-to
 
 ### Integration Authentication
 
-OAuth authentication for third-party APIs (GitHub, Google, Linear, etc.) is handled by **Owletto**, not by the Termos gateway. Workers access these APIs through Owletto MCP tools, which handle credential management, token refresh, and API proxying. Workers never see OAuth tokens directly.
+OAuth authentication for third-party APIs (GitHub, Google, Linear, etc.) is handled by **Owletto**, not by the Lobu gateway. Workers access these APIs through Owletto MCP tools, which handle credential management, token refresh, and API proxying. Workers never see OAuth tokens directly.
 
 Skills that need direct network access (e.g., `git clone`) declare `permissions` (domain allowlist) which go through the user-approved grant flow. Skills that need system tools declare `nixPackages`.
 

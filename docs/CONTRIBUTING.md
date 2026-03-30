@@ -20,19 +20,14 @@ All changes must go through pull requests. Direct pushes to main are disabled.
    ```bash
    # Run tests
    bun test
-   
+
    # Check formatting and linting
    bun run format
    bun run lint
-   
-   # Test bot functionality
-   curl -X POST http://localhost:8080/api/messaging/send \
-     -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"platform":"slack","channel":"test-channel","message":"@me test prompt"}'
-   
-   # Verify in Docker Compose
+
+   # Start the stack and test bot
    make dev
+   ./scripts/test-bot.sh "@me test prompt"
    ```
 
 4. **Commit your changes**

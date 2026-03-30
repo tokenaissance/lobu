@@ -48,7 +48,7 @@ curl -X POST http://localhost:8081/api/messaging/send \
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `platform` | Yes | Platform name (currently: "slack") |
+| `platform` | Yes | Platform name (`api`, `slack`, `telegram`, `discord`, etc.) |
 | `channel` | Yes | Channel ID (e.g., `C12345678`) or name (e.g., `general`, `#general`) |
 | `message` | Yes | Message text to send (use `@me` to mention the bot) |
 | `threadId` | No | Thread ID to reply to (for thread continuity) |
@@ -177,16 +177,7 @@ Common errors:
 
 ### Platform-Agnostic Design
 
-The messaging API is designed to work across multiple chat platforms:
-
-**Current Support:**
-- Slack (bot mentions: `<@U12345>`, uses `@me` placeholder)
-
-**Future Support:**
-- Discord (bot mentions: `<@123456>`, uses `@me` placeholder)
-- Telegram (bot mentions: `@botname`, uses `@me` placeholder)
-
-The `@me` placeholder ensures your code works across all platforms without modification.
+The messaging API works across all supported platforms. The `@me` placeholder is automatically replaced with the correct bot mention for each platform.
 
 ---
 
@@ -222,4 +213,4 @@ These APIs enable your AI agents to:
 - **CI/CD integration**: Run automated tests before deployment
 - **Development**: Quickly test bot behavior without manual Slack interaction
 
-The messaging endpoint is **platform-agnostic** by design. While Slack is currently supported, the same API structure will work for Discord, Teams, and other platforms in the future.
+The messaging endpoint is **platform-agnostic** — the same API structure works across Slack, Telegram, Discord, and other supported platforms.

@@ -2,9 +2,7 @@
 
 CLI tool for initializing and managing Lobu projects.
 
-## Installation
-
-### npx (Recommended)
+## Quick Start
 
 ```bash
 npx @lobu/cli init my-bot
@@ -12,105 +10,25 @@ cd my-bot
 docker compose up -d
 ```
 
-### Global Install
-
-```bash
-npm install -g @lobu/cli
-
-lobu init my-bot
-cd my-bot
-docker compose up -d
-```
-
-## Worker Deployment Options
-
-Lobu supports two deployment patterns for workers:
-
-### Option 1: Base Image (Day 0 - Quick Start)
-
-**Best for:** Beginners, tutorials, quick prototypes
-
-```dockerfile
-# Extends our curated base image
-FROM ghcr.io/lobu-ai/lobu-worker-base:0.1.0
-
-# Add your customizations
-RUN pip install pandas
-RUN apt-get install postgresql-client
-```
-
-**Pros:**
-- Turnkey experience - just works
-- All dependencies pre-installed
-- Predictable environment
-
-**Cons:**
-- Stuck with our base OS choice
-- May not meet compliance requirements
-
----
-
-### Option 2: Package Installation (Day 2 - Advanced)
-
-**Best for:** Enterprise, compliance-heavy environments, custom requirements
-
-```dockerfile
-# Use YOUR approved base image
-FROM company-registry/ubuntu:22.04
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    nodejs npm git docker.io python3 curl
-
-# Install Claude CLI
-RUN curl -L https://claude.ai/install.sh | sh
-
-# Install Lobu worker as a package
-RUN npm install -g @lobu/worker@^0.1.0
-
-# Your customizations
-COPY ./scripts /workspace/scripts
-
-CMD ["lobu-worker"]
-```
-
-**Pros:**
-- Full control over base OS
-- Use company-approved images
-- Smaller images (Alpine, Distroless)
-- Meet security/compliance requirements
-
-**Cons:**
-- More setup required
-- Must install system dependencies yourself
-
-See [Worker Package Documentation](../worker/docs/custom-base-image.md) for details.
-
----
-
 ## Commands
 
-### `lobu init`
+### `lobu init [name]`
 
-Initialize a new Lobu project in the current directory.
+Scaffold a new Lobu project with interactive prompts:
 
-**Interactive prompts:**
-- **Worker mode:** Base image vs Package installation
-- Slack credentials
-- Anthropic API key
-- Public gateway URL (for OAuth)
+- **Project name** and **deployment mode** (embedded/Docker workers)
+- **Gateway port** and optional **public URL** (for OAuth callbacks)
+- **Admin password**
+- **Worker network access** (isolated, allowlist, or unrestricted)
+- **AI provider** selection from the skills registry + API key
+- **Skills** to enable (from `config/system-skills.json`)
+- **Messaging platform** (Telegram, Slack, Discord, or none)
+- **Auth provider** (Owletto, custom, or none)
+- **Memory plugin** configuration
 
-**Generates:**
-- `docker-compose.yml` - Service definitions (redis, gateway, worker)
-- `.env` - Credentials
-- `Dockerfile.worker` - Worker customization via Dockerfile
-- `.gitignore`, `README.md`
-
-**If docker-compose.yml exists**, you'll be prompted for an alternative filename.
+**Generates:** `docker-compose.yml`, `.env`, `Dockerfile.worker`, `lobu.toml`, `IDENTITY.md`, `.gitignore`, `README.md`
 
 ## Usage
-
-After running `npx @lobu/cli init`:
 
 ```bash
 # Start services
@@ -126,9 +44,9 @@ docker compose down
 docker compose build worker
 ```
 
-## Configuration
+## Worker Customization
 
-### Dockerfile.worker (Base Image Mode)
+Extend the generated `Dockerfile.worker` to add tools:
 
 ```dockerfile
 FROM ghcr.io/lobu-ai/lobu-worker-base:0.1.0
@@ -139,134 +57,12 @@ RUN apt-get update && apt-get install -y postgresql-client
 # Add Python packages
 RUN pip install pandas matplotlib
 
-# Add Node.js packages
-RUN bun add @octokit/rest
-
 # Copy custom scripts
 COPY ./scripts /workspace/scripts
 ```
 
-### Dockerfile.worker (Package Mode)
-
-```dockerfile
-# Bring your own base
-FROM node:20-alpine
-
-# Install required system dependencies
-RUN apk add --no-cache git docker-cli python3 py3-pip curl
-
-# Install Claude CLI
-RUN curl -L https://claude.ai/install.sh | sh
-
-# Install worker package
-RUN npm install -g @lobu/worker@^0.1.0
-
-# Your customizations
-RUN pip3 install pandas matplotlib
-
-CMD ["lobu-worker"]
-```
-
-## Development Workflow
-
-```bash
-# 1. Create project
-npx @lobu/cli init my-bot
-
-# 2. Choose worker mode during init
-#    - Base image (recommended)
-#    - Package installation (advanced)
-
-# 3. Customize worker (optional)
-# Edit Dockerfile.worker
-
-# 4. Start services
-cd my-bot
-docker compose up -d
-
-# 5. View logs
-docker compose logs -f
-
-# 6. Rebuild after changes
-docker compose build worker
-
-# 7. Stop services
-docker compose down
-```
-
-## Version Locking
-
-The CLI version locks to base image versions:
-
-- CLI `0.1.0` -> `ghcr.io/lobu-ai/lobu-worker-base:0.1.0`
-- CLI `0.2.0` -> `ghcr.io/lobu-ai/lobu-worker-base:0.2.0`
-
-This ensures compatibility between CLI and runtime images.
-
-## Distribution Strategy
-
-Lobu uses a dual distribution pattern:
-
-**Day 0 (Quick Start):**
-- Use `ghcr.io/lobu-ai/lobu-worker-base` Docker image
-- Extend with Dockerfile
-- Perfect for learning, prototypes
-
-**Day 2+ (Production):**
-- Install `@lobu/worker` npm package
-- Use your own base image
-- Perfect for enterprise, compliance
-
-## Published Artifacts
-
-**GHCR:**
-```bash
-# For production (gateway)
-docker pull ghcr.io/lobu-ai/lobu-gateway:0.1.0
-
-# For quick start (extend this)
-docker pull ghcr.io/lobu-ai/lobu-worker-base:0.1.0
-```
-
-**NPM Registry:**
-```bash
-# CLI tool
-npm install -g @lobu/cli
-
-# Worker runtime (for custom base images)
-npm install -g @lobu/worker@0.1.0
-```
-
-## Architecture
-
-```
-User creates project
-        |
-npx @lobu/cli init my-bot
-        |
-Choose: Base image or Package?
-        |
-+---------------+----------------+
-| Base Image Mode                | Package Mode
-|                                |
-| FROM lobu-worker-base          | FROM your-company/base
-| RUN pip install pandas         | RUN npm install -g @lobu/worker
-|                                | RUN pip install pandas
-+---------------+----------------+
-                |
-    CLI generates docker-compose.yml
-                |
-        User runs: docker compose up -d
-                |
-        Docker builds worker:latest
-                |
-        Gateway spawns workers dynamically
-```
-
-## Contributing
-
-Lobu CLI generates Docker Compose configurations. To modify the generated setup, see `src/commands/init.ts`.
+See [custom base image docs](../worker/docs/custom-base-image.md) for using your own base image.
 
 ## License
 
-MIT
+Apache-2.0

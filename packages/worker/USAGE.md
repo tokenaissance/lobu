@@ -17,7 +17,7 @@ These variables are automatically set by the Gateway when deploying worker conta
 **Description**: Authentication token for worker-gateway communication
 **Format**: JWT token or user-specific token
 **Set by**: Gateway orchestrator
-**Used by**: Worker authentication, Anthropic API proxy authentication
+**Used by**: Worker authentication, gateway proxy authentication
 
 ### `DEPLOYMENT_NAME`
 **Description**: Unique identifier for this worker deployment
@@ -60,49 +60,6 @@ These variables are automatically set by the Gateway when deploying worker conta
 **Set by**: Container runtime
 **Used by**: Deployment identification if DEPLOYMENT_NAME not set
 
-## Queue Configuration
-
-### `QUEUE_URL`
-**Description**: Redis connection string for job queues
-**Format**: `redis://host:port/db`
-**Example**: `redis://redis:6379/0`
-**Set by**: Gateway orchestrator (passed from gateway config)
-**Used by**: Queue connection (if worker needs direct queue access)
-
-## Database Configuration (Platform-Specific)
-
-### `LOBU_DATABASE_HOST`
-**Description**: PostgreSQL host for platform-specific storage
-**Format**: Hostname or IP
-**Example**: `postgres`, `host.docker.internal`
-**Set by**: Gateway orchestrator (passed from gateway config)
-**Used by**: Database connections for platform data
-
-### `LOBU_DATABASE_PORT`
-**Description**: PostgreSQL port
-**Format**: Integer
-**Default**: `5432`
-**Set by**: Gateway orchestrator
-**Used by**: Database connections
-
-### `LOBU_DATABASE_NAME`
-**Description**: PostgreSQL database name
-**Format**: String
-**Set by**: Gateway orchestrator
-**Used by**: Database connections
-
-### `LOBU_DATABASE_USER`
-**Description**: PostgreSQL username
-**Format**: String
-**Set by**: Gateway orchestrator
-**Used by**: Database authentication
-
-### `LOBU_DATABASE_PASSWORD`
-**Description**: PostgreSQL password
-**Format**: String
-**Set by**: Gateway orchestrator
-**Used by**: Database authentication
-
 ## MCP Configuration
 
 ### `MCP_SERVER_CONFIG`
@@ -125,16 +82,6 @@ These variables are automatically set by the Gateway when deploying worker conta
 **Values**: `development` | `production`
 **Set by**: Gateway orchestrator
 **Used by**: Logging verbosity, error handling
-
-## Internal Variables (Do Not Set)
-
-These are used internally by the worker and should **never** be manually configured:
-
-### `ANTHROPIC_API_KEY` (Internal Use Only)
-**Description**: Set internally to WORKER_TOKEN for Anthropic proxy authentication
-**Set by**: Worker initialization
-**Used by**: Agent authentication to gateway's Anthropic proxy
-**Warning**: This is NOT a real Anthropic API key - it's the worker authentication token
 
 ## Container Runtime Variables
 

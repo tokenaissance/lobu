@@ -23,8 +23,10 @@ A clear and concise description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**Workflow yml file**
-If it's not sensitive, consider including a paste of your full Claude workflow.yml file.
+**Environment**
+- Deployment mode (Docker/K8s):
+- Platform (Slack/Telegram/Discord/etc.):
+- Lobu version:
 
 **Additional context**
 Add any other context about the problem here.

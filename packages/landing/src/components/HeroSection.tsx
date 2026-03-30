@@ -61,7 +61,7 @@ export function HeroSection() {
                 color: "var(--color-tg-accent)",
               }}
             >
-              Openclaw
+              OpenClaw
             </span>{" "}
             infra
           </span>

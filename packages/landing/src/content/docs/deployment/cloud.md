@@ -11,7 +11,7 @@ Lobu Cloud is the hosted version of Lobu. You get the same runtime, isolation, a
 
 - **Managed gateway and workers** — Lobu runs and scales the stack for you.
 - **Same settings page** — your users configure providers, skills, and permissions through the same UI.
-- **All platforms** — Telegram, WhatsApp, Slack, and REST API work out of the box.
+- **All platforms** — Telegram, WhatsApp, Slack, Discord, Teams, and REST API work out of the box.
 - **Zero-trust isolation** — workers are sandboxed with the same network policy and secret handling as self-hosted deployments.
 - **Automatic updates** — new features, skills registry updates, and security patches are applied without downtime.
 

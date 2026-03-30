@@ -80,8 +80,8 @@ The gateway will automatically pick up the latest worker image.
 
 The docker-compose.yml defines these services:
 - **redis** - Redis cache and queue
-- **gateway** - Slack integration and worker orchestration
-- **worker** - Claude worker (build-only, spawned dynamically)
+- **gateway** - Platform connections and worker orchestration
+- **worker** - Agent worker (build-only, spawned dynamically)
 
 ## Learn More
 
