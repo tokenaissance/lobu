@@ -1,10 +1,208 @@
 ---
 title: "MCP Is Overengineered, Skills Are Too Primitive"
-description: Draft post.
-date: 2026-03-05
+description: MCP HTTP is great for external services. MCP stdio is redundant. And most skill systems are just prompt text with no reproducibility. Here's what we built instead.
+date: 2026-04-02
 author: Burak Emre Kabakcı
 authorAvatar: https://gravatar.com/avatar/6d785cc20f0e9b685be6343f475a7f2a?s=64
 authorUrl: https://x.com/bu7emba
-tags: [mcp, skills, architecture]
-draft: true
+tags: [mcp, skills, nix, architecture]
+draft: false
 ---
+
+Two things are broken in the agent ecosystem right now.
+
+First, MCP is being used where it shouldn't be. MCP HTTP/SSE is a genuinely good protocol for connecting agents to external services. But MCP stdio — wrapping CLI tools in a JSON-RPC server so an agent can call them — is solving a problem that doesn't exist.
+
+Second, skills. Every agent framework has some notion of skills or plugins, but they're almost all just markdown instructions. They tell the agent _what to do_ without declaring _what it needs_. No system dependencies, no sandbox rules, no reproducibility. You can't hand someone a skill and know it'll work.
+
+We built a skill system in Lobu that fixes both of these. Skills are declarative manifests — they declare Nix packages, network access, MCP servers, and tool permissions. The runtime provisions everything automatically. And MCP is reserved for what it's actually good at.
+
+---
+
+## MCP is great — for external services
+
+Let's be clear: MCP HTTP/SSE is a good idea. It's essentially OpenAPI for agents.
+
+One URL gives you authentication discovery, tool listings, and execution endpoints. The agent doesn't need to know how to authenticate with GitHub's API, how to refresh an OAuth token, or where to send a webhook. The MCP server handles all of that. The agent just calls a tool.
+
+This matters for security too. In Lobu, workers run in sandboxed containers with no direct internet access. They can't curl external APIs. They don't see OAuth tokens. MCP servers sit behind the gateway proxy, which handles credential injection per-user. The worker calls `SearchRepositories`, the gateway injects the right GitHub token, and the worker never knows.
+
+For third-party API access — GitHub, Google, Linear, Slack — MCP HTTP/SSE is the right abstraction. It keeps secrets out of the sandbox and gives agents a clean interface to external services.
+
+---
+
+## MCP stdio is a solution looking for a problem
+
+But then there's MCP stdio.
+
+The idea: wrap a CLI tool in a JSON-RPC server process. The agent sends a JSON message, the server parses it, calls the CLI, parses the output, and sends back a JSON response. Your agent wants to run `gh pr list`? Don't let it run `gh pr list`. Instead, install a GitHub MCP stdio server, connect to it over stdin/stdout, and call the `list_pull_requests` tool.
+
+Why? If your agent already has Bash access — and every serious agent runtime gives agents Bash access — this is pure overhead. The agent can just run the command.
+
+```bash
+# What MCP stdio does
+Agent → JSON-RPC → MCP Server → spawns `gh pr list` → parses output → JSON-RPC → Agent
+
+# What you could do instead
+Agent → Bash → `gh pr list` → done
+```
+
+The protocol adds latency, a process boundary, a serialization layer, and a new failure mode. For what? The CLI tool already has a perfectly good interface. It takes arguments and returns text. That's what agents are good at.
+
+The ecosystem seems to agree. Look at the MCP server landscape — the servers that get adoption are HTTP/SSE servers for external services: Slack, GitHub APIs, databases, cloud storage. The stdio servers that wrap CLI tools are mostly proof-of-concepts that nobody maintains.
+
+Lobu's approach: install CLI tools directly via Nix, let the agent call them with Bash. Reserve MCP for external services where you actually need credential proxying and network isolation.
+
+```yaml
+# Instead of an MCP stdio server for git:
+nixConfig:
+  packages: [git, gh]
+
+# The agent just runs:
+# $ gh pr list --repo owner/repo
+# $ git log --oneline -10
+```
+
+100,000+ packages on [Nixpkgs](https://search.nixos.org/packages). Every CLI tool you can think of. Installed declaratively, cached across container restarts, no Docker rebuild required.
+
+---
+
+## Skills are just markdown files (and that's the problem)
+
+Now the other half of the problem.
+
+Look at [skills.sh](https://skills.sh/) — the agent skills directory. It's a registry of SKILL.md files you can install into Claude Code, Cursor, Copilot, and other agents. The discovery experience is good: you search, find a skill, run `npx skillsadd owner/repo`, and it drops a markdown file into your project.
+
+[ClawHub](https://clawhub.ai/skills) does something similar for the OpenClaw ecosystem. Searchable registry, community-published skills, download stats.
+
+But what _is_ a skill in these systems? It's a markdown file with instructions. "Use ffmpeg to process video." "Run ripgrep for code search." "Use the GitHub API to manage pull requests."
+
+That's it. There's no dependency declaration. The skill says "use ffmpeg" but doesn't install ffmpeg. There's no network policy. The skill says "call the Cloudflare API" but doesn't declare what domains the sandbox should allow. There's no tool permissions. The skill gives the agent instructions but no guardrails.
+
+It's like a `package.json` with no `dependencies` field — just a README that says "make sure you have Node 18 installed."
+
+You can't hand someone a skill and guarantee it works the same way in their environment. You can't audit what a skill actually needs. You can't enforce least-privilege access. The skill is just text. The rest is left to the user.
+
+---
+
+## What we built: skills as manifests
+
+A Lobu skill is a `SKILL.md` file with YAML frontmatter that declares everything the agent needs. The runtime reads the manifest and provisions the environment before the agent starts.
+
+Here's a concrete example — a video processing skill:
+
+```yaml
+---
+name: Video Processor
+description: Process and transcode video files with metadata extraction
+
+nixConfig:
+  packages: [ffmpeg, jq, mediainfo]
+
+mcpServers:
+  cloud-storage:
+    url: https://storage-mcp.example.com/mcp
+    type: sse
+
+networkConfig:
+  allowedDomains:
+    - storage.googleapis.com
+    - api.cloudflare.com
+
+toolsConfig:
+  allowedTools:
+    - Read
+    - Write
+    - Bash
+  deniedTools:
+    - DeleteFile
+  strictMode: false
+---
+
+# Video Processor
+
+You process video files using ffmpeg. For every video task:
+
+1. Use `mediainfo` to inspect the input file first
+2. Use `ffmpeg` for transcoding, trimming, and format conversion
+3. Use `jq` to parse and transform metadata JSON
+4. Upload results to cloud storage via the cloud-storage MCP server
+
+Never delete source files. Always verify output with mediainfo before uploading.
+```
+
+### What happens at runtime
+
+When a user enables this skill:
+
+1. **Gateway reads the manifest** and resolves each section
+2. **Nix installs ffmpeg, jq, and mediainfo** in the worker container via `NIX_PACKAGES=ffmpeg,jq,mediainfo`. The worker entrypoint runs `nix-shell -p ffmpeg jq mediainfo --command "bun run src/index.ts"`. All three tools are on `$PATH` for the agent and every child process.
+3. **Network sandbox is configured** — the worker can reach `storage.googleapis.com` and `api.cloudflare.com` through the gateway proxy. Everything else is blocked.
+4. **MCP server is registered** — the cloud storage server is accessible through the gateway proxy with per-user credential injection. The worker never sees storage tokens.
+5. **Tool permissions are applied** — the agent can Read, Write, and use Bash, but can't DeleteFile.
+6. **The markdown body is injected** into the agent's system prompt, shaping how it uses these capabilities.
+
+The agent doesn't know any of this happened. It just has ffmpeg on PATH, a cloud storage tool available, and the right network access. Same SKILL.md, same environment, every time.
+
+### Nix persistence
+
+The first boot pays the Nix install cost. After that, packages are cached:
+
+- **Docker** (dev): Nix store copied to the workspace volume, symlinked back. Survives container restarts.
+- **Kubernetes** (prod): Init container copies Nix store to PVC. Main container mounts it. Survives scale-to-zero.
+
+For complex environments, point at a Nix flake instead of listing packages:
+
+```yaml
+nixConfig:
+  flakeUrl: "github:user/my-agent-env"
+```
+
+The worker runs `nix develop github:user/my-agent-env` — fully reproducible, pinned dependencies, custom derivations if you need them.
+
+### The CLI
+
+Discover and install skills from your terminal:
+
+```bash
+# Search for skills
+$ lobu skills search "video"
+  video-processor  Process and transcode video files  [integration]
+
+# Get details
+$ lobu skills info video-processor
+  Video Processor
+  Process and transcode video files with metadata extraction
+  ID: video-processor
+
+# Add to your agent
+$ lobu skills add video-processor
+  Added "video-processor" to lobu.toml
+```
+
+The `add` command modifies your `lobu.toml`:
+
+```toml
+[agents.my-agent.skills]
+enabled = ["video-processor"]
+```
+
+Next time the agent starts, it has ffmpeg, jq, mediainfo, cloud storage access, and the right sandbox rules. No manual setup.
+
+---
+
+## Where MCP belongs (and where it doesn't)
+
+| Need | Right tool | Why |
+|------|-----------|-----|
+| External API access (GitHub, Google, Slack) | MCP HTTP/SSE | Credential proxying, OAuth, per-user auth — agent never sees secrets |
+| CLI tools (git, ffmpeg, jq, ripgrep) | Nix packages | Direct Bash access is simpler, faster, no protocol overhead |
+| System packages (Python, Node, compilers) | Nix packages | Declarative, reproducible, cached across restarts |
+| Network isolation | `networkConfig` | Domain allowlists enforced at infrastructure layer |
+| Tool restrictions | `toolsConfig` | Allow/deny lists with optional strict mode |
+
+MCP is great when you need a trust boundary between the agent and an external service. It's unnecessary when the agent already has a shell and you just need to install a CLI tool.
+
+Skills are great when they're manifests that declare what an agent needs. They're useless when they're just prompt text that hopes the environment has the right tools installed.
+
+Same SKILL.md. Same environment. Every time. That's the point.
