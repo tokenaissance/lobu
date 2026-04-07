@@ -22,16 +22,15 @@ The reference is auto-generated from the gateway's OpenAPI spec and always refle
 ## Quick Start
 
 ```bash
-# 1. Create an agent
-curl -X POST https://lobu.ai/api/v1/agents \
+# Send a message to an agent
+curl -X POST http://localhost:8080/api/v1/agents/{agentId}/messages \
+  -H "Authorization: Bearer $ADMIN_PASSWORD" \
   -H "Content-Type: application/json" \
-  -d '{"provider": "claude"}'
-
-# 2. Send a message (use token from step 1)
-curl -X POST https://lobu.ai/api/v1/agents/{agentId}/messages \
-  -H "Authorization: Bearer {token}" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Hello!"}'
+  -d '{
+    "platform": "api",
+    "channel": "test",
+    "content": "Hello!"
+  }'
 ```
 
 ## Typical Use Cases

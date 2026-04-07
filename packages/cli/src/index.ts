@@ -29,10 +29,6 @@ export async function runCli(
   program
     .command("init [name]")
     .description("Scaffold a new agent project (lobu.toml + docker-compose)")
-    .option(
-      "-t, --template <template>",
-      "Starter template (support, coding, general)"
-    )
     .action(async (name?: string) => {
       try {
         const { initCommand } = await import("./commands/init.js");

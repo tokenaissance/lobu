@@ -37,17 +37,13 @@ Generates:
 - `IDENTITY.md` — agent identity prompt
 - `.gitignore`, `README.md`
 
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `-t, --template <name>` | Starter template (`support`, `coding`, `general`) |
+Interactive prompts guide you through deployment mode, provider, skills, platform, and memory configuration.
 
 ---
 
 ### `lobu run`
 
-Run the agent stack. Reads `lobu.toml`, then starts Docker Compose. All extra flags are forwarded to `docker compose up`.
+Run the agent stack. Validates `lobu.toml`, prepares environment variables, then starts `docker compose up`. Extra flags are forwarded to Docker Compose.
 
 ```bash
 lobu run -d          # detached mode

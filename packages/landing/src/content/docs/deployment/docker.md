@@ -33,6 +33,6 @@ Use Docker mode when:
 
 ## Operational Notes
 
-- Start stack: `make dev` (development) or `docker compose up`
+- Start stack: `lobu run -d` or `docker compose up -d`
 - Restart after `.env` changes
 - Session persistence is provided by mounted workspace directories

@@ -57,18 +57,23 @@ Third-party API integrations (GitHub, Google, etc.) are handled entirely by Owle
 }
 ```
 
-With custom headers:
+With custom headers (header values support `${env:VAR_NAME}` substitution so secrets stay in environment variables):
 
 ```json
 {
   "id": "my-mcp",
-  "name": "My MCP",
-  "url": "https://mcp.example.com",
-  "type": "sse",
-  "headers": {
-    "Authorization": "Bearer ${env:MY_MCP_TOKEN}"
-  }
+  "name": "My MCP Server",
+  "description": "What this MCP does",
+  "mcpServers": [
+    {
+      "id": "my-mcp",
+      "name": "My MCP",
+      "url": "https://mcp.example.com",
+      "type": "sse",
+      "headers": {
+        "Authorization": "Bearer ${env:MY_MCP_TOKEN}"
+      }
+    }
+  ]
 }
 ```
-
-Header values support `${env:VAR_NAME}` substitution so secrets stay in environment variables.

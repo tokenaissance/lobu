@@ -28,7 +28,7 @@ const lobu = new Lobu({
     {
       id: "support",
       name: "Support Agent",
-      providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }],
+      providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }],
     },
   ],
 });
@@ -58,7 +58,7 @@ import { Lobu } from "@lobu/gateway";
 
 const lobu = new Lobu({
   redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }] }],
+  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
 });
 
 const initialized = lobu.initialize();
@@ -91,7 +91,7 @@ import { getRequestListener } from "@hono/node-server";
 
 const lobu = new Lobu({
   redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }] }],
+  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
 });
 
 const initialized = lobu.initialize();
@@ -116,7 +116,7 @@ const app = express();
 
 const lobu = new Lobu({
   redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }] }],
+  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
 });
 
 await lobu.initialize();
@@ -143,7 +143,7 @@ const app = new Hono();
 
 const lobu = new Lobu({
   redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }] }],
+  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
 });
 
 await lobu.initialize();
@@ -165,7 +165,7 @@ const fastify = Fastify();
 
 const lobu = new Lobu({
   redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }] }],
+  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
 });
 
 await lobu.initialize();
@@ -189,7 +189,7 @@ import { Lobu } from "@lobu/gateway";
 
 const lobu = new Lobu({
   redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "anthropic", key: process.env.ANTHROPIC_API_KEY! }] }],
+  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
 });
 
 await lobu.initialize();

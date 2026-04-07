@@ -3,7 +3,7 @@ title: Discord
 description: Connect a Lobu agent to Discord servers via bot integration.
 ---
 
-Lobu connects to Discord through the [Chat SDK](https://github.com/nicepkg/chat) Discord adapter, giving your agent access to direct messages and server channels.
+Lobu connects to Discord through the [Chat SDK](https://github.com/vercel/chat) Discord adapter, giving your agent access to direct messages and server channels.
 
 ## Setup
 

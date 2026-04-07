@@ -3,7 +3,7 @@ title: WhatsApp
 description: WhatsApp integration capabilities for Lobu agents.
 ---
 
-Lobu's WhatsApp adapter is Baileys-based and optimized for practical chat automation.
+Lobu's WhatsApp adapter uses the WhatsApp Business Cloud API for reliable, production-grade messaging.
 
 ## Setup
 
@@ -14,7 +14,7 @@ Lobu's WhatsApp adapter is Baileys-based and optimized for practical chat automa
 
 ## Features
 
-- **Baileys integration** for WhatsApp Web-compatible messaging.
+- **Cloud API integration** via the WhatsApp Business Platform.
 - **Self-chat mode** for local testing when `WHATSAPP_SELF_CHAT=true`.
 - **Group controls** with allow/deny behavior and optional mention requirement.
 - **Typing indicator status** while responses are being generated.
