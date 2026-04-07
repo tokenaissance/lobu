@@ -219,6 +219,9 @@ export async function initCommand(
     { name: "Telegram", value: "telegram" },
     { name: "Slack", value: "slack" },
     { name: "Discord", value: "discord" },
+    { name: "WhatsApp", value: "whatsapp" },
+    { name: "Microsoft Teams", value: "teams" },
+    { name: "Google Chat", value: "gchat" },
   ];
 
   const { platformType } = await inquirer.prompt([
@@ -293,6 +296,78 @@ export async function initCommand(
       connectionSecrets.push({
         envVar: "DISCORD_BOT_TOKEN",
         value: botToken,
+      });
+    }
+  } else if (platformType === "whatsapp") {
+    const whatsappAnswers = await inquirer.prompt([
+      {
+        type: "password",
+        name: "accessToken",
+        message: "WhatsApp Business access token:",
+        mask: "*",
+      },
+      {
+        type: "input",
+        name: "phoneNumberId",
+        message: "WhatsApp phone number ID:",
+      },
+    ]);
+    if (whatsappAnswers.accessToken) {
+      connectionConfig.accessToken = "$WHATSAPP_ACCESS_TOKEN";
+      connectionSecrets.push({
+        envVar: "WHATSAPP_ACCESS_TOKEN",
+        value: whatsappAnswers.accessToken,
+      });
+    }
+    if (whatsappAnswers.phoneNumberId) {
+      connectionConfig.phoneNumberId = "$WHATSAPP_PHONE_NUMBER_ID";
+      connectionSecrets.push({
+        envVar: "WHATSAPP_PHONE_NUMBER_ID",
+        value: whatsappAnswers.phoneNumberId,
+      });
+    }
+  } else if (platformType === "teams") {
+    const teamsAnswers = await inquirer.prompt([
+      {
+        type: "input",
+        name: "appId",
+        message: "Teams App ID (from Azure Bot):",
+      },
+      {
+        type: "password",
+        name: "appPassword",
+        message: "Teams App Password (client secret):",
+        mask: "*",
+      },
+    ]);
+    if (teamsAnswers.appId) {
+      connectionConfig.appId = "$TEAMS_APP_ID";
+      connectionSecrets.push({
+        envVar: "TEAMS_APP_ID",
+        value: teamsAnswers.appId,
+      });
+    }
+    if (teamsAnswers.appPassword) {
+      connectionConfig.appPassword = "$TEAMS_APP_PASSWORD";
+      connectionSecrets.push({
+        envVar: "TEAMS_APP_PASSWORD",
+        value: teamsAnswers.appPassword,
+      });
+    }
+  } else if (platformType === "gchat") {
+    const { credentials } = await inquirer.prompt([
+      {
+        type: "password",
+        name: "credentials",
+        message: "Google Chat service account JSON:",
+        mask: "*",
+      },
+    ]);
+    if (credentials) {
+      connectionConfig.credentials = "$GOOGLE_CHAT_CREDENTIALS";
+      connectionSecrets.push({
+        envVar: "GOOGLE_CHAT_CREDENTIALS",
+        value: credentials,
       });
     }
   }
