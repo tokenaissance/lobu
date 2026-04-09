@@ -651,6 +651,19 @@ export function createCliAuthRoutes(config: CliAuthRoutesConfig): Hono {
     return c.json(refreshed);
   });
 
+  router.post("/logout", async (c) => {
+    const rawBody = (await c.req.json().catch(() => ({}))) as {
+      refreshToken?: string;
+    };
+    const refreshToken = rawBody.refreshToken?.trim();
+    if (!refreshToken) {
+      return c.json({ error: "Missing refreshToken" }, 400);
+    }
+
+    await tokenService.revokeSessionByRefreshToken(refreshToken);
+    return c.json({ ok: true });
+  });
+
   router.get("/whoami", async (c) => {
     const authHeader = c.req.header("authorization");
     if (!authHeader?.startsWith("Bearer ")) {

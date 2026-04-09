@@ -3,7 +3,11 @@ import inquirer from "inquirer";
 import open from "open";
 import ora from "ora";
 import { resolveContext } from "../api/context.js";
-import { loadCredentials, saveCredentials } from "../api/credentials.js";
+import {
+  clearCredentials,
+  loadCredentials,
+  saveCredentials,
+} from "../api/credentials.js";
 
 function extractIdentity(payload: unknown): {
   email?: string;
@@ -64,52 +68,47 @@ async function validateToken(
   | { status: "invalid"; error: string }
   | { status: "unverified"; warning: string }
 > {
-  const endpoints = ["/auth/whoami", "/whoami", "/me"];
+  try {
+    const response = await fetch(`${apiBaseUrl}/auth/whoami`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-Lobu-Org": "default",
+      },
+    });
 
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(`${apiBaseUrl}${endpoint}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "X-Lobu-Org": "default",
-        },
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        return {
-          status: "invalid",
-          error: "Token was rejected by the API (unauthorized).",
-        };
-      }
-
-      if (response.status === 404) {
-        continue;
-      }
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const body = (await response.json().catch(() => ({}))) as unknown;
-      const identity = extractIdentity(body);
-      return { status: "valid", ...identity };
-    } catch {
-      // Try next endpoint.
+    if (response.status === 401 || response.status === 403) {
+      return {
+        status: "invalid",
+        error: "Token was rejected by the API (unauthorized).",
+      };
     }
-  }
 
-  return {
-    status: "unverified",
-    warning:
-      "Could not validate token against API endpoints, but token was saved locally.",
-  };
+    if (!response.ok) {
+      return {
+        status: "unverified",
+        warning:
+          "Could not validate token against API (non-200 response), but token was saved locally.",
+      };
+    }
+
+    const body = (await response.json().catch(() => ({}))) as unknown;
+    const identity = extractIdentity(body);
+    return { status: "valid", ...identity };
+  } catch {
+    return {
+      status: "unverified",
+      warning:
+        "Could not reach API to validate token, but token was saved locally.",
+    };
+  }
 }
 
 export async function loginCommand(options: {
   token?: string;
   adminPassword?: boolean;
   context?: string;
+  force?: boolean;
 }): Promise<void> {
   const target = await resolveContext(options.context);
 
@@ -120,23 +119,42 @@ export async function loginCommand(options: {
     return;
   }
 
+  // Check existing session — block unless --force
+  const existing = await loadCredentials(target.name);
+  if (existing && !options.force) {
+    console.log(
+      chalk.dim(
+        `\n  Already logged in to ${target.name} as ${existing.email ?? existing.name ?? "user"}.`
+      )
+    );
+    console.log(
+      chalk.dim(
+        "  Run `npx @lobu/cli logout` first, or use `--force` to re-authenticate.\n"
+      )
+    );
+    return;
+  }
+
+  // Force: revoke existing session before proceeding
+  if (existing && options.force) {
+    if (existing.refreshToken) {
+      try {
+        await fetch(`${target.apiUrl}/auth/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: existing.refreshToken }),
+        });
+      } catch {
+        // Best-effort revocation
+      }
+    }
+    await clearCredentials(target.name);
+  }
+
   if (options.token) {
     const token = options.token.trim();
     if (!token) {
       console.log(chalk.red("\n  Token cannot be empty.\n"));
-      return;
-    }
-
-    const existing = await loadCredentials(target.name);
-    if (existing) {
-      console.log(
-        chalk.dim(
-          `\n  Already logged in to ${target.name} as ${existing.email ?? "user"}.`
-        )
-      );
-      console.log(
-        chalk.dim("  Run `npx @lobu/cli logout` first to switch accounts.\n")
-      );
       return;
     }
 
@@ -172,19 +190,6 @@ export async function loginCommand(options: {
   }
 
   if (options.adminPassword) {
-    const existing = await loadCredentials(target.name);
-    if (existing) {
-      console.log(
-        chalk.dim(
-          `\n  Already logged in to ${target.name} as ${existing.email ?? existing.name ?? "user"}.`
-        )
-      );
-      console.log(
-        chalk.dim("  Run `npx @lobu/cli logout` first to switch accounts.\n")
-      );
-      return;
-    }
-
     const answers = await inquirer.prompt([
       {
         type: "password",
@@ -254,19 +259,6 @@ export async function loginCommand(options: {
       chalk.yellow(
         `\n  Logged in to ${target.name} using the development admin password fallback.\n`
       )
-    );
-    return;
-  }
-
-  const existing = await loadCredentials(target.name);
-  if (existing) {
-    console.log(
-      chalk.dim(
-        `\n  Already logged in to ${target.name} as ${existing.email ?? "user"}.`
-      )
-    );
-    console.log(
-      chalk.dim("  Run `npx @lobu/cli logout` first to switch accounts.\n")
     );
     return;
   }

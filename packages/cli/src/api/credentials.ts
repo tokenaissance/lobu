@@ -82,12 +82,13 @@ export async function clearCredentials(contextName?: string): Promise<void> {
 
 /**
  * Get token from env var (CI/CD) or stored credentials.
+ * Automatically refreshes expired tokens and clears stale credentials.
  */
-export async function getToken(): Promise<string | null> {
+export async function getToken(contextName?: string): Promise<string | null> {
   const envToken = process.env.LOBU_API_TOKEN;
   if (envToken) return envToken;
 
-  const creds = await loadCredentials();
+  const creds = await loadCredentials(contextName);
   if (!creds) return null;
 
   if (!needsRefresh(creds)) {
@@ -95,11 +96,17 @@ export async function getToken(): Promise<string | null> {
   }
 
   if (!creds.refreshToken) {
+    await clearCredentials(contextName);
     return null;
   }
 
-  const refreshed = await refreshCredentials(creds);
-  return refreshed?.accessToken ?? null;
+  const refreshed = await refreshCredentials(creds, contextName);
+  if (!refreshed) {
+    // Refresh failed (token revoked/expired server-side) — clear stale creds
+    await clearCredentials(contextName);
+    return null;
+  }
+  return refreshed.accessToken;
 }
 
 export async function refreshCredentials(
@@ -112,6 +119,35 @@ export async function refreshCredentials(
     return creds ?? null;
   }
 
+  const result = await attemptRefresh(target, creds);
+  if (result) return result;
+
+  // Retry once: another CLI process may have rotated the token concurrently.
+  // Re-read from disk to pick up the freshly written credentials.
+  const freshCreds = await loadCredentials(target.name);
+  if (
+    freshCreds?.accessToken &&
+    freshCreds.accessToken !== creds.accessToken &&
+    !needsRefresh(freshCreds)
+  ) {
+    return freshCreds;
+  }
+
+  // If the disk creds also have a different refresh token, try refreshing with those
+  if (
+    freshCreds?.refreshToken &&
+    freshCreds.refreshToken !== creds.refreshToken
+  ) {
+    return attemptRefresh(target, freshCreds);
+  }
+
+  return null;
+}
+
+async function attemptRefresh(
+  target: { apiUrl: string; name: string },
+  creds: Credentials
+): Promise<Credentials | null> {
   try {
     const response = await fetch(`${target.apiUrl}/auth/refresh`, {
       method: "POST",

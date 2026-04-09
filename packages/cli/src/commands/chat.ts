@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
+import { resolveContext } from "../api/context.js";
 import { getToken } from "../api/credentials.js";
 import { isLoadError, loadConfig } from "../config/loader.js";
 import { renderMarkdown } from "../utils/markdown.js";
@@ -22,17 +23,27 @@ export async function chatCommand(
     thread?: string;
     dryRun?: boolean;
     new?: boolean;
+    context?: string;
   }
 ): Promise<void> {
-  const gatewayUrl = (
-    options.gateway ?? (await resolveGatewayUrl(cwd))
-  ).replace(/\/$/, "");
+  // Resolve gateway URL: explicit flag > named context > .env fallback
+  let gatewayUrl: string;
+  if (options.gateway) {
+    gatewayUrl = options.gateway;
+  } else if (options.context) {
+    const ctx = await resolveContext(options.context);
+    gatewayUrl = ctx.apiUrl;
+  } else {
+    gatewayUrl = await resolveGatewayUrl(cwd);
+  }
+  gatewayUrl = gatewayUrl.replace(/\/$/, "");
 
-  const authToken = (await getToken()) ?? process.env.ADMIN_PASSWORD;
+  const authToken =
+    (await getToken(options.context)) ?? process.env.ADMIN_PASSWORD;
   if (!authToken) {
     console.error(
       chalk.red(
-        "\n  Authentication required. Run `npx @lobu/cli login` or set ADMIN_PASSWORD.\n"
+        "\n  Session expired or not logged in. Run `npx @lobu/cli login` or set ADMIN_PASSWORD.\n"
       )
     );
     process.exit(1);
