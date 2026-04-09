@@ -1,7 +1,7 @@
 {
   "name": "@lobu/landing",
   "private": true,
-  "version": "0.0.1",
+  "version": "3.0.8",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
