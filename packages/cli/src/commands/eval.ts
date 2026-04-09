@@ -169,7 +169,6 @@ export async function evalCommand(
         process.exit(1);
       }
       console.error(chalk.red(`\n  Eval "${def.name}" failed: ${msg}\n`));
-      if (options.ci) process.exit(1);
     }
   }
 
