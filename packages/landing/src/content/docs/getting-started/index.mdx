@@ -57,6 +57,51 @@ npx @lobu/cli eval
 
 The `init` wizard walks you through deployment mode, AI provider, skills, messaging platform, and memory configuration. All choices are saved to `lobu.toml` and `.env`.
 
+## Develop your agent
+
+The fastest way to build your agent is to point a coding agent at the generated project. Open [Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/index/codex/), [OpenCode](https://opencode.ai), or any coding agent and paste this prompt:
+
+```
+I am building a Lobu agent in this repository.
+
+Please:
+1. Read AGENTS.md, lobu.toml, and agents/my-agent/{IDENTITY,SOUL,USER}.md first.
+2. Help me shape the agent behavior by editing those files directly.
+3. Use Lobu skills when they make sense: https://lobu.ai/getting-started/skills/
+4. Suggest any provider, skill, or connection changes needed in lobu.toml.
+5. Keep the project runnable with `npx @lobu/cli run -d`.
+
+Explain what you change and why.
+```
+
+The coding agent will read your project structure and help you:
+
+- **Shape the personality** — edit `IDENTITY.md` to define who the agent is
+- **Write instructions** — edit `SOUL.md` with rules, workflows, and constraints
+- **Add skills** — enable GitHub, Google Workspace, Linear, or custom MCP servers in `lobu.toml`
+- **Configure network access** — set which domains the agent can reach
+- **Write evals** — create test cases in `agents/my-agent/evals/` to verify quality
+
+### What to give the coding agent
+
+| File | What to ask for |
+|------|----------------|
+| `agents/my-agent/IDENTITY.md` | "Make this a customer support agent for Acme Corp" |
+| `agents/my-agent/SOUL.md` | "Add rules: never share pricing, always confirm before cancellations" |
+| `agents/my-agent/USER.md` | "Set timezone to US/Pacific, company plan is Enterprise" |
+| `lobu.toml` | "Add GitHub and Linear skills, allow github.com and api.linear.app" |
+| `agents/my-agent/evals/` | "Write an eval that tests the agent follows the cancellation rule" |
+| `agents/my-agent/skills/` | "Create a custom skill for our internal API" |
+
+After each change, test with:
+
+```bash
+npx @lobu/cli chat "Hello, can you cancel my subscription?"
+npx @lobu/cli eval
+```
+
+See [Agent Prompts](/guides/agent-prompts/), [Skills Authoring](/guides/skills-authoring/), and [Evaluations](/guides/evals/) for details on each file.
+
 ## Configuration
 
 Lobu supports two configuration approaches depending on how you deploy:

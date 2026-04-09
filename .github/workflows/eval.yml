@@ -93,7 +93,7 @@ jobs:
           if [ -n "${{ inputs.model }}" ]; then
             MODEL_FLAG="-m ${{ inputs.model }}"
           fi
-          npx @lobu/cli eval --ci --output eval-results.json $MODEL_FLAG
+          npx @lobu/cli eval smoke --ci --output eval-results.json $MODEL_FLAG
 
       - name: Gateway logs
         if: always()

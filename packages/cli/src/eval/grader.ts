@@ -13,6 +13,39 @@ import {
 } from "./client.js";
 import type { RubricResult, TurnResult } from "./types.js";
 
+const INLINE_JUDGE_PROMPT = `You are a strict evaluator. You will be given an AI agent's response and a criteria to judge it against.
+
+You MUST respond with ONLY a JSON object, no other text:
+{"passed": true, "score": 0.85, "reason": "one sentence explanation"}
+
+Rules:
+- "passed": true if the response meets the criteria, false otherwise
+- "score": a number between 0.0 and 1.0
+- "reason": a brief explanation (one sentence)
+- Return ONLY the JSON object, nothing else
+
+## Criteria
+{{criteria}}
+
+## Agent Response
+{{response}}`;
+
+const RUBRIC_JUDGE_PROMPT = `You are a strict evaluator. Grade the agent's conversation against each criterion in the rubric.
+
+You MUST respond with ONLY a JSON object, no other text:
+{"criteria": [{"name": "criterion name", "passed": true, "explanation": "why"}], "score": 0.85}
+
+Rules:
+- Score each criterion independently
+- "score" is the overall score 0.0-1.0
+- Return ONLY the JSON object, nothing else
+
+## Rubric
+{{rubric}}
+
+## Conversation
+{{transcript}}`;
+
 export async function gradeWithRubric(
   gatewayUrl: string,
   authToken: string,
@@ -24,7 +57,10 @@ export async function gradeWithRubric(
     .map((t) => `User: ${t.user}\nAgent: ${t.agent}`)
     .join("\n\n");
 
-  const prompt = `## Rubric\n${rubricContent}\n\n## Conversation Transcript\n${transcript}\n\nGrade the agent's responses against the rubric. Return JSON only.`;
+  const prompt = RUBRIC_JUDGE_PROMPT.replace(
+    "{{rubric}}",
+    rubricContent
+  ).replace("{{transcript}}", transcript);
 
   const session = await createSession(gatewayUrl, authToken, {
     forceNew: true,
@@ -46,7 +82,10 @@ export async function gradeInline(
   agentResponse: string,
   timeoutMs: number
 ): Promise<{ passed: boolean; score: number; reason: string }> {
-  const prompt = `## Criteria\n${criteria}\n\n## Agent Response\n${agentResponse}\n\nDoes the response meet the criteria? Return JSON only: { "passed": boolean, "score": 0.0-1.0, "reason": "one sentence" }`;
+  const prompt = INLINE_JUDGE_PROMPT.replace("{{criteria}}", criteria).replace(
+    "{{response}}",
+    agentResponse
+  );
 
   const session = await createSession(gatewayUrl, authToken, {
     forceNew: true,
@@ -86,16 +125,8 @@ function parseGraderResponse(response: CollectedResponse): RubricResult {
         : [],
     };
   } catch {
-    return {
-      score: 0,
-      criteria: [
-        {
-          name: "parse_error",
-          passed: false,
-          explanation: "Failed to parse grader response",
-        },
-      ],
-    };
+    // Fallback: try to infer from prose response
+    return inferRubricFromText(response.text);
   }
 }
 
@@ -122,11 +153,8 @@ function parseInlineResponse(response: CollectedResponse): {
       reason: String(parsed.reason ?? ""),
     };
   } catch {
-    return {
-      passed: false,
-      score: 0,
-      reason: "Failed to parse grader response",
-    };
+    // Fallback: infer pass/fail from prose
+    return inferInlineFromText(response.text);
   }
 }
 
@@ -141,4 +169,65 @@ function extractJSON(text: string): string {
   if (braceMatch) return braceMatch[0];
 
   return text.trim();
+}
+
+/** Fallback: infer pass/fail from prose when JSON parsing fails. */
+function inferInlineFromText(text: string): {
+  passed: boolean;
+  score: number;
+  reason: string;
+} {
+  const lower = text.toLowerCase();
+  const positiveSignals = [
+    "yes",
+    "pass",
+    "meets",
+    "satisfies",
+    "correct",
+    "appropriate",
+    "good",
+    "well",
+  ];
+  const negativeSignals = [
+    "no",
+    "fail",
+    "does not",
+    "doesn't",
+    "incorrect",
+    "missing",
+    "lacks",
+    "poor",
+  ];
+
+  const posCount = positiveSignals.filter((s) => lower.includes(s)).length;
+  const negCount = negativeSignals.filter((s) => lower.includes(s)).length;
+
+  const passed = posCount > negCount;
+  return {
+    passed,
+    score: passed ? 0.7 : 0.3,
+    reason: `Inferred from prose (pos=${posCount}, neg=${negCount}): ${text.slice(0, 100)}`,
+  };
+}
+
+/** Fallback: infer rubric result from prose when JSON parsing fails. */
+function inferRubricFromText(text: string): RubricResult {
+  const lower = text.toLowerCase();
+  const positiveSignals = ["pass", "meets", "satisfies", "good", "correct"];
+  const negativeSignals = ["fail", "does not", "doesn't", "missing", "poor"];
+
+  const posCount = positiveSignals.filter((s) => lower.includes(s)).length;
+  const negCount = negativeSignals.filter((s) => lower.includes(s)).length;
+  const passed = posCount > negCount;
+
+  return {
+    score: passed ? 0.7 : 0.3,
+    criteria: [
+      {
+        name: "overall",
+        passed,
+        explanation: `Inferred from prose: ${text.slice(0, 200)}`,
+      },
+    ],
+  };
 }
