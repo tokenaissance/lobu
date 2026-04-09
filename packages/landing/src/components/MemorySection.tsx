@@ -1,65 +1,65 @@
 const memoryPillars = [
   {
     title: "Multi-tenant memory",
-    body: "Owletto scopes memory by workspace, so entities, synced data, connections, and analysis stay inside the right team boundary.",
+    body: "Memory is scoped by workspace. Each team's entities, data, and analysis stay isolated.",
   },
   {
     title: "Typed entity graph",
-    body: "Memory is organized as types, entities, relationships, connectors, and watchers instead of a pile of chat summaries.",
+    body: "Memory is structured as types, entities, and relationships — not loose text or chat summaries.",
   },
   {
     title: "Managed integrations",
-    body: "Connectors sync external systems into the same graph while OAuth, refresh, and scope upgrades stay out of workers.",
+    body: "Connectors sync external systems into the graph. OAuth and token refresh stay out of workers.",
   },
 ];
 
 const recallSignals = [
-  "Entity name matching for known customers, products, or topics",
-  "Full-text retrieval across saved facts, decisions, and observations",
+  "Entity name matching — customers, products, topics",
+  "Full-text retrieval across facts, decisions, and observations",
   "Semantic vector search for concept-level recall",
 ];
 
 const connectorModes = [
   {
     label: "OAuth",
-    text: "Connectors declare scopes. Owletto handles login, encrypted storage, refresh, and scope upgrades.",
+    text: "Connectors declare scopes. Owletto handles login, storage, refresh, and upgrades.",
   },
   {
     label: "API keys",
-    text: "Some connectors use saved or environment-backed credentials without exposing raw values to workers.",
+    text: "Saved or environment-backed credentials, never exposed to workers.",
   },
   {
     label: "Browser session",
-    text: "Owletto can persist browser-backed auth, launch a browser, or connect to one over CDP.",
+    text: "Persist browser auth, launch a browser, or connect over CDP.",
   },
 ];
 
 const whyItFitsLobu = [
-  "Workers get memory and integrations without receiving third-party OAuth tokens.",
-  "The gateway proxies tool calls while Owletto keeps auth and connector state scoped to the right organization.",
-  "The OpenClaw memory slot can recall durable facts before each run instead of leaning on recent chat history.",
+  "Workers get memory without receiving OAuth tokens.",
+  "Gateway proxies tool calls; Owletto keeps auth scoped per organization.",
+  "Agents recall durable facts before each run — not just recent chat history.",
 ];
 
 const faqItems = [
   {
-    q: "How is this different from filesystem-based memory?",
-    a: "Filesystem memory lives on one machine, serves one user, and goes stale when nobody updates it. Owletto scopes memory by workspace so agents and teammates share the same graph. Connectors sync external data and watchers keep it fresh.",
+    q: "How is this different from filesystem memory?",
+    a: "Filesystem memory lives on one machine and serves one user. Owletto scopes memory by workspace so agents share the same graph, connectors sync external data, and watchers keep it fresh.",
   },
   {
-    q: "How is this different from RAG or a vector database?",
-    a: "RAG usually returns similar text chunks. Owletto stores typed entities, relationships, and content, then combines entity matching, full-text search, and semantic search so agents find the right context even when wording changes.",
+    q: "How is this different from RAG?",
+    a: "RAG returns similar text chunks. Owletto stores typed entities and relationships, then combines entity matching, full-text, and semantic search to find the right context even when wording changes.",
   },
   {
     q: "How is this different from chat history?",
-    a: "Chat history is per-conversation and temporary. Owletto turns conversations and external sources into durable knowledge that any agent in the workspace can recall later.",
+    a: "Chat history is per-conversation and temporary. Owletto turns conversations and external sources into durable knowledge any agent in the workspace can recall.",
   },
   {
     q: "Is memory shared across agents?",
-    a: "Yes. Agents in the same workspace read from and write to the same graph. A support agent can save context that a sales agent recalls later, while organizations stay isolated.",
+    a: "Yes. Agents in the same workspace share a graph. A support agent can save context that a sales agent recalls later, while organizations stay isolated.",
   },
   {
     q: "Can I use a different memory system?",
-    a: "Yes. Owletto is the default, but workers use MCP tools, so you can point them at another memory server with the same interface.",
+    a: "Yes. Workers use MCP tools, so you can point them at any memory server with the same interface.",
   },
 ];
 
@@ -323,9 +323,8 @@ export function MemorySection() {
             class="text-lg sm:text-xl leading-8 max-w-[40rem] mx-auto m-0"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            Owletto is Lobu&apos;s default memory system. It gives agents a
-            typed graph, live connectors, scheduled analysis, and managed OAuth
-            instead of a vector dump or short-lived chat history.
+            Owletto is Lobu&apos;s default memory system — a typed entity graph
+            with live connectors, scheduled analysis, and managed OAuth.
           </p>
           <div class="flex flex-wrap gap-3 mt-8 justify-center">
             <a
@@ -430,10 +429,9 @@ export function MemorySection() {
                     class="text-sm leading-6 m-0"
                     style={{ color: "var(--color-page-text-muted)" }}
                   >
-                    Users define core workspace objects such as customers,
-                    products, competitors, or campaigns. JSON Schema gives each
-                    type structure so agents save typed memory instead of loose
-                    text.
+                    Define workspace objects — customers, products, competitors,
+                    campaigns. JSON Schema gives each type structure so agents
+                    save typed memory instead of loose text.
                   </p>
                 </div>
               </div>
@@ -466,10 +464,9 @@ export function MemorySection() {
                     class="text-sm leading-6 m-0"
                     style={{ color: "var(--color-page-text-muted)" }}
                   >
-                    Users add connectors for GitHub, Google, RSS, review sites,
-                    or internal sources. Owletto syncs those feeds into the same
-                    graph so memory stays current instead of relying only on
-                    what the agent was told.
+                    Add connectors for GitHub, Google, RSS, review sites, or
+                    internal sources. Owletto syncs feeds into the graph so
+                    memory stays current.
                   </p>
                 </div>
               </div>
@@ -502,10 +499,9 @@ export function MemorySection() {
                     class="text-sm leading-6 m-0"
                     style={{ color: "var(--color-page-text-muted)" }}
                   >
-                    Users create watchers that run scheduled prompts and
-                    extraction over fresh data. Incoming events become
-                    summaries, classifications, and durable knowledge the agent
-                    can recall later.
+                    Watchers run scheduled prompts over fresh data. Incoming
+                    events become summaries, classifications, and durable
+                    knowledge agents recall later.
                   </p>
                 </div>
               </div>
@@ -540,9 +536,8 @@ export function MemorySection() {
               class="text-base leading-7 mb-6"
               style={{ color: "var(--color-page-text-muted)" }}
             >
-              Owletto blends entity matching, text retrieval, and semantic
-              search so agents can find the right context even when wording
-              changes.
+              Owletto blends three search methods so agents find the right
+              context even when wording changes.
             </p>
             <div class="grid gap-3">
               {recallSignals.map((signal, index) => (
@@ -642,9 +637,9 @@ export function MemorySection() {
               class="text-base leading-7 m-0"
               style={{ color: "var(--color-page-text-muted)" }}
             >
-              Watchers run on schedule, analyze bounded windows of workspace
-              data, extract structured output, and keep conclusions linked to
-              evidence. Memory keeps moving even when nobody is chatting.
+              Watchers analyze workspace data on a schedule, extract structured
+              output, and link conclusions to evidence. Memory stays current
+              even when nobody is chatting.
             </p>
           </div>
 
@@ -748,10 +743,8 @@ export function MemorySection() {
                 class="text-base leading-7 m-0 max-w-[42rem]"
                 style={{ color: "var(--color-page-text-muted)" }}
               >
-                Lobu&apos;s memory story is not &quot;we store embeddings
-                somewhere&quot;. It is a scoped system for organizational
-                knowledge, connectors, and auth, and Owletto is the layer that
-                makes it work.
+                Scoped organizational knowledge, live connectors, and managed
+                auth — Owletto is the layer that makes it work.
               </p>
             </div>
             <div class="flex flex-wrap gap-3">
