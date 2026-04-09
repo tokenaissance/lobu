@@ -410,8 +410,7 @@ export function DemoSection() {
             class="text-sm leading-relaxed"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            Scaffold a Lobu project, hand it to your favorite coding agent, and
-            then either embed it in your product or ship it as its own app.
+            Scaffold a project, embed it or ship it as its own app.
           </p>
         </div>
 
