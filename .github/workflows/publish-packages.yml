@@ -34,9 +34,9 @@ jobs:
           cd ../cli && bun run build
 
       - name: Authenticate to npm
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          npm whoami
+        run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Stage publish artifacts
         run: |
