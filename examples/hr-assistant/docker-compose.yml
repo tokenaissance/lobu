@@ -36,6 +36,7 @@ services:
       WORKER_ALLOWED_DOMAINS: ${WORKER_ALLOWED_DOMAINS:-}
       WORKER_DISALLOWED_DOMAINS: ${WORKER_DISALLOWED_DOMAINS:-}
       MEMORY_URL: ${MEMORY_URL:-}
+      Z_AI_API_KEY: ${Z_AI_API_KEY:-}
       LOBU_WORKSPACE_ROOT: /workspace/project
     volumes:
       - .:/workspace/project:ro
