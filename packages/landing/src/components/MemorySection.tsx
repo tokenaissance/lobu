@@ -29,7 +29,7 @@ const connectorModes = [
     text: "Saved or environment-backed credentials, never exposed to workers.",
   },
   {
-    label: "Browser session",
+    label: "Browser",
     text: "Persist browser auth, launch a browser, or connect over CDP.",
   },
 ];
@@ -532,13 +532,6 @@ export function MemorySection() {
             >
               Recall stays grounded
             </h2>
-            <p
-              class="text-base leading-7 mb-6"
-              style={{ color: "var(--color-page-text-muted)" }}
-            >
-              Owletto blends three search methods so agents find the right
-              context even when wording changes.
-            </p>
             <div class="grid gap-3">
               {recallSignals.map((signal, index) => (
                 <div
@@ -587,20 +580,20 @@ export function MemorySection() {
               class="text-3xl tracking-[-0.03em] mt-0 mb-4"
               style={{ color: "var(--color-page-text)" }}
             >
-              Live systems feed the same graph
+              Embedded data ingestion
             </h2>
             <div class="grid gap-3">
               {connectorModes.map((mode) => (
                 <div
                   key={mode.label}
-                  class="rounded-2xl p-4 border"
+                  class="rounded-2xl p-4 border flex items-start gap-4"
                   style={{
                     borderColor: "rgba(251, 113, 133, 0.14)",
                     backgroundColor: "rgba(18, 12, 16, 0.45)",
                   }}
                 >
                   <div
-                    class="text-sm font-semibold mb-1"
+                    class="text-sm font-semibold shrink-0 w-16"
                     style={{ color: "var(--color-page-text)" }}
                   >
                     {mode.label}
