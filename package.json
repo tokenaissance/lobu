@@ -35,7 +35,7 @@
     "docker:build": "docker build -f docker/Dockerfile.gateway -t lobu-gateway . && docker build -f docker/Dockerfile.worker -t lobu-worker .",
     "k8s:deploy": "helm upgrade --install lobu charts/lobu --dependency-update",
     "k8s:uninstall": "helm uninstall lobu",
-    "publish:packages": "cd packages/core && npm publish --access public && cd ../gateway && npm publish --access public && cd ../worker && npm publish --access public && cd ../cli && npm publish --access public",
+    "publish:packages": "cd packages/core && pnpm publish --access public --no-git-checks && cd ../gateway && pnpm publish --access public --no-git-checks && cd ../worker && pnpm publish --access public --no-git-checks && cd ../cli && pnpm publish --access public --no-git-checks",
     "stage:publish": "node scripts/stage-publish-package.mjs",
     "slack:manifest:print": "bun run scripts/slack-manifest.ts print",
     "slack:manifest:validate": "bun run scripts/slack-manifest.ts validate",
