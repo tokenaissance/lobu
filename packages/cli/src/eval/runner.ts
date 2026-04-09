@@ -78,8 +78,6 @@ async function runTrial(
     agentId: options.agentId,
     forceNew: true,
     dryRun: true,
-    provider: options.provider,
-    model: options.model,
   });
 
   const turnResults: TurnResult[] = [];
