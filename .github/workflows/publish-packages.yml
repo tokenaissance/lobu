@@ -32,10 +32,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-
-      - name: Upgrade npm (needed for OIDC trusted publishing)
-        run: npm install -g npm@latest
+          # Node 24 ships with npm >= 11.5.1 which supports OIDC trusted
+          # publishing. Do NOT downgrade below 24 without re-adding the
+          # npm self-upgrade step (which has a known MODULE_NOT_FOUND bug
+          # on hosted runners).
+          node-version: 24
 
       - uses: oven-sh/setup-bun@v2
         with:
