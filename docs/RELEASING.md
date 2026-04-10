@@ -79,30 +79,43 @@ Update embedded host apps accordingly.
 
 The `release-please.yml` workflow runs on every push to `main`:
 
-1. **`release-please` step** — runs
+1. **`release-please` job** — runs
    `googleapis/release-please-action@v4` with
    `release-please-config.json` + `.release-please-manifest.json`.
    Either creates/updates the release PR or, if a release PR was just
    merged, cuts a GitHub release and tag.
 2. **`publish` job** (conditional on `releases_created == true`) —
-   runs only after the release PR merge:
-   - Checks out `main` at the release commit.
-   - `bun install --frozen-lockfile`
-   - `node scripts/publish-packages.mjs --skip-bump` — builds the four
-     packages, rewrites `workspace:*` refs to the concrete version,
-     runs `npm publish --access public` per package with
-     `NPM_CONFIG_PROVENANCE=true`.
-   - npm's OIDC trusted publisher exchange runs automatically because
-     the workflow has `id-token: write` and each package is registered
-     on npmjs.com as a trusted publisher with:
-     - Organization: `lobu-ai`
-     - Repository: `lobu`
-     - Workflow: `release-please.yml`
-     - Environment: `production`
-   - Provenance attestation is attached to every tarball.
+   runs only after the release PR merge. It does NOT publish directly.
+   Instead it triggers `publish-packages.yml` via `gh workflow run`.
+   This keeps the OIDC trusted publisher registration simple: only
+   `publish-packages.yml` needs to be registered on npmjs.com.
 3. **`dispatch-docker` job** (conditional on `releases_created == true`) —
    fires a `repository_dispatch` event so the Docker image build
    workflow picks up the new version.
+
+`publish-packages.yml` is the workflow that actually publishes:
+
+- Checks out `main` (the release commit).
+- `bun install --frozen-lockfile`
+- `node scripts/publish-packages.mjs --skip-bump` — builds the four
+  packages, rewrites `workspace:*` refs to the concrete version,
+  runs `npm publish --access public` per package with
+  `NPM_CONFIG_PROVENANCE=true`.
+- npm's OIDC trusted publisher exchange runs automatically because
+  the workflow has `id-token: write` and each package is registered
+  on npmjs.com as a trusted publisher with:
+  - Organization: `lobu-ai`
+  - Repository: `lobu`
+  - Workflow: `publish-packages.yml`
+  - Environment: `production`
+- Provenance attestation is attached to every tarball.
+
+You can also invoke `publish-packages.yml` manually for hotfix or
+recovery scenarios:
+
+```bash
+gh workflow run publish-packages.yml -f bump=skip
+```
 
 ## Verification after publish
 
