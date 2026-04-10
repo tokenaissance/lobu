@@ -1,11 +1,53 @@
 ---
-title: Agent Prompts
-description: How to customize agent behavior with IDENTITY.md, SOUL.md, and USER.md.
+title: Agent Workspace
+description: How agent files are organized across prompt files, local skills, evals, and lobu.toml.
 ---
 
-Every agent has three prompt files in its directory (e.g., `agents/my-agent/`). These files shape who the agent is, how it behaves, and what it knows about the user.
+Every Lobu agent has a workspace directory such as `agents/my-agent/`. `lobu.toml` points each agent at that directory with `dir = "./agents/my-agent"`.
 
-## File overview
+The workspace contains the agent's prompt files plus any agent-local skills and evals. Operator-controlled configuration such as providers, connections, network policy, tool policy, and enabled registry skills lives in [`lobu.toml`](/reference/lobu-toml/).
+
+At runtime, Lobu gives each user, DM, or channel its own isolated sandbox workspace. The files in `agents/<agent>/` are templates for that sandbox, so every new workspace starts from the same `IDENTITY.md`, `SOUL.md`, `USER.md`, skills, and eval setup for that agent.
+
+## Workspace layout
+
+```text
+lobu.toml
+agents/
+  my-agent/
+    IDENTITY.md
+    SOUL.md
+    USER.md
+    skills/
+      my-skill/
+        SKILL.md
+    evals/
+      smoke.yaml
+skills/
+  shared-skill/
+    SKILL.md
+```
+
+## What lives where
+
+| Concern | File or directory | Notes |
+|--------|-------------------|-------|
+| Agent identity | `agents/<agent>/IDENTITY.md` | Short description of who the agent is |
+| Agent behavior | `agents/<agent>/SOUL.md` | Rules, workflows, constraints, tone |
+| User or deployment context | `agents/<agent>/USER.md` | Shared context injected into every conversation |
+| Agent-local skills | `agents/<agent>/skills/<name>/SKILL.md` | Available only to one agent |
+| Shared skills | `skills/<name>/SKILL.md` | Available to all agents in the project |
+| Evaluations | `agents/<agent>/evals/` | Test cases for behavior and quality |
+| Providers, connections, network, tool policy, enabled registry skills | `lobu.toml` | Operator-controlled runtime config |
+
+## Runtime model
+
+- `agents/<agent>/...` is the source template checked into your project
+- each user, DM, or channel gets its own runtime workspace and filesystem
+- new sandboxes start from the agent template files, then diverge as the agent works
+- files created inside one sandbox do not appear in another sandbox unless you explicitly move data somewhere shared
+
+## Prompt files
 
 | File | Purpose | Analogy |
 |------|---------|---------|
@@ -13,18 +55,18 @@ Every agent has three prompt files in its directory (e.g., `agents/my-agent/`). 
 | `SOUL.md` | How the agent behaves — instructions, rules, constraints | A playbook |
 | `USER.md` | Context about the user or environment | A briefing doc |
 
-All three are loaded into the agent's system prompt at runtime. You can edit them freely — changes take effect on the next message (no restart needed in Docker mode after `make clean-workers`).
+All three prompt files are loaded into the agent's system prompt at runtime.
 
 ## IDENTITY.md
 
-Defines the agent's identity. Keep it short — one or two sentences.
+Defines the agent's identity. Keep it short and concrete.
 
 ```markdown
 You are Aria, a customer support agent for Acme Corp. You specialize in
 billing questions, account management, and product troubleshooting.
 ```
 
-A more minimal identity:
+A minimal identity also works:
 
 ```markdown
 You are a helpful AI assistant.
@@ -32,7 +74,7 @@ You are a helpful AI assistant.
 
 ## SOUL.md
 
-Instructions that govern the agent's behavior. This is where you put rules, constraints, tone guidelines, and workflow steps.
+`SOUL.md` holds the agent's behavioral instructions. Put rules, constraints, workflows, and tone guidance here.
 
 ```markdown
 # Instructions
@@ -60,7 +102,7 @@ Tips:
 
 ## USER.md
 
-Context about the user or deployment environment. This is injected into every conversation so the agent has background knowledge without the user repeating it.
+`USER.md` stores background context about the user, team, or deployment environment.
 
 ```markdown
 # User Context
@@ -71,28 +113,40 @@ Context about the user or deployment environment. This is injected into every co
 - Preferred language: English
 ```
 
-This file is optional and can be left empty. It's most useful when the agent serves a specific team or user.
+This file is optional and can be left empty.
 
-## Agent-specific skills
+## Skills
 
-You can also place skill files in `agents/{name}/skills/`. These are agent-scoped skills only available to that agent. Shared skills that all agents can use go in the root `skills/` directory.
+Local skills live in one of two places:
 
-## Directory structure
+- `agents/<agent>/skills/<name>/SKILL.md` for agent-specific skills
+- `skills/<name>/SKILL.md` for shared project-level skills
 
-```
-agents/
-  my-agent/
-    IDENTITY.md     # Who
-    SOUL.md         # How
-    USER.md         # Context
-    skills/         # Agent-specific skills
-    evals/          # Agent evaluations
-skills/             # Shared skills (all agents)
-```
+Use this page to understand where those files live. Use the [`SKILL.md` Reference](/reference/skill-md/) for the skill file format, frontmatter, packages, MCP servers, and network declarations.
 
-## Multi-agent example
+## lobu.toml
 
-With multiple agents in `lobu.toml`, each gets its own directory and prompt files:
+`lobu.toml` is the runtime wiring layer for the workspace. It tells Lobu:
+
+- which agent directories exist
+- which providers and connections to use
+- which registry skills are enabled
+- which custom MCP servers are attached directly to the agent
+- what network and tool policy applies
+
+Use the [`lobu.toml` Reference](/reference/lobu-toml/) for the exact schema. Keep operator policy there rather than spreading it into prompt files or `SKILL.md`.
+
+## Memory
+
+The sandbox filesystem is short-term working memory: drafts, scripts, downloaded files, generated artifacts, and intermediate results for one user or channel workspace.
+
+When you use Owletto, it adds long-term memory across workspaces. The filesystem stays local to one sandbox, while Owletto stores durable knowledge that other sessions, users, or agents can recall later.
+
+See [Memory](/getting-started/memory/) for the full model.
+
+## Multi-agent layout
+
+With multiple agents in `lobu.toml`, each one gets its own workspace:
 
 ```toml
 [agents.support]
@@ -115,3 +169,9 @@ agents/
     SOUL.md       # Sales-specific instructions
     USER.md
 ```
+
+## Related docs
+
+- [SKILL.md Reference](/reference/skill-md/)
+- [`lobu.toml` Reference](/reference/lobu-toml/)
+- [Evaluations](/guides/evals/)
