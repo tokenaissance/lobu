@@ -113,7 +113,7 @@ function buildMcpInstructions(
 
   for (const mcp of needsAuthentication) {
     lines.push(
-      `- ⚠️ **${mcp.name}** (id: ${mcp.id}): Authentication is required. Call \`${mcp.id}_login\` to start login. After the user completes login, call \`${mcp.id}_login_check\` before retrying its tools.`
+      `- ⚠️ **${mcp.name}** (id: ${mcp.id}): Authentication is required. Call \`${mcp.id}_login\` to start login. After the user completes login, call \`${mcp.id}_login_check\`. Newly available MCP tools will refresh on the next message.`
     );
   }
 

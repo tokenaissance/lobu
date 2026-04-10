@@ -456,6 +456,15 @@ describe("createMcpAuthToolDefinitions", () => {
           }
         );
       }
+      if (
+        url.endsWith("/internal/interactions/create") &&
+        init?.method === "POST"
+      ) {
+        return new Response(JSON.stringify({ id: "link-123" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     };
 
@@ -482,6 +491,7 @@ describe("createMcpAuthToolDefinitions", () => {
     expect(parsed.status).toBe("login_started");
     expect(parsed.mcp_id).toBe("github");
     expect(parsed.user_code).toBe("CODE-123");
+    expect(parsed.interaction_posted).toBe(true);
   });
 });
 

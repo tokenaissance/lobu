@@ -26,11 +26,38 @@ export function createInteractionRoutes(
     async (c) => {
       try {
         const worker = c.get("worker");
-        const { userId, conversationId, channelId, teamId, connectionId } =
-          worker;
-        const { question, options } = await c.req.json();
+        const {
+          userId,
+          conversationId,
+          channelId,
+          teamId,
+          connectionId,
+          platform,
+        } = worker;
+        const body = await c.req.json();
+        const interactionType =
+          typeof body?.interactionType === "string"
+            ? body.interactionType
+            : "question";
 
-        logger.info(`Posting question for conversation ${conversationId}`);
+        logger.info(
+          `Posting ${interactionType} for conversation ${conversationId}`
+        );
+
+        if (interactionType === "link_button") {
+          const posted = await interactionService.postLinkButton(
+            userId,
+            conversationId,
+            channelId,
+            teamId,
+            connectionId,
+            platform || "unknown",
+            body.url,
+            body.label,
+            body.linkType || "oauth"
+          );
+          return c.json({ id: posted.id, status: "posted" });
+        }
 
         const posted = await interactionService.postQuestion(
           userId,
@@ -38,8 +65,8 @@ export function createInteractionRoutes(
           channelId,
           teamId,
           connectionId,
-          question,
-          options || []
+          body.question,
+          body.options || []
         );
 
         return c.json({ id: posted.id, status: "posted" });

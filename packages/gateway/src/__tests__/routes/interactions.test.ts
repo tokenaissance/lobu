@@ -20,6 +20,7 @@ describe("interaction routes", () => {
 
     mockInteractionService = {
       postQuestion: mock(() => Promise.resolve({ id: "interaction-123" })),
+      postLinkButton: mock(() => Promise.resolve({ id: "link-123" })),
       createSuggestion: mock(() => Promise.resolve()),
     };
 
@@ -73,6 +74,27 @@ describe("interaction routes", () => {
       expect(body.id).toBe("interaction-123");
       expect(body.status).toBe("posted");
       expect(mockInteractionService.postQuestion).toHaveBeenCalledTimes(1);
+    });
+
+    test("posts link button and returns id", async () => {
+      const res = await router.request("/internal/interactions/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${workerToken}`,
+        },
+        body: JSON.stringify({
+          interactionType: "link_button",
+          url: "https://example.com/device",
+          label: "Connect GitHub",
+          linkType: "oauth",
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.id).toBe("link-123");
+      expect(body.status).toBe("posted");
+      expect(mockInteractionService.postLinkButton).toHaveBeenCalledTimes(1);
     });
 
     test("returns 500 on service error", async () => {

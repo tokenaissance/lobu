@@ -781,6 +781,40 @@ export class CoreServices {
         grantPattern
       );
     };
+    this.mcpProxy.onAuthRequired = async (
+      _agentId,
+      userId,
+      mcpId,
+      payload,
+      channelId,
+      conversationId,
+      teamId,
+      connectionId,
+      platform
+    ) => {
+      if (payload.url) {
+        await this.interactionService?.postOauthLink(
+          userId,
+          conversationId,
+          channelId,
+          teamId,
+          connectionId,
+          platform || "unknown",
+          payload.url,
+          `Connect ${mcpId}`
+        );
+        return;
+      }
+
+      await this.interactionService?.postStatusMessage(
+        conversationId,
+        channelId,
+        teamId,
+        connectionId,
+        platform || "unknown",
+        payload.message
+      );
+    };
     logger.debug("MCP proxy initialized");
 
     // Initialize worker gateway

@@ -147,6 +147,24 @@ export class McpProxy {
     connectionId: string | undefined
   ) => Promise<void>;
 
+  /** Callback invoked when an MCP auth flow is started or already pending. */
+  public onAuthRequired?: (
+    agentId: string,
+    userId: string,
+    mcpId: string,
+    payload: {
+      status: "login_required" | "pending";
+      url?: string;
+      userCode?: string;
+      message: string;
+    },
+    channelId: string,
+    conversationId: string,
+    teamId: string | undefined,
+    connectionId: string | undefined,
+    platform: string | undefined
+  ) => Promise<void>;
+
   constructor(
     private readonly configService: McpConfigSource,
     queue: IMessageQueue,
@@ -679,12 +697,30 @@ export class McpProxy {
             requesterUserId
           );
           if (autoAuthResult) {
+            if (this.onAuthRequired) {
+              await this.onAuthRequired(
+                agentId,
+                requesterUserId,
+                mcpId,
+                autoAuthResult,
+                auth.tokenData.channelId || "",
+                auth.tokenData.conversationId || "",
+                auth.tokenData.teamId,
+                auth.tokenData.connectionId,
+                auth.tokenData.platform
+              ).catch((err) =>
+                logger.error(
+                  { mcpId, error: String(err) },
+                  "onAuthRequired callback failed"
+                )
+              );
+            }
             return c.json(
               {
                 content: [
                   {
                     type: "text",
-                    text: autoAuthResult,
+                    text: JSON.stringify(autoAuthResult),
                   },
                 ],
                 isError: true,
@@ -697,7 +733,7 @@ export class McpProxy {
               content: [
                 {
                   type: "text",
-                  text: `Authentication required for ${mcpId}. Call owletto_login to authenticate.`,
+                  text: `Authentication required for ${mcpId}. Call ${mcpId}_login to authenticate.`,
                 },
               ],
               isError: true,
@@ -1242,7 +1278,13 @@ export class McpProxy {
     mcpId: string,
     agentId: string,
     userId: string
-  ): Promise<string | null> {
+  ): Promise<{
+    status: "login_required" | "pending";
+    url?: string;
+    userCode?: string;
+    message: string;
+    expiresInSeconds?: number;
+  } | null> {
     try {
       const { startDeviceAuth } = await import(
         "../../routes/internal/device-auth"
@@ -1253,12 +1295,11 @@ export class McpProxy {
       const pending = await this.redisClient.get(pendingKey);
       if (pending) {
         // Return the existing pending flow's info instead of starting a new one
-        return JSON.stringify({
-          status: "login_required",
+        return {
+          status: "pending",
           message:
             "Authentication is required. A login flow is already in progress. STOP calling tools and tell the user to complete login in their browser. Do NOT retry this tool call.",
-          note: "Do NOT call any owletto tools until the user completes login.",
-        });
+        };
       }
 
       const result = await startDeviceAuth(
@@ -1271,14 +1312,14 @@ export class McpProxy {
       );
       if (!result) return null;
       const url = result.verificationUriComplete || result.verificationUri;
-      return JSON.stringify({
+      return {
         status: "login_required",
+        url,
+        userCode: result.userCode,
         message:
           "Authentication is required. STOP calling tools and show the user this login link and code. Do NOT retry this tool call — wait for the user to complete login first.",
-        verification_url: url,
-        user_code: result.userCode,
-        expires_in_seconds: result.expiresIn,
-      });
+        expiresInSeconds: result.expiresIn,
+      };
     } catch (error) {
       logger.warn("Auto device-auth failed", {
         mcpId,

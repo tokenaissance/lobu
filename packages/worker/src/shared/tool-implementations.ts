@@ -78,6 +78,38 @@ async function gatewayFetch<T>(
   return { data };
 }
 
+async function postLinkButton(
+  gw: GatewayParams,
+  args: {
+    url: string;
+    label: string;
+    linkType?: "settings" | "install" | "oauth";
+  }
+): Promise<void> {
+  const { error } = await gatewayFetch<{ id: string }>(
+    gw,
+    "/internal/interactions/create",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        interactionType: "link_button",
+        url: args.url,
+        label: args.label,
+        linkType: args.linkType || "oauth",
+      }),
+    },
+    "Failed to post link button"
+  );
+
+  if (error) {
+    const text = error.content
+      .filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+    throw new Error(text || "Failed to post link button");
+  }
+}
+
 /**
  * Gateway connection params shared by all tool implementations.
  */
@@ -297,17 +329,29 @@ export async function startMcpLogin(
     );
     if (startResult.error) return startResult.error;
 
+    const verificationUrl =
+      startResult.data?.verificationUriComplete ||
+      startResult.data?.verificationUri;
+    if (verificationUrl) {
+      await postLinkButton(gw, {
+        url: verificationUrl,
+        label: `Connect ${args.mcpId}`,
+        linkType: "oauth",
+      });
+    }
+
     return textResult(
       JSON.stringify({
         status: "login_started",
         mcp_id: args.mcpId,
-        verification_url:
-          startResult.data?.verificationUriComplete ||
-          startResult.data?.verificationUri,
+        verification_url: verificationUrl,
         verification_uri: startResult.data?.verificationUri,
         user_code: startResult.data?.userCode,
         expires_in_seconds: startResult.data?.expiresIn,
-        message: `Authentication required for ${args.mcpId}. Show the user the verification URL and code, then wait for them to finish login.`,
+        interaction_posted: Boolean(verificationUrl),
+        message: verificationUrl
+          ? `Authentication required for ${args.mcpId}. The login link has been sent directly to the user. Do not repeat the URL unless they ask.`
+          : `Authentication required for ${args.mcpId}. Show the user the verification URL and code, then wait for them to finish login.`,
       })
     );
   });
@@ -332,12 +376,17 @@ export async function checkMcpLogin(
     if (statusResult.error) return statusResult.error;
 
     if (statusResult.data?.authenticated) {
+      const { invalidateSessionContextCache } = await import(
+        "../openclaw/session-context"
+      );
+      invalidateSessionContextCache();
       return textResult(
         JSON.stringify({
           status: "already_authenticated",
           mcp_id: args.mcpId,
           authenticated: true,
-          message: `${args.mcpId} is already authenticated.`,
+          refreshed_session_context: true,
+          message: `${args.mcpId} is already authenticated. Newly available MCP tools will be refreshed for the next message.`,
         })
       );
     }
@@ -358,12 +407,17 @@ export async function checkMcpLogin(
 
     const pollStatus = pollResult.data?.status || "error";
     if (pollStatus === "complete") {
+      const { invalidateSessionContextCache } = await import(
+        "../openclaw/session-context"
+      );
+      invalidateSessionContextCache();
       return textResult(
         JSON.stringify({
           status: "complete",
           mcp_id: args.mcpId,
           authenticated: true,
-          message: `${args.mcpId} authentication completed successfully.`,
+          refreshed_session_context: true,
+          message: `${args.mcpId} authentication completed successfully. Newly available MCP tools will be refreshed for the next message.`,
         })
       );
     }
