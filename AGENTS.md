@@ -54,13 +54,15 @@ Settings page provider order is drag-sortable via handle, with per-provider mode
 
 TypeScript packages must be compiled from `src/` → `dist/`. If you modify any package source code, run `make build-packages`. `make dev` (docker compose watch) automatically builds and syncs changes.
 
-## Versioning
+## Versioning and releasing
 
 The root `package.json` version is the single source of truth for all `@lobu/*` packages. `scripts/bump-version.mjs` copies it into every `packages/*/package.json` at bump time.
 
 - **Inter-package deps MUST use `"@lobu/<name>": "workspace:*"`**, never a hardcoded version string. `scripts/publish-packages.mjs` rewrites `workspace:*` to the current root version right before `npm publish` and restores the file afterwards.
 - Don't hand-edit versions in individual package.json files. Run `node scripts/bump-version.mjs patch|minor|major|<explicit>` instead.
 - Don't re-add `@lobu/<name>: "^x.y.z"` ranges when fixing unlisted-dependency warnings — add `workspace:*` so there's still exactly one place to change.
+- Releases go through `main` via a PR on a `release/<version>` branch, then `gh workflow run publish-packages.yml -f bump=skip`. Publishing runs on npm trusted publishing (OIDC) — no `NPM_TOKEN` secret, no OTP. See [`docs/RELEASING.md`](docs/RELEASING.md) for the full flow, recovery playbook, and local-publish fallback.
+- Do NOT bump versions inside CI via the workflow's `bump` input — the bump would happen only on the runner filesystem and never make it back to `main`. Always bump locally first.
 
 ## Instructions
 - You MUST only do what has been asked; nothing more, nothing less.
