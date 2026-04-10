@@ -18,7 +18,12 @@ export interface LobuAgentConfig {
   identity?: string;
   soul?: string;
   user?: string;
-  providers?: Array<{ id: string; model?: string; key?: string }>;
+  providers?: Array<{
+    id: string;
+    model?: string;
+    key?: string;
+    secretRef?: string;
+  }>;
   connections?: Array<{ type: string; [key: string]: string }>;
   skills?: string[];
   network?: { allowed?: string[]; denied?: string[] };
@@ -254,15 +259,28 @@ export class Lobu {
       // Seed provider credentials
       if (authProfilesManager && agent.providers) {
         for (const provider of agent.providers) {
-          if (!provider.key) continue;
-          await authProfilesManager.upsertProfile({
-            agentId: agent.id,
-            provider: provider.id,
-            credential: provider.key,
-            authType: "api-key",
-            label: `${provider.id} (from SDK config)`,
-            makePrimary: true,
-          });
+          if (provider.secretRef) {
+            await authProfilesManager.upsertProfile({
+              agentId: agent.id,
+              provider: provider.id,
+              credentialRef: provider.secretRef,
+              authType: "api-key",
+              label: `${provider.id} (from SDK config)`,
+              makePrimary: true,
+            });
+            continue;
+          }
+
+          if (provider.key) {
+            authProfilesManager.registerEphemeralProfile({
+              agentId: agent.id,
+              provider: provider.id,
+              credential: provider.key,
+              authType: "api-key",
+              label: `${provider.id} (from SDK config)`,
+              makePrimary: true,
+            });
+          }
         }
       }
     }

@@ -18,7 +18,15 @@ export interface SystemSkillEntry {
   mcpServers?: import("./types").SkillMcpServer[];
   providers?: ProviderConfigEntry[];
   nixPackages?: string[];
-  permissions?: string[];
+  /**
+   * Network access the skill requires.
+   * When the skill is enabled on an agent, these domains are merged into
+   * the agent's `networkConfig.allowedDomains` at load time.
+   */
+  networkConfig?: {
+    allowedDomains?: string[];
+    deniedDomains?: string[];
+  };
 }
 
 export interface SystemSkillsConfigFile {

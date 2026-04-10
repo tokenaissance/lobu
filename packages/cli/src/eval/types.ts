@@ -28,7 +28,7 @@ export const evalDefinitionSchema = z.object({
     .object({
       pass_threshold: z.number().default(0.8),
     })
-    .default({}),
+    .default(() => ({ pass_threshold: 0.8 })),
   turns: z.array(turnSchema).min(1),
 });
 

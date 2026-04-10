@@ -78,7 +78,7 @@ export const SKILL_INSTALL_SCENARIO: UseCase = {
     },
     {
       role: "bot",
-      text: "Installed and connected.\n\nSprint \"Week 15\" (68% done):\n• 11 merged, 3 in review, 2 todo\n• Blocked: AUTH-234 (design)\n• At risk: API-89 (due tomorrow)",
+      text: 'Installed and connected.\n\nSprint "Week 15" (68% done):\n• 11 merged, 3 in review, 2 todo\n• Blocked: AUTH-234 (design)\n• At risk: API-89 (due tomorrow)',
     },
   ],
 };

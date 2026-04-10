@@ -19,6 +19,7 @@ import type { GrantStore } from "./permissions/grant-store";
 import type { IFileHandler } from "./platform/file-handler";
 import type { ResponseRenderer } from "./platform/response-renderer";
 import type { SecretProxy } from "./proxy/secret-proxy";
+import type { WritableSecretStore } from "./secrets";
 import type { InstructionService } from "./services/instruction-service";
 import type { TranscriptionService } from "./services/transcription-service";
 import type { ISessionManager } from "./session";
@@ -35,6 +36,7 @@ export interface CoreServices {
   getQueue(): IMessageQueue;
   getQueueProducer(): QueueProducer;
   getSecretProxy(): SecretProxy | undefined;
+  getSecretStore(): WritableSecretStore;
   getWorkerGateway(): WorkerGateway | undefined;
   getMcpProxy(): McpProxy | undefined;
   getModelPreferenceStore(): ModelPreferenceStore | undefined;

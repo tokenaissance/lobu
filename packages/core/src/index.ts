@@ -25,7 +25,6 @@ export type {
   Connection,
   McpConfig,
   ModelOption,
-  ModelSelectionState,
   PermissionGrant,
   PrefillMcp,
   PrefillSkill,
@@ -48,6 +47,20 @@ export type {
   SystemSkillEntry,
   SystemSkillsConfigFile,
 } from "./integration-types";
+// lobu.toml zod schema (canonical — used by CLI and gateway)
+export {
+  type AgentEntry as TomlAgentEntry,
+  type ConnectionEntry as TomlConnectionEntry,
+  type LobuTomlConfig,
+  lobuConfigSchema,
+  type McpServerEntry as TomlMcpServerEntry,
+  type NetworkEntry as TomlNetworkEntry,
+  type ProviderEntry as TomlProviderEntry,
+  type SkillsEntry as TomlSkillsEntry,
+  type ToolsEntry,
+  type ToolsEntry as TomlToolsEntry,
+  type WorkerEntry as TomlWorkerEntry,
+} from "./lobu-toml-schema";
 export * from "./logger";
 // Module system
 export type { ActionButton, ModuleSessionContext } from "./modules";
@@ -85,6 +98,7 @@ export type {
 } from "./provider-config-types";
 // Redis & worker helpers
 export * from "./redis/base-store";
+export * from "./secret-refs";
 // Observability
 export { getSentry, initSentry } from "./sentry";
 export { extractTraceId, generateTraceId } from "./trace";
@@ -102,8 +116,11 @@ export type {
   LogLevel,
   McpOAuthConfig,
   McpServerConfig,
+  ModelSelectionMode,
+  ModelSelectionState,
   NetworkConfig,
   NixConfig,
+  ProviderModelPreferences,
   RegistryEntry,
   SessionContext,
   SkillConfig,
@@ -115,6 +132,7 @@ export type {
   ToolsConfig,
   UserSuggestion,
 } from "./types";
+export { hasCredentialSource } from "./types";
 
 // Utilities
 export * from "./utils/encryption";

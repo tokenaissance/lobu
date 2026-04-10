@@ -109,7 +109,7 @@ export class SystemSkillsService {
       system: true,
       mcpServers: entry.mcpServers,
       nixPackages: entry.nixPackages,
-      permissions: entry.permissions,
+      networkConfig: entry.networkConfig,
     };
   }
 
@@ -137,11 +137,12 @@ export class SystemSkillsService {
       }
     }
 
-    if (entry.permissions?.length) {
+    const allowedDomains = entry.networkConfig?.allowedDomains;
+    if (allowedDomains?.length) {
       lines.push(
         "",
-        "## Network Permissions",
-        `- ${entry.permissions.join(", ")}`
+        "## Network Access",
+        `- Allowed domains: ${allowedDomains.join(", ")}`
       );
     }
 
@@ -153,8 +154,8 @@ export class SystemSkillsService {
       "",
       "## Usage",
       "- Use MCP tools for API access (auth handled by Owletto).",
-      "- Skills with `permissions` require user-approved network grants.",
-      "- Skills with `nixPackages` require user-approved package installs."
+      "- Declared network domains and nix packages are merged into the agent's configuration when the skill is enabled. Review the skill before installing.",
+      "- Destructive MCP tool calls still require user approval in-thread unless the operator pre-approves them in `lobu.toml`."
     );
 
     return {

@@ -11,6 +11,7 @@ import {
   refreshCredential,
   tryCompletePendingDeviceAuth,
 } from "../../routes/internal/device-auth";
+import type { WritableSecretStore } from "../../secrets";
 import type { CachedMcpServer, McpTool, McpToolCache } from "./tool-cache";
 
 const logger = createLogger("mcp-proxy");
@@ -132,7 +133,9 @@ export class McpProxy {
   private readonly PENDING_TOOL_TTL = 300; // 5 minutes
   private readonly redisClient: any;
   private app: Hono;
-  private toolCache?: McpToolCache;
+  private readonly toolCache?: McpToolCache;
+  private readonly secretStore: WritableSecretStore;
+  private readonly grantStore?: GrantStore;
 
   /** Callback invoked when a tool call is blocked for approval. */
   public onToolBlocked?: (
@@ -152,11 +155,16 @@ export class McpProxy {
   constructor(
     private readonly configService: McpConfigSource,
     queue: IMessageQueue,
-    toolCache?: McpToolCache,
-    private readonly grantStore?: GrantStore
+    options: {
+      secretStore: WritableSecretStore;
+      toolCache?: McpToolCache;
+      grantStore?: GrantStore;
+    }
   ) {
     this.redisClient = queue.getRedisClient();
-    this.toolCache = toolCache;
+    this.secretStore = options.secretStore;
+    this.toolCache = options.toolCache;
+    this.grantStore = options.grantStore;
     this.app = new Hono();
     this.setupRoutes();
     logger.debug("MCP proxy initialized");
@@ -968,6 +976,7 @@ export class McpProxy {
   ): Promise<string | null> {
     const credential = await getStoredCredential(
       this.redisClient,
+      this.secretStore,
       agentId,
       userId,
       mcpId
@@ -976,6 +985,7 @@ export class McpProxy {
       // No stored credential — check if there's a pending device-auth to complete
       return tryCompletePendingDeviceAuth(
         this.redisClient,
+        this.secretStore,
         agentId,
         userId,
         mcpId
@@ -990,6 +1000,7 @@ export class McpProxy {
     // Token expired or expiring soon — refresh
     const refreshed = await refreshCredential(
       this.redisClient,
+      this.secretStore,
       agentId,
       userId,
       mcpId,

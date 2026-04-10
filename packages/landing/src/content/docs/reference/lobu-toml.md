@@ -75,6 +75,18 @@ scopes = ["read", "write"]
 allowed = ["github.com", "api.linear.app"]
 denied = []
 
+# Tool policy (worker-side visibility + MCP approval override)
+[agents.support.tools]
+# Bypass the in-thread approval card for these destructive MCP tools.
+pre_approved = [
+  "/mcp/gmail/tools/list_messages",
+  "/mcp/linear/tools/*",
+]
+# Worker-side tool visibility (optional).
+allowed = ["Read", "Grep", "mcp__gmail__*"]
+denied = ["Bash(rm:*)"]
+strict = false
+
 # Worker customization
 [agents.support.worker]
 nix_packages = ["imagemagick", "ffmpeg"]
@@ -95,6 +107,7 @@ Top-level table keyed by agent ID. IDs must match `^[a-z0-9][a-z0-9-]*$` (lowerc
 | `connections` | array | no | Platform connections |
 | `skills` | table | no | Skills and MCP servers |
 | `network` | table | no | Network access policy |
+| `tools` | table | no | Tool policy: pre-approval bypass + worker-side visibility |
 | `worker` | table | no | Worker customization |
 
 ### `[[agents.<id>.providers]]`
@@ -106,6 +119,9 @@ Each entry configures an LLM provider. The first available provider is used at r
 | `id` | string | yes | Provider identifier (e.g. `openrouter`, `anthropic`, `gemini`, `openai`) |
 | `model` | string | no | Model override (e.g. `anthropic/claude-sonnet-4`) |
 | `key` | string | no | API key — literal value or `$ENV_VAR` reference |
+| `secret_ref` | string | no | Durable secret reference (for example `secret://...`) |
+
+Provider credentials are optional. A provider entry may omit both `key` and `secret_ref`, or set exactly one of them. Setting both is invalid.
 
 ### `[[agents.<id>.connections]]`
 
@@ -208,6 +224,21 @@ Controls which domains the worker can reach through the gateway proxy.
 | `denied` | array of strings | no | Domains to block (only meaningful when `allowed = ["*"]`) |
 
 Domain format: exact match (`api.example.com`) or wildcard (`.example.com` matches all subdomains).
+
+### `[agents.<id>.tools]`
+
+Operator-level tool policy. Two independent concerns:
+
+See [Tool Policy](/guides/tool-policy/) for behavior and examples; this section is the exact schema reference.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pre_approved` | array of strings | no | MCP tool grant patterns that bypass the in-thread approval card. Each entry must match `/mcp/<mcp-id>/tools/<tool-name>` or `/mcp/<mcp-id>/tools/*` — malformed entries fail schema validation. Synced to the grant store at deployment time. |
+| `allowed` | array of strings | no | Tools the worker can call. Patterns follow Claude Code's permission format: `Read`, `Bash(git:*)`, `mcp__github__*`, `*`. |
+| `denied` | array of strings | no | Tools to always block. Takes precedence over `allowed`. |
+| `strict` | boolean | no | If `true`, ONLY `allowed` tools are permitted (defaults are ignored). Default `false`. |
+
+**`pre_approved` is an operator-only escape hatch.** Destructive MCP tools normally require user approval in-thread (per MCP `destructiveHint` annotations). Skills cannot set this field — bypassing approval is strictly the operator's call, visible in the `lobu.toml` diff.
 
 ### `[agents.<id>.worker]`
 

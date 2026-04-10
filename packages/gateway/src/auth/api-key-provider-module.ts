@@ -44,7 +44,8 @@ export class ApiKeyProviderModule extends BaseProviderModule {
 
   constructor(config: ApiKeyProviderConfig) {
     const authProfilesManager = new AuthProfilesManager(
-      config.agentSettingsStore
+      config.agentSettingsStore,
+      config.agentSettingsStore.getSecretStore()
     );
     super(
       {

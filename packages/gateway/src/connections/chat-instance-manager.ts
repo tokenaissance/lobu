@@ -4,15 +4,36 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { createLogger, decrypt, encrypt } from "@lobu/core";
+import { createLogger, isSecretRef } from "@lobu/core";
 import type Redis from "ioredis";
 import type { CoreServices, PlatformAdapter } from "../platform";
+import {
+  deleteSecretsByPrefix,
+  persistSecretValue,
+  resolveSecretValue,
+} from "../secrets";
+import { SlackConnectionCoordinator } from "./slack-connection-coordinator";
+import { registerSlackPlatformHandlers } from "./slack-platform-bridge";
 import {
   type ConnectionSettings,
   isSecretField,
   type PlatformAdapterConfig,
   type PlatformConnection,
 } from "./types";
+
+/** Shallow structural equality for plain config objects. */
+function configsEqual(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
 
 type HistoryRecord = {
   role: "user" | "assistant";
@@ -22,8 +43,6 @@ type HistoryRecord = {
 };
 
 const logger = createLogger("chat-instance-manager");
-const SLACK_SYSTEM_AGENT_PREFIX = "system:connection:slack";
-
 export const ADAPTER_FACTORIES: Record<string, (config: any) => Promise<any>> =
   {
     telegram: async (c) =>
@@ -52,11 +71,13 @@ export class ChatInstanceManager {
   private redis!: Redis;
   private services!: CoreServices;
   private publicGatewayUrl = "";
+  private slackCoordinator!: SlackConnectionCoordinator;
 
   async initialize(services: CoreServices): Promise<void> {
     this.services = services;
     this.redis = services.getQueue().getRedisClient();
     this.publicGatewayUrl = services.getPublicGatewayUrl();
+    this.slackCoordinator = this.buildSlackCoordinator();
 
     // Load all connections from Redis and start active ones
     const connectionIds = await this.redis.smembers("connections:all");
@@ -66,73 +87,72 @@ export class ChatInstanceManager {
     );
 
     for (const id of connectionIds) {
+      const raw = await this.redis.get(`connection:${id}`);
+      if (!raw) {
+        await this.redis.srem("connections:all", id);
+        continue;
+      }
+
+      let connection: PlatformConnection;
       try {
-        const raw = await this.redis.get(`connection:${id}`);
-        if (!raw) {
-          await this.redis.srem("connections:all", id);
-          continue;
-        }
-        const connection = JSON.parse(raw) as PlatformConnection;
-        try {
-          connection.config = this.decryptConfig(connection.config);
-        } catch (decryptError) {
-          // ENCRYPTION_KEY changed — remove stale connection so the seeder can recreate it
-          logger.warn(
-            { id, platform: connection.platform, error: String(decryptError) },
-            "Removing connection with undecryptable config (ENCRYPTION_KEY changed?)"
-          );
-          await this.redis.del(`connection:${id}`);
-          await this.redis.srem("connections:all", id);
-          if (connection.templateAgentId) {
-            await this.redis.srem(
-              `connections:agent:${connection.templateAgentId}`,
-              id
-            );
-          }
-          continue;
-        }
+        connection = JSON.parse(raw) as PlatformConnection;
+      } catch (error) {
+        logger.warn(
+          { id, error: String(error) },
+          "Removing connection with malformed JSON"
+        );
+        await this.deleteConnectionRecord(id);
+        continue;
+      }
 
-        // Migrate legacy agentId → templateAgentId
-        const legacy = connection as PlatformConnection & {
-          agentId?: string;
-        };
-        if (legacy.agentId && !connection.templateAgentId) {
-          connection.templateAgentId = legacy.agentId;
-          delete legacy.agentId;
-          await this.persistConnection(connection);
-          logger.info(
-            { id, templateAgentId: connection.templateAgentId },
-            "Migrated agentId → templateAgentId"
-          );
-        }
+      try {
+        connection.config = await this.resolveConfigForRuntime(
+          connection.id,
+          connection.config
+        );
+      } catch (error) {
+        logger.warn(
+          { id, platform: connection.platform, error: String(error) },
+          "Removing connection with unresolved secret refs — reseed from lobu.toml"
+        );
+        await this.deleteConnectionRecord(connection.id, connection);
+        continue;
+      }
 
-        // Migrate legacy scope values: "mcp-servers"/"tools" → "skills"
-        if (connection.settings?.userConfigScopes?.length) {
-          const oldScopes = connection.settings.userConfigScopes as string[];
-          const hasLegacy = oldScopes.some(
-            (s) => s === "mcp-servers" || s === "tools"
-          );
-          if (hasLegacy) {
-            const migrated = new Set<string>();
-            for (const s of oldScopes) {
-              if (s === "mcp-servers" || s === "tools") {
-                migrated.add("skills");
-              } else {
-                migrated.add(s);
-              }
-            }
-            connection.settings.userConfigScopes = [...migrated] as any;
-            await this.persistConnection(connection);
-            logger.info({ id }, "Migrated legacy scopes → skills");
-          }
-        }
-
+      try {
         if (connection.status === "active") {
           await this.startInstance(connection);
         }
       } catch (error) {
         logger.error({ id, error: String(error) }, "Failed to load connection");
       }
+    }
+  }
+
+  private async deleteConnectionRecord(
+    id: string,
+    connection?: PlatformConnection
+  ): Promise<void> {
+    await this.redis.del(`connection:${id}`);
+    await this.redis.srem("connections:all", id);
+    if (connection?.templateAgentId) {
+      await this.redis.srem(
+        `connections:agent:${connection.templateAgentId}`,
+        id
+      );
+    }
+    // Also clear any secrets owned by the torn-down record so a replay
+    // of `initialize()` does not inherit stale credential material.
+    try {
+      await deleteSecretsByPrefix(
+        this.services.getSecretStore(),
+        `connections/${id}/`
+      );
+    } catch (error) {
+      logger.warn(
+        { id, error: String(error) },
+        "Failed to purge connection secrets during record cleanup"
+      );
     }
   }
 
@@ -192,7 +212,7 @@ export class ChatInstanceManager {
     // Start the Chat SDK instance
     await this.startInstance(connection);
 
-    // Persist (secrets encrypted)
+    // Persist (sensitive fields are moved into the secret store as refs)
     await this.persistConnection(connection);
 
     logger.info({ id, platform, templateAgentId }, "Connection added");
@@ -218,7 +238,46 @@ export class ChatInstanceManager {
     await this.redis.del(`connection:${id}`);
     await this.redis.srem("connections:all", id);
 
-    logger.info({ id }, "Connection removed");
+    // Cascade-delete per-channel chat history (populated by the chat
+    // response bridge, see `chat:history:{id}:{channelId}`) so that
+    // removing a connection also drops its conversation logs.
+    const historyDeleted = await this.deleteKeysByPattern(
+      `chat:history:${id}:*`
+    );
+
+    // Cascade-delete secrets owned by this connection (botToken, signing
+    // secrets, etc). Uses the same `connections/{id}/` prefix that
+    // `normalizeConfigForStorage` writes under.
+    const secretsDeleted = await deleteSecretsByPrefix(
+      this.services.getSecretStore(),
+      `connections/${id}/`
+    );
+
+    logger.info({ id, secretsDeleted, historyDeleted }, "Connection removed");
+  }
+
+  /**
+   * SCAN-and-DEL every key matching `pattern`. Used by `removeConnection`
+   * to garbage-collect per-connection Redis state. Returns the number of
+   * keys deleted.
+   */
+  private async deleteKeysByPattern(pattern: string): Promise<number> {
+    let cursor = "0";
+    let deleted = 0;
+    do {
+      const [next, keys] = await this.redis.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        100
+      );
+      cursor = next;
+      if (keys.length > 0) {
+        deleted += await this.redis.del(...keys);
+      }
+    } while (cursor !== "0");
+    return deleted;
   }
 
   async restartConnection(id: string): Promise<void> {
@@ -233,7 +292,31 @@ export class ChatInstanceManager {
     if (!raw) throw new Error(`Connection ${id} not found`);
 
     const connection = JSON.parse(raw) as PlatformConnection;
-    connection.config = this.decryptConfig(connection.config);
+
+    // Resolve the (possibly-ref'd) config before we attempt to boot. If
+    // this fails — e.g. a secret ref was wiped between restarts — we
+    // can't auto-delete the record (that's initialize()'s startup job,
+    // not a user-initiated restart), so stamp the row with the error
+    // and re-throw so the caller (and UI) can surface it.
+    try {
+      connection.config = await this.resolveConfigForRuntime(
+        connection.id,
+        connection.config
+      );
+    } catch (error) {
+      connection.status = "error";
+      connection.errorMessage = `Failed to resolve connection secrets: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
+      connection.updatedAt = Date.now();
+      await this.persistConnection(connection);
+      logger.error(
+        { id, error: String(error) },
+        "restartConnection: failed to resolve secrets"
+      );
+      throw error;
+    }
+
     connection.status = "active";
     connection.errorMessage = undefined;
     connection.updatedAt = Date.now();
@@ -262,7 +345,10 @@ export class ChatInstanceManager {
     if (!raw) throw new Error(`Connection ${id} not found`);
 
     const connection = JSON.parse(raw) as PlatformConnection;
-    connection.config = this.decryptConfig(connection.config);
+    connection.config = await this.resolveConfigForRuntime(
+      connection.id,
+      connection.config
+    );
     connection.status = "stopped";
     connection.updatedAt = Date.now();
     await this.persistConnection(connection);
@@ -283,11 +369,30 @@ export class ChatInstanceManager {
     if (!raw) throw new Error(`Connection ${id} not found`);
 
     const connection = JSON.parse(raw) as PlatformConnection;
-    connection.config = this.decryptConfig(connection.config);
+    connection.config = await this.resolveConfigForRuntime(
+      connection.id,
+      connection.config
+    );
+
+    // Compute the merged config first (skipping sanitized `***...`
+    // placeholder values), then decide whether a restart is needed by
+    // comparing merged-vs-current. A previous version compared the raw
+    // `updates.config` to `connection.config`, which would trigger a
+    // spurious restart every time the UI posted back a sanitized form.
+    const previousConfig = connection.config as Record<string, unknown>;
+    let nextConfig: Record<string, unknown> | undefined;
+    if (updates.config !== undefined) {
+      const merged = { ...previousConfig };
+      for (const [key, value] of Object.entries(updates.config)) {
+        if (typeof value === "string" && value.startsWith("***")) continue;
+        merged[key] = value;
+      }
+      merged.platform = updates.config.platform;
+      nextConfig = merged;
+    }
 
     const needsRestart =
-      updates.config !== undefined &&
-      JSON.stringify(updates.config) !== JSON.stringify(connection.config);
+      nextConfig !== undefined && !configsEqual(nextConfig, previousConfig);
 
     if (updates.templateAgentId !== undefined) {
       // Update agent index — remove old, add new
@@ -307,14 +412,8 @@ export class ChatInstanceManager {
         delete connection.templateAgentId;
       }
     }
-    if (updates.config !== undefined) {
-      const merged = { ...connection.config } as any;
-      for (const [key, value] of Object.entries(updates.config)) {
-        if (typeof value === "string" && value.startsWith("***")) continue;
-        merged[key] = value;
-      }
-      merged.platform = updates.config.platform;
-      connection.config = merged as PlatformAdapterConfig;
+    if (nextConfig !== undefined) {
+      connection.config = nextConfig as PlatformAdapterConfig;
     }
     if (updates.settings !== undefined) {
       connection.settings = { ...connection.settings, ...updates.settings };
@@ -384,7 +483,7 @@ export class ChatInstanceManager {
     return this.instances.get(id);
   }
 
-  /** Get a decrypted secret from a running connection's config. */
+  /** Get a resolved secret value from a running connection's config. */
   getConnectionConfigSecret(
     connectionId: string,
     field: string
@@ -433,23 +532,11 @@ export class ChatInstanceManager {
   async findSlackConnectionByTeamId(
     teamId: string
   ): Promise<PlatformConnection | null> {
-    const connections = await this.listConnections({ platform: "slack" });
-    return (
-      connections.find(
-        (connection) => connection.metadata?.teamId === teamId
-      ) || null
-    );
+    return this.slackCoordinator.findConnectionByTeamId(teamId);
   }
 
   async getDefaultSlackConnection(): Promise<PlatformConnection | null> {
-    const connections = await this.listConnections({ platform: "slack" });
-    if (connections.length === 1) {
-      return connections[0] || null;
-    }
-
-    return (
-      connections.find((connection) => !connection.metadata?.teamId) || null
-    );
+    return this.slackCoordinator.getDefaultConnection();
   }
 
   async ensureSlackWorkspaceConnection(
@@ -460,40 +547,9 @@ export class ChatInstanceManager {
       teamName?: string;
     }
   ): Promise<PlatformConnection> {
-    const baseConfig = this.resolveSlackAdapterConfig({
-      requireOAuth: true,
-    }) as Extract<PlatformAdapterConfig, { platform: "slack" }>;
-    const config: PlatformAdapterConfig = {
-      ...baseConfig,
-      botToken: installation.botToken,
-      ...(installation.botUserId ? { botUserId: installation.botUserId } : {}),
-    };
-    const agentId = `${SLACK_SYSTEM_AGENT_PREFIX}:${teamId}`;
-    const metadata = {
+    return this.slackCoordinator.ensureWorkspaceConnection(
       teamId,
-      teamName: installation.teamName,
-      botUserId: installation.botUserId,
-    };
-
-    const existing = await this.findSlackConnectionByTeamId(teamId);
-    if (existing) {
-      const updated = await this.updateConnection(existing.id, {
-        templateAgentId: agentId,
-        config,
-        metadata,
-      });
-      if (!this.has(existing.id)) {
-        await this.restartConnection(existing.id);
-      }
-      return updated;
-    }
-
-    return this.addConnection(
-      "slack",
-      agentId,
-      config,
-      { allowGroups: true },
-      metadata
+      installation
     );
   }
 
@@ -505,98 +561,11 @@ export class ChatInstanceManager {
     teamName?: string;
     connectionId: string;
   }> {
-    const { chat, adapter } = await this.createSlackOAuthChat({
-      requireOAuth: true,
-    });
-
-    try {
-      const url = new URL(request.url);
-      if (redirectUri) {
-        url.searchParams.set("redirect_uri", redirectUri);
-      }
-
-      const callbackRequest = new Request(url.toString(), {
-        method: request.method,
-        headers: request.headers,
-      });
-
-      const { teamId, installation } =
-        await adapter.handleOAuthCallback(callbackRequest);
-      let connection: PlatformConnection;
-      try {
-        connection = await this.ensureSlackWorkspaceConnection(
-          teamId,
-          installation
-        );
-      } catch (error) {
-        await adapter.deleteInstallation(teamId).catch((err) => {
-          logger.warn(
-            { teamId, error: String(err) },
-            "Failed to delete Slack installation after connection error"
-          );
-        });
-        throw error;
-      }
-
-      return {
-        teamId,
-        teamName: installation.teamName,
-        connectionId: connection.id,
-      };
-    } finally {
-      await chat.shutdown().catch((err: unknown) => {
-        logger.warn(
-          { error: String(err) },
-          "Failed to shut down Slack OAuth chat"
-        );
-      });
-    }
+    return this.slackCoordinator.completeOAuthInstall(request, redirectUri);
   }
 
   async handleSlackAppWebhook(request: Request): Promise<Response> {
-    const body = await request.text();
-    const teamId = this.extractSlackTeamId(
-      body,
-      request.headers.get("content-type") || ""
-    );
-
-    if (teamId) {
-      const connection = await this.findSlackConnectionByTeamId(teamId);
-      if (connection) {
-        if (!(await this.ensureConnectionRunning(connection.id))) {
-          return new Response("Slack connection unavailable", { status: 503 });
-        }
-        return this.handleWebhook(
-          connection.id,
-          this.cloneRequestWithBody(request, body)
-        );
-      }
-    }
-
-    const fallbackConnection = await this.getDefaultSlackConnection();
-    if (fallbackConnection) {
-      if (!(await this.ensureConnectionRunning(fallbackConnection.id))) {
-        return new Response("Slack connection unavailable", { status: 503 });
-      }
-      return this.handleWebhook(
-        fallbackConnection.id,
-        this.cloneRequestWithBody(request, body)
-      );
-    }
-
-    const { chat, adapter } = await this.createSlackOAuthChat();
-    try {
-      return await adapter.handleWebhook(
-        this.cloneRequestWithBody(request, body)
-      );
-    } finally {
-      await chat.shutdown().catch((err) => {
-        logger.warn(
-          { error: String(err) },
-          "Failed to shut down Slack webhook chat"
-        );
-      });
-    }
+    return this.slackCoordinator.handleAppWebhook(request);
   }
 
   // --- Private ---
@@ -633,6 +602,7 @@ export class ChatInstanceManager {
         this,
         commandDispatcher
       );
+      registerSlackPlatformHandlers(chat, connection, commandDispatcher);
 
       chat.registerSingleton();
 
@@ -769,144 +739,44 @@ export class ChatInstanceManager {
     }
   }
 
-  private resolveSlackAdapterConfig(options?: {
-    requireOAuth?: boolean;
-  }): PlatformAdapterConfig {
-    const slackInstance = Array.from(this.instances.values()).find(
-      (instance) => instance.connection.platform === "slack"
+  private findRunningInstanceByPlatform(
+    platform: string
+  ): ManagedInstance | undefined {
+    return Array.from(this.instances.values()).find(
+      (instance) => instance.connection.platform === platform
     );
-    const currentConfig = (slackInstance?.connection.config || {}) as Record<
-      string,
-      any
-    >;
-
-    const signingSecret =
-      process.env.SLACK_SIGNING_SECRET || currentConfig.signingSecret;
-    const clientId = process.env.SLACK_CLIENT_ID || currentConfig.clientId;
-    const clientSecret =
-      process.env.SLACK_CLIENT_SECRET || currentConfig.clientSecret;
-    const encryptionKey =
-      process.env.SLACK_ENCRYPTION_KEY || currentConfig.encryptionKey;
-    const installationKeyPrefix =
-      process.env.SLACK_INSTALLATION_KEY_PREFIX ||
-      currentConfig.installationKeyPrefix;
-    const userName =
-      process.env.SLACK_BOT_USERNAME ||
-      currentConfig.userName ||
-      slackInstance?.connection.metadata?.botUsername;
-
-    if (!signingSecret) {
-      throw new Error("Slack signing secret is not configured");
-    }
-
-    if (options?.requireOAuth) {
-      if (!clientId || !clientSecret) {
-        throw new Error(
-          "Slack OAuth is not configured. Set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET."
-        );
-      }
-
-      return {
-        platform: "slack",
-        signingSecret,
-        clientId,
-        clientSecret,
-        ...(encryptionKey ? { encryptionKey } : {}),
-        ...(installationKeyPrefix ? { installationKeyPrefix } : {}),
-        ...(userName ? { userName } : {}),
-      };
-    }
-
-    const botToken = process.env.SLACK_BOT_TOKEN || currentConfig.botToken;
-    if (!botToken && (!clientId || !clientSecret)) {
-      throw new Error(
-        "Slack adapter is not configured. Provide SLACK_BOT_TOKEN or Slack OAuth credentials."
-      );
-    }
-
-    return {
-      platform: "slack",
-      signingSecret,
-      ...(botToken ? { botToken } : {}),
-      ...(clientId ? { clientId } : {}),
-      ...(clientSecret ? { clientSecret } : {}),
-      ...(encryptionKey ? { encryptionKey } : {}),
-      ...(installationKeyPrefix ? { installationKeyPrefix } : {}),
-      ...(userName ? { userName } : {}),
-    };
   }
 
-  private async createSlackOAuthChat(options?: { requireOAuth?: boolean }) {
-    const { Chat } = await import("chat");
-    const { createSlackAdapter } = await import("@chat-adapter/slack");
+  private buildSlackCoordinator(): SlackConnectionCoordinator {
+    return new SlackConnectionCoordinator({
+      addConnection: this.addConnection.bind(this),
+      createStateAdapter: this.createStateAdapter.bind(this),
+      ensureConnectionRunning: this.ensureConnectionRunning.bind(this),
+      forwardWebhook: this.handleWebhook.bind(this),
+      getCurrentSlackConfig: () => {
+        const slackInstance = this.findRunningInstanceByPlatform("slack");
+        const currentConfig = (slackInstance?.connection.config || {}) as
+          | Record<string, any>
+          | undefined;
 
-    const adapter = createSlackAdapter(
-      this.resolveSlackAdapterConfig(options) as any
-    );
-    const state = await this.createStateAdapter();
-
-    const chat = new Chat({
-      userName: "lobu-slack-oauth",
-      adapters: { slack: adapter },
-      state,
-      logger: "warn",
-    });
-
-    await chat.initialize();
-    return { chat, adapter };
-  }
-
-  private cloneRequestWithBody(request: Request, body: string): Request {
-    return new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body:
-        request.method === "GET" || request.method === "HEAD"
-          ? undefined
-          : body,
-    });
-  }
-
-  private extractSlackTeamId(body: string, contentType: string): string | null {
-    if (contentType.includes("application/x-www-form-urlencoded")) {
-      const params = new URLSearchParams(body);
-      const directTeamId = params.get("team_id");
-      if (directTeamId) {
-        return directTeamId;
-      }
-
-      const payloadStr = params.get("payload");
-      if (!payloadStr) {
-        return null;
-      }
-
-      try {
-        const payload = JSON.parse(payloadStr) as {
-          team?: { id?: string };
-          team_id?: string;
+        return {
+          signingSecret: currentConfig?.signingSecret,
+          clientId: currentConfig?.clientId,
+          clientSecret: currentConfig?.clientSecret,
+          encryptionKey: currentConfig?.encryptionKey,
+          installationKeyPrefix: currentConfig?.installationKeyPrefix,
+          userName:
+            currentConfig?.userName ||
+            slackInstance?.connection.metadata?.botUsername,
+          botToken: currentConfig?.botToken,
         };
-        return payload.team?.id || payload.team_id || null;
-      } catch {
-        return null;
-      }
-    }
-
-    try {
-      const payload = JSON.parse(body) as {
-        team_id?: string;
-        team?: string;
-        event?: { team_id?: string; team?: string };
-      };
-      return (
-        payload.team_id ||
-        payload.team ||
-        payload.event?.team_id ||
-        payload.event?.team ||
-        null
-      );
-    } catch {
-      return null;
-    }
+      },
+      getRunningChat: (connectionId) => this.getInstance(connectionId)?.chat,
+      hasConnection: this.has.bind(this),
+      listSlackConnections: () => this.listConnections({ platform: "slack" }),
+      restartConnection: this.restartConnection.bind(this),
+      updateConnection: this.updateConnection.bind(this),
+    });
   }
 
   private async ensureConnectionRunning(id: string): Promise<boolean> {
@@ -939,11 +809,11 @@ export class ChatInstanceManager {
   private async persistConnection(
     connection: PlatformConnection
   ): Promise<void> {
-    const encrypted = {
-      ...connection,
-      config: this.encryptConfig(connection.config),
-    };
-    const json = JSON.stringify(encrypted);
+    const persistedConfig = await this.normalizeConfigForStorage(
+      connection.id,
+      connection.config
+    );
+    const json = JSON.stringify({ ...connection, config: persistedConfig });
 
     const pipeline = this.redis
       .pipeline()
@@ -960,39 +830,49 @@ export class ChatInstanceManager {
     await pipeline.exec();
   }
 
-  private encryptConfig(config: PlatformAdapterConfig): PlatformAdapterConfig {
-    const encrypted = { ...config } as any;
-    for (const field of Object.keys(encrypted)) {
-      if (isSecretField(field) && typeof encrypted[field] === "string") {
-        try {
-          encrypted[field] = `enc:v1:${encrypt(encrypted[field])}`;
-        } catch {
-          // encryption not available — store as-is (dev mode)
-        }
-      }
+  private async normalizeConfigForStorage(
+    connectionId: string,
+    config: PlatformAdapterConfig
+  ): Promise<PlatformAdapterConfig> {
+    const normalized = { ...config } as Record<string, unknown>;
+    const secretStore = this.services.getSecretStore();
+
+    for (const field of Object.keys(normalized)) {
+      const value = normalized[field];
+      if (!isSecretField(field) || typeof value !== "string") continue;
+      normalized[field] = await persistSecretValue(
+        secretStore,
+        `connections/${connectionId}/${field}`,
+        value
+      );
     }
-    return encrypted;
+
+    return normalized as PlatformAdapterConfig;
   }
 
-  private decryptConfig(config: PlatformAdapterConfig): PlatformAdapterConfig {
-    const decrypted = { ...config } as any;
-    for (const field of Object.keys(decrypted)) {
-      const val = decrypted[field];
-      if (
-        isSecretField(field) &&
-        typeof val === "string" &&
-        val.startsWith("enc:v1:")
-      ) {
-        try {
-          decrypted[field] = decrypt(val.slice(7));
-        } catch {
+  private async resolveConfigForRuntime(
+    connectionId: string,
+    config: PlatformAdapterConfig
+  ): Promise<PlatformAdapterConfig> {
+    const resolved = { ...config } as Record<string, unknown>;
+    const secretStore = this.services.getSecretStore();
+
+    for (const field of Object.keys(resolved)) {
+      const value = resolved[field];
+      if (!isSecretField(field) || typeof value !== "string") continue;
+
+      if (isSecretRef(value)) {
+        const secretValue = await resolveSecretValue(secretStore, value);
+        if (secretValue === undefined) {
           throw new Error(
-            `Failed to decrypt field "${field}" — ENCRYPTION_KEY may have changed`
+            `Failed to resolve secret ref for connection ${connectionId} field "${field}"`
           );
         }
+        resolved[field] = secretValue;
       }
     }
-    return decrypted;
+
+    return resolved as PlatformAdapterConfig;
   }
 
   /** Return connection with secrets redacted for API responses. */

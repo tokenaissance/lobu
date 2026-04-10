@@ -1,94 +1,26 @@
 ---
 title: Skills
-description: How skills work in Lobu — integrations, system packages, MCP servers, sandbox controls, and the SKILL.md format.
+description: What skills are in Lobu, how they are enabled, and where to find the detailed reference docs.
 ---
 
 import { SkillsRegistryTable } from "../../../components/SkillsRegistryTable";
-import { TerminalLog } from "../../../components/TerminalLog";
-import skillsConfig from "@skills-config";
 
-A **skill** is a self-contained capability definition for a Lobu agent. Skills declare what external services, system packages, MCP servers, network access, and tool permissions an agent session needs. The gateway resolves these declarations at session start, so the worker container launches with the right environment — no manual setup required.
+A **skill** is a reusable capability bundle for a Lobu agent. Skills can add instructions, integrations, MCP servers, system packages, and network requirements.
 
-<TerminalLog client:load />
+## What Skills Do
 
-## How skills work
+- Add capability declarations through `SKILL.md`
+- Extend the agent's instructions with markdown content
+- Let the gateway prepare the worker with the packages, MCP servers, and network access the skill requires
 
-```
-SKILL.md (declarative config)
-  ├── integrations     → third-party API access, managed by Owletto
-  ├── mcpServers       → MCP tool servers, proxied through gateway
-  ├── nixConfig        → system packages provisioned via Nix
-  ├── networkConfig    → domain allowlist for the sandbox
-  └── toolsConfig      → agent tool permissions (allow / deny / strict)
-```
+When a user enables a skill, the gateway reads the skill manifest, resolves the declared config, and starts the worker with those capabilities in place.
 
-When a user enables a skill in the settings page:
+## What Does Not Belong In A Skill
 
-1. **Gateway reads the skill manifest** and resolves each section.
-2. **Credentials** for integrations are managed by Owletto; MCP server credentials are resolved by the gateway proxy — workers never see raw secrets.
-3. **Nix packages** are passed as environment variables (`NIX_PACKAGES`, `NIX_FLAKE_URL`) to the worker entrypoint.
-4. **Network and tool policies** are enforced at the orchestrator level (Docker / Kubernetes).
-5. The worker container starts with everything in place.
+- Tool visibility and MCP approval bypasses are configured in [`lobu.toml`](/reference/lobu-toml/), not in `SKILL.md`
+- Destructive MCP tools still follow the normal approval flow unless the operator configures `[agents.<id>.tools].pre_approved`
 
----
-
-## System packages with Nix
-
-Every Lobu worker container ships with [Nix](https://nixos.org/) pre-installed. This gives agents access to **over 100 000 packages** from [Nixpkgs](https://search.nixos.org/packages) without baking dependencies into a custom Docker image.
-
-### Why Nix
-
-Traditional approaches to giving containers extra tools — installing via `apt-get` at runtime or maintaining custom images per use case — are slow, fragile, or impossible when the container filesystem is read-only. Nix solves this:
-
-- **Declarative**: list package names, get reproducible results.
-- **No root required**: Nix installs into `/nix/store` under the `worker` user.
-- **Persistent across scale-to-zero**: the Nix store is symlinked (Docker) or subPath-mounted (K8s) onto the workspace PVC. Packages survive container restarts.
-- **Composable**: combine packages from settings, skill manifests, and repo-level config — they all merge into one `nix-shell` invocation.
-
-### Resolution order
-
-The worker entrypoint evaluates Nix configuration in priority order:
-
-| Priority | Source | Mechanism |
-|----------|--------|-----------|
-| 1 | `NIX_FLAKE_URL` env var | `nix develop <url>` — full flake-based dev shell |
-| 2 | `NIX_PACKAGES` env var | `nix-shell -p <pkgs>` — individual packages from Nixpkgs |
-| 3 | `flake.nix` in workspace | Auto-detected, `nix develop .` |
-| 4 | `shell.nix` in workspace | Auto-detected, `nix-shell` |
-| 5 | `.nix-packages` file | One package name per line, fed to `nix-shell -p` |
-
-Sources 1 and 2 come from the API (skill settings or agent config). Sources 3–5 are repo-level files the agent can create or a user can commit. API sources always win.
-
-### Example: adding ffmpeg and ImageMagick
-
-In the settings page, add `ffmpeg` and `imagemagick` to the agent's system packages. The gateway passes `NIX_PACKAGES=ffmpeg,imagemagick` to the worker. On startup:
-
-```bash
-# Worker entrypoint (simplified)
-nix-shell -p ffmpeg imagemagick --command "bun run src/index.ts"
-```
-
-The agent process and every child process (`Bash` tool calls, etc.) now have `ffmpeg` and `convert` on `$PATH`.
-
-### Persistence model
-
-| Environment | Strategy |
-|-------------|----------|
-| **Docker** (dev) | Nix store copied to `/workspace/.nix-store`, then symlinked back to `/nix/store`. Survives container restart. |
-| **Kubernetes** (prod) | Init container copies `/nix/store` to PVC subpath. Main container mounts PVC subpath at `/nix/store` and `/nix/var`. |
-
-Both approaches mean the first boot pays the install cost; subsequent sessions reuse the cached store.
-
-### Flake support
-
-For complex environments (pinned Nixpkgs, overlays, custom derivations), point the agent at a flake:
-
-```yaml
-nixConfig:
-  flakeUrl: "github:user/my-agent-env"
-```
-
-The worker runs `nix develop github:user/my-agent-env --command <entrypoint>`, giving the agent a fully reproducible shell.
+See [Tool Policy](/guides/tool-policy/) for that split.
 
 ---
 
@@ -100,96 +32,9 @@ Integration auth for third-party APIs (GitHub, Google, Linear, etc.) is handled 
 
 ---
 
-## MCP servers
+## Read Next
 
-[MCP](https://modelcontextprotocol.io/) (Model Context Protocol) servers extend agent capabilities with additional tools. Skills can declare MCP servers, and the gateway handles proxying and credential injection.
-
-- **HTTP/SSE transport**: workers connect to MCP servers through the gateway proxy. No direct outbound network required.
-- **Per-user credentials**: each user authenticates independently via a device-code flow. The gateway injects the correct token when proxying MCP requests for a given user.
-
-```yaml
-mcpServers:
-  my-memory:
-    url: https://memory.example.com/mcp
-    type: sse
-```
-
----
-
-## SKILL.md format
-
-Skills are defined as `SKILL.md` files — Markdown with YAML frontmatter:
-
-```yaml
----
-name: My Skill
-description: What this skill does
-
-integrations:
-  - id: google
-    authType: oauth
-
-mcpServers:
-  my-mcp:
-    url: https://my-mcp.example.com
-    type: sse
-
-nixConfig:
-  packages: [jq, ripgrep, pandoc]
-
-networkConfig:
-  allowedDomains:
-    - api.example.com
-
-toolsConfig:
-  allowedTools:
-    - Read
-    - Bash(git:*)
-  deniedTools:
-    - DeleteFile
-  strictMode: true
----
-
-# My Skill
-
-Instructions and behavioral rules for the agent go here as Markdown.
-The body acts as a system prompt extension — it shapes how the agent
-uses the declared capabilities.
-```
-
-### Frontmatter reference
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Display name shown in settings and search results |
-| `description` | string | Short summary for the skill registry |
-| `integrations` | array | Third-party services the skill requires (managed by Owletto) |
-| `integrations[].id` | string | Integration identifier (e.g. `google`, `github`) |
-| `integrations[].authType` | `oauth` \| `apiKey` | Authentication method |
-| `mcpServers` | object | MCP server connections (keyed by server ID) |
-| `mcpServers.<id>.url` | string | Server endpoint URL |
-| `mcpServers.<id>.type` | `sse` \| `http` | Transport type |
-| `nixConfig.packages` | string[] | Nix packages to install (from [Nixpkgs](https://search.nixos.org/packages)) |
-| `nixConfig.flakeUrl` | string | Nix flake URL for a full dev shell |
-| `networkConfig.allowedDomains` | string[] | Domains the worker sandbox can reach |
-| `toolsConfig.allowedTools` | string[] | Tools the agent is allowed to use |
-| `toolsConfig.deniedTools` | string[] | Tools explicitly blocked |
-| `toolsConfig.strictMode` | boolean | When `true`, only `allowedTools` are available |
-
-### Markdown body
-
-The body after the frontmatter is injected into the agent's system prompt when the skill is active. Use it to define behavioral rules, workflows, or domain-specific instructions. The agent follows these instructions alongside its base prompt.
-
----
-
-## Full registry source
-
-The built-in system skills and providers are config-driven:
-
-- **Local**: `config/system-skills.json`
-- **GitHub**: [config/system-skills.json](https://github.com/lobu-ai/lobu/blob/main/config/system-skills.json)
-
-<details>
-  <summary>View full <code>system-skills.json</code></summary>
-  <pre><code>{JSON.stringify(skillsConfig, null, 2)}</code></pre>
-</details>
+- [SKILL.md Reference](/reference/skill-md/) for the file format and supported frontmatter
+- [Skills Authoring](/guides/skills-authoring/) for creating local and shared skills
+- [`lobu.toml` Reference](/reference/lobu-toml/) for agent-level configuration
+- [Tool Policy](/guides/tool-policy/) for tool visibility and MCP approval overrides

@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { MockRedisClient } from "@lobu/core/testing";
 import {
   ProviderCatalogService,
@@ -12,17 +19,38 @@ import {
   resolveSettingsView,
 } from "../auth/settings/resolved-settings-view";
 import { buildDefaultSettingsFromSource } from "../auth/settings/template-utils";
+import { RedisSecretStore } from "../secrets";
 import { hasConfiguredProvider } from "../services/platform-helpers";
+
+const TEST_ENCRYPTION_KEY =
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+let originalEncryptionKey: string | undefined;
+
+beforeAll(() => {
+  originalEncryptionKey = process.env.ENCRYPTION_KEY;
+  process.env.ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+});
+
+afterAll(() => {
+  if (originalEncryptionKey !== undefined) {
+    process.env.ENCRYPTION_KEY = originalEncryptionKey;
+  } else {
+    delete process.env.ENCRYPTION_KEY;
+  }
+});
 
 describe("sandbox provider inheritance", () => {
   let redis: MockRedisClient;
   let store: AgentSettingsStore;
+  let secretStore: RedisSecretStore;
   let authProfilesManager: AuthProfilesManager;
 
   beforeEach(() => {
     redis = new MockRedisClient();
-    store = new AgentSettingsStore(redis as any);
-    authProfilesManager = new AuthProfilesManager(store);
+    secretStore = new RedisSecretStore(redis as any, "lobu:test:secrets:");
+    store = new AgentSettingsStore(redis as any, secretStore);
+    authProfilesManager = new AuthProfilesManager(store, secretStore);
   });
 
   test("inherits installed providers through metadata and connection template fallback", async () => {

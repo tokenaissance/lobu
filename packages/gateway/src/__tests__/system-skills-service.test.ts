@@ -15,7 +15,9 @@ const testConfig = {
         },
       ],
       nixPackages: ["git"],
-      permissions: ["github.com", "api.github.com"],
+      networkConfig: {
+        allowedDomains: ["github.com", "api.github.com"],
+      },
     },
     {
       id: "owletto",
@@ -59,6 +61,7 @@ describe("SystemSkillsService", () => {
       repo: "system/github",
       name: "GitHub",
       description: "GitHub integration",
+      instructions: undefined,
       enabled: true,
       system: true,
       mcpServers: [
@@ -69,19 +72,22 @@ describe("SystemSkillsService", () => {
         },
       ],
       nixPackages: ["git"],
-      permissions: ["github.com", "api.github.com"],
+      networkConfig: {
+        allowedDomains: ["github.com", "api.github.com"],
+      },
     });
     expect(skills[1]).toEqual({
       repo: "system/owletto",
       name: "Owletto",
       description: "Owletto embedded",
+      instructions: undefined,
       enabled: true,
       system: true,
       mcpServers: [
         { id: "owletto-mcp", url: "https://owletto.example.com/mcp" },
       ],
       nixPackages: undefined,
-      permissions: undefined,
+      networkConfig: undefined,
     });
   });
 
@@ -292,7 +298,7 @@ describe("SystemSkillsService", () => {
     expect(runtime[0].content).toContain("System skill ID: `system/github`");
     expect(runtime[0].content).toContain("## MCP Servers");
     expect(runtime[0].content).toContain("GitHub MCP (`github-mcp`)");
-    expect(runtime[0].content).toContain("## Network Permissions");
+    expect(runtime[0].content).toContain("## Network Access");
     expect(runtime[0].content).toContain("github.com, api.github.com");
     expect(runtime[0].content).toContain("## Nix Packages");
     expect(runtime[0].content).toContain("git");

@@ -16,7 +16,13 @@
     "sourceMap": true,
     "strict": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    // Override the workspace path mapping from the root tsconfig so that
+    // `@lobu/core` resolves via node_modules to the compiled .d.ts. Without
+    // this, tsc follows the mapping into core's source tree and complains
+    // that those files are outside the CLI's rootDir.
+    "baseUrl": ".",
+    "paths": {}
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

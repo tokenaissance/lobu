@@ -1,204 +1,169 @@
 import { describe, expect, mock, test } from "bun:test";
-import { ChatInstanceManager } from "../connections/chat-instance-manager";
+import { MockRedisClient } from "@lobu/core/testing";
 
-class PipelineRedisMock {
-  private readonly operations: Array<() => Promise<unknown>> = [];
-
-  constructor(private readonly redis: RedisMock) {}
-
-  set(key: string, value: string): this {
-    this.operations.push(() => this.redis.set(key, value));
-    return this;
-  }
-
-  sadd(key: string, member: string): this {
-    this.operations.push(() => this.redis.sadd(key, member));
-    return this;
-  }
-
-  async exec(): Promise<unknown[]> {
-    const results: unknown[] = [];
-    for (const operation of this.operations) {
-      results.push(await operation());
+mock.module("@aws-sdk/client-secrets-manager", () => ({
+  GetSecretValueCommand: class GetSecretValueCommand {},
+  SecretsManagerClient: class SecretsManagerClient {
+    send(): Promise<null> {
+      return Promise.resolve(null);
     }
-    return results;
-  }
-}
+  },
+}));
 
-class RedisMock {
-  private readonly strings = new Map<string, string>();
-  private readonly sets = new Map<string, Set<string>>();
+const TEST_ENCRYPTION_KEY =
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-  async get(key: string): Promise<string | null> {
-    return this.strings.get(key) ?? null;
-  }
-
-  async set(key: string, value: string): Promise<"OK"> {
-    this.strings.set(key, value);
-    return "OK";
-  }
-
-  async del(...keys: string[]): Promise<number> {
-    let removed = 0;
-    for (const key of keys) {
-      const existed = this.strings.delete(key) || this.sets.delete(key);
-      if (existed) {
-        removed++;
-      }
-    }
-    return removed;
-  }
-
-  async sadd(key: string, ...members: string[]): Promise<number> {
-    if (!this.sets.has(key)) {
-      this.sets.set(key, new Set());
-    }
-
-    const set = this.sets.get(key)!;
-    let added = 0;
-    for (const member of members) {
-      if (!set.has(member)) {
-        set.add(member);
-        added++;
-      }
-    }
-    return added;
-  }
-
-  async srem(key: string, ...members: string[]): Promise<number> {
-    const set = this.sets.get(key);
-    if (!set) {
-      return 0;
-    }
-
-    let removed = 0;
-    for (const member of members) {
-      if (set.delete(member)) {
-        removed++;
-      }
-    }
-    return removed;
-  }
-
-  async smembers(key: string): Promise<string[]> {
-    return Array.from(this.sets.get(key) || []);
-  }
-
-  pipeline(): PipelineRedisMock {
-    return new PipelineRedisMock(this);
-  }
+async function loadChatInstanceManager() {
+  const mod = await import("../connections/chat-instance-manager");
+  return mod.ChatInstanceManager;
 }
 
 describe("ChatInstanceManager Slack marketplace support", () => {
-  test("ensureSlackWorkspaceConnection is idempotent per team", async () => {
+  test("ensureSlackWorkspaceConnection delegates to the Slack coordinator", async () => {
+    const ChatInstanceManager = await loadChatInstanceManager();
     const manager = new ChatInstanceManager() as any;
-    const redis = new RedisMock();
-    const startInstance = mock(async (connection: any) => {
-      manager.instances.set(connection.id, {
-        connection,
-        chat: { webhooks: { slack: async () => new Response("ok") } },
-        cleanup: async () => undefined,
-      });
-    });
+    const ensureWorkspaceConnection = mock(async () => ({ id: "conn-team" }));
+    manager.slackCoordinator = {
+      ensureWorkspaceConnection,
+    };
 
-    manager.redis = redis;
-    manager.startInstance = startInstance;
-    manager.resolveSlackAdapterConfig = mock(() => ({
-      platform: "slack",
-      signingSecret: "signing-secret",
-      clientId: "client-id",
-      clientSecret: "client-secret",
-    }));
-
-    const first = await manager.ensureSlackWorkspaceConnection("T123", {
-      botToken: "xoxb-first-token",
+    const result = await manager.ensureSlackWorkspaceConnection("T123", {
+      botToken: "xoxb-token",
       botUserId: "U123",
       teamName: "Acme",
     });
-    const second = await manager.ensureSlackWorkspaceConnection("T123", {
-      botToken: "xoxb-second-token",
-      botUserId: "U456",
-      teamName: "Acme Updated",
+
+    expect(result).toEqual({ id: "conn-team" });
+    expect(ensureWorkspaceConnection).toHaveBeenCalledWith("T123", {
+      botToken: "xoxb-token",
+      botUserId: "U123",
+      teamName: "Acme",
     });
+  });
 
-    expect(second.id).toBe(first.id);
-    expect(startInstance).toHaveBeenCalledTimes(2);
+  test("handleSlackAppWebhook delegates to the Slack coordinator", async () => {
+    const ChatInstanceManager = await loadChatInstanceManager();
+    const manager = new ChatInstanceManager() as any;
+    const request = new Request("https://gateway.example.com/slack/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ team_id: "T123", type: "event_callback" }),
+    });
+    const handleAppWebhook = mock(async () => new Response("ok"));
+    manager.slackCoordinator = {
+      handleAppWebhook,
+    };
 
-    const connections = await manager.listConnections({ platform: "slack" });
-    expect(connections).toHaveLength(1);
+    const response = await manager.handleSlackAppWebhook(request);
 
-    const stored = JSON.parse(
-      (await redis.get(`connection:${first.id}`)) || "{}"
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("ok");
+    expect(handleAppWebhook).toHaveBeenCalledWith(request);
+  });
+
+  test("restartConnection persists error state when secret refs cannot be resolved", async () => {
+    // When a connection's secret ref becomes unresolvable between restarts
+    // (secret wiped, backend down, etc), restartConnection must:
+    //   1) stamp the stored record with status=error + errorMessage
+    //   2) re-throw so the caller knows the restart failed
+    // It MUST NOT auto-delete the connection — that's initialize()'s
+    // startup-only job. The operator needs to see the error and decide
+    // how to fix.
+    const originalKey = process.env.ENCRYPTION_KEY;
+    process.env.ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+    try {
+      const ChatInstanceManager = await loadChatInstanceManager();
+      const { RedisSecretStore, SecretStoreRegistry } = await import(
+        "../secrets"
+      );
+
+      const redis = new MockRedisClient();
+      const backingStore = new RedisSecretStore(
+        redis as any,
+        "lobu:test:secrets:"
+      );
+      const secretStore = new SecretStoreRegistry(backingStore, {
+        secret: backingStore,
+      });
+
+      const services = {
+        getQueue: () => ({ getRedisClient: () => redis }),
+        getPublicGatewayUrl: () => "",
+        getSecretStore: () => secretStore,
+      } as any;
+
+      const manager = new ChatInstanceManager() as any;
+      manager.services = services;
+      manager.redis = redis;
+      manager.publicGatewayUrl = "";
+
+      // Seed a connection whose `botToken` is a secret ref that doesn't
+      // exist in the store — resolveConfigForRuntime will throw.
+      const connectionId = "conn-broken";
+      const connection = {
+        id: connectionId,
+        platform: "telegram",
+        templateAgentId: "agent-1",
+        config: {
+          platform: "telegram",
+          botToken: "secret://connections%2Fconn-broken%2FbotToken",
+        },
+        settings: { allowGroups: true },
+        metadata: {},
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      await redis.set(`connection:${connectionId}`, JSON.stringify(connection));
+      await redis.sadd("connections:all", connectionId);
+
+      await expect(manager.restartConnection(connectionId)).rejects.toThrow(
+        /Failed to resolve secret ref/
+      );
+
+      // Connection record must still exist with status=error and a
+      // descriptive errorMessage.
+      const sanitized = await manager.getConnection(connectionId);
+      expect(sanitized).not.toBeNull();
+      expect(sanitized.status).toBe("error");
+      expect(sanitized.errorMessage).toContain("Failed to resolve");
+    } finally {
+      if (originalKey !== undefined) {
+        process.env.ENCRYPTION_KEY = originalKey;
+      } else {
+        delete process.env.ENCRYPTION_KEY;
+      }
+    }
+  });
+
+  test("completeSlackOAuthInstall delegates to the Slack coordinator", async () => {
+    const ChatInstanceManager = await loadChatInstanceManager();
+    const manager = new ChatInstanceManager() as any;
+    const request = new Request(
+      "https://gateway.example.com/slack/oauth_callback?code=test&state=test"
     );
-    const decryptedConfig = manager.decryptConfig(stored.config);
-
-    expect(stored.metadata).toEqual({
+    const completeOAuthInstall = mock(async () => ({
       teamId: "T123",
-      teamName: "Acme Updated",
-      botUserId: "U456",
+      teamName: "Acme",
+      connectionId: "conn-team",
+    }));
+    manager.slackCoordinator = {
+      completeOAuthInstall,
+    };
+
+    const result = await manager.completeSlackOAuthInstall(
+      request,
+      "https://gateway.example.com/slack/oauth_callback"
+    );
+
+    expect(result).toEqual({
+      teamId: "T123",
+      teamName: "Acme",
+      connectionId: "conn-team",
     });
-    expect(decryptedConfig.botToken).toBe("xoxb-second-token");
-    expect(decryptedConfig.botUserId).toBe("U456");
-  });
-
-  test("handleSlackAppWebhook prefers an exact team match", async () => {
-    const manager = new ChatInstanceManager() as any;
-
-    manager.findSlackConnectionByTeamId = mock(async (teamId: string) =>
-      teamId === "T123" ? { id: "conn-team" } : null
+    expect(completeOAuthInstall).toHaveBeenCalledWith(
+      request,
+      "https://gateway.example.com/slack/oauth_callback"
     );
-    manager.getDefaultSlackConnection = mock(async () => ({
-      id: "conn-default",
-    }));
-    manager.ensureConnectionRunning = mock(async () => true);
-    manager.handleWebhook = mock(
-      async (connectionId: string, request: Request) => {
-        const body = await request.text();
-        return new Response(`${connectionId}:${body}`);
-      }
-    );
-
-    const body = JSON.stringify({ team_id: "T123", type: "event_callback" });
-    const response = await manager.handleSlackAppWebhook(
-      new Request("https://gateway.example.com/slack/events", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body,
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe(`conn-team:${body}`);
-    expect(manager.handleWebhook).toHaveBeenCalledTimes(1);
-    expect(manager.handleWebhook.mock.calls[0]?.[0]).toBe("conn-team");
-  });
-
-  test("handleSlackAppWebhook falls back to the default Slack connection", async () => {
-    const manager = new ChatInstanceManager() as any;
-
-    manager.findSlackConnectionByTeamId = mock(async () => null);
-    manager.getDefaultSlackConnection = mock(async () => ({
-      id: "conn-default",
-    }));
-    manager.ensureConnectionRunning = mock(async () => true);
-    manager.handleWebhook = mock(
-      async (connectionId: string, request: Request) => {
-        const body = await request.text();
-        return new Response(`${connectionId}:${body}`);
-      }
-    );
-
-    const body = JSON.stringify({ type: "url_verification" });
-    const response = await manager.handleSlackAppWebhook(
-      new Request("https://gateway.example.com/slack/events", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body,
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe(`conn-default:${body}`);
-    expect(manager.handleWebhook.mock.calls[0]?.[0]).toBe("conn-default");
   });
 });

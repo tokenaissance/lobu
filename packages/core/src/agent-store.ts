@@ -11,32 +11,64 @@ import type {
   AuthProfile,
   InstalledProvider,
   McpServerConfig,
+  ModelSelectionState,
   NetworkConfig,
   NixConfig,
+  ProviderModelPreferences,
   SkillsConfig,
   ToolsConfig,
 } from "./types";
 
 // ── Agent Settings ──────────────────────────────────────────────────────────
 
+/**
+ * Agent settings — configurable per agentId.
+ *
+ * Canonical shape. Both the in-memory store and the gateway Redis store use
+ * this interface; the gateway re-exports it from `auth/settings/index.ts` for
+ * legacy import paths.
+ */
 export interface AgentSettings {
+  /** Display-only model reference (legacy; prefer modelSelection). */
   model?: string;
-  modelSelection?: { mode: "auto" | "pinned"; pinnedModel?: string };
-  providerModelPreferences?: Record<string, string>;
+  /** Model selection mode (auto provider/default model vs pinned provider/model). */
+  modelSelection?: ModelSelectionState;
+  /** Per-provider preferred model for auto mode. */
+  providerModelPreferences?: ProviderModelPreferences;
+  /** Network access configuration */
   networkConfig?: NetworkConfig;
+  /** Nix environment configuration */
   nixConfig?: NixConfig;
+  /** Additional MCP servers */
   mcpServers?: Record<string, McpServerConfig>;
+  /** Internal marker: MCP IDs already acknowledged to the user in chat */
   mcpInstallNotified?: Record<string, number>;
+  /** Workspace identity/instruction files (markdown content) */
   soulMd?: string;
   userMd?: string;
   identityMd?: string;
+  /** Skills configuration — enabled skills from the skills registry. */
   skillsConfig?: SkillsConfig;
+  /** Tool permission configuration — allowed/denied tools (worker-side visibility). */
   toolsConfig?: ToolsConfig;
+  /** OpenClaw plugin configuration */
   pluginsConfig?: PluginsConfig;
+  /** Ordered auth profiles (index 0 = primary). Used for multi-provider credential management. */
   authProfiles?: AuthProfile[];
+  /** Installed providers for this agent (index 0 = primary). */
   installedProviders?: InstalledProvider[];
+  /** Enable verbose logging (show tool calls, reasoning, etc.) */
   verboseLogging?: boolean;
+  /** Template agent this sandbox was cloned from (for credential fallback) */
   templateAgentId?: string;
+  /**
+   * MCP tool patterns the operator has pre-approved. Each entry is a grant
+   * pattern (e.g. "/mcp/gmail/tools/send_email" or "/mcp/linear/tools/*").
+   * Synced to the grant store at deployment time to bypass the approval card
+   * for matching tools. Operator-only — skills cannot set this.
+   */
+  preApprovedTools?: string[];
+  /** Last updated timestamp */
   updatedAt: number;
 }
 

@@ -123,7 +123,12 @@ export interface AgentConfig {
   identityMd?: string;
   soulMd?: string;
   userMd?: string;
-  providers?: Array<{ id: string; model?: string; key?: string }>;
+  providers?: Array<{
+    id: string;
+    model?: string;
+    key?: string;
+    secretRef?: string;
+  }>;
   connections?: Array<{ type: string; config: Record<string, string> }>;
   skills?: { enabled?: string[]; mcp?: Record<string, any> };
   network?: { allowed?: string[]; denied?: string[] };
@@ -155,6 +160,16 @@ export interface GatewayConfig {
   mcp: {
     publicGatewayUrl: string;
     internalGatewayUrl: string;
+  };
+  secrets: {
+    /** Redis-backed writable secret store (encrypts via ENCRYPTION_KEY). */
+    redis: {
+      prefix: string;
+    };
+    /** Read-only AWS Secrets Manager backend for `aws-sm://` refs. */
+    aws: {
+      region?: string;
+    };
   };
   health: {
     checkIntervalMs: number;
@@ -517,6 +532,17 @@ export function buildGatewayConfig(
     mcp: {
       publicGatewayUrl,
       internalGatewayUrl: getInternalGatewayUrl(),
+    },
+    secrets: {
+      redis: {
+        prefix: getOptionalEnv(
+          "SECRET_STORE_REDIS_PREFIX",
+          "lobu:secret-store:"
+        ),
+      },
+      aws: {
+        region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION,
+      },
     },
     health: {
       checkIntervalMs: getOptionalNumber(

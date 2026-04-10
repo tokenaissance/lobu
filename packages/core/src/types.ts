@@ -1,3 +1,24 @@
+import type { SecretRef } from "./secret-refs";
+
+// ============================================================================
+// Model Selection
+// ============================================================================
+
+export type ModelSelectionMode = "auto" | "pinned";
+
+/**
+ * Model selection state for an agent.
+ * `auto` lets the worker pick a default from installed providers;
+ * `pinned` forces a specific model reference (e.g. "openai/gpt-5").
+ */
+export interface ModelSelectionState {
+  mode: ModelSelectionMode;
+  pinnedModel?: string;
+}
+
+/** Per-provider preferred model for auto mode, keyed by provider id. */
+export type ProviderModelPreferences = Record<string, string>;
+
 // ============================================================================
 // Provider Catalog Types
 // ============================================================================
@@ -35,21 +56,39 @@ export interface CliBackendConfig {
 /**
  * Unified authentication profile for any model provider.
  * Stored in AgentSettings.authProfiles as an ordered array (index 0 = primary).
+ *
+ * **Invariant:** at any point in time, a profile has **exactly one** credential
+ * source set — either `credentialRef` (persisted profiles resolved through the
+ * secret store) or `credential` (in-memory runtime profiles for SDK-embedded
+ * use). The same rule applies to `metadata.refreshToken` / `refreshTokenRef`.
+ * The persistence layer is responsible for never writing plaintext credentials
+ * into the stored JSON.
  */
 export interface AuthProfile {
   id: string; // UUID
   provider: string; // "anthropic", "openai-codex", "gemini", "nvidia"
   model: string; // Full model ref: "openai-codex/gpt-5.2-codex"
-  credential: string; // API key or OAuth access token
+  /** Runtime-only resolved credential value. Never persisted. */
+  credential?: string;
+  /** Durable secret reference for the credential. */
+  credentialRef?: SecretRef;
   label: string; // "user@gmail.com", "sk-ant-...1234"
   authType: "oauth" | "device-code" | "api-key";
   metadata?: {
     email?: string;
     expiresAt?: number;
+    /** Runtime-only resolved refresh token value. Never persisted. */
     refreshToken?: string;
+    /** Durable secret reference for the refresh token. */
+    refreshTokenRef?: SecretRef;
     accountId?: string;
   };
   createdAt: number;
+}
+
+/** True if the profile has any credential source (resolved or ref). */
+export function hasCredentialSource(profile: AuthProfile): boolean {
+  return Boolean(profile.credential || profile.credentialRef);
 }
 
 export interface SessionContext {
@@ -147,12 +186,8 @@ export interface SkillConfig {
   mcpServers?: SkillMcpServer[];
   /** System packages declared by the skill (nix) */
   nixPackages?: string[];
-  /** Network domains the skill needs access to (legacy flat list) */
-  permissions?: string[];
   /** Network access policy declared by the skill */
   networkConfig?: { allowedDomains?: string[]; deniedDomains?: string[] };
-  /** Tool permission policy declared by the skill */
-  toolPermissions?: { allow?: string[]; deny?: string[] };
   /** AI providers the skill requires */
   providers?: string[];
   /** Preferred model for this skill (e.g., "anthropic/claude-opus-4") */

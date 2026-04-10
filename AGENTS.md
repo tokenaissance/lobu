@@ -54,6 +54,14 @@ Settings page provider order is drag-sortable via handle, with per-provider mode
 
 TypeScript packages must be compiled from `src/` → `dist/`. If you modify any package source code, run `make build-packages`. `make dev` (docker compose watch) automatically builds and syncs changes.
 
+## Versioning
+
+The root `package.json` version is the single source of truth for all `@lobu/*` packages. `scripts/bump-version.mjs` copies it into every `packages/*/package.json` at bump time.
+
+- **Inter-package deps MUST use `"@lobu/<name>": "workspace:*"`**, never a hardcoded version string. `scripts/publish-packages.mjs` rewrites `workspace:*` to the current root version right before `npm publish` and restores the file afterwards.
+- Don't hand-edit versions in individual package.json files. Run `node scripts/bump-version.mjs patch|minor|major|<explicit>` instead.
+- Don't re-add `@lobu/<name>: "^x.y.z"` ranges when fixing unlisted-dependency warnings — add `workspace:*` so there's still exactly one place to change.
+
 ## Instructions
 - You MUST only do what has been asked; nothing more, nothing less.
 - When the user types a Slack message link (slack.com/archives/x/x/?thread_ts=) you MUST call ./scripts/slack-thread-viewer.js "link" to gather context
@@ -145,7 +153,7 @@ Worker deployments use persistent volumes for session continuity across scale-to
 
 OAuth authentication for third-party APIs (GitHub, Google, Linear, etc.) is handled by **Owletto**, not by the Lobu gateway. Workers access these APIs through Owletto MCP tools, which handle credential management, token refresh, and API proxying. Workers never see OAuth tokens directly.
 
-Skills that need direct network access (e.g., `git clone`) declare `permissions` (domain allowlist) which go through the user-approved grant flow. Skills that need system tools declare `nixPackages`.
+Skills that need direct network access (e.g., `git clone`) declare `networkConfig.allowedDomains`, which is merged into the agent's network allowlist when the skill is enabled. Skills that need system tools declare `nixPackages` which are merged into the worker's Nix environment. Review skills before installing — declared domains and packages are applied without a separate per-skill approval step. Destructive MCP tool calls still require in-thread approval unless the operator pre-approves them in `[agents.<id>.tools]` in `lobu.toml`.
 
 Local dev Telegram bot is `@clawdotfreebot`, production is `@lobuaibot`.
 To test Telegram bot, use `TEST_PLATFORM=telegram TEST_CHANNEL=@clawdotfreebot ./scripts/test-bot.sh "message"` (or set `TELEGRAM_TEST_CHAT_ID`); this path uses `tguser` and sends as your real user account.

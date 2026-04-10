@@ -8,7 +8,7 @@ Agent settings control behavior of each worker session.
 ## What You Can Configure
 
 - **Provider and model** — `model`, `modelSelection` (auto/pinned), `providerModelPreferences`, `installedProviders`
-- **Allowed/disallowed tools** — `toolsConfig`
+- **Allowed/disallowed tools** — configured in `[agents.<id>.tools]` in `lobu.toml`
 - **Skills/plugins and MCP server config** — `skillsConfig`, `mcpServers`, `pluginsConfig`
 - **Permission grants (network domains)** — `networkConfig`
 - **Agent prompts** — `identityMd`, `soulMd`, `userMd`
@@ -22,6 +22,8 @@ Agent settings control behavior of each worker session.
 - Gateway is the source of truth for settings.
 - Worker fetches session context from gateway before execution.
 - Tool policy is applied before tools are exposed to the model.
+
+See [Tool Policy](/guides/tool-policy/) for the operator-facing config, and [`lobu.toml` reference](/reference/lobu-toml/) for the exact schema.
 
 ## Practical Guidance
 

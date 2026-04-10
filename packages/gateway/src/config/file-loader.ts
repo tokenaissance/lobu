@@ -1,78 +1,19 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { AgentSettings, SkillConfig, SystemSkillEntry } from "@lobu/core";
-import { createLogger } from "@lobu/core";
+import type {
+  TomlAgentEntry as AgentEntry,
+  AgentSettings,
+  LobuTomlConfig,
+  TomlMcpServerEntry as McpServerEntry,
+  SkillConfig,
+  SystemSkillEntry,
+  ToolsEntry,
+} from "@lobu/core";
+import { createLogger, lobuConfigSchema } from "@lobu/core";
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
-import { z } from "zod";
 
 const logger = createLogger("file-loader");
-
-// ── lobu.toml Zod Schema ─────────────────────────────────────────────────
-// Duplicated from @lobu/cli because CLI uses zod@3, gateway uses zod@4.
-// If the CLI migrates to zod@4, this should move to @lobu/core.
-
-const providerSchema = z.object({
-  id: z.string(),
-  model: z.string().optional(),
-  key: z.string().optional(),
-});
-
-const connectionSchema = z.object({
-  type: z.string(),
-  config: z.record(z.string(), z.string()),
-});
-
-const mcpOAuthSchema = z.object({
-  auth_url: z.string(),
-  token_url: z.string(),
-  client_id: z.string().optional(),
-  client_secret: z.string().optional(),
-  scopes: z.array(z.string()).optional(),
-  token_endpoint_auth_method: z.string().optional(),
-});
-
-const mcpServerSchema = z.object({
-  url: z.string().optional(),
-  command: z.string().optional(),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  headers: z.record(z.string(), z.string()).optional(),
-  oauth: mcpOAuthSchema.optional(),
-});
-
-const skillsSchema = z.object({
-  enabled: z.array(z.string()).default([]),
-  mcp: z.record(z.string(), mcpServerSchema).optional(),
-});
-
-const networkSchema = z.object({
-  allowed: z.array(z.string()).optional(),
-  denied: z.array(z.string()).optional(),
-});
-
-const workerSchema = z.object({
-  nix_packages: z.array(z.string()).optional(),
-});
-
-const agentEntrySchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  dir: z.string(),
-  providers: z.array(providerSchema).default([]),
-  connections: z.array(connectionSchema).default([]),
-  skills: skillsSchema.default({ enabled: [] }),
-  network: networkSchema.optional(),
-  worker: workerSchema.optional(),
-});
-
-const lobuConfigSchema = z.object({
-  agents: z.record(z.string(), agentEntrySchema),
-});
-
-type LobuTomlConfig = z.infer<typeof lobuConfigSchema>;
-type AgentEntry = z.infer<typeof agentEntrySchema>;
-type McpServerEntry = z.infer<typeof mcpServerSchema>;
 
 // ── Public Types ──────────────────────────────────────────────────────────
 
@@ -81,7 +22,11 @@ export interface FileLoadedAgent {
   name: string;
   description?: string;
   settings: Partial<AgentSettings>;
-  credentials: Array<{ provider: string; key: string }>;
+  credentials: Array<{
+    provider: string;
+    key?: string;
+    secretRef?: string;
+  }>;
   connections: Array<{ type: string; config: Record<string, string> }>;
 }
 
@@ -221,10 +166,6 @@ async function buildAgentConfig(
     ...(agentConfig.worker?.nix_packages || []),
   ];
 
-  // Tool permissions — merge from all skills
-  const mergedToolAllow: string[] = [];
-  const mergedToolDeny: string[] = [];
-
   // MCP servers — start with agent-level toml config
   const mcpServers: Record<string, any> = {};
   if (agentConfig.skills.mcp) {
@@ -255,7 +196,10 @@ async function buildAgentConfig(
     }
   }
 
-  // Merge skill-level frontmatter configs into agent settings
+  // Merge skill-level frontmatter configs into agent settings.
+  // Note: skills can declare nix packages, network domains, and MCP servers —
+  // but NOT tool pre-approvals. Pre-approving destructive MCP tools is an
+  // operator-only escape hatch (see `[agents.<id>.tools]` in lobu.toml).
   const allSkills = [...systemSkills, ...localSkills];
   for (const skill of allSkills) {
     if (skill.nixPackages?.length) {
@@ -266,16 +210,6 @@ async function buildAgentConfig(
     }
     if (skill.networkConfig?.deniedDomains?.length) {
       mergedDeniedDomains.push(...skill.networkConfig.deniedDomains);
-    }
-    if (skill.toolPermissions?.allow?.length) {
-      mergedToolAllow.push(...skill.toolPermissions.allow);
-    }
-    if (skill.toolPermissions?.deny?.length) {
-      mergedToolDeny.push(...skill.toolPermissions.deny);
-    }
-    // Also merge legacy permissions (domain allowlist) from skills
-    if (skill.permissions?.length) {
-      mergedAllowedDomains.push(...skill.permissions);
     }
     // Merge skill-level MCP servers
     if (skill.mcpServers?.length) {
@@ -313,20 +247,9 @@ async function buildAgentConfig(
     };
   }
 
-  // Apply merged tool permissions
-  if (mergedToolAllow.length > 0 || mergedToolDeny.length > 0) {
-    settings.toolsConfig = {
-      ...settings.toolsConfig,
-      allowedTools:
-        mergedToolAllow.length > 0
-          ? [...new Set(mergedToolAllow)]
-          : settings.toolsConfig?.allowedTools,
-      deniedTools:
-        mergedToolDeny.length > 0
-          ? [...new Set(mergedToolDeny)]
-          : settings.toolsConfig?.deniedTools,
-    };
-  }
+  // Apply agent-level tool configuration (worker-side policy + operator
+  // pre-approvals that bypass the in-thread approval gate).
+  applyAgentToolsConfig(settings, agentConfig.tools);
 
   // Apply merged MCP servers
   if (Object.keys(mcpServers).length > 0) {
@@ -335,12 +258,13 @@ async function buildAgentConfig(
 
   // Credentials
   const credentials = agentConfig.providers
-    .filter((p) => p.key)
+    .filter((p) => p.key || p.secret_ref)
     .map((p) => ({
       provider: p.id,
-      key: resolveEnvVar(p.key!),
+      ...(p.key ? { key: resolveEnvVar(p.key) } : {}),
+      ...(p.secret_ref ? { secretRef: resolveEnvVar(p.secret_ref) } : {}),
     }))
-    .filter((c) => c.key);
+    .filter((c) => c.key || c.secretRef);
 
   // Connections
   const connections = agentConfig.connections
@@ -390,9 +314,41 @@ function buildSystemSkills(
         args: mcp.args,
       })),
       nixPackages: skill.nixPackages,
-      permissions: skill.permissions,
+      networkConfig: skill.networkConfig,
       providers: skill.providers?.length ? [skill.id] : undefined,
     }));
+}
+
+/**
+ * Translate a `[agents.<id>.tools]` block into AgentSettings fields.
+ * `pre_approved` becomes `settings.preApprovedTools`; `allowed`/`denied`/`strict`
+ * populate `settings.toolsConfig` for worker-side permission filtering.
+ */
+function applyAgentToolsConfig(
+  settings: Partial<AgentSettings>,
+  tools: ToolsEntry | undefined
+): void {
+  if (!tools) return;
+
+  if (tools.pre_approved?.length) {
+    settings.preApprovedTools = [...new Set(tools.pre_approved)];
+  }
+
+  if (
+    tools.allowed?.length ||
+    tools.denied?.length ||
+    tools.strict !== undefined
+  ) {
+    settings.toolsConfig = {
+      ...(tools.allowed?.length
+        ? { allowedTools: [...new Set(tools.allowed)] }
+        : {}),
+      ...(tools.denied?.length
+        ? { deniedTools: [...new Set(tools.denied)] }
+        : {}),
+      ...(tools.strict !== undefined ? { strictMode: tools.strict } : {}),
+    };
+  }
 }
 
 function buildLocalSkills(skillFiles: LoadedSkillFile[]): SkillConfig[] {
@@ -412,12 +368,6 @@ function buildLocalSkills(skillFiles: LoadedSkillFile[]): SkillConfig[] {
         skill.networkConfig = {
           allowedDomains: fm.network.allow,
           deniedDomains: fm.network.deny,
-        };
-      }
-      if (fm.permissions) {
-        skill.toolPermissions = {
-          allow: fm.permissions.allow,
-          deny: fm.permissions.deny,
         };
       }
       if (fm.mcpServers && Object.keys(fm.mcpServers).length > 0) {
@@ -470,7 +420,6 @@ interface SkillFrontmatter {
   description?: string;
   nixPackages?: string[];
   network?: { allow?: string[]; deny?: string[] };
-  permissions?: { allow?: string[]; deny?: string[] };
   mcpServers?: Record<
     string,
     {

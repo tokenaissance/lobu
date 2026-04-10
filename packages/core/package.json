@@ -1,10 +1,13 @@
 {
   "name": "@lobu/core",
-  "version": "3.0.14",
+  "version": "3.0.16",
   "license": "Apache-2.0",
   "description": "Core types and utilities for Lobu agent platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -13,7 +16,10 @@
       "require": "./dist/index.js"
     },
     "./testing": {
-      "bun": "./src/__tests__/fixtures/index.ts"
+      "types": "./dist/__tests__/fixtures/index.d.ts",
+      "bun": "./src/__tests__/fixtures/index.ts",
+      "import": "./dist/__tests__/fixtures/index.js",
+      "require": "./dist/__tests__/fixtures/index.js"
     }
   },
   "scripts": {
@@ -30,7 +36,8 @@
     "@opentelemetry/semantic-conventions": "^1.28.0",
     "@sentry/node": "^10.23.0",
     "ioredis": "^5.4.1",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/bun": "1.2.11",

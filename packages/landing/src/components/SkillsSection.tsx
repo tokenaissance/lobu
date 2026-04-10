@@ -317,9 +317,208 @@ const anatomy = [
 const k = { color: "#7dcfff" }; // keys
 const s = { color: "#9ece6a" }; // strings
 const d = { color: "#565f89" }; // delimiters / muted
-const o = { color: "#ff9e64" }; // booleans / special
 const h = { color: "#c0caf5" }; // headings
 const m = { color: "#9aa5ce" }; // body text
+
+const editorTree = [
+  { label: "lobu.toml", depth: 0, badge: "config" },
+  { label: "IDENTITY.md", depth: 0, badge: "identity" },
+  { label: "SOUL.md", depth: 0, badge: "rules" },
+  { label: "USER.md", depth: 0, badge: "context" },
+  { label: "skills", depth: 0, badge: "dir" },
+  { label: "ops-triage", depth: 1, badge: "dir" },
+  { label: "SKILL.md", depth: 2, badge: "active" },
+];
+
+function EditorPreview() {
+  return (
+    <div
+      class="rounded-xl overflow-hidden mb-4"
+      style={{
+        border: "1px solid var(--color-page-border)",
+        backgroundColor: "var(--color-page-bg-elevated)",
+      }}
+    >
+      <div
+        class="px-4 py-3 flex items-center justify-between gap-3"
+        style={{
+          borderBottom: "1px solid var(--color-page-border)",
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))",
+        }}
+      >
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-400/80" />
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+          <span class="w-2.5 h-2.5 rounded-full bg-green-400/80" />
+        </div>
+        <div
+          class="text-[11px] font-mono"
+          style={{ color: "var(--color-page-text-muted)" }}
+        >
+          agent workspace
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]">
+        <aside
+          class="p-4"
+          style={{
+            borderRight: "1px solid var(--color-page-border)",
+            backgroundColor: "rgba(255,255,255,0.02)",
+          }}
+        >
+          <div
+            class="text-[10px] uppercase tracking-[0.18em] mb-3"
+            style={{ color: "var(--color-page-text-muted)" }}
+          >
+            Files
+          </div>
+          <div class="space-y-1.5">
+            {editorTree.map((item) => {
+              const isActive = item.badge === "active";
+              return (
+                <div
+                  key={`${item.depth}-${item.label}`}
+                  class="flex items-center gap-2 rounded-md px-2 py-1.5"
+                  style={{
+                    marginLeft: `${item.depth * 14}px`,
+                    backgroundColor: isActive
+                      ? "rgba(122,162,247,0.14)"
+                      : "transparent",
+                    color: isActive
+                      ? "var(--color-page-text)"
+                      : "var(--color-page-text-muted)",
+                  }}
+                >
+                  <span
+                    class="text-[9px] font-medium px-1.5 py-0.5 rounded border"
+                    style={{
+                      borderColor: isActive
+                        ? "rgba(125,207,255,0.35)"
+                        : "var(--color-page-border)",
+                      color: isActive
+                        ? "#7dcfff"
+                        : "var(--color-page-text-muted)",
+                    }}
+                  >
+                    {item.badge}
+                  </span>
+                  <span class="text-[12px] font-mono">{item.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            class="mt-4 rounded-lg p-3 text-[11px] leading-relaxed"
+            style={{
+              backgroundColor: "rgba(0,0,0,0.18)",
+              color: "var(--color-page-text-muted)",
+              border: "1px solid var(--color-page-border)",
+            }}
+          >
+            <div
+              class="font-medium mb-1"
+              style={{ color: "var(--color-page-text)" }}
+            >
+              One workspace, explicit files
+            </div>
+            <div>
+              <code>lobu.toml</code> wires skills in. Each <code>SKILL.md</code>{" "}
+              defines sandbox, tools, MCP, and behavior.
+            </div>
+          </div>
+        </aside>
+
+        <div class="min-w-0">
+          <div
+            class="flex flex-wrap items-center gap-2 px-4 py-2.5"
+            style={{
+              borderBottom: "1px solid var(--color-page-border)",
+              backgroundColor: "rgba(0,0,0,0.16)",
+            }}
+          >
+            <div
+              class="text-[11px] font-mono px-2.5 py-1 rounded-md"
+              style={{
+                backgroundColor: "rgba(122,162,247,0.12)",
+                color: "var(--color-page-text)",
+                border: "1px solid rgba(122,162,247,0.22)",
+              }}
+            >
+              skills/ops-triage/SKILL.md
+            </div>
+            <div
+              class="text-[11px] font-mono px-2.5 py-1 rounded-md"
+              style={{
+                color: "var(--color-page-text-muted)",
+                border: "1px solid var(--color-page-border)",
+              }}
+            >
+              lobu.toml
+            </div>
+          </div>
+
+          <div
+            class="px-4 py-3 text-[11px]"
+            style={{
+              color: "var(--color-page-text-muted)",
+              borderBottom: "1px solid var(--color-page-border)",
+            }}
+          >
+            Frontmatter declares packages, network, permissions, and MCP.
+            Markdown below becomes the skill instructions.
+          </div>
+          <SkillYaml />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TerminalPreview() {
+  return (
+    <div
+      class="rounded-xl overflow-hidden"
+      style={{
+        border: "1px solid var(--color-page-border)",
+        backgroundColor: "#0b1020",
+      }}
+    >
+      <div
+        class="px-4 py-2 text-[10px] uppercase tracking-[0.18em]"
+        style={{
+          color: "var(--color-page-text-muted)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          backgroundColor: "rgba(255,255,255,0.03)",
+        }}
+      >
+        Terminal
+      </div>
+      <pre class="m-0 p-4 overflow-x-auto text-[11px] leading-6 font-mono text-[#9aa5ce]">
+        <code>
+          <span style={{ color: "#7aa2f7" }}>$</span> npx lobu run
+          {"\n"}
+          <span style={{ color: "#9ece6a" }}>{">"}</span> reading lobu.toml
+          {"\n"}
+          <span style={{ color: "#9ece6a" }}>{">"}</span> loading{" "}
+          <span style={{ color: "#c0caf5" }}>skills/ops-triage/SKILL.md</span>
+          {"\n"}
+          <span style={{ color: "#9ece6a" }}>{">"}</span> allowing{" "}
+          <span style={{ color: "#c0caf5" }}>
+            api.github.com, gmail.googleapis.com, .linear.app
+          </span>
+          {"\n"}
+          <span style={{ color: "#9ece6a" }}>{">"}</span> registering{" "}
+          <span style={{ color: "#c0caf5" }}>github-mcp</span>
+          {"\n"}
+          <span style={{ color: "#9ece6a" }}>{">"}</span> agent ready
+        </code>
+      </pre>
+    </div>
+  );
+}
 
 function SkillYaml() {
   return (
@@ -409,113 +608,6 @@ function SkillYaml() {
   );
 }
 
-function LobuTomlExample() {
-  return (
-    <pre
-      class="p-4 text-[11px] leading-relaxed font-mono overflow-x-auto m-0"
-      style={{ backgroundColor: "rgba(0,0,0,0.3)", color: "#9aa5ce" }}
-    >
-      <code>
-        <span style={d}>[</span>
-        <span style={k}>agents.acme-support</span>
-        <span style={d}>]</span>
-        {"\n"}
-        <span style={k}>name</span>
-        {" = "}
-        <span style={s}>"acme-support"</span>
-        {"\n"}
-        <span style={k}>description</span>
-        {" = "}
-        <span style={s}>"Customer support agent for Acme Corp"</span>
-        {"\n"}
-        <span style={k}>dir</span>
-        {" = "}
-        <span style={s}>"./agents/acme-support"</span>
-        {"\n\n"}
-        <span style={d}>{"# LLM providers (order = priority)"}</span>
-        {"\n"}
-        <span style={d}>[[</span>
-        <span style={k}>agents.acme-support.providers</span>
-        <span style={d}>]]</span>
-        {"\n"}
-        <span style={k}>id</span>
-        {" = "}
-        <span style={s}>"groq"</span>
-        {"\n"}
-        <span style={k}>key</span>
-        {" = "}
-        <span style={s}>"$GROQ_API_KEY"</span>
-        {"\n\n"}
-        <span style={d}>[[</span>
-        <span style={k}>agents.acme-support.providers</span>
-        <span style={d}>]]</span>
-        {"\n"}
-        <span style={k}>id</span>
-        {" = "}
-        <span style={s}>"gemini"</span>
-        {"\n"}
-        <span style={k}>key</span>
-        {" = "}
-        <span style={s}>"$GEMINI_API_KEY"</span>
-        {"\n\n"}
-        <span style={d}>{"# Platform connection"}</span>
-        {"\n"}
-        <span style={d}>[[</span>
-        <span style={k}>agents.acme-support.connections</span>
-        <span style={d}>]]</span>
-        {"\n"}
-        <span style={k}>type</span>
-        {" = "}
-        <span style={s}>"telegram"</span>
-        {"\n"}
-        <span style={d}>[</span>
-        <span style={k}>agents.acme-support.connections.config</span>
-        <span style={d}>]</span>
-        {"\n"}
-        <span style={k}>botToken</span>
-        {" = "}
-        <span style={s}>"$TELEGRAM_BOT_TOKEN"</span>
-        {"\n\n"}
-        <span style={d}>{"# Skills from the registry"}</span>
-        {"\n"}
-        <span style={d}>[</span>
-        <span style={k}>agents.acme-support.skills</span>
-        <span style={d}>]</span>
-        {"\n"}
-        <span style={k}>enabled</span>
-        {" = "}
-        <span style={d}>[</span>
-        <span style={s}>"github"</span>
-        <span style={d}>,</span> <span style={s}>"google-workspace"</span>
-        <span style={d}>]</span>
-        {"\n\n"}
-        <span style={d}>{"# Custom MCP server"}</span>
-        {"\n"}
-        <span style={d}>[</span>
-        <span style={k}>agents.acme-support.skills.mcp.my-kb</span>
-        <span style={d}>]</span>
-        {"\n"}
-        <span style={k}>url</span>
-        {" = "}
-        <span style={s}>"https://mcp.acme.com/sse"</span>
-        {"\n\n"}
-        <span style={d}>{"# Network sandbox"}</span>
-        {"\n"}
-        <span style={d}>[</span>
-        <span style={k}>agents.acme-support.network</span>
-        <span style={d}>]</span>
-        {"\n"}
-        <span style={k}>allowed</span>
-        {" = "}
-        <span style={d}>[</span>
-        <span style={s}>"api.github.com"</span>
-        <span style={d}>,</span> <span style={s}>"registry.npmjs.org"</span>
-        <span style={d}>]</span>
-      </code>
-    </pre>
-  );
-}
-
 export function SkillsSection() {
   return (
     <section class="pt-28 pb-16 px-8">
@@ -556,151 +648,8 @@ export function SkillsSection() {
             automatically.
           </p>
 
-          {/* Unified block */}
-          <div
-            class="rounded-xl overflow-hidden mb-6"
-            style={{ border: "1px solid var(--color-page-border)" }}
-          >
-            {/* Top: IDENTITY.md, SOUL.md, USER.md cards */}
-            <div
-              class="grid grid-cols-1 sm:grid-cols-3"
-              style={{ borderBottom: "1px solid var(--color-page-border)" }}
-            >
-              {[
-                {
-                  file: "IDENTITY.md",
-                  desc: "Who the agent is — persona, name, tone.",
-                  badge: "identity",
-                  color: "bg-cyan-900/40 text-cyan-400 border-cyan-800/50",
-                },
-                {
-                  file: "SOUL.md",
-                  desc: "Behavior rules. What the agent should always or never do.",
-                  badge: "rules",
-                  color:
-                    "bg-purple-900/40 text-purple-400 border-purple-800/50",
-                },
-                {
-                  file: "USER.md",
-                  desc: "User-specific context — timezone, preferences.",
-                  badge: "context",
-                  color: "bg-green-900/40 text-green-400 border-green-800/50",
-                },
-              ].map((item, i) => (
-                <div
-                  key={item.file}
-                  class="p-5"
-                  style={{
-                    backgroundColor: "var(--color-page-bg-elevated)",
-                    borderRight:
-                      i < 2 ? "1px solid var(--color-page-border)" : undefined,
-                  }}
-                >
-                  <div class="flex items-center gap-2 mb-2">
-                    <span
-                      class={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${item.color}`}
-                    >
-                      {item.badge}
-                    </span>
-                    <h3
-                      class="text-sm font-semibold font-mono"
-                      style={{ color: "var(--color-page-text)" }}
-                    >
-                      {item.file}
-                    </h3>
-                  </div>
-                  <p
-                    class="text-xs leading-relaxed"
-                    style={{ color: "var(--color-page-text-muted)" }}
-                  >
-                    {item.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Bottom: lobu.toml (left) + skills/*.md (right) */}
-            <div class="grid grid-cols-1 md:grid-cols-2">
-              {/* lobu.toml */}
-              <div
-                style={{
-                  borderRight: "1px solid var(--color-page-border)",
-                }}
-              >
-                <div
-                  class="p-5"
-                  style={{
-                    backgroundColor: "var(--color-page-bg-elevated)",
-                    borderBottom: "1px solid var(--color-page-border)",
-                  }}
-                >
-                  <div class="flex items-center gap-2 mb-2">
-                    <span class="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-amber-900/40 text-amber-400 border-amber-800/50">
-                      config
-                    </span>
-                    <h3
-                      class="text-sm font-semibold font-mono"
-                      style={{ color: "var(--color-page-text)" }}
-                    >
-                      lobu.toml
-                    </h3>
-                  </div>
-                  <p
-                    class="text-xs leading-relaxed"
-                    style={{ color: "var(--color-page-text-muted)" }}
-                  >
-                    Providers, skills, network policy, platforms.
-                  </p>
-                </div>
-                <LobuTomlExample />
-              </div>
-
-              {/* skills/*.md */}
-              <div>
-                <div
-                  class="p-5"
-                  style={{
-                    backgroundColor: "var(--color-page-bg-elevated)",
-                    borderBottom: "1px solid var(--color-page-border)",
-                  }}
-                >
-                  <div class="flex items-center gap-2 mb-2">
-                    <span class="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-blue-900/40 text-blue-400 border-blue-800/50">
-                      skills
-                    </span>
-                    <h3
-                      class="text-sm font-semibold font-mono"
-                      style={{ color: "var(--color-page-text)" }}
-                    >
-                      skills/ops-triage/SKILL.md
-                    </h3>
-                  </div>
-                  <p
-                    class="text-xs leading-relaxed"
-                    style={{ color: "var(--color-page-text-muted)" }}
-                  >
-                    Third-party app integrations, MCP, and sandbox config.
-                  </p>
-                </div>
-                <SkillYaml />
-              </div>
-            </div>
-          </div>
-
-          <div class="text-center">
-            <div
-              class="inline-flex flex-wrap items-center gap-4 text-xs"
-              style={{ color: "var(--color-page-text-muted)" }}
-            >
-              <code
-                class="text-[11px] px-2 py-1 rounded"
-                style={{ backgroundColor: "var(--color-page-surface-dim)" }}
-              >
-                npx @lobu/cli run
-              </code>
-              <span>Run locally</span>
-            </div>
-          </div>
+          <EditorPreview />
+          <TerminalPreview />
         </div>
 
         {/* Anatomy of a skill */}

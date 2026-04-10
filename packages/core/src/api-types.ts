@@ -3,7 +3,7 @@
  * These mirror the gateway API response shapes used by UI consumers.
  */
 
-import type { RegistryEntry } from "./types";
+import type { ModelSelectionState, RegistryEntry } from "./types";
 
 export type { RegistryEntry };
 
@@ -66,11 +66,6 @@ export interface ProviderView {
   canEdit: boolean;
   canReset: boolean;
   hasLocalOverride: boolean;
-}
-
-export interface ModelSelectionState {
-  mode: "auto" | "pinned";
-  pinnedModel?: string;
 }
 
 export interface SkillMcpServerInfo {

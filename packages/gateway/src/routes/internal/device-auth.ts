@@ -1,13 +1,9 @@
-import {
-  type McpOAuthConfig,
-  createLogger,
-  decrypt,
-  encrypt,
-} from "@lobu/core";
+import { createLogger, type McpOAuthConfig } from "@lobu/core";
 import { Hono } from "hono";
 import type Redis from "ioredis";
 import { GenericDeviceCodeClient } from "../../auth/external/device-code-client";
 import type { McpConfigService } from "../../auth/mcp/config-service";
+import type { WritableSecretStore } from "../../secrets";
 import { authenticateWorker } from "./middleware";
 import type { WorkerContext } from "./types";
 
@@ -52,6 +48,11 @@ interface StoredClient {
 export interface DeviceAuthConfig {
   redis: Redis;
   mcpConfigService: McpConfigService;
+  secretStore: WritableSecretStore;
+}
+
+interface StoredCredentialPointer {
+  secretRef: string;
 }
 
 interface ResolvedOAuthEndpoints {
@@ -117,38 +118,116 @@ function resolveOAuthEndpoints(
 
 export async function getStoredCredential(
   redis: Redis,
+  secretStore: WritableSecretStore,
   agentId: string,
   userId: string,
   mcpId: string
 ): Promise<StoredCredential | null> {
   const raw = await redis.get(credentialKey(agentId, userId, mcpId));
   if (!raw) return null;
+
+  let pointer: StoredCredentialPointer;
   try {
-    return JSON.parse(decrypt(raw)) as StoredCredential;
-  } catch {
+    pointer = JSON.parse(raw) as StoredCredentialPointer;
+  } catch (error) {
+    logger.warn("Corrupted credential pointer in Redis", {
+      agentId,
+      userId,
+      mcpId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
+
+  if (typeof pointer.secretRef !== "string") {
+    logger.warn("Credential pointer missing secretRef", {
+      agentId,
+      userId,
+      mcpId,
+    });
+    return null;
+  }
+
+  const value = await secretStore.get(pointer.secretRef);
+  if (!value) {
+    logger.warn("Unresolved credential secret ref", {
+      agentId,
+      userId,
+      mcpId,
+      secretRef: pointer.secretRef,
+    });
+    return null;
+  }
+
+  return JSON.parse(value) as StoredCredential;
 }
 
 async function storeCredential(
   redis: Redis,
+  secretStore: WritableSecretStore,
   agentId: string,
   userId: string,
   mcpId: string,
   credential: StoredCredential
 ): Promise<void> {
-  const encrypted = encrypt(JSON.stringify(credential));
+  const secretRef = await secretStore.put(
+    `mcp-auth/${agentId}/${userId}/${mcpId}/credential`,
+    JSON.stringify(credential),
+    { ttlSeconds: 90 * 24 * 60 * 60 }
+  );
   // Store with 90-day TTL (tokens can be refreshed before expiry)
   await redis.set(
     credentialKey(agentId, userId, mcpId),
-    encrypted,
+    JSON.stringify({ secretRef }),
     "EX",
     90 * 24 * 60 * 60
   );
 }
 
+/**
+ * Delete a stored MCP device-auth credential (logout).
+ * Removes both the Redis pointer and the secret value from the store so no
+ * orphaned tokens linger for the remainder of the 90-day TTL.
+ */
+export async function deleteCredential(
+  redis: Redis,
+  secretStore: WritableSecretStore,
+  agentId: string,
+  userId: string,
+  mcpId: string
+): Promise<boolean> {
+  const pointerKey = credentialKey(agentId, userId, mcpId);
+  const raw = await redis.get(pointerKey);
+  if (!raw) return false;
+
+  try {
+    const pointer = JSON.parse(raw) as StoredCredentialPointer;
+    if (typeof pointer.secretRef === "string") {
+      await secretStore.delete(pointer.secretRef);
+    }
+  } catch (error) {
+    logger.warn(
+      {
+        agentId,
+        userId,
+        mcpId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "Failed to parse credential pointer while deleting"
+    );
+  }
+
+  await redis.del(pointerKey);
+  // Also clean up any pending device-auth flow state so a subsequent
+  // start() kicks off fresh.
+  await redis.del(deviceAuthKey(agentId, userId, mcpId));
+  logger.info("Deleted MCP credential", { agentId, userId, mcpId });
+  return true;
+}
+
 export async function refreshCredential(
   redis: Redis,
+  secretStore: WritableSecretStore,
   agentId: string,
   userId: string,
   mcpId: string,
@@ -162,7 +241,7 @@ export async function refreshCredential(
   if (!acquired) {
     // Another request is refreshing — wait briefly and re-read
     await new Promise((r) => setTimeout(r, 150));
-    return getStoredCredential(redis, agentId, userId, mcpId);
+    return getStoredCredential(redis, secretStore, agentId, userId, mcpId);
   }
 
   try {
@@ -216,7 +295,14 @@ export async function refreshCredential(
       resource: credential.resource,
     };
 
-    await storeCredential(redis, agentId, userId, mcpId, refreshed);
+    await storeCredential(
+      redis,
+      secretStore,
+      agentId,
+      userId,
+      mcpId,
+      refreshed
+    );
     logger.info("Token refreshed", { agentId, userId, mcpId });
     return refreshed;
   } catch (error) {
@@ -235,6 +321,7 @@ export async function refreshCredential(
  */
 export async function tryCompletePendingDeviceAuth(
   redis: Redis,
+  secretStore: WritableSecretStore,
   agentId: string,
   userId: string,
   mcpId: string
@@ -295,7 +382,14 @@ export async function tryCompletePendingDeviceAuth(
       resource: deviceState.resource,
     };
 
-    await storeCredential(redis, agentId, userId, mcpId, storedCred);
+    await storeCredential(
+      redis,
+      secretStore,
+      agentId,
+      userId,
+      mcpId,
+      storedCred
+    );
     await redis.del(deviceAuthKey(agentId, userId, mcpId));
 
     logger.info("Device auth auto-completed by proxy", {
@@ -618,7 +712,14 @@ export function createDeviceAuthRoutes(
         resource: deviceState.resource,
       };
 
-      await storeCredential(redis, agentId, userId, mcpId, storedCred);
+      await storeCredential(
+        redis,
+        config.secretStore,
+        agentId,
+        userId,
+        mcpId,
+        storedCred
+      );
       await redis.del(deviceAuthKey(agentId, userId, mcpId));
 
       logger.info("Device auth completed", { mcpId, agentId, userId });
@@ -643,9 +744,41 @@ export function createDeviceAuthRoutes(
     const agentId = worker.agentId || worker.userId;
     const userId = worker.userId;
 
-    const credential = await getStoredCredential(redis, agentId, userId, mcpId);
+    const credential = await getStoredCredential(
+      redis,
+      config.secretStore,
+      agentId,
+      userId,
+      mcpId
+    );
     return c.json({ authenticated: !!credential });
   });
+
+  // DELETE /internal/device-auth/credential?mcpId=owletto
+  // Logout: revoke a stored credential + purge the underlying secret.
+  router.delete(
+    "/internal/device-auth/credential",
+    authenticateWorker,
+    async (c) => {
+      const mcpId = c.req.query("mcpId");
+      if (!mcpId) {
+        return c.json({ error: "Missing required query param: mcpId" }, 400);
+      }
+
+      const worker = c.get("worker");
+      const agentId = worker.agentId || worker.userId;
+      const userId = worker.userId;
+
+      const deleted = await deleteCredential(
+        redis,
+        config.secretStore,
+        agentId,
+        userId,
+        mcpId
+      );
+      return c.json({ deleted });
+    }
+  );
 
   logger.debug("Device auth routes registered");
   return router;

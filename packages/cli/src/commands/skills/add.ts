@@ -9,15 +9,13 @@ import { getSkillById } from "./registry.js";
 
 export async function skillsAddCommand(
   cwd: string,
-  skillId: string,
+  skillId: string
 ): Promise<void> {
   const skill = getSkillById(skillId);
   if (!skill) {
     console.log(chalk.red(`\n  Skill "${skillId}" not found.`));
     console.log(
-      chalk.dim(
-        "  Run `npx @lobu/cli skills list` to see available skills.\n",
-      ),
+      chalk.dim("  Run `npx @lobu/cli skills list` to see available skills.\n")
     );
     return;
   }
@@ -39,7 +37,7 @@ export async function skillsAddCommand(
   // Update the enabled array in-place via regex to preserve file formatting
   const skillsKey = `agents.${ctx.agentId}.skills`;
   const enabledPattern = new RegExp(
-    `(\\[${skillsKey.replace(/\./g, "\\.")}\\][^\\[]*enabled\\s*=\\s*\\[)([^\\]]*)\\]`,
+    `(\\[${skillsKey.replace(/\./g, "\\.")}\\][^\\[]*enabled\\s*=\\s*\\[)([^\\]]*)\\]`
   );
   const match = ctx.raw.match(enabledPattern);
 
@@ -64,7 +62,7 @@ export async function skillsAddCommand(
       console.log(chalk.dim("\n  Required secrets:"));
       for (const v of envVars) {
         console.log(
-          chalk.cyan(`    npx @lobu/cli secrets set ${v} <your-key>`),
+          chalk.cyan(`    npx @lobu/cli secrets set ${v} <your-key>`)
         );
       }
     }

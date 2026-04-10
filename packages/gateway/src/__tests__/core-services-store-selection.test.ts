@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { GatewayConfig } from "../config";
 import { CoreServices } from "../services/core-services";
-import { MockMessageQueue } from "./setup";
 import {
   RedisAgentAccessStore,
   RedisAgentConfigStore,
   RedisAgentConnectionStore,
 } from "../stores/redis-agent-store";
+import { MockMessageQueue } from "./setup";
 
 function createGatewayConfig(
   overrides?: Partial<GatewayConfig>
@@ -68,6 +68,10 @@ function createGatewayConfig(
       staleThresholdMs: 2000,
       protectActiveWorkers: true,
     },
+    secrets: {
+      redis: { prefix: "lobu:test:secret-store:" },
+      aws: {},
+    },
     ...overrides,
   };
 }
@@ -88,5 +92,48 @@ describe("CoreServices store selection", () => {
       RedisAgentConnectionStore
     );
     expect(coreServices.getAccessStore()).toBeInstanceOf(RedisAgentAccessStore);
+  });
+});
+
+describe("CoreServices.reloadFromFiles listeners", () => {
+  test("invokes registered reload listeners with the reloaded agent ids", async () => {
+    const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const projectDir = mkdtempSync(join(tmpdir(), "lobu-reload-listener-"));
+    try {
+      mkdirSync(join(projectDir, "agents", "bot"), { recursive: true });
+      writeFileSync(
+        join(projectDir, "lobu.toml"),
+        `
+[agents.bot]
+name = "bot"
+dir = "./agents/bot"
+`,
+        "utf-8"
+      );
+
+      const coreServices = new CoreServices(createGatewayConfig());
+      // Minimally prime reloadFromFiles: it only needs projectPath +
+      // the file-loaded agents slot. It tolerates missing store/settings
+      // manager — the inner `if` branches guard each step.
+      (coreServices as any).projectPath = projectDir;
+
+      const received: string[][] = [];
+      coreServices.onReloadFromFiles((agentIds) => {
+        received.push(agentIds);
+      });
+
+      const result = await coreServices.reloadFromFiles();
+
+      expect(result.reloaded).toBe(true);
+      expect(result.agents).toEqual(["bot"]);
+      expect(received).toEqual([["bot"]]);
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 });

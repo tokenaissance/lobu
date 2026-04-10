@@ -1,10 +1,13 @@
 {
   "name": "@lobu/gateway",
-  "version": "3.0.14",
+  "version": "3.0.16",
   "license": "Apache-2.0",
   "description": "Lobu SDK — embed AI agents with platform adapters, worker orchestration, and MCP proxy",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -31,6 +34,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock": "^3.1028.0",
+    "@aws-sdk/client-secrets-manager": "^3.1028.0",
     "@chat-adapter/discord": "^4",
     "@chat-adapter/gchat": "^4",
     "@chat-adapter/slack": "^4",
@@ -41,7 +45,7 @@
     "@hono/node-server": "^1.19.9",
     "@hono/zod-openapi": "^1.2.1",
     "@kubernetes/client-node": "0.21.0",
-    "@lobu/core": "^3.0.5",
+    "@lobu/core": "workspace:*",
     "@mariozechner/pi-ai": "^0.51.6",
     "@scalar/hono-api-reference": "^0.9.39",
     "@sentry/node": "^10.19.0",

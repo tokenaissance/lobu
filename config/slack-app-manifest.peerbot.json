@@ -19,7 +19,7 @@
       {
         "command": "/lobu",
         "description": "Lobu commands - manage repositories and authentication",
-        "usage_hint": "connect | login | help",
+        "usage_hint": "help | status | new | clear",
         "url": "https://community.lobu.ai/slack/events"
       }
     ],

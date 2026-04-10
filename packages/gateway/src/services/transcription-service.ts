@@ -186,7 +186,7 @@ export class TranscriptionService {
         agentId,
         profileProviderId
       );
-      if (profile) {
+      if (profile?.credential) {
         configs.push({
           profileProviderId,
           displayName: displayName(ttsProvider),
@@ -212,7 +212,7 @@ export class TranscriptionService {
         agentId,
         candidate.profileProviderId
       );
-      if (!profile) continue;
+      if (!profile?.credential) continue;
 
       configs.push({
         profileProviderId: candidate.profileProviderId,

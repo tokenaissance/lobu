@@ -1,13 +1,15 @@
-import type { AgentSettings } from "./agent-settings-store";
+import type {
+  AgentSettings,
+  ModelSelectionMode,
+  ModelSelectionState,
+  ProviderModelPreferences,
+} from "@lobu/core";
 
-export type ModelSelectionMode = "auto" | "pinned";
-
-export interface ModelSelectionState {
-  mode: ModelSelectionMode;
-  pinnedModel?: string;
-}
-
-export type ProviderModelPreferences = Record<string, string>;
+export type {
+  ModelSelectionMode,
+  ModelSelectionState,
+  ProviderModelPreferences,
+};
 
 function normalizePreferenceMap(
   map: ProviderModelPreferences | undefined

@@ -10,10 +10,40 @@ Lobu's Slack adapter supports assistant threads, rich UI, and interactive workfl
 
 ## Setup
 
+### Single-workspace setup
+
 1. Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps) and install it to your workspace.
 2. Copy the **Signing Secret** and **Bot Token** (`xoxb-...`) from the app settings.
 3. Run `lobu connections add slack` to add the connection to your existing agent (prompts for the bot token and signing secret), or run `lobu init` to scaffold a new project and pick Slack in the wizard.
 4. Start the stack with `lobu run -d` — the bot is now live in your Slack workspace.
+
+## Installation Modes
+
+Lobu supports two Slack installation models:
+
+- **Single-workspace connection** for self-hosted deployments. You create your own Slack app, install it to one workspace, then configure Lobu with the **Signing Secret** and **Bot Token**.
+- **OAuth / multi-workspace distribution** for shared deployments. In this mode, users install a shared Slack app through an install link, Slack redirects back to Lobu, and Lobu creates or updates one Slack connection per Slack workspace.
+
+For OAuth distribution, incoming Slack events are routed by Slack `team_id`, so each installed workspace is isolated behind its own Lobu connection even when many workspaces share the same app.
+
+### Shared OAuth distribution
+
+If you want one Slack app that many workspaces can install, create the app for your public Lobu deployment and wire Slack back to these Lobu endpoints:
+
+- **Install URL for users:** `https://<your-lobu-base-url>/slack/install`
+- **OAuth redirect URL:** `https://<your-lobu-base-url>/slack/oauth_callback`
+- **Events / interactivity / slash commands URL:** `https://<your-lobu-base-url>/slack/events`
+
+Minimum setup:
+
+1. Create a Slack app for your public Lobu domain.
+2. Configure the app's OAuth redirect URL to `https://<your-lobu-base-url>/slack/oauth_callback`.
+3. Point event subscriptions, interactive requests, and slash commands to `https://<your-lobu-base-url>/slack/events`.
+4. Add the bot scopes your Lobu deployment needs.
+5. Configure Lobu with the Slack app's **Client ID**, **Client Secret**, and **Signing Secret**.
+6. Share `https://<your-lobu-base-url>/slack/install` with users who should install the app to their Slack workspace.
+
+When a user completes the Slack install flow, Lobu exchanges the OAuth code, stores the workspace installation, and creates or updates the Lobu Slack connection for that workspace automatically.
 
 ## Interactive Examples
 
@@ -27,13 +57,46 @@ Three common Slack thread interactions: network permission, skill install, and s
 
 ## Features
 
-- **Block Kit rendering** for buttons, forms, and structured interaction payloads.
+- **Block Kit rendering** — cards, sections, action buttons, and link buttons are emitted as real Slack Block Kit by the `@chat-adapter/slack` adapter. Agents never author Block Kit JSON directly; they post platform-agnostic chat elements and the adapter converts.
 - **Thread streaming** using Slack streaming APIs for incremental responses.
-- **Tool approval UI** — the gateway intercepts destructive MCP tool calls and renders an in-thread approval card before executing.
-- **AskUser** — agents can prompt users mid-conversation with radio buttons, text input, or action buttons (rendered as Block Kit elements).
-- **MCP connections** — workers discover MCP tools at startup and call them through the gateway proxy; responses render inline as system messages.
+- **Tool approval UI** — the gateway intercepts destructive MCP tool calls and renders an in-thread approval card (`Allow once / 1h / 24h / Always / Deny`) before executing. See below.
+- **AskUser** — agents can prompt the user with an action-button card (`AskUserQuestion(question, options[])`); each option renders as a Block Kit button in-thread.
+- **MCP tool access** — workers discover MCP tools at startup and call them through the gateway proxy; responses render inline as system messages.
 - **Settings/auth links** rendered as platform-scoped link buttons.
 - **Thread status indicator** (`is running..`) with rotating progress messages.
+
+## Arbitrary MCP Servers
+
+Lobu supports any MCP server — Owletto's built-ins, community-published servers, or your own. MCP servers are declared in `lobu.toml` under `[agents.<id>.skills.mcp.<name>]`:
+
+```toml
+[agents.support.skills.mcp.gmail]
+url = "https://gmail-mcp.example.com"
+
+[agents.support.skills.mcp.gmail.oauth]
+auth_url = "https://auth.example.com/authorize"
+token_url = "https://auth.example.com/token"
+client_id = "$OAUTH_CLIENT_ID"
+client_secret = "$OAUTH_CLIENT_SECRET"
+scopes = ["gmail.readonly", "gmail.send"]
+```
+
+Workers discover tools at startup and call them through the gateway MCP proxy. The proxy handles credential injection, SSRF protection, and approval policy. Workers never see OAuth tokens directly.
+
+## Destructive Tool Approval
+
+By default, destructive MCP tool calls require in-thread user approval. Lobu uses the MCP protocol's tool annotations:
+
+- A tool with `readOnlyHint: true` or `destructiveHint: false` runs without approval.
+- Any other tool (including tools with no annotations) triggers an approval card in the thread. The user picks `Allow once / 1h / 24h / Always / Deny`, and the choice is recorded in the grant store for future calls.
+
+This is the conservative default from the MCP spec — tools are presumed destructive unless they say otherwise.
+
+### Operator override (`[agents.<id>.tools]`)
+
+If you want specific MCP tools to skip the approval prompt, configure `pre_approved` under `[agents.<id>.tools]` in `lobu.toml`.
+
+See [Tool Policy](/guides/tool-policy/) for the behavior and [`lobu.toml` reference](/reference/lobu-toml/) for the schema.
 
 ## Typical Use Cases
 

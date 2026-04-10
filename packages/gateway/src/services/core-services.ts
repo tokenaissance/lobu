@@ -51,15 +51,20 @@ import {
 import { GrantStore } from "../permissions/grant-store";
 import { SecretProxy } from "../proxy/secret-proxy";
 import { TokenRefreshJob } from "../proxy/token-refresh-job";
+import {
+  AwsSecretsManagerSecretStore,
+  RedisSecretStore,
+  SecretStoreRegistry,
+} from "../secrets";
 import { InMemoryAgentStore } from "../stores/in-memory-agent-store";
 import {
   RedisAgentAccessStore,
   RedisAgentConfigStore,
   RedisAgentConnectionStore,
 } from "../stores/redis-agent-store";
-import { ImageGenerationService } from "./image-generation-service";
 import { BedrockModelCatalog } from "./bedrock-model-catalog";
 import { BedrockOpenAIService } from "./bedrock-openai-service";
+import { ImageGenerationService } from "./image-generation-service";
 import { InstructionService } from "./instruction-service";
 import { RedisSessionStore, SessionManager } from "./session-manager";
 import { SettingsResolver } from "./settings-resolver";
@@ -93,6 +98,7 @@ export class CoreServices {
   private modelPreferenceStore?: ModelPreferenceStore;
   private oauthStateStore?: ProviderOAuthStateStore;
   private secretProxy?: SecretProxy;
+  private secretStore?: SecretStoreRegistry;
   private tokenRefreshJob?: TokenRefreshJob;
 
   // ============================================================================
@@ -160,6 +166,11 @@ export class CoreServices {
   private fileLoadedAgents: FileLoadedAgent[] = [];
   private projectPath: string | null = null;
   private configAgents: AgentConfig[] = [];
+
+  // Listeners notified when `reloadFromFiles` finishes so downstream
+  // caches (e.g. BaseDeploymentManager.grantSyncCache) can drop stale
+  // entries for the reloaded agents. Registered by `startGateway`.
+  private reloadListeners: Array<(agentIds: string[]) => void> = [];
 
   // Options stored for deferred initialization
   private options?: {
@@ -317,8 +328,28 @@ export class CoreServices {
     this.grantStore = new GrantStore(redisClient);
     logger.debug("Grant store initialized");
 
+    const redisSecretStore = new RedisSecretStore(
+      redisClient,
+      this.config.secrets.redis.prefix
+    );
+    this.secretStore = new SecretStoreRegistry(
+      redisSecretStore,
+      { secret: redisSecretStore },
+      {
+        readOnlyStores: {
+          "aws-sm": new AwsSecretsManagerSecretStore(
+            this.config.secrets.aws.region
+          ),
+        },
+      }
+    );
+    logger.debug("Secret store initialized");
+
     // Initialize agent configuration stores
-    this.agentSettingsStore = new AgentSettingsStore(redisClient);
+    this.agentSettingsStore = new AgentSettingsStore(
+      redisClient,
+      this.secretStore
+    );
     this.channelBindingService = new ChannelBindingService(redisClient);
     this.userAgentsStore = new UserAgentsStore(redisClient);
     this.agentMetadataStore = new AgentMetadataStore(redisClient);
@@ -459,7 +490,14 @@ export class CoreServices {
     }
 
     // Initialize auth profile and preference stores
-    this.authProfilesManager = new AuthProfilesManager(this.agentSettingsStore);
+    if (!this.secretStore) {
+      throw new Error("Secret store must be initialized before auth services");
+    }
+
+    this.authProfilesManager = new AuthProfilesManager(
+      this.agentSettingsStore,
+      this.secretStore
+    );
     this.transcriptionService = new TranscriptionService(
       this.authProfilesManager
     );
@@ -475,7 +513,8 @@ export class CoreServices {
           await this.authProfilesManager.upsertProfile({
             agentId: agent.agentId,
             provider: cred.provider,
-            credential: cred.key,
+            ...(cred.key ? { credential: cred.key } : {}),
+            ...(cred.secretRef ? { credentialRef: cred.secretRef } : {}),
             authType: "api-key",
             label: `${cred.provider} (from lobu.toml)`,
             makePrimary: true,
@@ -487,19 +526,30 @@ export class CoreServices {
       );
     }
 
-    // Seed provider credentials from config agents (embedded mode)
+    // Seed provider credentials from config agents (embedded SDK mode).
+    // `secretRef` → durable upsertProfile (persists through secret store).
+    // `key` → registerEphemeralProfile (in-memory, SDK-process lifetime).
     if (this.authProfilesManager && this.configAgents.length > 0) {
       for (const agent of this.configAgents) {
         for (const provider of agent.providers || []) {
-          if (!provider.key) continue;
-          await this.authProfilesManager.upsertProfile({
+          if (!provider.key && !provider.secretRef) continue;
+
+          const input = {
             agentId: agent.id,
             provider: provider.id,
-            credential: provider.key,
-            authType: "api-key",
+            authType: "api-key" as const,
             label: `${provider.id} (from config)`,
             makePrimary: true,
-          });
+            ...(provider.secretRef
+              ? { credentialRef: provider.secretRef }
+              : { credential: provider.key }),
+          };
+
+          if (provider.secretRef) {
+            await this.authProfilesManager.upsertProfile(input);
+          } else {
+            this.authProfilesManager.registerEphemeralProfile(input);
+          }
         }
       }
       logger.debug(
@@ -512,11 +562,14 @@ export class CoreServices {
     );
 
     // Initialize secret injection proxy (will be finalized after provider modules are registered)
-    this.secretProxy = new SecretProxy({
-      defaultUpstreamUrl:
-        this.config.anthropicProxy.anthropicBaseUrl ||
-        "https://api.anthropic.com",
-    });
+    this.secretProxy = new SecretProxy(
+      {
+        defaultUpstreamUrl:
+          this.config.anthropicProxy.anthropicBaseUrl ||
+          "https://api.anthropic.com",
+      },
+      this.secretStore
+    );
     this.secretProxy.initialize(redisClient);
     logger.debug(
       `Secret proxy initialized (upstream: ${this.config.anthropicProxy.anthropicBaseUrl || "https://api.anthropic.com"})`
@@ -683,13 +736,15 @@ export class CoreServices {
     logger.debug("Instruction service initialized");
 
     // Initialize MCP tool cache and proxy
+    if (!this.secretStore) {
+      throw new Error("Secret store must be initialized before MCP proxy");
+    }
     const mcpToolCache = new McpToolCache(redisClient);
-    this.mcpProxy = new McpProxy(
-      this.mcpConfigService,
-      this.queue,
-      mcpToolCache,
-      this.grantStore
-    );
+    this.mcpProxy = new McpProxy(this.mcpConfigService, this.queue, {
+      secretStore: this.secretStore,
+      toolCache: mcpToolCache,
+      grantStore: this.grantStore,
+    });
     this.mcpProxy.onToolBlocked = async (
       _requestId,
       agentId,
@@ -909,7 +964,8 @@ export class CoreServices {
           await this.authProfilesManager.upsertProfile({
             agentId: agent.agentId,
             provider: cred.provider,
-            credential: cred.key,
+            ...(cred.key ? { credential: cred.key } : {}),
+            ...(cred.secretRef ? { credentialRef: cred.secretRef } : {}),
             authType: "api-key",
             label: `${cred.provider} (from lobu.toml)`,
             makePrimary: true,
@@ -919,8 +975,32 @@ export class CoreServices {
     }
 
     const agentIds = this.fileLoadedAgents.map((a) => a.agentId);
+
+    // Notify listeners (e.g. the orchestrator's BaseDeploymentManager)
+    // so they can drop caches keyed on per-agent config — without this,
+    // changes to `networkConfig.allowedDomains` or `preApprovedTools`
+    // would be masked by the grantSyncCache hash on the next message.
+    for (const listener of this.reloadListeners) {
+      try {
+        listener(agentIds);
+      } catch (error) {
+        logger.warn("Reload listener failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     logger.info(`Reloaded ${agentIds.length} agent(s) from files`);
     return { reloaded: true, agents: agentIds };
+  }
+
+  /**
+   * Register a callback invoked after `reloadFromFiles` completes with the
+   * list of reloaded agent ids. Used by `startGateway` to wire the
+   * orchestrator's grant-sync cache invalidation into the reload path.
+   */
+  onReloadFromFiles(listener: (agentIds: string[]) => void): void {
+    this.reloadListeners.push(listener);
   }
 
   getFileLoadedAgents(): FileLoadedAgent[] {
@@ -982,6 +1062,11 @@ export class CoreServices {
 
   getSecretProxy(): SecretProxy | undefined {
     return this.secretProxy;
+  }
+
+  getSecretStore(): SecretStoreRegistry {
+    if (!this.secretStore) throw new Error("Secret store not initialized");
+    return this.secretStore;
   }
 
   getWorkerGateway(): WorkerGateway | undefined {

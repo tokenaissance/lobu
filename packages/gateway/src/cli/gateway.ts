@@ -214,6 +214,7 @@ export function createGatewayApp(
       const deviceAuthRouter = createDeviceAuthRoutes({
         redis: redisClient,
         mcpConfigService,
+        secretStore: coreServices.getSecretStore(),
       });
       app.route("", deviceAuthRouter);
       logger.debug(
@@ -594,9 +595,7 @@ export function createGatewayApp(
     if (systemSkillsService) {
       const { SystemEnvStore } = require("../auth/system-env-store");
       const { setEnvResolver } = require("../auth/mcp/string-substitution");
-      const systemEnvStore = new SystemEnvStore(
-        coreServices.getQueue().getRedisClient()
-      );
+      const systemEnvStore = new SystemEnvStore(coreServices.getSecretStore());
       systemEnvStore.refreshCache().catch((e: any) => {
         logger.error("Failed to refresh system env cache", { error: e });
       });
@@ -1246,10 +1245,25 @@ export async function startGateway(config: GatewayConfig): Promise<void> {
   // Inject core services into orchestrator (provider modules carry their own credential stores)
   await orchestrator.injectCoreServices(
     coreServices.getQueue().getRedisClient(),
+    coreServices.getSecretStore(),
     coreServices.getProviderCatalogService(),
     coreServices.getGrantStore() ?? undefined
   );
   logger.debug("Orchestrator configured with core services");
+
+  // Wire reload-from-files notifications to the deployment manager's
+  // grant-sync cache so that changes to `networkConfig.allowedDomains` or
+  // `preApprovedTools` in lobu.toml take effect on the next message —
+  // without this, the cached hash short-circuits both grants AND revokes.
+  const deploymentManager = orchestrator.getDeploymentManager();
+  coreServices.onReloadFromFiles((agentIds: string[]) => {
+    for (const agentId of agentIds) {
+      deploymentManager.invalidateGrantSyncCache(agentId);
+    }
+    logger.debug(
+      `Invalidated grant-sync cache for ${agentIds.length} reloaded agent(s)`
+    );
+  });
 
   // Initialize Chat SDK connection manager (API-driven platform connections)
   const { ChatInstanceManager, ChatResponseBridge } = await import(

@@ -19,7 +19,7 @@ export async function connectionsListCommand(cwd: string): Promise<void> {
         const type = c.type as string;
         const label = PLATFORM_LABELS[type] ?? type;
         console.log(
-          `    ${chalk.cyan("●")} ${label} ${chalk.dim(`(${type})`)}`,
+          `    ${chalk.cyan("●")} ${label} ${chalk.dim(`(${type})`)}`
         );
       }
     }

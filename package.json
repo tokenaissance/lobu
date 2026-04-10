@@ -1,6 +1,6 @@
 {
   "name": "lobu-monorepo",
-  "version": "3.0.14",
+  "version": "3.0.16",
   "description": "Deploy autonomous AI agents with sandboxing, network isolation, and multi-platform access.",
   "license": "Apache-2.0",
   "workspaces": [
@@ -25,7 +25,7 @@
     "jscpd": "bunx jscpd --pattern \"packages/**/*.ts\" --reporters \"console\" --ignore \"**/node_modules/**,**/dist/**,**/coverage/**,**/.bun/**,**/.turbo/**,workspaces/**,charts/**,integration-tests/**,bin/**,**/__tests__/**,**/__mocks__/**,**/*.d.ts\"",
     "depcruise": "bunx --bun depcruise --config config/dependency-cruiser.config.cjs packages",
     "dev": "docker compose -f docker/docker-compose.yml watch",
-    "build:packages": "cd packages/core && bun run build && cd ../gateway && bun run build && cd ../worker && bun run build",
+    "build:packages": "cd packages/core && bun run build && cd ../gateway && bun run build && cd ../worker && bun run build && cd ../cli && bun run build",
     "test:packages": "cd packages/core && bun run test && cd ../gateway && bun run test && cd ../worker && bun run test",
     "typecheck:packages": "cd packages/core && bun run typecheck && cd ../gateway && bun run typecheck && cd ../worker && bun run typecheck",
     "knip": "bunx knip --config config/knip.ts",
@@ -36,8 +36,7 @@
     "k8s:deploy": "helm upgrade --install lobu charts/lobu --dependency-update",
     "k8s:uninstall": "helm uninstall lobu",
     "version:bump": "node scripts/bump-version.mjs",
-    "publish:packages": "node scripts/bump-version.mjs patch && bun run build:packages && node scripts/stage-publish-package.mjs packages/core .publish/core && node scripts/stage-publish-package.mjs packages/gateway .publish/gateway && node scripts/stage-publish-package.mjs packages/worker .publish/worker && node scripts/stage-publish-package.mjs packages/cli .publish/cli && cd .publish/core && npm publish --access public && cd ../gateway && npm publish --access public && cd ../worker && npm publish --access public && cd ../cli && npm publish --access public",
-    "stage:publish": "node scripts/stage-publish-package.mjs",
+    "publish:packages": "node scripts/publish-packages.mjs",
     "slack:manifest:print": "bun run scripts/slack-manifest.ts print",
     "slack:manifest:validate": "bun run scripts/slack-manifest.ts validate",
     "slack:manifest:update": "bun run scripts/slack-manifest.ts update"

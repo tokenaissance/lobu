@@ -18,7 +18,10 @@ export class ChatGPTOAuthModule extends BaseProviderModule {
   private deviceCodeClient: ChatGPTDeviceCodeClient;
 
   constructor(agentSettingsStore: AgentSettingsStore) {
-    const authProfilesManager = new AuthProfilesManager(agentSettingsStore);
+    const authProfilesManager = new AuthProfilesManager(
+      agentSettingsStore,
+      agentSettingsStore.getSecretStore()
+    );
     super(
       {
         providerId: "chatgpt",

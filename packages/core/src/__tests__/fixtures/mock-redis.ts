@@ -255,15 +255,30 @@ export class MockRedisClient {
   // --- Pipeline ---
 
   pipeline(): {
+    set(key: string, value: string): any;
     setex(key: string, ttl: number, value: string): any;
+    sadd(key: string, ...members: string[]): any;
+    srem(key: string, ...members: string[]): any;
     del(...keys: string[]): any;
     exec(): Promise<Array<[null, any]>>;
   } {
     const ops: Array<() => Promise<any>> = [];
     const self = this;
     const chain = {
+      set(key: string, value: string) {
+        ops.push(() => self.set(key, value));
+        return chain;
+      },
       setex(key: string, ttl: number, value: string) {
         ops.push(() => self.setex(key, ttl, value));
+        return chain;
+      },
+      sadd(key: string, ...members: string[]) {
+        ops.push(() => self.sadd(key, ...members));
+        return chain;
+      },
+      srem(key: string, ...members: string[]) {
+        ops.push(() => self.srem(key, ...members));
         return chain;
       },
       del(...keys: string[]) {

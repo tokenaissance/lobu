@@ -1,9 +1,10 @@
-import { createLogger } from "@lobu/core";
+import { createLogger, type SecretRef } from "@lobu/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type Redis from "ioredis";
 import type { AuthProfilesManager } from "../auth/settings/auth-profiles-manager";
 import type { ProviderUpstreamConfig } from "../modules/module-system";
+import type { SecretStore } from "../secrets";
 
 const logger = createLogger("secret-proxy");
 
@@ -13,7 +14,7 @@ const REDIS_KEY_PREFIX = "lobu:secret:";
 export interface SecretMapping {
   agentId: string;
   envVarName: string;
-  value: string;
+  secretRef: SecretRef;
   deploymentName: string;
 }
 
@@ -39,10 +40,12 @@ export class SecretProxy {
   private slugMap: Map<string, string>;
   private slugToProviderId: Map<string, string> = new Map();
   private authProfilesManager?: AuthProfilesManager;
+  private readonly secretStore: SecretStore;
   private systemKeyResolver?: (providerId: string) => string | undefined;
 
-  constructor(config: SecretProxyConfig) {
+  constructor(config: SecretProxyConfig, secretStore: SecretStore) {
     this.config = config;
+    this.secretStore = secretStore;
     this.slugMap = new Map();
     for (const upstream of config.providerUpstreams ?? []) {
       this.slugMap.set(upstream.slug, upstream.upstreamBaseUrl);
@@ -128,7 +131,7 @@ export class SecretProxy {
     if (!raw) return null;
     try {
       const mapping: SecretMapping = JSON.parse(raw);
-      return mapping.value;
+      return await this.secretStore.get(mapping.secretRef);
     } catch {
       return null;
     }
@@ -394,7 +397,7 @@ export async function generatePlaceholder(
   redis: Redis,
   agentId: string,
   envVarName: string,
-  realValue: string,
+  secretRef: SecretRef,
   deploymentName: string,
   ttlSeconds?: number
 ): Promise<string> {
@@ -402,7 +405,7 @@ export async function generatePlaceholder(
   await storeSecretMapping(
     redis,
     uuid,
-    { agentId, envVarName, value: realValue, deploymentName },
+    { agentId, envVarName, secretRef, deploymentName },
     ttlSeconds
   );
   return `${PLACEHOLDER_PREFIX}${uuid}`;

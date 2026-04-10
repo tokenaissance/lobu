@@ -31,7 +31,7 @@ export interface AgentContext {
  * Prints a red error message and returns null if the file or agent is missing.
  */
 export async function loadAgentContext(
-  cwd: string,
+  cwd: string
 ): Promise<AgentContext | null> {
   const configPath = join(cwd, CONFIG_FILENAME);
   let raw: string;
@@ -39,7 +39,7 @@ export async function loadAgentContext(
     raw = await readFile(configPath, "utf-8");
   } catch {
     console.log(
-      chalk.red(`\n  No ${CONFIG_FILENAME} found. Run \`lobu init\` first.\n`),
+      chalk.red(`\n  No ${CONFIG_FILENAME} found. Run \`lobu init\` first.\n`)
     );
     return null;
   }
@@ -70,7 +70,7 @@ export async function loadAgentContext(
  */
 export async function appendTomlBlock(
   ctx: AgentContext,
-  lines: string[],
+  lines: string[]
 ): Promise<void> {
   const block = lines.join("\n");
   await writeFile(ctx.configPath, `${ctx.raw.trimEnd()}\n${block}\n`);
@@ -81,7 +81,7 @@ export async function appendTomlBlock(
  */
 export async function setSecrets(
   cwd: string,
-  secrets: Array<{ envVar: string; value: string }>,
+  secrets: Array<{ envVar: string; value: string }>
 ): Promise<void> {
   for (const secret of secrets) {
     await secretsSetCommand(cwd, secret.envVar, secret.value);

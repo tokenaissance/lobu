@@ -4,41 +4,36 @@ function cloneSettingValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Fields that should NOT be copied from a template agent to a derived
+ * sandbox. Everything else on `AgentSettings` flows through by default, so
+ * adding a new field doesn't require editing this file.
+ *
+ * - `updatedAt`: set fresh on save.
+ * - `templateAgentId`: the derived agent tracks its own template pointer.
+ * - `mcpInstallNotified`: per-agent UI state; not a config value.
+ * - `authProfiles`: credentials are deliberately not cloned into sandboxes;
+ *   they're resolved at runtime from the effective settings chain.
+ */
+const NON_TEMPLATED_KEYS = new Set<keyof AgentSettings>([
+  "updatedAt",
+  "templateAgentId",
+  "mcpInstallNotified",
+  "authProfiles",
+]);
+
 export function buildDefaultSettingsFromSource(
   source: AgentSettings | null
 ): Omit<AgentSettings, "updatedAt"> {
   if (!source) return {};
 
-  const defaults: Omit<AgentSettings, "updatedAt"> = {};
-
-  if (source.model !== undefined) defaults.model = source.model;
-  if (source.modelSelection)
-    defaults.modelSelection = cloneSettingValue(source.modelSelection);
-  if (source.providerModelPreferences)
-    defaults.providerModelPreferences = cloneSettingValue(
-      source.providerModelPreferences
-    );
-  if (source.networkConfig)
-    defaults.networkConfig = cloneSettingValue(source.networkConfig);
-  if (source.nixConfig)
-    defaults.nixConfig = cloneSettingValue(source.nixConfig);
-  if (source.mcpServers)
-    defaults.mcpServers = cloneSettingValue(source.mcpServers);
-  if (source.soulMd !== undefined) defaults.soulMd = source.soulMd;
-  if (source.userMd !== undefined) defaults.userMd = source.userMd;
-  if (source.identityMd !== undefined) defaults.identityMd = source.identityMd;
-  if (source.skillsConfig)
-    defaults.skillsConfig = cloneSettingValue(source.skillsConfig);
-  if (source.toolsConfig)
-    defaults.toolsConfig = cloneSettingValue(source.toolsConfig);
-  if (source.pluginsConfig)
-    defaults.pluginsConfig = cloneSettingValue(source.pluginsConfig);
-  if (source.installedProviders) {
-    defaults.installedProviders = cloneSettingValue(source.installedProviders);
+  const defaults: Partial<AgentSettings> = {};
+  for (const key of Object.keys(source) as Array<keyof AgentSettings>) {
+    if (NON_TEMPLATED_KEYS.has(key)) continue;
+    const value = source[key];
+    if (value === undefined) continue;
+    // JSON deep-clone is fine — AgentSettings values are plain data.
+    (defaults as Record<string, unknown>)[key] = cloneSettingValue(value);
   }
-  if (source.verboseLogging !== undefined) {
-    defaults.verboseLogging = source.verboseLogging;
-  }
-
-  return defaults;
+  return defaults as Omit<AgentSettings, "updatedAt">;
 }

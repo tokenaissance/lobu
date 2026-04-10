@@ -87,6 +87,7 @@ function hasImageGenerationAccess(
   profileProviderId: string,
   profile: AuthProfile
 ): boolean {
+  if (!profile.credential) return false;
   if (profileProviderId !== "chatgpt") return true;
   if (profile.authType === "api-key") return true;
 

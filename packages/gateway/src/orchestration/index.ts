@@ -10,6 +10,7 @@ import {
   type ModelProviderModule,
 } from "../modules/module-system";
 import type { GrantStore } from "../permissions/grant-store";
+import type { WritableSecretStore } from "../secrets";
 import type {
   BaseDeploymentManager,
   OrchestratorConfig,
@@ -46,14 +47,13 @@ export class Orchestrator {
    * so only the Redis client is needed for secret placeholder generation.
    */
   async injectCoreServices(
-    redisClient?: Redis,
+    redisClient: Redis,
+    secretStore: WritableSecretStore,
     providerCatalogService?: ProviderCatalogService,
     grantStore?: GrantStore
   ): Promise<void> {
-    // Inject Redis client into deployment manager for secret placeholder generation
-    if (redisClient) {
-      this.deploymentManager.setRedisClient(redisClient);
-    }
+    this.deploymentManager.setRedisClient(redisClient);
+    this.deploymentManager.setSecretStore(secretStore);
 
     // Inject grant store for auto-adding domain grants at deployment time
     if (grantStore) {
@@ -329,5 +329,13 @@ export class Orchestrator {
 
   async getQueueStats() {
     return this.queueConsumer.getQueueStats();
+  }
+
+  /**
+   * Expose the deployment manager so host code can drop per-agent
+   * caches (e.g. grant sync cache) on config reload.
+   */
+  getDeploymentManager(): BaseDeploymentManager {
+    return this.deploymentManager;
   }
 }

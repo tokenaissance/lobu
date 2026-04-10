@@ -54,7 +54,6 @@ export default defineConfig({
             { label: "Getting Started", link: "/getting-started/" },
             { label: "Comparison", link: "/getting-started/comparison/" },
             { label: "Skills", link: "/getting-started/skills/" },
-            { label: "Providers", link: "/reference/providers/" },
           ],
         },
         { label: "Deployment", autogenerate: { directory: "deployment" } },
@@ -71,6 +70,16 @@ export default defineConfig({
           ],
         },
         { label: "Guides", autogenerate: { directory: "guides" } },
+        {
+          label: "Reference",
+          items: [
+            { label: "lobu.toml", link: "/reference/lobu-toml/" },
+            { label: "SKILL.md", link: "/reference/skill-md/" },
+            { label: "Providers", link: "/reference/providers/" },
+            { label: "CLI", link: "/reference/cli/" },
+            { label: "API Reference", link: "/reference/api-reference/" },
+          ],
+        },
       ],
       social: [
         {

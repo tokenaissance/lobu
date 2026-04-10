@@ -3,7 +3,9 @@ title: Skills Authoring
 description: Create custom skills and MCP servers to extend agent capabilities.
 ---
 
-Skills extend what your agent can do. They bundle instructions, MCP servers, network permissions, and system packages into a single unit.
+Skills extend what your agent can do. They bundle instructions, MCP servers, network domains, and system packages into a single unit.
+
+Tool permissions are not part of skill frontmatter. Configure those separately under `[agents.<id>.tools]` in `lobu.toml`; see [Tool Policy](/guides/tool-policy/).
 
 ## Skill types
 
@@ -65,8 +67,6 @@ For structured extraction, use the PDF Parser API at api.pdfparser.com.
 | `nixPackages` | string[] | System packages to install in the worker (e.g., `poppler`, `ffmpeg`, `imagemagick`) |
 | `network.allow` | string[] | Domains the skill needs access to |
 | `network.deny` | string[] | Domains to block |
-| `permissions.allow` | string[] | Tool permissions (e.g., `Bash(git:*)`) |
-| `permissions.deny` | string[] | Tool restrictions |
 | `mcpServers` | object | MCP servers this skill provides (see below) |
 
 The markdown body below the frontmatter is the skill's instructions — they're available to the agent at runtime via `.skills/{name}/SKILL.md`.
@@ -160,7 +160,7 @@ Local skills (in `skills/` or `agents/{name}/skills/`) are automatically discove
 ## How skills work at runtime
 
 1. **Startup**: gateway loads `lobu.toml` + scans skill directories
-2. **Permissions merge**: network domains, nix packages, and tool permissions from all enabled skills are merged into the agent's session context
+2. **Config merge**: network domains, nix packages, and MCP servers declared by enabled skills are merged into the agent's session context
 3. **MCP discovery**: MCP servers declared by skills are registered and their tools are discovered
 4. **Workspace sync**: skill files are written to `.skills/{name}/SKILL.md` in the worker filesystem
 5. **Agent access**: the agent can read skill instructions on demand (`cat .skills/github/SKILL.md`) and invoke MCP tools directly
@@ -188,13 +188,15 @@ Provider skills install an LLM provider. See [Providers](/reference/providers/) 
 
 Browse all available skills with `npx @lobu/cli skills list`.
 
-## Permissions model
+## Trust model
 
-Skills declare what they need; Lobu enforces it:
+Skills are trusted code. When a skill is enabled on an agent, its declared config is merged into the agent at startup — there is no separate per-skill consent prompt.
 
-- **Network**: domains in `network.allow` are added to the worker's gateway proxy allowlist
-- **Nix packages**: installed in the worker environment before the agent starts
-- **Tool permissions**: control which tools the agent can use (e.g., restrict bash to specific commands)
-- **MCP credentials**: handled by the gateway proxy — workers never see OAuth tokens
+- **Network**: domains in `network.allow` are added to the worker's gateway proxy allowlist.
+- **Nix packages**: installed in the worker environment before the agent starts.
+- **MCP servers**: registered and their tools discovered at startup.
+- **MCP credentials**: handled by the gateway proxy — workers never see OAuth tokens.
 
-A skill cannot grant itself permissions that the agent's base configuration denies.
+**Review a skill before installing it.** A malicious skill can widen the network allowlist or register additional MCP servers just by being enabled. Lobu's built-in system skills are curated; third-party or local skills should be read like any other dependency.
+
+**Skills cannot bypass MCP tool approval.** Destructive MCP tool calls (per `destructiveHint` annotations) still require in-thread user approval regardless of which skill provided the tool. Only the operator can pre-approve tools, and only by listing them in `[agents.<id>.tools].pre_approved` in `lobu.toml`. See [Tool Policy](/guides/tool-policy/).

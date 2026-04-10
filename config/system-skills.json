@@ -20,7 +20,13 @@
       "name": "GitHub",
       "description": "Repos, issues, pull requests, and code access",
       "instructions": "Use Owletto MCP tools for GitHub API access (issues, PRs, repos). For git operations, use the CLI directly — network permissions are granted for github.com.",
-      "permissions": ["github.com", ".github.com", ".githubusercontent.com"]
+      "networkConfig": {
+        "allowedDomains": [
+          "github.com",
+          ".github.com",
+          ".githubusercontent.com"
+        ]
+      }
     },
     {
       "id": "google-workspace",

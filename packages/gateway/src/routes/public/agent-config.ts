@@ -56,10 +56,16 @@ export interface ConfigChangeEntry {
 const SENSITIVE_KEY_PATTERN =
   /(?:credential|secret|token|password|api(?:_|-)?key|authorization)/i;
 
-type SanitizedAuthProfile = Omit<AuthProfile, "credential" | "metadata"> & {
+type SanitizedAuthProfile = Omit<
+  AuthProfile,
+  "credential" | "credentialRef" | "metadata"
+> & {
   credential: string;
   credentialRedacted: true;
-  metadata?: Omit<NonNullable<AuthProfile["metadata"]>, "refreshToken"> & {
+  metadata?: Omit<
+    NonNullable<AuthProfile["metadata"]>,
+    "refreshToken" | "refreshTokenRef"
+  > & {
     refreshToken?: string;
     refreshTokenRedacted?: true;
   };
@@ -627,19 +633,33 @@ function sanitizeSettingsForResponse(
 }
 
 function sanitizeAuthProfile(profile: AuthProfile): SanitizedAuthProfile {
-  const hadRefreshToken = !!profile.metadata?.refreshToken;
+  const hadRefreshToken =
+    !!profile.metadata?.refreshToken || !!profile.metadata?.refreshTokenRef;
   const metadata = profile.metadata
-    ? (redactSensitiveFields(
-        profile.metadata
-      ) as SanitizedAuthProfile["metadata"])
+    ? (() => {
+        const {
+          refreshToken: _refreshToken,
+          refreshTokenRef: _refreshTokenRef,
+          ...rest
+        } = redactSensitiveFields(profile.metadata) as NonNullable<
+          AuthProfile["metadata"]
+        >;
+        return rest as SanitizedAuthProfile["metadata"];
+      })()
     : undefined;
 
   if (metadata && hadRefreshToken) {
     metadata.refreshTokenRedacted = true;
   }
 
+  const {
+    credential: _credential,
+    credentialRef: _credentialRef,
+    ...rest
+  } = profile;
+
   return {
-    ...profile,
+    ...rest,
     credential: REDACTED_VALUE,
     credentialRedacted: true,
     metadata,

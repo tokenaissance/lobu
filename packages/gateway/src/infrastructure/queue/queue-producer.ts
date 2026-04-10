@@ -52,6 +52,10 @@ export interface MessagePayload {
   // Nix environment configuration for agent workspace
   nixConfig?: NixConfig;
 
+  // MCP tool grant patterns the operator has pre-approved.
+  // Synced to the grant store at deployment time to bypass the approval card.
+  preApprovedTools?: string[];
+
   // Job type (default: "message")
   jobType?: JobType;
 

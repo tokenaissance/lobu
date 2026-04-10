@@ -14,12 +14,27 @@ import {
   deleteSecretMappings,
   generatePlaceholder,
 } from "../proxy/secret-proxy";
+import {
+  deleteSecretsByPrefix,
+  persistSecretValue,
+  type WritableSecretStore,
+} from "../secrets";
 import { getScheduledWakeupService } from "./scheduled-wakeup";
 
 // Re-export MessagePayload for use by deployment implementations
 export type { MessagePayload };
 
 const logger = createLogger("orchestrator");
+
+/** TTL applied to non-provider secret env var placeholders. */
+const SECRET_PLACEHOLDER_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * Maximum number of agents tracked in the grant-sync LRU. Oldest entry is
+ * evicted when the cache grows past this bound, which prevents unbounded
+ * memory growth for long-running gateways that see a large agent churn.
+ */
+const GRANT_SYNC_CACHE_MAX = 1000;
 
 export interface DeploymentIdentity {
   conversationId: string;
@@ -166,7 +181,20 @@ export abstract class BaseDeploymentManager {
   protected providerModules: ModelProviderModule[];
   protected providerCatalogService?: import("../auth/provider-catalog").ProviderCatalogService;
   protected redisClient?: Redis;
+  /**
+   * Set by `setSecretStore` during `Orchestrator.injectCoreServices`.
+   * `generateEnvironmentVariables` asserts this is present before use.
+   */
+  protected secretStore?: WritableSecretStore;
   protected grantStore?: GrantStore;
+  /**
+   * Per-agent cache of the last-synced grant pattern set. Used to
+   * (a) skip redundant `grantStore.grant()` writes when the set is
+   * unchanged and (b) compute the revoke-diff so patterns dropped from
+   * `networkConfig.allowedDomains` / `preApprovedTools` are removed from
+   * Redis instead of lingering forever.
+   */
+  private grantSyncCache = new Map<string, Set<string>>();
 
   constructor(
     config: OrchestratorConfig,
@@ -184,6 +212,10 @@ export abstract class BaseDeploymentManager {
    */
   setRedisClient(redis: Redis): void {
     this.redisClient = redis;
+  }
+
+  setSecretStore(secretStore: WritableSecretStore): void {
+    this.secretStore = secretStore;
   }
 
   /**
@@ -359,7 +391,8 @@ export abstract class BaseDeploymentManager {
   }
 
   /**
-   * Auto-add Nix cache domains as grants and persist MCP configs for the deployment.
+   * Auto-add Nix cache domains as grants, sync per-agent grants (network +
+   * pre-approved MCP tools), and persist MCP configs for the deployment.
    */
   private async storeDeploymentConfigs(
     deploymentName: string,
@@ -378,6 +411,16 @@ export abstract class BaseDeploymentManager {
       }
       logger.info(
         `Synced network config domains as grants for ${deploymentName}: ${messageData.networkConfig.allowedDomains.join(", ")}`
+      );
+    }
+
+    // Sync operator-pre-approved MCP tool patterns to grant store
+    if (this.grantStore && agentId && messageData.preApprovedTools?.length) {
+      for (const pattern of messageData.preApprovedTools) {
+        await this.grantStore.grant(agentId, pattern, null);
+      }
+      logger.info(
+        `Synced pre-approved tool patterns as grants for ${deploymentName}: ${messageData.preApprovedTools.join(", ")}`
       );
     }
 
@@ -403,18 +446,80 @@ export abstract class BaseDeploymentManager {
   }
 
   /**
-   * Sync networkConfig.allowedDomains to the grant store for a running worker.
-   * Called on every message to pick up domains added via configuration APIs.
+   * Sync per-agent grants (network domains + pre-approved MCP tool patterns)
+   * to the grant store for a running worker. Called on every message so
+   * config changes pick up without redeploying.
+   *
+   * Computes the diff against the last-synced set per agent:
+   *   - patterns in the new set but not the previous are `grant()`-ed
+   *   - patterns in the previous set but not the new are `revoke()`-d
+   * This means clearing `networkConfig.allowedDomains` or
+   * `preApprovedTools` in lobu.toml actually drops access, instead of
+   * leaving stale grants in Redis.
    */
   async syncNetworkConfigGrants(messageData: MessagePayload): Promise<void> {
     const agentId = messageData.agentId;
     if (!this.grantStore || !agentId) return;
 
-    if (messageData.networkConfig?.allowedDomains?.length) {
-      for (const domain of messageData.networkConfig.allowedDomains) {
-        await this.grantStore.grant(agentId, domain, null);
+    const nextPatterns = new Set<string>();
+    for (const domain of messageData.networkConfig?.allowedDomains ?? []) {
+      nextPatterns.add(domain);
+    }
+    for (const pattern of messageData.preApprovedTools ?? []) {
+      nextPatterns.add(pattern);
+    }
+
+    const previous = this.grantSyncCache.get(agentId) ?? new Set<string>();
+
+    // Unchanged set → skip Redis roundtrip entirely.
+    if (
+      nextPatterns.size === previous.size &&
+      [...nextPatterns].every((p) => previous.has(p))
+    ) {
+      return;
+    }
+
+    // Revoke patterns that were previously granted but are no longer
+    // present in the current config.
+    for (const pattern of previous) {
+      if (!nextPatterns.has(pattern)) {
+        await this.grantStore.revoke(agentId, pattern);
       }
     }
+
+    // Grant any new patterns. Repeating grants for existing patterns is
+    // idempotent, but skipping them saves writes.
+    for (const pattern of nextPatterns) {
+      if (!previous.has(pattern)) {
+        await this.grantStore.grant(agentId, pattern, null);
+      }
+    }
+
+    // LRU touch: delete + re-insert so the agent becomes the newest key.
+    this.grantSyncCache.delete(agentId);
+    this.grantSyncCache.set(agentId, nextPatterns);
+
+    // Evict the oldest entry if we've exceeded the cap.
+    if (this.grantSyncCache.size > GRANT_SYNC_CACHE_MAX) {
+      const oldest = this.grantSyncCache.keys().next().value;
+      if (oldest !== undefined) {
+        this.grantSyncCache.delete(oldest);
+      }
+    }
+  }
+
+  /**
+   * Clear the grant sync cache for an agent. Call this when the agent's
+   * networkConfig or preApprovedTools change (deployment teardown, config
+   * reload) so the next message re-syncs grants.
+   */
+  invalidateGrantSyncCache(agentId: string): void {
+    this.grantSyncCache.delete(agentId);
+  }
+
+  /** Clear the entire grant sync cache. Call on whole-config reload. */
+  clearAllGrantSyncCaches(): void {
+    this.grantSyncCache.clear();
   }
 
   /**
@@ -532,6 +637,12 @@ export abstract class BaseDeploymentManager {
     deploymentName: string
   ): Promise<Record<string, string>> {
     if (!this.redisClient) return envVars;
+    if (!this.secretStore) {
+      throw new Error(
+        "BaseDeploymentManager.secretStore not initialized - call setSecretStore before deploying workers"
+      );
+    }
+    const secretStore = this.secretStore;
 
     // Collect credential env var names from all providers
     const providerCredentialVars = new Set<string>();
@@ -560,13 +671,21 @@ export abstract class BaseDeploymentManager {
         }
         hasSecrets = true;
       } else {
-        // Use UUID placeholder for non-provider secrets (legacy path)
+        // Custom env var secrets (non-provider): move the value into the
+        // secret store and hand the worker an opaque UUID placeholder.
         try {
+          const secretRef = await persistSecretValue(
+            secretStore,
+            `deployments/${deploymentName}/${agentId}/${key}`,
+            value,
+            { ttlSeconds: SECRET_PLACEHOLDER_TTL_SECONDS }
+          );
+          if (!secretRef) continue;
           const placeholder = await generatePlaceholder(
             this.redisClient,
             agentId,
             key,
-            value,
+            secretRef,
             deploymentName
           );
           envVars[key] = placeholder;
@@ -777,6 +896,30 @@ export abstract class BaseDeploymentManager {
       // Clean up secret placeholder mappings
       if (this.redisClient) {
         await deleteSecretMappings(this.redisClient, deploymentName);
+      }
+
+      // Cascade-delete the underlying non-provider secrets written by
+      // `injectSecretPlaceholders` under `deployments/{deploymentName}/`.
+      // Without this, the placeholder mappings are gone but the backing
+      // secret entries linger until their 7-day TTL expires (and AWS SM
+      // entries would leak forever).
+      if (this.secretStore) {
+        try {
+          const cleared = await deleteSecretsByPrefix(
+            this.secretStore,
+            `deployments/${deploymentName}/`
+          );
+          if (cleared > 0) {
+            logger.debug(
+              `Cleared ${cleared} deployment secret(s) for ${deploymentName}`
+            );
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to clear deployment secrets for ${deploymentName}:`,
+            error
+          );
+        }
       }
 
       // Clean up any scheduled wakeups for this deployment

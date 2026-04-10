@@ -18,7 +18,7 @@ const SUPPORTED = [
 
 export async function connectionsAddCommand(
   cwd: string,
-  platform: string,
+  platform: string
 ): Promise<void> {
   if (!SUPPORTED.includes(platform)) {
     console.log(chalk.red(`\n  Platform "${platform}" is not supported.`));
@@ -35,16 +35,16 @@ export async function connectionsAddCommand(
   if (existing.some((c) => c.type === platform)) {
     console.log(
       chalk.yellow(
-        `\n  Connection "${platform}" is already configured for agent "${ctx.agentId}".\n`,
-      ),
+        `\n  Connection "${platform}" is already configured for agent "${ctx.agentId}".\n`
+      )
     );
     return;
   }
 
   console.log(
     chalk.dim(
-      `\n  Adding ${PLATFORM_LABELS[platform]} connection to agent "${ctx.agentId}".\n`,
-    ),
+      `\n  Adding ${PLATFORM_LABELS[platform]} connection to agent "${ctx.agentId}".\n`
+    )
   );
 
   const { connectionConfig, connectionSecrets } =
@@ -62,7 +62,7 @@ export async function connectionsAddCommand(
     "",
     `[agents.${ctx.agentId}.connections.config]`,
     ...Object.entries(connectionConfig).map(
-      ([key, value]) => `${key} = "${value}"`,
+      ([key, value]) => `${key} = "${value}"`
     ),
   ];
   await appendTomlBlock(ctx, lines);
@@ -70,12 +70,12 @@ export async function connectionsAddCommand(
 
   console.log(
     chalk.green(
-      `\n  Added ${PLATFORM_LABELS[platform]} connection to ${CONFIG_FILENAME}`,
-    ),
+      `\n  Added ${PLATFORM_LABELS[platform]} connection to ${CONFIG_FILENAME}`
+    )
   );
   console.log(
     chalk.dim(
-      "  Run `lobu run -d` to start the stack with the new connection.\n",
-    ),
+      "  Run `lobu run -d` to start the stack with the new connection.\n"
+    )
   );
 }

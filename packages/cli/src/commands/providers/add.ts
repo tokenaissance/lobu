@@ -10,15 +10,15 @@ import { getSkillById, isProviderSkill } from "../skills/registry.js";
 
 export async function providersAddCommand(
   cwd: string,
-  providerId: string,
+  providerId: string
 ): Promise<void> {
   const skill = getSkillById(providerId);
   if (!skill || !isProviderSkill(skill)) {
     console.log(chalk.red(`\n  Provider "${providerId}" not found.`));
     console.log(
       chalk.dim(
-        "  Run `npx @lobu/cli providers list` to see available providers.\n",
-      ),
+        "  Run `npx @lobu/cli providers list` to see available providers.\n"
+      )
     );
     return;
   }
@@ -31,7 +31,7 @@ export async function providersAddCommand(
   >;
   if (providers.some((p) => p.id === providerId)) {
     console.log(
-      chalk.yellow(`\n  Provider "${providerId}" is already configured.\n`),
+      chalk.yellow(`\n  Provider "${providerId}" is already configured.\n`)
     );
     return;
   }
@@ -64,7 +64,7 @@ export async function providersAddCommand(
   }
 
   console.log(
-    chalk.green(`\n  Added provider "${providerId}" to ${CONFIG_FILENAME}`),
+    chalk.green(`\n  Added provider "${providerId}" to ${CONFIG_FILENAME}`)
   );
   if (defaultModel) {
     console.log(chalk.dim(`  Default model: ${defaultModel}`));
@@ -72,7 +72,7 @@ export async function providersAddCommand(
   if (!apiKey) {
     console.log(chalk.dim("\n  Set the API key:"));
     console.log(
-      chalk.cyan(`    npx @lobu/cli secrets set ${envVar} <your-key>`),
+      chalk.cyan(`    npx @lobu/cli secrets set ${envVar} <your-key>`)
     );
   }
   console.log();

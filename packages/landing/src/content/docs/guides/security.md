@@ -37,7 +37,8 @@ Domain format: exact (`api.example.com`) or wildcard (`.example.com` matches all
 
 - Workers discover MCP tools through the gateway and call them with their own JWT token scoped to the agent.
 - The proxy enforces **SSRF protection**: upstream MCP URLs that resolve to internal or private IP ranges are blocked.
-- Tool-approval policy (allow / deny / approve-per-call) is applied by the proxy before the upstream call.
+- **Destructive tool approval**: per the MCP spec, tools without `readOnlyHint: true` or `destructiveHint: false` require user approval in-thread (`Allow once / 1h / 24h / Always / Deny`). The user's choice is recorded in the grant store.
+- **Operator override**: `[agents.<id>.tools]` in `lobu.toml` accepts a `pre_approved` list of grant patterns (e.g. `/mcp/gmail/tools/list_messages`, `/mcp/linear/tools/*`) that bypass the approval card. This is operator-only — skills cannot set it — so the escape hatch is always visible in code review. See [Tool Policy](/guides/tool-policy/) and the [`lobu.toml` reference](/reference/lobu-toml/).
 
 ## Further Reading
 

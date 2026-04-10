@@ -170,6 +170,9 @@ export async function resolveAgentOptions(
   if (settings.toolsConfig) {
     mergedOptions.toolsConfig = settings.toolsConfig;
   }
+  if (settings.preApprovedTools?.length) {
+    mergedOptions.preApprovedTools = settings.preApprovedTools;
+  }
   if (settings.mcpServers) {
     mergedOptions.mcpServers = settings.mcpServers;
   }
@@ -219,7 +222,8 @@ export async function hasConfiguredProvider(
 
 /**
  * Build a MessagePayload from common fields.
- * Extracts networkConfig, nixConfig, mcpServers from agentOptions before constructing the payload.
+ * Extracts networkConfig, nixConfig, mcpServers, preApprovedTools from
+ * agentOptions before constructing the payload.
  */
 export function buildMessagePayload(params: {
   platform: string;
@@ -234,8 +238,13 @@ export function buildMessagePayload(params: {
   platformMetadata: Record<string, any>;
   agentOptions: Record<string, any>;
 }): MessagePayload {
-  const { networkConfig, nixConfig, mcpServers, ...remainingOptions } =
-    params.agentOptions;
+  const {
+    networkConfig,
+    nixConfig,
+    mcpServers,
+    preApprovedTools,
+    ...remainingOptions
+  } = params.agentOptions;
 
   return {
     platform: params.platform,
@@ -252,6 +261,7 @@ export function buildMessagePayload(params: {
     networkConfig,
     nixConfig,
     mcpConfig: mcpServers ? { mcpServers } : undefined,
+    preApprovedTools,
   };
 }
 
