@@ -32,8 +32,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          registry-url: "https://registry.npmjs.org"
+          node-version: 22
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -44,10 +43,12 @@ jobs:
 
       - name: Publish packages
         env:
-          # Legacy path: NPM_TOKEN secret. Ignored when trusted publishing is
-          # configured and the runner already has an OIDC session.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: ${{ inputs.provenance && 'true' || 'false' }}
+          # Trusted publishing via OIDC: npm CLI automatically exchanges the
+          # GitHub Actions OIDC token for a short-lived publish token when
+          # id-token: write is granted and a trusted publisher is registered
+          # on npmjs.com. No NPM_TOKEN secret is used. `--provenance`
+          # enables provenance attestations tied to this workflow run.
+          NPM_CONFIG_PROVENANCE: "true"
         run: |
           if [ "${{ inputs.bump }}" = "skip" ]; then
             node scripts/publish-packages.mjs --skip-bump
