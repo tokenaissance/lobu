@@ -91,16 +91,19 @@ body {
   right: 0;
 }
 
-/* Chat action button hover */
-.chat-action-btn {
+/* Chat action button hover — theme sets --chat-btn-glow via inline style.
+   !important is needed because Starlight resets transition: all. */
+button.chat-action-btn {
   transition:
     transform 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    background-color 0.2s ease !important;
 }
 
-.chat-action-btn:hover {
-  transform: translateY(-1px) scale(1.03);
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+button.chat-action-btn:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 2px 14px var(--chat-btn-glow, rgba(249, 115, 22, 0.4));
+  background-color: var(--chat-btn-glow, rgba(249, 115, 22, 0.12)) !important;
 }
 
 /* Schedule dialog */

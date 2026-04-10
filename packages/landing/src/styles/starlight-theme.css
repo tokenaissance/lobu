@@ -44,6 +44,39 @@
   max-width: 100% !important;
 }
 
+/* Break out of the 48rem content constraint to use more width.
+   Accounts for the left sidebar (~18rem) and keeps some right padding. */
+.chat-grid-fullwidth {
+  width: min(76rem, calc(100vw - 20rem));
+  max-width: none;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 72rem) {
+  .chat-grid-fullwidth {
+    width: 100%;
+    left: auto;
+    transform: none;
+  }
+}
+
+/* Chat action button hover — theme sets --chat-btn-glow via inline style.
+   Not in @layer so it wins over Starlight's reset. */
+button.chat-action-btn {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease !important;
+}
+
+button.chat-action-btn:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 2px 14px var(--chat-btn-glow, rgba(249, 115, 22, 0.4));
+  background-color: var(--chat-btn-glow, rgba(249, 115, 22, 0.12)) !important;
+}
+
 /* Hide Starlight's own footer — our Footer component replaces it */
 footer.sl-flex {
   display: none !important;

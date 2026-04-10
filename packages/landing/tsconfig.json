@@ -4,8 +4,10 @@
     "jsxImportSource": "preact",
     "paths": {
       "@settings/*": ["../gateway/src/routes/public/settings-page/*"],
-      "@settings/api": ["./src/settings-mock/mock-api.ts"]
-    }
+      "@settings/api": ["./src/settings-mock/mock-api.ts"],
+      "@platform-configs": ["./src/generated/platform-configs.json"]
+    },
+    "resolveJsonModule": true
   },
   "include": ["src/**/*", "src/**/*.astro"]
 }

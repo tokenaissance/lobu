@@ -20,11 +20,9 @@ Lobu's Slack adapter supports assistant threads, rich UI, and interactive workfl
 3. Run `lobu connections add slack` to add the connection to your existing agent (prompts for the bot token and signing secret), or run `lobu init` to scaffold a new project and pick Slack in the wizard.
 4. Start the stack with `lobu run -d` — the bot is now live in your Slack workspace.
 
-## Interactive Examples
-
 Below are three common interactions rendered as they would appear in a Slack thread: approval flows, skill/MCP installation, and scheduled tasks.
 
-<div class="not-content grid gap-6 my-6 md:grid-cols-3">
+<div class="not-content chat-grid-fullwidth grid gap-6 my-6 md:grid-cols-3">
   <SampleChat useCase={networkCase} theme={SLACK_THEME} />
   <SampleChat useCase={skillsCase} theme={SLACK_THEME} />
   <SampleChat useCase={schedulesCase} theme={SLACK_THEME} />

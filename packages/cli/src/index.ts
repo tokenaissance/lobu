@@ -312,5 +312,32 @@ export async function runCli(
       await providersAddCommand(process.cwd(), id);
     });
 
+  // ─── connections ────────────────────────────────────────────────────
+  const connections = program
+    .command("connections")
+    .description("Manage messaging platform connections");
+
+  connections
+    .command("list")
+    .description("List configured connections per agent")
+    .action(async () => {
+      const { connectionsListCommand } = await import(
+        "./commands/connections/list.js"
+      );
+      await connectionsListCommand(process.cwd());
+    });
+
+  connections
+    .command("add <platform>")
+    .description(
+      "Add a messaging platform connection (telegram, slack, discord, whatsapp, teams, gchat)"
+    )
+    .action(async (platform: string) => {
+      const { connectionsAddCommand } = await import(
+        "./commands/connections/add.js"
+      );
+      await connectionsAddCommand(process.cwd(), platform);
+    });
+
   await program.parseAsync(argv);
 }

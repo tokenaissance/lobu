@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "bun scripts/gen-platform-configs.ts",
     "build": "astro build",
     "preview": "astro preview"
   },

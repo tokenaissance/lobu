@@ -12,6 +12,8 @@
 import type { ChatMessage, InlineButton, UseCase } from "../types";
 
 export interface ChatTheme {
+  /** Brand primary color — used for action button backgrounds and accents */
+  primary: string;
   /** Outer window background and border */
   bg: string;
   border: string;
@@ -21,85 +23,76 @@ export interface ChatTheme {
   /** User (outgoing) message bubble */
   userBubbleBg: string;
   userBubbleBorder: string;
-  /** Inline action button style */
-  buttonColor: string;
-  buttonBorder: string;
-  /** Glow/shadow color used on button hover (should match buttonColor with low alpha) */
+  /** Glow/shadow color used on button hover */
   buttonGlow: string;
 }
 
 // --- Preset themes ---
 
 export const TELEGRAM_THEME: ChatTheme = {
+  primary: "#f97316",
   bg: "#0b0c0f",
   border: "#23262d",
   botBubbleBg: "#171a20",
   botBubbleBorder: "#2a2f38",
-  userBubbleBg: "rgba(var(--color-tg-accent-rgb), 0.18)",
-  userBubbleBorder: "rgba(var(--color-tg-accent-rgb), 0.35)",
-  buttonColor: "#ff8a3d",
-  buttonBorder: "#a74f20",
-  buttonGlow: "rgba(249, 115, 22, 0.3)",
+  userBubbleBg: "rgba(249, 115, 22, 0.18)",
+  userBubbleBorder: "rgba(249, 115, 22, 0.35)",
+  buttonGlow: "rgba(249, 115, 22, 0.35)",
 };
 
 export const SLACK_THEME: ChatTheme = {
+  primary: "#36c5ab",
   bg: "#1a1d21",
   border: "#2c2f33",
   botBubbleBg: "#222529",
   botBubbleBorder: "#32353a",
-  userBubbleBg: "rgba(54, 197, 171, 0.16)",
+  userBubbleBg: "rgba(54, 197, 171, 0.18)",
   userBubbleBorder: "rgba(54, 197, 171, 0.35)",
-  buttonColor: "#36c5ab",
-  buttonBorder: "#1f6d5f",
-  buttonGlow: "rgba(54, 197, 171, 0.3)",
+  buttonGlow: "rgba(54, 197, 171, 0.35)",
 };
 
 export const DISCORD_THEME: ChatTheme = {
+  primary: "#5865f2",
   bg: "#313338",
   border: "#3f4147",
   botBubbleBg: "#383a40",
   botBubbleBorder: "#4a4d55",
-  userBubbleBg: "rgba(88, 101, 242, 0.2)",
+  userBubbleBg: "rgba(88, 101, 242, 0.22)",
   userBubbleBorder: "rgba(88, 101, 242, 0.45)",
-  buttonColor: "#a5b0ff",
-  buttonBorder: "#4752c4",
-  buttonGlow: "rgba(88, 101, 242, 0.35)",
+  buttonGlow: "rgba(88, 101, 242, 0.4)",
 };
 
 export const WHATSAPP_THEME: ChatTheme = {
+  primary: "#25d366",
   bg: "#0b141a",
   border: "#1f2c33",
   botBubbleBg: "#1f2c33",
   botBubbleBorder: "#2a3942",
-  userBubbleBg: "rgba(37, 211, 102, 0.18)",
+  userBubbleBg: "rgba(37, 211, 102, 0.2)",
   userBubbleBorder: "rgba(37, 211, 102, 0.4)",
-  buttonColor: "#25d366",
-  buttonBorder: "#0f6b33",
-  buttonGlow: "rgba(37, 211, 102, 0.3)",
+  buttonGlow: "rgba(37, 211, 102, 0.35)",
 };
 
 export const TEAMS_THEME: ChatTheme = {
+  primary: "#6264a7",
   bg: "#1f1f1f",
   border: "#333333",
   botBubbleBg: "#292929",
   botBubbleBorder: "#3a3a3a",
-  userBubbleBg: "rgba(98, 100, 167, 0.22)",
+  userBubbleBg: "rgba(98, 100, 167, 0.24)",
   userBubbleBorder: "rgba(98, 100, 167, 0.45)",
-  buttonColor: "#9ea2ff",
-  buttonBorder: "#4a4d8a",
-  buttonGlow: "rgba(98, 100, 167, 0.3)",
+  buttonGlow: "rgba(98, 100, 167, 0.35)",
 };
 
 export const GCHAT_THEME: ChatTheme = {
+  primary: "#8ab4f8",
   bg: "#1f1f1f",
   border: "#303134",
   botBubbleBg: "#2a2b2e",
   botBubbleBorder: "#3c3d40",
-  userBubbleBg: "rgba(138, 180, 248, 0.2)",
+  userBubbleBg: "rgba(138, 180, 248, 0.22)",
   userBubbleBorder: "rgba(138, 180, 248, 0.42)",
-  buttonColor: "#8ab4f8",
-  buttonBorder: "#3f5a8e",
-  buttonGlow: "rgba(138, 180, 248, 0.3)",
+  buttonGlow: "rgba(138, 180, 248, 0.35)",
 };
 
 // --- ChatBubble (exported for custom compositions) ---
@@ -127,10 +120,10 @@ export function ChatBubble({
     <div class={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div class="max-w-[75%]">
         <div
-          class="px-2.5 py-1.5 text-[13px] leading-[1.35] whitespace-pre-wrap rounded-[12px] relative"
+          class="px-2.5 py-1.5 text-[13px] font-medium leading-[1.4] whitespace-pre-wrap rounded-[12px] relative"
           style={{
             backgroundColor: isUser ? theme.userBubbleBg : theme.botBubbleBg,
-            color: "var(--color-page-text-muted)",
+            color: "rgba(230, 232, 236, 0.9)",
             border: `1px solid ${
               isUser ? theme.userBubbleBorder : theme.botBubbleBorder
             }`,
@@ -150,11 +143,12 @@ export function ChatBubble({
           <button
             type="button"
             key={btn.label}
-            class="mt-1 h-7 px-2.5 inline-flex items-center justify-center rounded-full text-[12px] font-semibold cursor-pointer chat-action-btn"
+            class="h-7 px-3 inline-flex items-center justify-center rounded-full text-[12px] font-semibold cursor-pointer chat-action-btn"
             style={{
+              marginTop: "8px",
               backgroundColor: "transparent",
-              color: theme.buttonColor,
-              border: `1px solid ${theme.buttonBorder}`,
+              color: theme.primary,
+              border: `1px solid ${theme.primary}`,
               ["--chat-btn-glow" as string]: theme.buttonGlow,
             }}
             onMouseEnter={() => onButtonHover?.(true)}
@@ -208,7 +202,9 @@ export function SampleChat({
         return (
           <div
             key={`${msg.role}-${msg.text.slice(0, 20)}-${i}`}
-            class={i === 0 ? "" : isSameSenderAsPrev ? "mt-1" : "mt-3"}
+            style={{
+              marginTop: i === 0 ? 0 : isSameSenderAsPrev ? "6px" : "16px",
+            }}
           >
             <ChatBubble
               role={msg.role}
@@ -226,12 +222,14 @@ export function SampleChat({
 
   return (
     <div
-      class="rounded-[14px] overflow-hidden w-full max-w-[380px]"
+      class="rounded-[14px] overflow-hidden w-full"
       style={{
         border: `1px solid ${theme.border}`,
         backgroundColor: theme.bg,
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+        minWidth: "280px",
+        maxWidth: "460px",
       }}
     >
       {/* Header */}
