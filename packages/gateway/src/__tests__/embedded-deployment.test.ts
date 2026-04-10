@@ -284,17 +284,26 @@ describe("EmbeddedDeploymentManager", () => {
     });
 
     test("prepends the worker bin directory to subprocess PATH", async () => {
-      const msg = createTestMessagePayload();
-      await manager.createDeployment("worker-1", "user-1", "user-1", msg);
+      // Treat every candidate worker bin dir as existing for this assertion;
+      // in a workspace repo the local packages/<pkg>/node_modules/.bin is
+      // hoisted to the root so the real fs.existsSync would filter everything
+      // out.
+      const existsSpy = spyOn(fs, "existsSync").mockReturnValue(true);
+      try {
+        const msg = createTestMessagePayload();
+        await manager.createDeployment("worker-1", "user-1", "user-1", msg);
 
-      const spawnCall = mockSpawn.mock.calls.at(-1);
-      expect(spawnCall).toBeDefined();
+        const spawnCall = mockSpawn.mock.calls.at(-1);
+        expect(spawnCall).toBeDefined();
 
-      const spawnOptions = spawnCall?.[2] as
-        | { env?: Record<string, string> }
-        | undefined;
-      const pathEntries = (spawnOptions?.env?.PATH || "").split(":");
-      expect(pathEntries).toContain(path.resolve("node_modules/.bin"));
+        const spawnOptions = spawnCall?.[2] as
+          | { env?: Record<string, string> }
+          | undefined;
+        const pathEntries = (spawnOptions?.env?.PATH || "").split(":");
+        expect(pathEntries).toContain(path.resolve("node_modules/.bin"));
+      } finally {
+        existsSpy.mockRestore();
+      }
     });
 
     test("child process exit removes worker from map", async () => {

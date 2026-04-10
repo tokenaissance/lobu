@@ -175,7 +175,8 @@ describe("OpenClawWorker audio permission hint", () => {
       "token"
     );
 
-    expect(hint).toBeNull();
+    expect(hint).toContain("an audio-capable provider");
+    expect(hint).toContain("Ask an admin");
   });
 });
 
