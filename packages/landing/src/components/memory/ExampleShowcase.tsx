@@ -1,12 +1,11 @@
-import { useState } from "preact/hooks";
-import {
-  capabilityLenses,
-  examples,
-  sharedActStep,
-  sharedRecallStep,
-  type RecordNode,
-} from "../../memory-examples";
-import { getNodeAccentStyle, RecordTree } from "./RecordTree";
+import type { ComponentChildren } from "preact";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import { examples, type RecordNode } from "../../memory-examples";
+import { landingUseCaseOptions } from "../../use-case-showcases";
+import { CompactContentRail } from "../CompactContentRail";
+import { SectionHeader } from "../SectionHeader";
+import { formatUseCaseSummaryTitle, UseCaseSummary } from "../UseCaseSummary";
+import { UseCaseTabs } from "../UseCaseTabs";
 import {
   accentAmber,
   accentCyan,
@@ -19,7 +18,6 @@ import {
   darkBase,
   deepBg,
   innerCardBg,
-  innerCardBgLight,
   labelGray,
   textColor,
   textMuted,
@@ -46,51 +44,189 @@ function getDefaultSelectedNodeId(example: (typeof examples)[number]) {
   );
 }
 
-export function ExampleShowcase() {
-  const [activeExampleId, setActiveExampleId] = useState(examples[0].id);
-  const [selectedNodeId, setSelectedNodeId] = useState(
-    getDefaultSelectedNodeId(examples[0])
+const stepColors = {
+  model: accentPurple,
+  connect: accentAmber,
+  auth: accentCyan,
+  reuse: accentGreen,
+  fresh: accentPink,
+};
+
+function formatStepLabel(label: string) {
+  return label.length === 1 ? `0${label}` : label;
+}
+
+function StepIntro({
+  stepLabel,
+  title,
+  detail,
+  color,
+}: {
+  stepLabel: string;
+  title: string;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <div class="mb-5">
+      <div
+        class="text-[11px] font-semibold uppercase tracking-[0.24em] mb-2"
+        style={{ color }}
+      >
+        {formatStepLabel(stepLabel)}
+      </div>
+      <h3
+        class="text-xl sm:text-2xl font-bold tracking-tight mb-2"
+        style={{ color: textColor }}
+      >
+        {title}
+      </h3>
+      <p class="text-sm leading-relaxed" style={{ color: textMuted }}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function DetailCard({ children }: { children: ComponentChildren }) {
+  return (
+    <div
+      class="rounded-[1.5rem] p-4 sm:p-5 border"
+      style={{
+        backgroundColor: innerCardBg,
+        borderColor: cardBorderSubtle,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function StepChip({
+  label,
+  active = false,
+  onClick,
+  color,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+  color: string;
+}) {
+  const style = {
+    color: active ? darkBase : textColor,
+    backgroundColor: active ? color : `${color}14`,
+    borderColor: active ? `${color}b8` : `${color}47`,
+    boxShadow: active ? `0 8px 24px ${color}29` : "none",
+  };
+
+  if (!onClick) {
+    return (
+      <span
+        class="px-3 py-1 rounded-full text-xs border"
+        style={style}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      class="px-3 py-1 rounded-full text-xs border transition-all hover:-translate-y-0.5"
+      style={style}
+    >
+      {label}
+    </button>
+  );
+}
+
+function LinkRow({ links }: { links: Array<{ label: string; href: string }> }) {
+  if (!links.length) return null;
+
+  return (
+    <div class="flex flex-wrap gap-3 text-sm">
+      {links.map((link) => (
+        <a
+          key={link.href}
+          href={link.href}
+          class="transition-colors hover:opacity-80"
+          style={{ color: "var(--color-tg-accent)" }}
+        >
+          {link.label} →
+        </a>
+      ))}
+    </div>
+  );
+}
+
+export function ExampleShowcase(props: {
+  activeUseCaseId?: string;
+  onActiveUseCaseChange?: (id: string) => void;
+  showTabs?: boolean;
+  summaryTitlePrefix?: string;
+}) {
+  const {
+    activeUseCaseId,
+    onActiveUseCaseChange,
+    showTabs = true,
+    summaryTitlePrefix = "",
+  } = props;
+  const [internalUseCaseId, setInternalUseCaseId] = useState(
+    activeUseCaseId ?? examples[0].useCaseId
   );
 
-  const activeExample =
-    examples.find((e) => e.id === activeExampleId) ?? examples[0];
+  const resolvedUseCaseId = activeUseCaseId ?? internalUseCaseId;
+  const activeExample = useMemo(
+    () =>
+      examples.find((example) => example.useCaseId === resolvedUseCaseId) ??
+      examples[0],
+    [resolvedUseCaseId]
+  );
+  const [selectedNodeId, setSelectedNodeId] = useState(
+    getDefaultSelectedNodeId(activeExample)
+  );
+
+  useEffect(() => {
+    setSelectedNodeId(getDefaultSelectedNodeId(activeExample));
+  }, [activeExample.useCaseId]);
+
   const selectedNode =
     findRecordNode(activeExample.recordTree, selectedNodeId) ??
     activeExample.recordTree;
   const selectedHighlights =
     activeExample.nodeHighlights?.[selectedNode.id] ?? activeExample.highlights;
-  const selectedNodeAccent = getNodeAccentStyle(selectedNode);
+  const selectedEntityLabel =
+    Object.entries(activeExample.entitySelections ?? {}).find(
+      ([, nodeId]) => nodeId === selectedNodeId
+    )?.[0] ?? selectedNode.kind;
 
   const switchExample = (id: string) => {
-    const next = examples.find((e) => e.id === id) ?? examples[0];
-    setActiveExampleId(next.id);
-    setSelectedNodeId(getDefaultSelectedNodeId(next));
+    onActiveUseCaseChange?.(id);
+    if (activeUseCaseId === undefined) {
+      setInternalUseCaseId(id);
+    }
   };
 
   return (
-    <div class="px-2 sm:px-3 pt-1">
-      <div class="mb-6">
-        <div class="grid gap-y-2 w-fit max-w-full mx-auto">
-          {capabilityLenses.map((lens) => (
-            <div
-              key={lens.title}
-              class="grid grid-cols-[6.75rem_minmax(0,1fr)] sm:grid-cols-[8.5rem_minmax(0,1fr)] items-baseline gap-x-3 text-left"
-            >
-              <span
-                class="text-xs uppercase tracking-[0.18em] font-semibold text-right"
-                style={{ color: lens.accent }}
-              >
-                {lens.title}
-              </span>
-              <span class="text-sm" style={{ color: textMuted }}>
-                {lens.body}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div class="max-w-[68rem] mx-auto px-4 sm:px-6 pt-1">
+      {showTabs ? (
+        <UseCaseTabs
+          tabs={landingUseCaseOptions}
+          activeId={activeExample.useCaseId}
+          onSelect={switchExample}
+          className="mb-5"
+        />
+      ) : null}
 
-      <div class="mb-5">
+      <UseCaseSummary
+        title={formatUseCaseSummaryTitle(activeExample.title, summaryTitlePrefix)}
+        description={activeExample.description}
+      />
+
+      <CompactContentRail className="mb-5">
         <div
           class="rounded-[2rem] border overflow-hidden"
           style={{
@@ -115,41 +251,12 @@ export function ExampleShowcase() {
           </div>
 
           <div
-            class="px-3 sm:px-4 py-3 border-t flex flex-wrap items-center justify-between gap-2"
+            class="px-3 sm:px-4 py-3 border-t flex flex-wrap items-center justify-end gap-2"
             style={{
               borderColor: cardBorderSubtle,
               backgroundColor: "rgba(255,255,255,0.02)",
             }}
           >
-            <div class="flex flex-wrap gap-2">
-              Pick an example:
-              {examples.map((example) => {
-                const active = example.id === activeExample.id;
-                return (
-                  <button
-                    key={example.id}
-                    type="button"
-                    onClick={() => switchExample(example.id)}
-                    class="px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all hover:-translate-y-0.5"
-                    style={{
-                      color: active ? darkBase : textColor,
-                      backgroundColor: active
-                        ? "var(--color-tg-accent)"
-                        : innerCardBgLight,
-                      borderColor: active
-                        ? "rgba(248, 184, 78, 0.72)"
-                        : "rgba(70, 85, 105, 0.72)",
-                      boxShadow: active
-                        ? "0 8px 24px rgba(248, 184, 78, 0.16)"
-                        : "none",
-                    }}
-                  >
-                    {example.tab}
-                  </button>
-                );
-              })}
-            </div>
-
             <div
               class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium border"
               style={{
@@ -171,188 +278,57 @@ export function ExampleShowcase() {
             </div>
           </div>
         </div>
-      </div>
+      </CompactContentRail>
 
-      <div class="grid gap-5 lg:grid-cols-2 mt-5">
-        <div class="min-w-0 lg:order-2">
-          <div
-            class="rounded-3xl p-4 border"
-            style={{
-              backgroundColor: innerCardBg,
-              borderColor: cardBorderSubtle,
-            }}
-          >
-            <h3
-              class="text-xl tracking-[-0.03em] mt-0 mb-2"
-              style={{ color: textColor }}
-            >
-              Structured memory
-            </h3>
-            <p class="text-sm leading-6 m-0 mb-5" style={{ color: textMuted }}>
-              Click any node to inspect what Owletto wrote into the record tree.
-            </p>
-            <RecordTree
-              node={activeExample.recordTree}
-              selectedId={selectedNodeId}
-              onSelect={setSelectedNodeId}
-            />
-          </div>
-        </div>
+      <CompactContentRail className="mt-10">
+        <SectionHeader
+          title="How it works"
+          body="Turn scattered prompts, tools, and application data into a shared context layer your agents can use everywhere."
+          className="mb-12"
+        />
 
-        <div class="min-w-0 lg:order-1">
-          <div
-            class="rounded-3xl p-4 border"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(19, 24, 28, 0.82), rgba(13, 16, 20, 0.78))",
-              borderColor: "rgba(62, 77, 97, 0.52)",
-            }}
-          >
-            <h3
-              class="text-xl tracking-[-0.03em] mt-0 mb-2"
-              style={{ color: textColor }}
-            >
-              How your agent works
-            </h3>
-            <p class="text-sm leading-6 m-0 mb-5" style={{ color: textMuted }}>
-              One prompt is extracted, normalized, linked, recalled, and kept
-              fresh by watchers.
-            </p>
+        <div class="space-y-10">
+          {activeExample.howItWorks.map((step) => {
+            const color = stepColors[step.id];
 
-            <div class="grid gap-4">
-              {activeExample.transformation.map((step, index) => {
-                const colors = [accentPurple, accentAmber, accentCyan];
-                const color = colors[index] ?? labelGray;
+            if (step.id === "model") {
+              return (
+                <div
+                  key={step.label}
+                  class="grid grid-cols-1 lg:grid-cols-[minmax(16rem,0.78fr)_minmax(24rem,1fr)] gap-6 items-start"
+                >
+                  <div class="min-w-0">
+                    <StepIntro
+                      stepLabel={step.label}
+                      title={step.title}
+                      detail={step.detail}
+                      color={color}
+                    />
 
-                return (
-                  <div key={step.label} class="grid gap-2">
-                    <div class="flex items-start gap-3">
-                      <div
-                        class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                        style={{ color: darkBase, backgroundColor: color }}
-                      >
-                        {step.label}
-                      </div>
-                      <div class="min-w-0 pt-0.5">
-                        <div
-                          class="text-sm font-semibold mb-1"
-                          style={{ color: textColor }}
-                        >
-                          {step.title}
-                        </div>
-                        <div
-                          class="text-sm leading-6"
-                          style={{ color: textMuted }}
-                        >
-                          {step.detail}
-                        </div>
-                      </div>
-                    </div>
+                    <div class="grid gap-3">
+                      <LinkRow links={step.links ?? []} />
 
-                    {index === 0 && (
-                      <div class="flex flex-wrap gap-1.5 ml-10">
-                        {activeExample.entityTypes.map((type) => {
-                          const targetNodeId =
-                            activeExample.entitySelections?.[type];
-                          const isActive = targetNodeId === selectedNodeId;
-
-                          if (!targetNodeId) {
-                            return (
-                              <span
-                                key={type}
-                                class="px-3 py-1 rounded-full text-xs"
-                                style={{
-                                  color: textColor,
-                                  backgroundColor: "rgba(192, 132, 252, 0.08)",
-                                  border: "1px solid rgba(192, 132, 252, 0.28)",
-                                }}
-                              >
-                                {type}
-                              </span>
-                            );
-                          }
+                      <div class="flex flex-wrap gap-1.5">
+                        {(step.chips ?? activeExample.entityTypes).map((type) => {
+                          const targetNodeId = activeExample.entitySelections?.[type];
 
                           return (
-                            <button
+                            <StepChip
                               key={type}
-                              type="button"
-                              onClick={() => setSelectedNodeId(targetNodeId)}
-                              class="px-3 py-1 rounded-full text-xs border transition-all hover:-translate-y-0.5"
-                              style={{
-                                color: isActive ? darkBase : textColor,
-                                backgroundColor: isActive
-                                  ? accentPurple
-                                  : "rgba(192, 132, 252, 0.08)",
-                                borderColor: isActive
-                                  ? "rgba(192, 132, 252, 0.72)"
-                                  : "rgba(192, 132, 252, 0.28)",
-                                boxShadow: isActive
-                                  ? "0 8px 24px rgba(192, 132, 252, 0.16)"
-                                  : "none",
-                              }}
-                            >
-                              {type}
-                            </button>
+                              label={type}
+                              active={targetNodeId === selectedNodeId}
+                              onClick={
+                                targetNodeId
+                                  ? () => setSelectedNodeId(targetNodeId)
+                                  : undefined
+                              }
+                              color={accentPurple}
+                            />
                           );
                         })}
                       </div>
-                    )}
 
-                    {index === 1 && (
-                      <div
-                        class="rounded-xl p-3 border ml-10 min-h-[14rem]"
-                        style={{
-                          backgroundColor: deepBg,
-                          borderColor: cardBorderSubtle,
-                        }}
-                      >
-                        <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
-                          <div class="grid gap-0.5">
-                            <div
-                              class="text-[10px] uppercase tracking-[0.18em]"
-                              style={{ color: "#9fb3d1" }}
-                            >
-                              Selected node
-                            </div>
-                            <div
-                              class="text-sm font-semibold"
-                              style={{ color: textColor }}
-                            >
-                              {selectedNode.label}
-                            </div>
-                          </div>
-                          <span
-                            class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em]"
-                            style={{
-                              color: selectedNodeAccent.accent,
-                              backgroundColor:
-                                selectedNodeAccent.badgeBackground,
-                              border: selectedNodeAccent.badgeBorder,
-                            }}
-                          >
-                            {selectedNode.kind}
-                          </span>
-                        </div>
-                        <div class="grid gap-2 sm:grid-cols-2">
-                          {selectedHighlights.map((highlight) => (
-                            <div key={highlight.label} class="grid gap-0.5">
-                              <div
-                                class="text-[10px] uppercase tracking-[0.2em]"
-                                style={{ color: "#9fb3d1" }}
-                              >
-                                {highlight.label}
-                              </div>
-                              <div class="text-sm" style={{ color: textColor }}>
-                                {highlight.value}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {index === 2 && (
-                      <div class="grid gap-1.5 ml-10">
+                      <div class="grid gap-1.5">
                         {activeExample.relations.map((relation) => (
                           <div
                             key={`${relation.source}-${relation.label}`}
@@ -391,48 +367,89 @@ export function ExampleShowcase() {
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Shared steps — same for all examples */}
-              {[
-                { step: sharedRecallStep, color: accentGreen },
-                { step: sharedActStep, color: accentPink },
-              ].map(({ step, color }) => (
-                <div key={step.label} class="grid gap-2">
-                  <div class="flex items-start gap-3">
-                    <div
-                      class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                      style={{ color: darkBase, backgroundColor: color }}
-                    >
-                      {step.label}
-                    </div>
-                    <div class="min-w-0 pt-0.5">
-                      <div
-                        class="text-sm font-semibold mb-1"
-                        style={{ color: textColor }}
-                      >
-                        {step.title}
-                      </div>
-                      <div
-                        class="text-sm leading-6"
-                        style={{ color: textMuted }}
-                      >
-                        {step.detail}
-                      </div>
                     </div>
                   </div>
 
-                  {step === sharedActStep && (
-                    <div
-                      class="rounded-xl p-3 border ml-10"
-                      style={{
-                        backgroundColor: deepBg,
-                        borderColor: "rgba(251, 113, 133, 0.22)",
-                      }}
-                    >
+                  <div class="min-w-0">
+                    <DetailCard>
+                      <div
+                        class="text-[11px] font-semibold uppercase tracking-[0.24em] mb-3"
+                        style={{ color: accentPurple }}
+                      >
+                        Selected node
+                      </div>
+                      <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                        <div class="grid gap-1">
+                          <div
+                            class="text-[10px] uppercase tracking-[0.18em]"
+                            style={{ color: labelGray }}
+                          >
+                            {selectedEntityLabel}
+                          </div>
+                          <div
+                            class="text-lg font-semibold"
+                            style={{ color: textColor }}
+                          >
+                            {selectedNode.label}
+                          </div>
+                        </div>
+                        <span
+                          class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em]"
+                          style={{
+                            color: accentPurple,
+                            backgroundColor: "rgba(192, 132, 252, 0.08)",
+                            border: "1px solid rgba(192, 132, 252, 0.24)",
+                          }}
+                        >
+                          {selectedNode.kind}
+                        </span>
+                      </div>
+                      <div
+                        class="rounded-xl p-3 border min-h-[12.5rem] lg:h-[12.5rem] flex flex-col"
+                        style={{
+                          backgroundColor: deepBg,
+                          borderColor: cardBorderSubtle,
+                        }}
+                      >
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          {selectedHighlights.map((highlight) => (
+                            <div key={highlight.label} class="grid gap-0.5">
+                              <div
+                                class="text-[10px] uppercase tracking-[0.2em]"
+                                style={{ color: labelGray }}
+                              >
+                                {highlight.label}
+                              </div>
+                              <div class="text-sm" style={{ color: textColor }}>
+                                {highlight.value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DetailCard>
+                  </div>
+                </div>
+              );
+            }
+
+            if (step.id === "fresh") {
+              return (
+                <div
+                  key={step.label}
+                  class="grid grid-cols-1 lg:grid-cols-[minmax(16rem,0.78fr)_minmax(24rem,1fr)] gap-6 items-start"
+                >
+                  <div class="min-w-0">
+                    <StepIntro
+                      stepLabel={step.label}
+                      title={step.title}
+                      detail={step.detail}
+                      color={color}
+                    />
+                  </div>
+
+                  <div class="min-w-0">
+                    <DetailCard>
                       <div class="flex flex-wrap items-center gap-2 mb-3">
                         <span
                           class="text-sm font-semibold"
@@ -452,13 +469,8 @@ export function ExampleShowcase() {
                         </span>
                       </div>
                       <div class="grid gap-2">
-                        <div>
-                          <div
-                            class="text-xs leading-5"
-                            style={{ color: textMuted }}
-                          >
-                            {activeExample.watcher.prompt}
-                          </div>
+                        <div class="text-xs leading-5" style={{ color: textMuted }}>
+                          {activeExample.watcher.prompt}
                         </div>
                         <div>
                           <div
@@ -472,7 +484,6 @@ export function ExampleShowcase() {
                             style={{
                               color: textColor,
                               backgroundColor: "rgba(251, 113, 133, 0.06)",
-                              border: "1px solid rgba(251, 113, 133, 0.14)",
                             }}
                           >
                             {activeExample.watcher.extractionSchema}
@@ -485,22 +496,107 @@ export function ExampleShowcase() {
                           >
                             Schema evolution
                           </div>
-                          <div
-                            class="text-xs leading-5"
-                            style={{ color: textMuted }}
-                          >
+                          <div class="text-xs leading-5" style={{ color: textMuted }}>
                             {activeExample.watcher.schemaEvolution}
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    </DetailCard>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              );
+            }
+
+            return (
+              <div
+                key={step.label}
+                class="grid grid-cols-1 lg:grid-cols-[minmax(16rem,0.78fr)_minmax(24rem,1fr)] gap-6 items-start"
+              >
+                <div class="min-w-0">
+                  <StepIntro
+                    stepLabel={step.label}
+                    title={step.title}
+                    detail={step.detail}
+                    color={color}
+                  />
+                  <LinkRow links={step.links ?? []} />
+                </div>
+
+                <div class="min-w-0">
+                  <DetailCard>
+                    {step.panel ? (
+                      <>
+                        <div class="mb-4">
+                          <div
+                            class="text-[11px] font-semibold uppercase tracking-[0.24em] mb-2"
+                            style={{ color }}
+                          >
+                            {step.panel.title}
+                          </div>
+                          {step.panel.description ? (
+                            <p
+                              class="text-sm leading-6 m-0"
+                              style={{ color: textMuted }}
+                            >
+                              {step.panel.description}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {step.panel.items?.length ? (
+                          <div class="grid gap-3 sm:grid-cols-2 mb-4">
+                            {step.panel.items.map((item) => (
+                              <div
+                                key={`${item.meta ?? ""}-${item.label}`}
+                                class="rounded-xl p-3 border"
+                                style={{
+                                  backgroundColor: deepBg,
+                                  borderColor: cardBorderSubtle,
+                                }}
+                              >
+                                {item.meta ? (
+                                  <div
+                                    class="text-[10px] uppercase tracking-[0.18em] mb-1"
+                                    style={{ color }}
+                                  >
+                                    {item.meta}
+                                  </div>
+                                ) : null}
+                                <div
+                                  class="text-sm font-semibold mb-1"
+                                  style={{ color: textColor }}
+                                >
+                                  {item.label}
+                                </div>
+                                <div
+                                  class="text-xs leading-5"
+                                  style={{ color: textMuted }}
+                                >
+                                  {item.detail}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : step.chips?.length ? (
+                      <div class="flex flex-wrap gap-1.5 mb-4">
+                        {step.chips.map((chip) => (
+                          <StepChip
+                            key={chip}
+                            label={chip}
+                            color={color}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </DetailCard>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </CompactContentRail>
     </div>
   );
 }

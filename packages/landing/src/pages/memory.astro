@@ -4,6 +4,9 @@ import "../globals.css";
 import { Footer } from "../components/Footer";
 import { MemorySection } from "../components/MemorySection";
 import { Nav } from "../components/Nav";
+import { getLatestPosts } from "../latest-posts";
+
+const latestPosts = await getLatestPosts();
 ---
 
 <BaseLayout
@@ -19,7 +22,7 @@ import { Nav } from "../components/Nav";
   >
     <Nav currentPath={Astro.url.pathname} />
     <main class="relative z-[1]">
-      <MemorySection client:load />
+      <MemorySection client:load linkTabsToPages latestPosts={latestPosts} />
     </main>
     <Footer />
   </div>

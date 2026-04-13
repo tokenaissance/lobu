@@ -1,0 +1,40 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import "../../globals.css";
+import { Footer } from "../../components/Footer";
+import { LandingPage } from "../../components/LandingPage";
+import { Nav } from "../../components/Nav";
+import {
+  getLandingUseCaseShowcase,
+  landingUseCaseShowcases,
+} from "../../use-case-showcases";
+
+export function getStaticPaths() {
+  return landingUseCaseShowcases.map((useCase) => ({
+    params: { useCase: useCase.id },
+    props: { useCaseId: useCase.id },
+  }));
+}
+
+const { useCaseId } = Astro.props;
+const showcase = getLandingUseCaseShowcase(useCaseId);
+---
+
+<BaseLayout
+  title={showcase.campaign.seoTitle}
+  description={showcase.campaign.seoDescription}
+>
+  <div
+    class="min-h-screen grid-lines overflow-x-hidden"
+    style={{
+      backgroundColor: "var(--color-page-bg)",
+      "--grid-max-w": "72rem",
+    }}
+  >
+    <Nav currentPath={Astro.url.pathname} />
+    <main class="relative z-[1]">
+      <LandingPage client:load defaultUseCaseId={showcase.id} linkTabsToCampaigns />
+    </main>
+    <Footer />
+  </div>
+</BaseLayout>

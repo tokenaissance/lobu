@@ -1,3 +1,8 @@
+import type { LandingUseCaseId } from "../use-case-definitions";
+import { getLandingUseCaseShowcase, landingUseCaseOptions } from "../use-case-showcases";
+import { formatUseCaseSummaryTitle, UseCaseSummary } from "./UseCaseSummary";
+import { UseCaseTabs } from "./UseCaseTabs";
+
 const ApiIcon = () => (
   <svg
     width="12"
@@ -16,9 +21,15 @@ const ApiIcon = () => (
 
 const GITHUB_URL = "https://github.com/lobu-ai/lobu";
 
-export function HeroSection() {
+export function HeroSection(props: {
+  activeUseCaseId?: LandingUseCaseId;
+  onActiveUseCaseChange?: (id: LandingUseCaseId) => void;
+  linkTabsToCampaigns?: boolean;
+}) {
+  const activeUseCase = getLandingUseCaseShowcase(props.activeUseCaseId);
+
   return (
-    <section class="pt-28 pb-12 px-8 relative">
+    <section class="pt-24 pb-4 px-8 relative">
       <div class="max-w-5xl mx-auto text-center relative">
         <h1
           class="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1] mb-5"
@@ -35,7 +46,7 @@ export function HeroSection() {
           , running in your infrastructure
         </h1>
         <p
-          class="text-lg mx-auto mb-8 leading-relaxed"
+          class="text-lg mx-auto mb-4 leading-relaxed"
           style={{ color: "var(--color-page-text-muted)" }}
         >
           <a
@@ -45,44 +56,43 @@ export function HeroSection() {
           >
             Sandboxed
           </a>{" "}
-          persistent agents powered by{" "}
+          persistent agents powered by the{" "}
           <a
             href="/getting-started/comparison/"
             class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            OpenClaw runtime
+            OpenClaw harness
           </a>
-          , Lobu{" "}
-          <a
-            href="/skills"
-            class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
-            style={{ color: "var(--color-page-text-muted)" }}
-          >
-            Skills,
-          </a>{" "}
-          and{" "}
+          , <br />
           <a
             href="/memory"
             class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            Memory
+            long-term memory
+          </a>{" "}
+          and installable{" "}
+          <a
+            href="/skills"
+            class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+            style={{ color: "var(--color-page-text-muted)" }}
+          >
+            skills
           </a>
           .
         </p>
-
         {/* CTA buttons */}
-        <div class="flex flex-wrap gap-3 mb-8 justify-center items-center">
+        <div class="flex flex-wrap gap-3 mb-6 justify-center items-center">
           <a
-            href="/getting-started/"
+            href="https://owletto.com"
             class="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-lg transition-all hover:opacity-90"
             style={{
               backgroundColor: "var(--color-page-text)",
               color: "var(--color-page-bg)",
             }}
           >
-            Get Started
+            Try now
           </a>
           <a
             href={GITHUB_URL}
@@ -97,6 +107,30 @@ export function HeroSection() {
             <ApiIcon />
             GitHub
           </a>
+        </div>
+
+        <div class="mt-8 mb-6">
+          <div
+            class="text-[11px] font-semibold uppercase tracking-[0.22em] mb-3"
+            style={{ color: "var(--color-page-text-muted)" }}
+          >
+            Pick a use case
+          </div>
+          <UseCaseTabs
+            tabs={landingUseCaseOptions}
+            activeId={activeUseCase.id}
+            onSelect={
+              props.linkTabsToCampaigns
+                ? undefined
+                : (id) => props.onActiveUseCaseChange?.(id as LandingUseCaseId)
+            }
+            hrefForId={props.linkTabsToCampaigns ? (id) => `/for/${id}` : undefined}
+          />
+          <UseCaseSummary
+            title={formatUseCaseSummaryTitle(activeUseCase.label)}
+            description={activeUseCase.memory.description}
+            className="mt-4 mb-0"
+          />
         </div>
       </div>
     </section>

@@ -10,33 +10,29 @@ tags: [memory, agents, architecture]
 
 import { PipelineDiagram } from "../../components/blog/PipelineDiagram";
 
-I keep seeing the same question framed the wrong way:
+People often ask the wrong question:
 
 **Should agent memory live in the filesystem or in a database?**
 
-I do not think that is the right choice.
+My background is in data systems, so I think about this the same way I think about analytics infrastructure.
 
-My background is in data systems. In a normal company, you do not ask whether the business should run on analysts' notebooks or on the warehouse. You need both.
+A company does not run on analysts' notebooks alone, and it does not ask analysts to do all of their work directly in warehouse tables. It needs both:
 
-- operational systems run the business
-- a central warehouse accumulates durable facts from those systems
-- analysts use SQL and Python to make sense of the data
-- the cleaned result flows back into tables that the rest of the company can use in BI tools
+- operational systems to run the business
+- a central warehouse to accumulate durable facts
+- analysts using SQL and Python to make sense of raw data
+- curated tables that business users can consume in BI tools
 
-The same pattern shows up in agent systems.
+Agents need the same split.
 
 - the **filesystem** is where the agent does temporary work
-- the **memory layer** is where the organization stores durable knowledge
+- the **memory layer** is where the organization keeps durable knowledge
 
 That is the model behind Lobu's [Memory docs](/getting-started/memory/).
 
-## The data warehouse analogy
+## The warehouse analogy
 
-A company usually has many operational systems: CRM, support, billing, product events, internal tools.
-
-Those systems are great at running transactions. They are not great at answering broad organizational questions.
-
-So teams build a warehouse.
+In a normal data stack, information moves from operational systems into a warehouse, gets cleaned up by analysts, and becomes something the rest of the business can use.
 
 <PipelineDiagram
   title="Classic analytics stack"
@@ -44,159 +40,79 @@ So teams build a warehouse.
     { emoji: "🧾", title: "OLTP systems", detail: "CRM, support, billing, product events" },
     { emoji: "🔄", title: "CDC / sync", detail: "Changes flow out of operational systems" },
     { emoji: "🏛️", title: "Warehouse", detail: "One durable place to ask cross-company questions" },
-    { emoji: "🧠", title: "Analysts", detail: "Use SQL and Python to make sense of the data" },
-    { emoji: "📊", title: "Curated tables", detail: "Cleaned models others can trust" },
+    { emoji: "🧑‍💻", title: "Analysts", detail: "Use SQL and Python to make sense of the data" },
+    { emoji: "📊", title: "Curated tables", detail: "Cleaned models the rest of the business can trust" },
     { emoji: "👥", title: "BI users", detail: "Dashboards and self-serve reporting" },
   ]}
 />
 
-A useful mental model is this:
+That same pattern shows up in agent systems.
 
-- **OLTP systems** are the shop floor
-- **the warehouse** is the stockroom
-- **analysts** are the people turning raw inventory into something the business can actually use
+An agent pulls files and data from tools, APIs, or conversations, uses code and prompts to inspect them, and should write the durable result into an organizational memory layer that future agents and operators can reuse.
 
-The warehouse becomes the central place where the organization can ask:
+The metaphor is simple:
 
-- what changed?
-- what is the current truth?
-- what should everyone else be able to see?
+> The filesystem is the analyst's notebook. The memory layer is the warehouse.
 
-## Agents have the same split
+## Why you need both
 
-An agent also has two kinds of state.
-
-First, there is the messy working state:
+The filesystem is excellent for ephemeral work:
 
 - downloaded PDFs
 - screenshots
 - temporary scripts
-- CSV exports
 - notebooks
-- intermediate results
-- generated reports that may or may not matter later
+- CSV exports
+- intermediate analysis outputs
+- drafts and generated reports that may or may not matter later
 
-That belongs in the filesystem.
+But a filesystem is a bad place for organizational memory. It is local to one sandbox, hard to share across agents, hard to audit, and bad at answering questions like:
 
-Second, there is durable knowledge:
+- who owns this project?
+- what does this customer prefer?
+- what changed since last week?
+- what should another agent remember later?
 
-- who owns a project
-- what a customer prefers
-- which risk is blocking a rollout
-- what changed since last week
-- which facts should another agent or user be able to recall later
+The opposite mistake is to treat the memory layer like a junk drawer. Not every PDF, chart, script, or half-finished CSV deserves promotion into durable memory.
 
-That belongs in a shared memory layer.
+Good agents should be able to **think messily and remember cleanly**.
+
+## What should go where?
 
 <PipelineDiagram
-  title="Agent memory loop"
+  title="Keep in the filesystem"
   steps={[
-    { emoji: "🗂️", title: "Files, tools, prompts", detail: "The agent's working context" },
-    { emoji: "🤖", title: "Agent analysis", detail: "Code, search, extraction, reasoning" },
-    { emoji: "🧠", title: "Durable memory", detail: "Shared facts worth keeping" },
-    { emoji: "🔁", title: "Other agents and users", detail: "Future recall and downstream workflows" },
+    { emoji: "📄", title: "Raw source files", detail: "Original PDFs, exports, and documents" },
+    { emoji: "💻", title: "Temporary code", detail: "Scripts, notebooks, and one-off tooling" },
+    { emoji: "🧪", title: "Intermediate analysis outputs", detail: "Scratch results produced during the work" },
+    { emoji: "📝", title: "Drafts", detail: "Half-finished writing and working notes" },
+    { emoji: "📸", title: "Screenshots", detail: "Visual evidence and temporary captures" },
+    { emoji: "🧩", title: "One-off transformed data", detail: "Useful for the current task, not durable memory" },
   ]}
 />
 
-If you try to put everything into the filesystem, you get isolated sandboxes full of local context that nobody else can use.
-
-If you try to put everything into the database, you get a junk drawer full of temporary artifacts that should never have been promoted to memory in the first place.
-
-## What analysts do, agents now do too
-
-This is the part that feels familiar to me.
-
-An analyst might:
-
-1. pull raw data from business systems
-2. use SQL or Python to clean and analyze it
-3. write the result back into Snowflake tables
-4. let business users explore that curated result in a BI tool
-
-An agent often does the same shape of work:
-
-1. pull files and data from tools, APIs, or conversations
-2. use code and tools to inspect, transform, and analyze them
-3. write the durable result into organizational memory
-4. let other agents, operators, or workflows use that updated knowledge later
-
-Here is the old world:
-
 <PipelineDiagram
-  title="Old world"
+  title="Write to the memory layer"
   steps={[
-    { emoji: "🏢", title: "Business systems", detail: "Where raw operational data starts" },
-    { emoji: "🔄", title: "Change capture", detail: "Replicate updates out of those systems" },
-    { emoji: "🏛️", title: "Warehouse", detail: "Central analytical layer" },
-    { emoji: "🧑‍💻", title: "Analyst with SQL / Python", detail: "Transform and interpret the raw data" },
-    { emoji: "📊", title: "Curated tables", detail: "Trusted models for the business" },
-    { emoji: "👥", title: "Dashboards and business users", detail: "Consumption layer" },
+    { emoji: "🏢", title: "Customer facts", detail: "Stable information about accounts and organizations" },
+    { emoji: "❤️", title: "User preferences", detail: "How people want to work and communicate" },
+    { emoji: "📍", title: "Project state", detail: "Current phase, status, and major context" },
+    { emoji: "🚧", title: "Blockers and ownership", detail: "Who owns what and what is in the way" },
+    { emoji: "🔁", title: "Recurring operational knowledge", detail: "Patterns agents should reuse later" },
+    { emoji: "✅", title: "Decisions worth recalling later", detail: "Approved outcomes and durable conclusions" },
+    { emoji: "🔗", title: "References to evidence", detail: "Links back to the source behind the fact" },
   ]}
 />
-
-And here is the agentic version:
-
-<PipelineDiagram
-  title="Agentic version"
-  steps={[
-    { emoji: "📥", title: "Business systems, chats, files", detail: "Raw inputs and source systems" },
-    { emoji: "🗂️", title: "Agent workspace", detail: "Ephemeral filesystem and tools" },
-    { emoji: "🤖", title: "Agent with code and prompts", detail: "Interprets and structures the inputs" },
-    { emoji: "🧠", title: "Organizational memory", detail: "Shared knowledge layer" },
-    { emoji: "⚙️", title: "Future agents, operators, automations", detail: "Reuse and downstream action" },
-  ]}
-/>
-
-The metaphor I like is simple:
-
-> The filesystem is the analyst's notebook. The memory layer is the warehouse.
-
-You would never ask a company to run its reporting directly from a pile of temporary notebooks. And you would not ask analysts to do all of their work by editing warehouse tables by hand.
-
-Agents need the same separation.
-
-## Why filesystem memory is not enough
-
-Filesystem memory is excellent for ephemeral work. It is close to the agent's tools, cheap to use, and naturally fits active problem solving.
-
-But it breaks down when you need:
-
-- memory shared across agents
-- recall across sessions or threads
-- structured facts instead of loose files
-- auditability and correction
-- freshness from connectors or scheduled updates
-
-A workspace can tell you **what the agent touched**.
-
-A memory layer should tell you **what the organization now knows**.
-
-That is a different job.
-
-## Why the memory layer should not replace the filesystem
-
-The opposite mistake is also common.
-
-Not every artifact deserves promotion into shared memory.
-
-A half-finished CSV, a temporary chart, a debug script, or a downloaded PDF is often just working state. Useful now, irrelevant later.
-
-Good agents should be able to think messily and remember cleanly.
-
-That means:
-
-- keep temporary work in the filesystem
-- write stable meaning into the memory layer
 
 ## How this maps to Lobu
 
 Lobu makes this split explicit.
 
 - Every agent has a local workspace.
-- If `MEMORY_URL` is not set, Lobu uses `@openclaw/native-memory` and memory stays local to that workspace.
-- If `MEMORY_URL` is set, Lobu uses `@lobu/owletto-openclaw` and writes durable memory into Owletto.
+- If `MEMORY_URL` is not set, Lobu uses `@openclaw/native-memory`, so memory stays local to that workspace.
+- If `MEMORY_URL` is set, Lobu uses `@lobu/owletto-openclaw`, which writes durable memory into Owletto.
 
-Owletto plays the role of the organizational knowledge layer:
+Owletto is the shared organizational memory layer:
 
 - shared across agents and sessions
 - structured as entities, relationships, and events
@@ -205,36 +121,8 @@ Owletto plays the role of the organizational knowledge layer:
 
 So the practical model is:
 
-<PipelineDiagram
-  title="Lobu memory split"
-  steps={[
-    { emoji: "🗂️", title: "Filesystem", detail: "Ephemeral working state" },
-    { emoji: "🧠", title: "Owletto", detail: "Durable organizational knowledge" },
-  ]}
-/>
-
-## What should go where?
-
-A simple rule of thumb:
-
-### Keep in the filesystem
-
-- raw source files
-- temporary code
-- intermediate analysis outputs
-- drafts
-- screenshots
-- one-off transformed data
-
-### Write to the memory layer
-
-- customer facts
-- user preferences
-- project state
-- blockers and ownership
-- recurring operational knowledge
-- decisions worth recalling later
-- references to the evidence behind those facts
+- **filesystem** = ephemeral working state
+- **Owletto** = durable organizational knowledge
 
 ## The short version
 

@@ -1,17 +1,25 @@
-import { connectorModes, faqItems } from "../memory-examples";
-import { ExampleShowcase } from "./memory/ExampleShowcase";
+import { useMemo, useState } from "preact/hooks";
+import type { LandingUseCaseId } from "../use-case-definitions";
 import {
-  accentPink,
-  accentPurple,
-  cardBg,
-  cardBorder,
-  textColor,
-  textMuted,
-} from "./memory/styles";
+  DEFAULT_LANDING_USE_CASE_ID,
+  getLandingUseCaseShowcase,
+  getMemoryPrompt,
+  landingUseCaseOptions,
+} from "../use-case-showcases";
+import { CommandHero } from "./CommandHero";
+import { CompactContentRail } from "./CompactContentRail";
+import { ExampleShowcase } from "./memory/ExampleShowcase";
+import { LatestBlogPosts, type LatestBlogPost } from "./LatestBlogPosts";
+import { ScheduleCallButton, ScheduleCallIcon } from "./ScheduleDialog";
+import { UseCaseTabs } from "./UseCaseTabs";
+import { textColor, textMuted } from "./memory/styles";
 
 function SectionDivider() {
   return <div class="section-divider" />;
 }
+
+const GITHUB_URL = "https://github.com/lobu-ai/owletto";
+const OWLETTO_URL = "https://owletto.com";
 
 function GitHubIcon() {
   return (
@@ -27,203 +35,114 @@ function GitHubIcon() {
   );
 }
 
-export function MemorySection() {
+const INIT_COMMAND = "npx owletto@latest init";
+
+export function MemorySection(props: {
+  defaultUseCaseId?: LandingUseCaseId;
+  linkTabsToPages?: boolean;
+  latestPosts: LatestBlogPost[];
+}) {
+  const [activeUseCaseId, setActiveUseCaseId] = useState<LandingUseCaseId>(
+    props.defaultUseCaseId ?? DEFAULT_LANDING_USE_CASE_ID
+  );
+  const activeUseCase = useMemo(
+    () => getLandingUseCaseShowcase(activeUseCaseId),
+    [activeUseCaseId]
+  );
+
   return (
     <section class="pt-32 pb-24 px-4 sm:px-8">
       <div class="max-w-[72rem] mx-auto">
-        {/* Hero */}
-        <div class="text-center mb-12">
-          <h1
-            class="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.05] mb-5"
-            style={{ color: textColor }}
-          >
-            Turn data into{" "}
-            <span style={{ color: "var(--color-tg-accent)" }}>
-              shared, structured memory
-            </span>
-          </h1>
-          <p
-            class="text-lg sm:text-xl leading-8 max-w-[52rem] mx-auto m-0"
-            style={{ color: textMuted }}
-          >
-            Connect OpenClaw, ChatGPT, Claude, any MCP client, and any messaging
-            app. <br />
-            Bring public data, user data, and internal context together.
-          </p>
-          <div class="flex flex-wrap gap-3 mt-8 justify-center">
+        <CommandHero
+          title={
+            <>
+              Turn data into shared,{" "}
+              <span style={{ color: "var(--color-tg-accent)" }}>
+                structured memory
+              </span>
+            </>
+          }
+          description="Owletto gives every Lobu use case the same durable graph: connectors, recall, and managed auth without leaking credentials to the runtime."
+          command={INIT_COMMAND}
+          prompt={getMemoryPrompt(activeUseCase)}
+          startTitle="Start Owletto in seconds"
+          actions={
             <a
-              href="https://owletto.com"
+              href={OWLETTO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-medium border transition-transform hover:-translate-y-0.5"
+              class="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-lg transition-all hover:opacity-90"
               style={{
-                color: textColor,
-                backgroundColor: "rgba(255,255,255,0.04)",
-                borderColor: "var(--color-page-border-active)",
+                backgroundColor: "var(--color-page-text)",
+                color: "var(--color-page-bg)",
               }}
             >
-              Try Owletto
+              Try now
             </a>
-            <a
-              href="/reference/owletto-cli/"
-              class="inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-medium"
-              style={{ color: textMuted }}
-            >
-              Getting started with CLI
-            </a>
-          </div>
-        </div>
+          }
+        />
 
-        {/* Interactive example showcase */}
-        <ExampleShowcase />
+        <UseCaseTabs
+          tabs={landingUseCaseOptions}
+          activeId={activeUseCaseId}
+          onSelect={props.linkTabsToPages ? undefined : setActiveUseCaseId}
+          hrefForId={props.linkTabsToPages ? (id) => `/memory/for/${id}` : undefined}
+          className="mb-10"
+        />
+
+        <ExampleShowcase
+          activeUseCaseId={activeUseCaseId}
+          onActiveUseCaseChange={setActiveUseCaseId}
+          showTabs={false}
+          summaryTitlePrefix="Lobu for "
+        />
 
         <SectionDivider />
 
-        {/* Connectors + auth */}
-        <div
-          class="rounded-3xl p-6 sm:p-8 border max-w-[48rem] mx-auto"
-          style={{
-            background:
-              "radial-gradient(circle at top right, rgba(244, 114, 182, 0.14), transparent 34%), linear-gradient(180deg, rgba(19, 16, 22, 0.94), rgba(13, 11, 16, 0.9))",
-            borderColor: cardBorder,
-          }}
-        >
-          <div
-            class="text-xs uppercase tracking-[0.22em] mb-3"
-            style={{ color: accentPink }}
-          >
-            Connectors + auth
-          </div>
+        <LatestBlogPosts posts={props.latestPosts} />
+
+        <SectionDivider />
+
+        <CompactContentRail className="text-center">
           <h2
-            class="text-3xl tracking-[-0.03em] mt-0 mb-4"
+            class="text-2xl font-bold mb-3"
             style={{ color: textColor }}
           >
-            Embedded data ingestion
+            Start building shared memory
           </h2>
-          <div class="grid gap-3">
-            {connectorModes.map((mode) => (
-              <div
-                key={mode.label}
-                class="rounded-2xl p-4 border"
-                style={{
-                  borderColor: "rgba(251, 113, 133, 0.14)",
-                  backgroundColor: "rgba(18, 12, 16, 0.45)",
-                }}
-              >
-                <div class="text-sm leading-6" style={{ color: textMuted }}>
-                  <span class="font-semibold" style={{ color: textColor }}>
-                    {mode.label}.
-                  </span>{" "}
-                  {mode.text}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <SectionDivider />
-
-        {/* FAQ */}
-        <div>
-          <div class="flex flex-col items-center text-center mb-8">
-            <div
-              class="text-xs uppercase tracking-[0.22em] mb-3"
-              style={{ color: accentPurple }}
+          <p
+            class="text-sm mb-6 max-w-md mx-auto leading-relaxed"
+            style={{ color: textMuted }}
+          >
+            Model the right entities, connect your sources, and keep long-term context available across every agent workflow.
+          </p>
+          <div class="flex flex-wrap gap-3 justify-center">
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-lg transition-all hover:opacity-80"
+              style={{
+                backgroundColor: "var(--color-page-surface)",
+                color: textColor,
+                border: "1px solid var(--color-page-border-active)",
+              }}
             >
-              FAQ
-            </div>
-            <h2
-              class="text-3xl sm:text-4xl tracking-[-0.03em]"
-              style={{ color: textColor }}
+              <GitHubIcon />
+              Owletto on GitHub
+            </a>
+            <ScheduleCallButton
+              class="inline-flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-lg transition-all hover:opacity-80"
+              style={{
+                backgroundColor: "var(--color-tg-accent)",
+                color: "var(--color-page-bg)",
+              }}
             >
-              Common questions
-            </h2>
+              <ScheduleCallIcon />
+              Talk to Founder
+            </ScheduleCallButton>
           </div>
-          <div class="max-w-[48rem] mx-auto grid gap-4">
-            {faqItems.map((item) => (
-              <div
-                key={item.q}
-                class="rounded-2xl p-5 border"
-                style={{
-                  background: cardBg,
-                  borderColor: cardBorder,
-                }}
-              >
-                <h3
-                  class="text-base font-semibold mb-2 mt-0"
-                  style={{ color: textColor }}
-                >
-                  {item.q}
-                </h3>
-                <p class="text-sm leading-6 m-0" style={{ color: textMuted }}>
-                  {item.a}{" "}
-                  {item.link && (
-                    <a
-                      href={item.link.href}
-                      class="transition-colors hover:opacity-80"
-                      style={{ color: "var(--color-tg-accent)" }}
-                    >
-                      {item.link.label}
-                    </a>
-                  )}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <SectionDivider />
-
-        {/* CTA */}
-        <div
-          class="rounded-[2rem] p-7 sm:p-10 border"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(14, 14, 18, 0.92) 36%, rgba(56, 189, 248, 0.12))",
-            borderColor: "rgba(82, 99, 124, 0.56)",
-          }}
-        >
-          <div class="grid gap-6 lg:grid-cols-[1fr_auto] items-center">
-            <div>
-              <h2
-                class="text-3xl sm:text-4xl tracking-[-0.03em] mt-0 mb-3"
-                style={{ color: textColor }}
-              >
-                Inspect structured memory from any prompt
-              </h2>
-              <p
-                class="text-base leading-7 m-0 max-w-[42rem]"
-                style={{ color: textMuted }}
-              >
-                See the prompt, the extracted record, its relationships, and the
-                model log.
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-3">
-              <a
-                href="https://github.com/lobu-ai/owletto"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium border"
-                style={{
-                  color: textColor,
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  borderColor: "var(--color-page-border-active)",
-                }}
-              >
-                <GitHubIcon />
-                Owletto on GitHub
-              </a>
-              <a
-                href="/getting-started/memory/"
-                class="inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-medium"
-                style={{ color: textMuted }}
-              >
-                Memory docs →
-              </a>
-            </div>
-          </div>
-        </div>
+        </CompactContentRail>
       </div>
     </section>
   );

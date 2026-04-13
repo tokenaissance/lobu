@@ -1,521 +1,376 @@
+import type { ComponentChildren } from "preact";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import type { LandingUseCaseId } from "../use-case-definitions";
 import {
-  deliverySurfaces,
-  messagingChannels,
-  type DeliverySurface,
-} from "./platforms";
+  DEFAULT_LANDING_USE_CASE_ID,
+  getLandingUseCaseShowcase,
+  landingUseCaseOptions,
+} from "../use-case-showcases";
+import { deliverySurfaces } from "./platforms";
+import { UseCaseTabs } from "./UseCaseTabs";
 
-type TermLink = { label: string; href: string; selected?: boolean };
-
-type TermLine = {
-  text: string;
-  color: string;
-  links?: TermLink[];
-};
-
-const initLines: TermLine[] = [
-  { text: "$ npx @lobu/cli@latest init landing-demo-agent", color: "#4ade80" },
-  { text: "", color: "" },
-  { text: "🤖 Welcome to Lobu!", color: "#facc15" },
-  { text: "", color: "" },
-  {
-    text: "? Deployment type?",
-    color: "#c9cdd4",
-    links: [
-      { label: "Embedded", href: "/deployment/embedding/", selected: true },
-      { label: "Docker", href: "/deployment/docker/" },
-      { label: "Kubernetes", href: "/deployment/kubernetes/" },
-    ],
-  },
-  {
-    text: "? Worker network access?",
-    color: "#c9cdd4",
-    links: [{ label: "Restricted", href: "/guides/security/", selected: true }],
-  },
-  {
-    text: "? AI provider?",
-    color: "#c9cdd4",
-    links: [
-      {
-        label: "Claude Sonnet 4 via OpenRouter",
-        href: "/reference/providers/",
-        selected: true,
-      },
-    ],
-  },
-  {
-    text: "? Skills / MCPs?",
-    color: "#c9cdd4",
-    links: [
-      { label: "GitHub", href: "/getting-started/skills/", selected: true },
-      { label: "my-custom-mcp", href: "/getting-started/skills/" },
-    ],
-  },
-  {
-    text: "? Connect a messaging platform?",
-    color: "#c9cdd4",
-    links: messagingChannels.map((channel) => ({
-      label: channel.label,
-      href: channel.href,
-      selected: channel.id === "whatsapp",
-    })),
-  },
-  {
-    text: "? Memory?",
-    color: "#c9cdd4",
-    links: [
-      {
-        label: "Filesystem",
-        href: "/guides/agent-settings/#filesystem-memory-openclawnative-memory",
-        selected: true,
-      },
-      { label: "Owletto", href: "/memory", selected: false },
-    ],
-  },
-  { text: "", color: "" },
-  { text: "- Creating Lobu project...", color: "#8f96a3" },
-  { text: "✔ Project created successfully!", color: "#4ade80" },
-  { text: "", color: "" },
-  { text: "✓ Lobu initialized!", color: "#4ade80" },
-  { text: "", color: "" },
-  { text: "Next steps:", color: "#facc15" },
-  { text: "  cd landing-demo-agent", color: "#67e8f9" },
-  { text: "  npx @lobu/cli@latest run -d", color: "#67e8f9" },
-];
-
-const agentPrompt = [
-  "I am building a Lobu agent in this repository.",
-  "",
-  "Please:",
-  "1. Read AGENTS.md, lobu.toml, and agents/landing-demo-agent/{IDENTITY,SOUL,USER}.md first.",
-  "2. Help me shape the agent behavior by editing those files directly.",
-  "3. Use Lobu skills when they make sense: https://lobu.ai/getting-started/skills/",
-  "4. Suggest any provider, skill, or connection changes needed in lobu.toml.",
-  "5. Keep the project runnable with `npx @lobu/cli@latest run -d`.",
-  "",
-  "Explain what you change and why.",
-].join("\n");
-
-const embedSnippet = [
-  "// app/api/lobu/[...path]/route.ts",
-  'import { Lobu } from "@lobu/gateway";',
-  "",
-  "const lobu = new Lobu({",
-  "  redis: process.env.REDIS_URL!,",
-  '  agents: [{ id: "support" }],',
-  "});",
-  "const ready = lobu.initialize();",
-  "",
-  "async function handler(req: Request) {",
-  "  await ready;",
-  "  return lobu.getApp().fetch(req);",
-  "}",
-  "export const GET = handler;",
-  "export const POST = handler;",
-].join("\n");
-
-const testEvalLines: TermLine[] = [
-  {
-    text: '$ npx @lobu/cli@latest chat "Hello, what can you do?"',
-    color: "#4ade80",
-  },
-  { text: "I can help with code reviews, manage GitHub", color: "#c9cdd4" },
-  { text: "issues, and answer questions about your...", color: "#c9cdd4" },
-  { text: "", color: "" },
-  { text: "$ npx @lobu/cli@latest eval", color: "#4ade80" },
-  { text: "", color: "" },
-  { text: "Running 3 evals (9 trials)...", color: "#8f96a3" },
-  { text: "", color: "" },
-  { text: "  ping               3/3 passed  avg 0.95", color: "#4ade80" },
-  { text: "  context-retention  3/3 passed  avg 0.88", color: "#4ade80" },
-  { text: "  follows-instr.     2/3 passed  avg 0.76", color: "#facc15" },
-  { text: "", color: "" },
-  { text: "Overall: 89% pass rate", color: "#4ade80" },
-  { text: "Report: evals/evals-report.md", color: "#8f96a3" },
-];
-
-const selfHostSnippet = [
-  "$ cd landing-demo-agent",
-  "$ npx @lobu/cli@latest run -d",
-  "# iterate locally",
-  "",
-  "$ docker compose up -d",
-  "# or deploy the same stack on Kubernetes",
-].join("\n");
-
-function WindowChrome({ label }: { label: string }) {
-  return (
-    <div
-      class="flex items-center gap-2 px-3.5 py-2.5 min-w-0"
-      style={{ backgroundColor: "#0b0c0f" }}
-    >
-      <div class="flex items-center gap-1.5 mr-3">
-        <span
-          class="w-3 h-3 rounded-full"
-          style={{ backgroundColor: "#ff5f57" }}
-        />
-        <span
-          class="w-3 h-3 rounded-full"
-          style={{ backgroundColor: "#febc2e" }}
-        />
-        <span
-          class="w-3 h-3 rounded-full"
-          style={{ backgroundColor: "#28c840" }}
-        />
-      </div>
-      <span
-        class="px-2.5 py-1 rounded-md text-[11px] min-w-0 max-w-full truncate"
-        style={{ backgroundColor: "#23262d", color: "#c9cdd4" }}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function TermLinkPill({ link }: { link: TermLink }) {
-  return (
-    <a
-      href={link.href}
-      target={link.href.startsWith("http") ? "_blank" : undefined}
-      rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-      class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-70 no-underline"
-      style={
-        link.selected
-          ? {
-              backgroundColor: "rgba(255,255,255,0.07)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "var(--color-tg-accent)",
-            }
-          : {
-              backgroundColor: "transparent",
-              border: "1px solid rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.3)",
-            }
-      }
-    >
-      {link.label}
-    </a>
-  );
-}
-
-function TerminalWindow({
-  label,
-  lines,
-}: {
-  label: string;
-  lines: TermLine[];
-}) {
-  return (
-    <div
-      class="rounded-[18px] overflow-hidden min-w-0"
-      style={{
-        border: "1px solid #23262d",
-        backgroundColor: "#0b0c0f",
-      }}
-    >
-      <WindowChrome label={label} />
-      <div
-        class="px-3.5 pb-3.5 pt-1 font-mono text-[11px] sm:text-[12px] text-left min-w-0 overflow-x-auto"
-        style={{ backgroundColor: "#0b0c0f" }}
-      >
-        {(() => {
-          const lineKeyCounts = new Map<string, number>();
-          return lines.map((line) => {
-            const baseKey = `${line.text}:${line.links?.map((link) => link.label).join(",") ?? ""}`;
-            const occurrence = (lineKeyCounts.get(baseKey) ?? 0) + 1;
-            lineKeyCounts.set(baseKey, occurrence);
-            const key = `${baseKey}:${occurrence}`;
-
-            return line.text === "" ? (
-              <div key={key} class="h-3" />
-            ) : (
-              <div
-                key={key}
-                class={`break-words whitespace-pre-wrap flex items-baseline gap-1.5 flex-wrap leading-[1.7] ${line.links ? "mt-2 first:mt-0" : ""}`}
-                style={{ color: line.color }}
-              >
-                <span>{line.text}</span>
-                {line.links?.map((link) => (
-                  <TermLinkPill key={link.label} link={link} />
-                ))}
-              </div>
-            );
-          });
-        })()}
-      </div>
-    </div>
-  );
-}
-
-function PromptWindow({ label, prompt }: { label: string; prompt: string }) {
-  return (
-    <div
-      class="rounded-[18px] overflow-hidden min-w-0"
-      style={{
-        border: "1px solid #23262d",
-        backgroundColor: "#0b0c0f",
-      }}
-    >
-      <div
-        class="flex items-center justify-between gap-3 px-3.5 py-2.5 min-w-0"
-        style={{ backgroundColor: "#0b0c0f" }}
-      >
-        <span
-          class="flex-1 min-w-0 px-2.5 py-1 rounded-md text-[11px] truncate"
-          style={{ backgroundColor: "#23262d", color: "#c9cdd4" }}
-        >
-          {label}
-        </span>
-        <button
-          type="button"
-          class="shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-opacity hover:opacity-80"
-          style={{
-            backgroundColor: "#23262d",
-            color: "#c9cdd4",
-          }}
-          onClick={() => {
-            navigator.clipboard.writeText(prompt).catch(() => undefined);
-          }}
-        >
-          Copy
-        </button>
-      </div>
-      <pre
-        class="px-3.5 pb-3.5 pt-2 m-0 font-mono text-[11px] sm:text-[12px] leading-[1.7] overflow-x-auto whitespace-pre-wrap break-words text-left"
-        style={{ color: "#c9cdd4", backgroundColor: "#0b0c0f" }}
-      >
-        {prompt}
-      </pre>
-    </div>
-  );
-}
-
-function SectionIntro({
-  step,
-  title,
-  body,
-}: {
-  step: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div class="mb-5">
-      <div
-        class="text-[11px] font-semibold uppercase tracking-[0.24em] mb-2"
-        style={{ color: "var(--color-tg-accent)" }}
-      >
-        {step}
-      </div>
-      <h3
-        class="text-xl sm:text-2xl font-bold tracking-tight mb-2"
-        style={{ color: "var(--color-page-text)" }}
-      >
-        {title}
-      </h3>
-      <p
-        class="text-sm leading-relaxed"
-        style={{ color: "var(--color-page-text-muted)" }}
-      >
-        {body}
-      </p>
-    </div>
-  );
-}
-
-function DeliverySurfacePill({ surface }: { surface: DeliverySurface }) {
-  return (
-    <a
-      href={surface.href}
-      class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
-      style={{
-        color: "var(--color-page-text)",
-        backgroundColor: "var(--color-page-surface-dim)",
-        border: "1px solid var(--color-page-border)",
-      }}
-    >
-      <span style={{ color: "var(--color-page-text-muted)" }}>
-        {surface.renderIcon(12)}
-      </span>
-      <span>{surface.label}</span>
-    </a>
-  );
-}
-
-function ShipCard({
+function Card({
   title,
   description,
-  code,
   href,
+  hrefLabel,
+  children,
 }: {
   title: string;
-  description: string;
-  code: string;
-  href: string;
+  description?: string;
+  href?: string;
+  hrefLabel?: string;
+  children: ComponentChildren;
 }) {
   return (
     <div
-      class="rounded-xl p-6 h-full"
+      class="rounded-2xl p-6 h-full"
       style={{
         backgroundColor: "var(--color-page-bg-elevated)",
         border: "1px solid var(--color-page-border)",
       }}
     >
-      <h4
-        class="text-lg font-semibold mb-2"
-        style={{ color: "var(--color-page-text)" }}
-      >
-        {title}
-      </h4>
-      <p
-        class="text-sm leading-relaxed mb-4"
-        style={{ color: "var(--color-page-text-muted)" }}
-      >
-        {description}
-      </p>
-      <div
-        class="rounded-lg overflow-hidden font-mono text-[12px] leading-[1.7] mb-4"
-        style={{
-          backgroundColor: "rgba(0,0,0,0.3)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}
-      >
-        <pre
-          class="p-3.5 m-0 overflow-x-auto whitespace-pre-wrap break-words"
-          style={{ color: "rgba(255,255,255,0.78)" }}
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <h3
+          class="text-lg font-semibold"
+          style={{ color: "var(--color-page-text)" }}
         >
-          {code}
-        </pre>
+          {title}
+        </h3>
+        {href ? (
+          <a
+            href={href}
+            class="text-sm font-medium transition-opacity hover:opacity-80 shrink-0"
+            style={{ color: "var(--color-tg-accent)" }}
+          >
+            {hrefLabel ?? `${title} page`} →
+          </a>
+        ) : null}
       </div>
-      <a
-        href={href}
-        class="text-xs font-medium transition-opacity hover:opacity-80"
-        style={{ color: "var(--color-tg-accent)" }}
-      >
-        Learn more →
-      </a>
+      {description ? (
+        <p
+          class="text-sm leading-relaxed mb-4"
+          style={{ color: "var(--color-page-text-muted)" }}
+        >
+          {description}
+        </p>
+      ) : null}
+      {children}
     </div>
   );
 }
 
-export function DemoSection() {
+function PillList({ items }: { items: string[] }) {
   return (
-    <section id="how-it-works" class="py-14 px-8">
-      <div class="w-full max-w-[64rem] mx-auto px-6 lg:px-8 box-border">
-        <div class="max-w-3xl mx-auto text-center mb-12">
-          <h2
-            class="text-2xl sm:text-3xl font-bold tracking-tight mb-3"
-            style={{ color: "var(--color-page-text)" }}
-          >
-            How it works
-          </h2>
-          <p
-            class="text-sm leading-relaxed"
+    <div class="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span
+          key={item}
+          class="text-[11px] font-medium px-2 py-1 rounded-full"
+          style={{
+            color: "var(--color-page-text-muted)",
+            backgroundColor: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.09)",
+          }}
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function StepsList({
+  steps,
+}: {
+  steps: Array<{ title: string; detail: string; chips?: string[] }>;
+}) {
+  return (
+    <div class="grid gap-4">
+      {steps.map((step, index) => (
+        <div key={step.title} class="grid gap-2">
+          <div class="flex items-start gap-3">
+            <div
+              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+              style={{
+                color: "var(--color-page-bg)",
+                backgroundColor: "var(--color-tg-accent)",
+              }}
+            >
+              {index + 1}
+            </div>
+            <div class="min-w-0">
+              <div
+                class="text-sm font-semibold mb-1"
+                style={{ color: "var(--color-page-text)" }}
+              >
+                {step.title}
+              </div>
+              <div
+                class="text-sm leading-6"
+                style={{ color: "var(--color-page-text-muted)" }}
+              >
+                {step.detail}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RequestBlock({
+  label,
+  text,
+  showPlatforms = false,
+}: {
+  label: string;
+  text: string;
+  showPlatforms?: boolean;
+}) {
+  return (
+    <div
+      class="rounded-xl p-4 mb-5"
+      style={{
+        backgroundColor: "rgba(0,0,0,0.28)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <div
+        class="text-[10px] uppercase tracking-[0.18em] mb-2"
+        style={{ color: "var(--color-page-text-muted)" }}
+      >
+        {label}
+      </div>
+      <div
+        class="text-sm leading-7"
+        style={{ color: "var(--color-page-text)" }}
+      >
+        {text}
+      </div>
+      {showPlatforms ? (
+        <div class="flex flex-wrap gap-2 mt-4">
+          {deliverySurfaces.map((surface) => (
+            <a
+              key={surface.id}
+              href={surface.href}
+              class="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full transition-opacity hover:opacity-80"
+              style={{
+                color: "var(--color-page-text-muted)",
+                backgroundColor: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+            >
+              <span class="shrink-0" aria-hidden="true">
+                {surface.renderIcon(12)}
+              </span>
+              {surface.label}
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function HighlightGrid({
+  items,
+}: {
+  items: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <div class="grid gap-3 sm:grid-cols-2">
+      {items.map((item) => (
+        <div key={item.label} class="grid gap-0.5">
+          <div
+            class="text-[10px] uppercase tracking-[0.18em]"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            Scaffold a project, embed it or ship it as its own app.
-          </p>
+            {item.label}
+          </div>
+          <div class="text-sm" style={{ color: "var(--color-page-text)" }}>
+            {item.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function DemoSection(props: {
+  defaultUseCaseId?: LandingUseCaseId;
+  activeUseCaseId?: LandingUseCaseId;
+  onActiveUseCaseChange?: (id: LandingUseCaseId) => void;
+  showTabs?: boolean;
+
+  linkTabsToCampaigns?: boolean;
+}) {
+  const [internalUseCaseId, setInternalUseCaseId] = useState(
+    props.activeUseCaseId ?? props.defaultUseCaseId ?? DEFAULT_LANDING_USE_CASE_ID
+  );
+
+  useEffect(() => {
+    if (props.activeUseCaseId) {
+      setInternalUseCaseId(props.activeUseCaseId);
+    }
+  }, [props.activeUseCaseId]);
+
+  const resolvedUseCaseId =
+    props.activeUseCaseId ?? internalUseCaseId ?? props.defaultUseCaseId;
+  const activeUseCase = useMemo(
+    () => getLandingUseCaseShowcase(resolvedUseCaseId),
+    [resolvedUseCaseId]
+  );
+
+  return (
+    <section id="how-it-works" class="pt-4 pb-14 px-8">
+      <div class="w-full max-w-[72rem] mx-auto px-2 sm:px-6 lg:px-6 box-border">
+        {props.showTabs === false ? null : (
+          <UseCaseTabs
+            tabs={landingUseCaseOptions}
+            activeId={activeUseCase.id}
+            onSelect={
+              props.linkTabsToCampaigns
+                ? undefined
+                : (id) => {
+                    const nextId = id as LandingUseCaseId;
+                    props.onActiveUseCaseChange?.(nextId);
+                    if (props.activeUseCaseId === undefined) {
+                      setInternalUseCaseId(nextId);
+                    }
+                  }
+            }
+            hrefForId={props.linkTabsToCampaigns ? (id) => `/for/${id}` : undefined}
+            className="mb-6"
+          />
+        )}
+
+        <div class="mb-6">
+          <Card
+            title="Runtime"
+            description={activeUseCase.runtime.summary}
+          >
+            <RequestBlock
+              label={activeUseCase.runtime.requestLabel}
+              text={activeUseCase.runtime.request}
+              showPlatforms
+            />
+            <StepsList steps={activeUseCase.runtime.steps} />
+          </Card>
         </div>
 
-        <div class="space-y-10">
-          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-6 items-start">
-            <div class="min-w-0">
-              <SectionIntro
-                step="01"
-                title="Initialize the project"
-                body="Start with the CLI and make the key choices once: runtime, network policy, provider, messaging channel, and memory. Embedded is the default local path, but the same project can move to Docker or Kubernetes later."
-              />
-            </div>
-            <TerminalWindow
-              label="npx @lobu/cli@latest init landing-demo-agent"
-              lines={initLines}
-            />
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-6 items-start">
-            <div class="min-w-0">
-              <SectionIntro
-                step="02"
-                title="Add capabilities to your agent"
-                body="Open Claude Code, Codex, OpenCode, or any coding agent, point it at the generated Lobu project, and paste a Lobu-specific prompt. That gives the agent the right files and workflow to iterate on."
-              />
-              <p
-                class="text-sm leading-relaxed"
-                style={{ color: "var(--color-page-text-muted)" }}
-              >
-                Start with the{" "}
-                <a
-                  href="/getting-started/skills/"
-                  class="underline decoration-dotted underline-offset-2 hover:opacity-80"
-                  style={{ color: "var(--color-tg-accent)" }}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card
+            title="Skill bundle"
+            description={activeUseCase.skills.description}
+            href="/skills"
+            hrefLabel="Skills page"
+          >
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <div
+                  class="text-[10px] uppercase tracking-[0.18em] mb-2"
+                  style={{ color: "var(--color-page-text-muted)" }}
                 >
-                  Lobu skills docs
-                </a>{" "}
-                and paste the prompt on the right into your agent.
-              </p>
-            </div>
-            <PromptWindow label="paste into your agent" prompt={agentPrompt} />
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-6 items-start">
-            <div class="min-w-0">
-              <SectionIntro
-                step="03"
-                title="Test and evaluate"
-                body="Chat with your agent from the terminal, route test messages through supported chat platforms, and run automated evals to measure quality across models."
-              />
-              <p
-                class="text-sm leading-relaxed"
-                style={{ color: "var(--color-page-text-muted)" }}
-              >
-                See the{" "}
-                <a
-                  href="/guides/testing/"
-                  class="underline decoration-dotted underline-offset-2 hover:opacity-80"
-                  style={{ color: "var(--color-tg-accent)" }}
+                  Skills
+                </div>
+                <PillList items={activeUseCase.skills.skills} />
+              </div>
+              <div>
+                <div
+                  class="text-[10px] uppercase tracking-[0.18em] mb-2"
+                  style={{ color: "var(--color-page-text-muted)" }}
                 >
-                  Testing guide
-                </a>{" "}
-                and{" "}
-                <a
-                  href="/guides/evals/"
-                  class="underline decoration-dotted underline-offset-2 hover:opacity-80"
-                  style={{ color: "var(--color-tg-accent)" }}
-                >
-                  Evaluations guide
-                </a>
-                .
-              </p>
+                  Allowed domains
+                </div>
+                <PillList items={activeUseCase.skills.allowedDomains} />
+              </div>
             </div>
-            <TerminalWindow label="test and evaluate" lines={testEvalLines} />
-          </div>
-
-          <div>
-            <SectionIntro
-              step="04"
-              title="Ship it the way you want"
-              body="When the agent is ready, keep the same Lobu project, choose the runtime model that fits your product, and deliver it over the channel your users already use."
-            />
-            <div class="flex flex-wrap gap-2 mb-5">
-              {deliverySurfaces.map((surface) => (
-                <DeliverySurfacePill key={surface.label} surface={surface} />
+            <div class="grid gap-3 sm:grid-cols-2 mt-5">
+              <div class="grid gap-0.5">
+                <div
+                  class="text-[10px] uppercase tracking-[0.18em]"
+                  style={{ color: "var(--color-page-text-muted)" }}
+                >
+                  Agent
+                </div>
+                <div class="text-sm" style={{ color: "var(--color-page-text)" }}>
+                  {activeUseCase.skills.agentId}
+                </div>
+              </div>
+              <div class="grid gap-0.5">
+                <div
+                  class="text-[10px] uppercase tracking-[0.18em]"
+                  style={{ color: "var(--color-page-text-muted)" }}
+                >
+                  MCP server
+                </div>
+                <div class="text-sm" style={{ color: "var(--color-page-text)" }}>
+                  {activeUseCase.skills.mcpServer}
+                </div>
+              </div>
+              <div class="grid gap-0.5">
+                <div
+                  class="text-[10px] uppercase tracking-[0.18em]"
+                  style={{ color: "var(--color-page-text-muted)" }}
+                >
+                  Provider
+                </div>
+                <div class="text-sm" style={{ color: "var(--color-page-text)" }}>
+                  {activeUseCase.skills.providerId}
+                </div>
+              </div>
+              <div class="grid gap-0.5">
+                <div
+                  class="text-[10px] uppercase tracking-[0.18em]"
+                  style={{ color: "var(--color-page-text-muted)" }}
+                >
+                  Model
+                </div>
+                <div class="text-sm" style={{ color: "var(--color-page-text)" }}>
+                  {activeUseCase.skills.model}
+                </div>
+              </div>
+            </div>
+            <div class="mt-5 grid gap-2">
+              {activeUseCase.skills.skillInstructions.map((instruction) => (
+                <div
+                  key={instruction}
+                  class="rounded-lg px-3 py-2 text-sm leading-6"
+                  style={{
+                    color: "var(--color-page-text)",
+                    backgroundColor: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {instruction}
+                </div>
               ))}
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ShipCard
-                title="Embed in your app"
-                description="Mount Lobu inside Next.js, Express, Hono, Fastify, or any Node.js framework. Works anywhere that speaks Web Standard Request/Response."
-                code={embedSnippet}
-                href="/deployment/embedding/"
-              />
-              <ShipCard
-                title="Run it on your infra"
-                description="Use the same project and run the stack on Docker or Kubernetes when Lobu should ship as its own app or service."
-                code={selfHostSnippet}
-                href="/deployment/docker/"
-              />
+          </Card>
+
+          <Card
+            title="Memory"
+            description={activeUseCase.memory.description}
+            href="/memory"
+            hrefLabel="Memory page"
+          >
+            <RequestBlock
+              label={activeUseCase.memory.sourceLabel}
+              text={activeUseCase.memory.sourceText}
+            />
+            <HighlightGrid items={activeUseCase.memory.highlights} />
+            <div class="mt-5">
+              <div
+                class="text-[10px] uppercase tracking-[0.18em] mb-2"
+                style={{ color: "var(--color-page-text-muted)" }}
+              >
+                Structured entities
+              </div>
+              <PillList items={activeUseCase.memory.entityTypes} />
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </section>
