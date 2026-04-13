@@ -293,6 +293,52 @@ npx owletto@latest run save_knowledge '{"content":"Prefers weekly summaries","se
 
 This is the most direct way to inspect or test Owletto memory behavior outside an agent runtime.
 
+### Which MCP tools are available?
+
+The exact tool list depends on the endpoint and your session scope.
+
+- `owletto run` with no tool name shows the tools available to your current session.
+- Unscoped sessions can expose organization-switching tools.
+- Admin sessions can expose workspace management tools.
+- Some internal helper tools exist for Owletto's own page/rendering flows and are not normally shown to end users.
+
+In practice, the Owletto MCP surface is organized like this:
+
+#### Core memory tools
+
+- `search_knowledge` — search the workspace knowledge graph and saved memory for entities and related context.
+- `read_knowledge` — read or search saved knowledge/content, including watcher windows when watcher parameters are provided.
+- `save_knowledge` — persist durable knowledge and optionally supersede stale facts.
+
+#### Watcher tools
+
+- `list_watchers` — discover watcher definitions for the current organization.
+- `get_watcher` — inspect one watcher's metadata and saved analysis windows.
+
+#### Organization tools
+
+These are typically available only on the unscoped `/mcp` endpoint:
+
+- `list_organizations` — list organizations available to the authenticated user.
+- `switch_organization` — move the current session into a different organization.
+
+#### Admin / workspace tools
+
+If your session has admin-level access, Owletto can also expose management tools such as:
+
+- `manage_entity` — entity CRUD plus relationship operations.
+- `manage_entity_schema` — entity type and relationship type schema management.
+- `manage_connections` — connector/connection setup and auth flows.
+- `manage_feeds` — feed creation, updates, deletion, and manual triggering.
+- `manage_auth_profiles` — reusable auth profile management.
+- `manage_operations` — discover and execute connector-backed operations.
+- `manage_watchers` — create, version, update, and complete watchers.
+- `manage_classifiers` — classifier template and manual classification management.
+- `manage_view_templates` — configure view templates for entity types and entities.
+- `query_sql` — run paginated read-only SQL against org-scoped virtual tables.
+
+There is also an internal `resolve_path` helper used by Owletto's page/template flows, but it is not usually part of the normal user-facing MCP tool surface.
+
 ## Other Useful Commands
 
 ### `owletto doctor`
@@ -312,6 +358,8 @@ This is mainly for connector setup, not day-to-day memory usage.
 ### `owletto configure`
 
 Writes OpenClaw plugin config using an `owletto token` command, which is useful when wiring the Owletto memory plugin into OpenClaw-based runtimes.
+
+In practice, this is how you generate config for `@lobu/owletto-openclaw` outside Lobu. The plugin still runs inside OpenClaw as a normal `slot: "memory"` plugin; `owletto configure` just gives it the token command and endpoint details it needs to authenticate to an Owletto server.
 
 ## Repo-Local Development
 

@@ -40,7 +40,7 @@ Memory is pluggable. The gateway picks a default from `MEMORY_URL`; any agent ca
 | `MEMORY_URL` | Plugin used |
 |---|---|
 | unset | `@openclaw/native-memory` — files under `/workspace` (per-thread PVC in K8s, `./workspaces/{threadId}/` in Docker). Not shared across threads. |
-| set | `@lobu/owletto-openclaw` — calls Owletto's MCP server via the gateway's `/mcp/owletto` proxy. Cross-session, shareable across agents. |
+| set | `@lobu/owletto-openclaw` — the OpenClaw memory plugin for Owletto. It translates OpenClaw memory calls into Owletto MCP requests via the gateway's `/mcp/owletto` proxy. Cross-session, shareable across agents. |
 
 `lobu init` sets `MEMORY_URL` for you: **Owletto Cloud** → `https://owletto.com/mcp`, **Owletto Local** → adds an Owletto container and points at `http://owletto:8787/mcp`, **Custom URL** → your value, **None** → leaves it unset.
 
@@ -63,6 +63,8 @@ Switch one agent to Owletto:
 ```
 
 The gateway injects the internal `mcpUrl` and `gatewayAuthUrl` automatically — you don't need to hand-write them.
+
+That means the plugin source is the only part you normally set yourself. OpenClaw loads `@lobu/owletto-openclaw` as the agent's `slot: "memory"` plugin, and Lobu fills in the proxy/auth details needed to reach Owletto safely.
 
 Switch to native memory:
 

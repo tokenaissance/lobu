@@ -13,6 +13,7 @@ import {
   accentGreen,
   accentPink,
   accentPurple,
+  cardBg,
   cardBorder,
   cardBorderSubtle,
   darkBase,
@@ -40,13 +41,15 @@ function findRecordNode(node: RecordNode, id: string): RecordNode | null {
 }
 
 function getDefaultSelectedNodeId(example: (typeof examples)[number]) {
-  return Object.values(example.entitySelections ?? {})[0] ?? example.recordTree.id;
+  return (
+    Object.values(example.entitySelections ?? {})[0] ?? example.recordTree.id
+  );
 }
 
 export function ExampleShowcase() {
   const [activeExampleId, setActiveExampleId] = useState(examples[0].id);
   const [selectedNodeId, setSelectedNodeId] = useState(
-    getDefaultSelectedNodeId(examples[0]),
+    getDefaultSelectedNodeId(examples[0])
   );
 
   const activeExample =
@@ -87,93 +90,84 @@ export function ExampleShowcase() {
         </div>
       </div>
 
-      <div
-        class="rounded-[2rem] border mb-5 overflow-hidden"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(31, 37, 44, 0.76), rgba(24, 27, 33, 0.64))",
-          borderColor: "rgba(62, 77, 97, 0.58)",
-        }}
-      >
-        <div class="px-3 sm:px-4 py-3 sm:py-4">
+      <div class="mb-5">
+        <div
+          class="rounded-[2rem] border overflow-hidden"
+          style={{
+            background: cardBg,
+            borderColor: cardBorder,
+            boxShadow: "0 18px 48px rgba(0, 0, 0, 0.18)",
+          }}
+        >
+          <div class="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
+            <div
+              class="text-xs uppercase tracking-[0.24em] mb-3"
+              style={{ color: labelGray }}
+            >
+              {activeExample.sourceLabel}
+            </div>
+            <p
+              class="text-lg sm:text-[1rem] lg:text-[1.05rem] leading-8 sm:leading-9 m-0"
+              style={{ color: textColor }}
+            >
+              {activeExample.sourceText}
+            </p>
+          </div>
+
           <div
-            class="rounded-[1.65rem] border overflow-hidden"
+            class="px-3 sm:px-4 py-3 border-t flex flex-wrap items-center justify-between gap-2"
             style={{
-              backgroundColor: "rgba(12, 14, 19, 0.92)",
-              borderColor: cardBorder,
+              borderColor: cardBorderSubtle,
+              backgroundColor: "rgba(255,255,255,0.02)",
             }}
           >
-            <div class="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
-              <div
-                class="text-xs uppercase tracking-[0.24em] mb-3"
-                style={{ color: labelGray }}
-              >
-                {activeExample.sourceLabel}
-              </div>
-              <p
-                class="text-lg sm:text-[1rem] lg:text-[1.05rem] leading-8 sm:leading-9 m-0"
-                style={{ color: textColor }}
-              >
-                {activeExample.sourceText}
-              </p>
+            <div class="flex flex-wrap gap-2">
+              Pick an example:
+              {examples.map((example) => {
+                const active = example.id === activeExample.id;
+                return (
+                  <button
+                    key={example.id}
+                    type="button"
+                    onClick={() => switchExample(example.id)}
+                    class="px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all hover:-translate-y-0.5"
+                    style={{
+                      color: active ? darkBase : textColor,
+                      backgroundColor: active
+                        ? "var(--color-tg-accent)"
+                        : innerCardBgLight,
+                      borderColor: active
+                        ? "rgba(248, 184, 78, 0.72)"
+                        : "rgba(70, 85, 105, 0.72)",
+                      boxShadow: active
+                        ? "0 8px 24px rgba(248, 184, 78, 0.16)"
+                        : "none",
+                    }}
+                  >
+                    {example.tab}
+                  </button>
+                );
+              })}
             </div>
 
             <div
-              class="px-3 sm:px-4 py-3 border-t flex flex-wrap items-center justify-between gap-2"
+              class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium border"
               style={{
+                color: textMuted,
+                backgroundColor: innerCardBg,
                 borderColor: cardBorderSubtle,
-                backgroundColor: "rgba(255,255,255,0.02)",
               }}
             >
-               
-              <div class="flex flex-wrap gap-2">
-                Pick an example: 
-                {examples.map((example) => {
-                  const active = example.id === activeExample.id;
-                  return (
-                    <button
-                      key={example.id}
-                      type="button"
-                      onClick={() => switchExample(example.id)}
-                      class="px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all hover:-translate-y-0.5"
-                      style={{
-                        color: active ? darkBase : textColor,
-                        backgroundColor: active
-                          ? "var(--color-tg-accent)"
-                          : innerCardBgLight,
-                        borderColor: active
-                          ? "rgba(248, 184, 78, 0.72)"
-                          : "rgba(70, 85, 105, 0.72)",
-                        boxShadow: active
-                          ? "0 8px 24px rgba(248, 184, 78, 0.16)"
-                          : "none",
-                      }}
-                    >
-                      {example.tab}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div
-                class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium border"
+              <span
+                class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
                 style={{
-                  color: textMuted,
-                  backgroundColor: innerCardBg,
-                  borderColor: cardBorderSubtle,
+                  color: darkBase,
+                  backgroundColor: "var(--color-tg-accent)",
                 }}
               >
-                <span
-                  class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
-                  style={{
-                    color: darkBase,
-                    backgroundColor: "var(--color-tg-accent)",
-                  }}
-                >
-                  →
-                </span>
-                Send message
-              </div>
+                →
+              </span>
+              Send message
             </div>
           </div>
         </div>
@@ -194,12 +188,8 @@ export function ExampleShowcase() {
             >
               Structured memory
             </h3>
-            <p
-              class="text-sm leading-6 m-0 mb-5"
-              style={{ color: textMuted }}
-            >
-              Click any node to inspect what Owletto wrote into the record
-              tree.
+            <p class="text-sm leading-6 m-0 mb-5" style={{ color: textMuted }}>
+              Click any node to inspect what Owletto wrote into the record tree.
             </p>
             <RecordTree
               node={activeExample.recordTree}
@@ -224,10 +214,7 @@ export function ExampleShowcase() {
             >
               How your agent works
             </h3>
-            <p
-              class="text-sm leading-6 m-0 mb-5"
-              style={{ color: textMuted }}
-            >
+            <p class="text-sm leading-6 m-0 mb-5" style={{ color: textMuted }}>
               One prompt is extracted, normalized, linked, recalled, and kept
               fresh by watchers.
             </p>
@@ -265,7 +252,8 @@ export function ExampleShowcase() {
                     {index === 0 && (
                       <div class="flex flex-wrap gap-1.5 ml-10">
                         {activeExample.entityTypes.map((type) => {
-                          const targetNodeId = activeExample.entitySelections?.[type];
+                          const targetNodeId =
+                            activeExample.entitySelections?.[type];
                           const isActive = targetNodeId === selectedNodeId;
 
                           if (!targetNodeId) {
@@ -337,7 +325,8 @@ export function ExampleShowcase() {
                             class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em]"
                             style={{
                               color: selectedNodeAccent.accent,
-                              backgroundColor: selectedNodeAccent.badgeBackground,
+                              backgroundColor:
+                                selectedNodeAccent.badgeBackground,
                               border: selectedNodeAccent.badgeBorder,
                             }}
                           >
@@ -353,10 +342,7 @@ export function ExampleShowcase() {
                               >
                                 {highlight.label}
                               </div>
-                              <div
-                                class="text-sm"
-                                style={{ color: textColor }}
-                              >
+                              <div class="text-sm" style={{ color: textColor }}>
                                 {highlight.value}
                               </div>
                             </div>

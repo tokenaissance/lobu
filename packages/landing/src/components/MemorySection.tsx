@@ -46,7 +46,8 @@ export function MemorySection() {
             class="text-lg sm:text-xl leading-8 max-w-[52rem] mx-auto m-0"
             style={{ color: textMuted }}
           >
-            Connect OpenClaw, ChatGPT, Claude, any MCP client, and any messaging app. <br />
+            Connect OpenClaw, ChatGPT, Claude, any MCP client, and any messaging
+            app. <br />
             Bring public data, user data, and internal context together.
           </p>
           <div class="flex flex-wrap gap-3 mt-8 justify-center">
@@ -109,14 +110,8 @@ export function MemorySection() {
                   backgroundColor: "rgba(18, 12, 16, 0.45)",
                 }}
               >
-                <div
-                  class="text-sm leading-6"
-                  style={{ color: textMuted }}
-                >
-                  <span
-                    class="font-semibold"
-                    style={{ color: textColor }}
-                  >
+                <div class="text-sm leading-6" style={{ color: textMuted }}>
+                  <span class="font-semibold" style={{ color: textColor }}>
                     {mode.label}.
                   </span>{" "}
                   {mode.text}
@@ -160,11 +155,17 @@ export function MemorySection() {
                 >
                   {item.q}
                 </h3>
-                <p
-                  class="text-sm leading-6 m-0"
-                  style={{ color: textMuted }}
-                >
-                  {item.a}
+                <p class="text-sm leading-6 m-0" style={{ color: textMuted }}>
+                  {item.a}{" "}
+                  {item.link && (
+                    <a
+                      href={item.link.href}
+                      class="transition-colors hover:opacity-80"
+                      style={{ color: "var(--color-tg-accent)" }}
+                    >
+                      {item.link.label}
+                    </a>
+                  )}
                 </p>
               </div>
             ))}
@@ -194,8 +195,8 @@ export function MemorySection() {
                 class="text-base leading-7 m-0 max-w-[42rem]"
                 style={{ color: textMuted }}
               >
-                See the prompt, the extracted record, its relationships, and
-                the model log.
+                See the prompt, the extracted record, its relationships, and the
+                model log.
               </p>
             </div>
             <div class="flex flex-wrap gap-3">

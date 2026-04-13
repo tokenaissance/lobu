@@ -113,10 +113,7 @@ export function RecordTree(props: {
             </span>
           )}
         </div>
-        <div
-          class="text-sm font-semibold mb-1"
-          style={{ color: textColor }}
-        >
+        <div class="text-sm font-semibold mb-1" style={{ color: textColor }}>
           {node.label}
         </div>
         <div class="text-sm leading-6" style={{ color: textMuted }}>

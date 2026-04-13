@@ -42,7 +42,8 @@ This is an intentional split:
 1. Gateway selects the default memory plugin based on `MEMORY_URL` and sets it in `agentDefaults.pluginsConfig`.
 2. Worker fetches session context from gateway and passes `pluginsConfig` into OpenClaw runtime startup.
 3. OpenClaw loads enabled plugins for that agent session.
-4. The memory plugin handles persistent memory operations so context can be reused across future runs.
+4. If memory is set to `@lobu/owletto-openclaw`, that plugin converts OpenClaw memory reads/writes into Owletto MCP calls through the gateway proxy.
+5. The memory plugin handles persistent memory operations so context can be reused across future runs.
 
 The practical model is:
 

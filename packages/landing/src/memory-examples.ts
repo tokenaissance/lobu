@@ -116,16 +116,18 @@ export const examples: MemoryExample[] = [
       {
         label: "3",
         title: "Link",
-        detail:
-          "Create relationship edges.",
+        detail: "Create relationship edges.",
       },
     ],
     watcher: {
       name: "Contact freshness",
       schedule: "Every 24 hours",
-      prompt: "Monitor Alex Kim's organization for role changes, new preferences, and overdue follow-ups.",
-      extractionSchema: "{ status, role_changed, new_preferences[], overdue_tasks[] }",
-      schemaEvolution: "Started with name + role. After 3 runs, added preference_history and follow_up_urgency as new patterns emerged.",
+      prompt:
+        "Monitor Alex Kim's organization for role changes, new preferences, and overdue follow-ups.",
+      extractionSchema:
+        "{ status, role_changed, new_preferences[], overdue_tasks[] }",
+      schemaEvolution:
+        "Started with name + role. After 3 runs, added preference_history and follow_up_urgency as new patterns emerged.",
     },
     highlights: [
       { label: "Primary person", value: "Alex Kim" },
@@ -162,7 +164,10 @@ export const examples: MemoryExample[] = [
         { label: "Relationship", value: "works_at" },
         { label: "Source", value: "Alex Kim" },
         { label: "Target", value: "Acme Health" },
-        { label: "Why it matters", value: "Connects contact memory to org context" },
+        {
+          label: "Why it matters",
+          value: "Connects contact memory to org context",
+        },
       ],
       "person-task": [
         { label: "Type", value: "Task" },
@@ -284,9 +289,12 @@ export const examples: MemoryExample[] = [
     watcher: {
       name: "Account health monitor",
       schedule: "Every 12 hours",
-      prompt: "Poll CRM data for Northstar Foods. Track expansion progress, risk level changes, and renewal timeline.",
-      extractionSchema: "{ risk_level, expansion_status, renewal_blockers[], activity_delta }",
-      schemaEvolution: "Started with risk_level + renewal_date. After processing EMEA expansion data, added region_status and pilot_health fields automatically.",
+      prompt:
+        "Poll CRM data for Northstar Foods. Track expansion progress, risk level changes, and renewal timeline.",
+      extractionSchema:
+        "{ risk_level, expansion_status, renewal_blockers[], activity_delta }",
+      schemaEvolution:
+        "Started with risk_level + renewal_date. After processing EMEA expansion data, added region_status and pilot_health fields automatically.",
     },
     highlights: [
       { label: "Organization", value: "Northstar Foods" },
@@ -441,16 +449,18 @@ export const examples: MemoryExample[] = [
       {
         label: "3",
         title: "Link",
-        detail:
-          "Create relationship edges.",
+        detail: "Create relationship edges.",
       },
     ],
     watcher: {
       name: "Phoenix rollout tracker",
       schedule: "Every Monday at 9 AM",
-      prompt: "Check Phoenix migration blockers, milestone progress, and generate the weekly risk summary for leadership.",
-      extractionSchema: "{ blockers_resolved[], milestone_state, new_risks[], risk_summary }",
-      schemaEvolution: "Started with blocker_status + phase. After the design review brief arrived, added document_references and dependency_chain fields.",
+      prompt:
+        "Check Phoenix migration blockers, milestone progress, and generate the weekly risk summary for leadership.",
+      extractionSchema:
+        "{ blockers_resolved[], milestone_state, new_risks[], risk_summary }",
+      schemaEvolution:
+        "Started with blocker_status + phase. After the design review brief arrived, added document_references and dependency_chain fields.",
     },
     highlights: [
       { label: "Project", value: "Phoenix migration" },
@@ -616,16 +626,18 @@ export const examples: MemoryExample[] = [
       {
         label: "3",
         title: "Link",
-        detail:
-          "Create relationship edges.",
+        detail: "Create relationship edges.",
       },
     ],
     watcher: {
       name: "Board action tracker",
       schedule: "Daily at 8 AM",
-      prompt: "Track board action items: check Elena's forecast delivery, legal review status, and upcoming board packet deadlines.",
-      extractionSchema: "{ action_items[], blocked_items[], deadlines_approaching[], completion_status }",
-      schemaEvolution: "Started with decision_status + owner. After two board cycles, added deadline_proximity and cross-reference fields for linked decisions.",
+      prompt:
+        "Track board action items: check Elena's forecast delivery, legal review status, and upcoming board packet deadlines.",
+      extractionSchema:
+        "{ action_items[], blocked_items[], deadlines_approaching[], completion_status }",
+      schemaEvolution:
+        "Started with decision_status + owner. After two board cycles, added deadline_proximity and cross-reference fields for linked decisions.",
     },
     highlights: [
       { label: "Approved", value: "LATAM expansion budget" },
@@ -747,7 +759,6 @@ export const examples: MemoryExample[] = [
 ];
 
 export const connectorModes = [
-  
   {
     label: "OAuth",
     text: "Connectors declare scopes. Owletto handles login, storage, refresh, and upgrades.",
@@ -766,10 +777,23 @@ export const connectorModes = [
   },
 ];
 
-export const faqItems = [
+export type FaqItem = {
+  q: string;
+  a: string;
+  link?: {
+    href: string;
+    label: string;
+  };
+};
+
+export const faqItems: FaqItem[] = [
   {
     q: "How is this different from filesystem memory?",
     a: "Filesystem memory lives on one machine and serves one user. Owletto scopes memory by workspace so agents share the same graph, connectors sync external data, and watchers keep it fresh.",
+    link: {
+      href: "/blog/filesystem-vs-database-agent-memory",
+      label: "Read: Filesystem vs Database for Agent Memory",
+    },
   },
   {
     q: "How is this different from RAG?",
@@ -788,4 +812,3 @@ export const faqItems = [
     a: "Yes. Workers use MCP tools, so you can point them at any memory server with the same interface.",
   },
 ];
-
