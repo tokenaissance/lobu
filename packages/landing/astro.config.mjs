@@ -43,6 +43,7 @@ export default defineConfig({
         "./src/styles/starlight-theme.css",
       ],
       components: {
+        Head: "./src/components/starlight/Head.astro",
         SiteTitle: "./src/components/starlight/SiteTitle.astro",
         Header: "./src/components/starlight/Header.astro",
         Footer: "./src/components/starlight/Footer.astro",

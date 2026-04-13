@@ -17,6 +17,8 @@ const {
   article,
 } = Astro.props;
 
+import PosthogAnalytics from "../components/PosthogAnalytics.astro";
+
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL("/lobster-icon.png", Astro.site);
 ---
@@ -78,6 +80,7 @@ const ogImage = new URL("/lobster-icon.png", Astro.site);
         "https://x.com/bu7emba"
       ]
     })} />
+    <PosthogAnalytics />
   </head>
   <body>
     <slot />
