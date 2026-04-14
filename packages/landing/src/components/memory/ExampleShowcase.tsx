@@ -14,6 +14,7 @@ import {
   accentPurple,
   cardBg,
   cardBorder,
+  cardBorderFaint,
   cardBorderSubtle,
   darkBase,
   deepBg,
@@ -41,6 +42,106 @@ function findRecordNode(node: RecordNode, id: string): RecordNode | null {
 function getDefaultSelectedNodeId(example: (typeof examples)[number]) {
   return (
     Object.values(example.entitySelections ?? {})[0] ?? example.recordTree.id
+  );
+}
+
+function getDerivedPanelTable(stepId: string, step: (typeof examples)[number]["howItWorks"][number]) {
+  if (step.panel?.table) {
+    return step.panel.table;
+  }
+
+  if (!step.panel?.items?.length) {
+    return null;
+  }
+
+  if (stepId === "connect") {
+    return {
+      columns: ["Type", "Source", "Added context"],
+      rows: step.panel.items.map((item) => [
+        item.meta ?? "Source",
+        item.label,
+        item.detail,
+      ]),
+    };
+  }
+
+  if (stepId === "auth") {
+    return {
+      columns: ["Access", "System", "How it works"],
+      rows: step.panel.items.map((item) => [
+        item.meta ?? "Access",
+        item.label,
+        item.detail,
+      ]),
+    };
+  }
+
+  return null;
+}
+
+function PlatformLogo({
+  platformId,
+}: {
+  platformId: "slack" | "openclaw" | "chatgpt" | "claude";
+}) {
+  if (platformId === "slack") {
+    return (
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
+      </svg>
+    );
+  }
+
+  if (platformId === "openclaw") {
+    return (
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M7 18c1.5-3 3.2-4.8 5-5.5" />
+        <path d="M12 12.5c.6-2.5 2-4.5 4.5-6" />
+        <path d="M7 18c-.8 1.2-1.8 2.1-3 2.7" />
+        <path d="M12 12.5c-.4-2.2-.2-4.2.7-6.2" />
+        <path d="M12 12.5c2 .3 3.9 1.2 5.8 2.8" />
+      </svg>
+    );
+  }
+
+  if (platformId === "chatgpt") {
+    return (
+      <img
+        src="https://www.google.com/s2/favicons?domain=openai.com&sz=32"
+        alt=""
+        width="12"
+        height="12"
+        class="w-3 h-3 rounded-sm"
+        loading="lazy"
+      />
+    );
+  }
+
+  return (
+    <img
+      src="https://www.google.com/s2/favicons?domain=anthropic.com&sz=32"
+      alt=""
+      width="12"
+      height="12"
+      class="w-3 h-3 rounded-sm"
+      loading="lazy"
+    />
   );
 }
 
@@ -290,6 +391,7 @@ export function ExampleShowcase(props: {
         <div class="space-y-10">
           {activeExample.howItWorks.map((step) => {
             const color = stepColors[step.id];
+            const panelTable = getDerivedPanelTable(step.id, step);
 
             if (step.id === "model") {
               return (
@@ -308,7 +410,14 @@ export function ExampleShowcase(props: {
                     <div class="grid gap-3">
                       <LinkRow links={step.links ?? []} />
 
-                      <div class="flex flex-wrap gap-1.5">
+                      <div>
+                        <div
+                          class="text-[10px] uppercase tracking-[0.18em] mb-2"
+                          style={{ color: labelGray }}
+                        >
+                          Entities
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
                         {(step.chips ?? activeExample.entityTypes).map((type) => {
                           const targetNodeId = activeExample.entitySelections?.[type];
 
@@ -326,46 +435,7 @@ export function ExampleShowcase(props: {
                             />
                           );
                         })}
-                      </div>
-
-                      <div class="grid gap-1.5">
-                        {activeExample.relations.map((relation) => (
-                          <div
-                            key={`${relation.source}-${relation.label}`}
-                            class="flex flex-wrap items-center gap-1.5"
-                          >
-                            <span
-                              class="px-2 py-0.5 rounded-full text-xs"
-                              style={{
-                                color: textColor,
-                                backgroundColor: "rgba(103, 232, 249, 0.08)",
-                                border: "1px solid rgba(103, 232, 249, 0.22)",
-                              }}
-                            >
-                              {relation.source}
-                            </span>
-                            <span
-                              class="px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-[0.16em]"
-                              style={{
-                                color: accentCyan,
-                                backgroundColor: "rgba(103, 232, 249, 0.06)",
-                                border: "1px solid rgba(103, 232, 249, 0.18)",
-                              }}
-                            >
-                              {relation.label}
-                            </span>
-                            <span
-                              class="px-2 py-0.5 rounded-full text-xs"
-                              style={{
-                                color: textColor,
-                                backgroundColor: "rgba(134, 239, 172, 0.08)",
-                                border: "1px solid rgba(134, 239, 172, 0.22)",
-                              }}
-                            >
-                              {relation.target}
-                            </span>
-                          </div>
-                        ))}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -427,6 +497,82 @@ export function ExampleShowcase(props: {
                           ))}
                         </div>
                       </div>
+
+                      {/* Relevant relationships for the selected node */}
+                      {(() => {
+                        // Strip the prefix (e.g., "Entity: ", "Incident: ") from the label for comparison
+                        const selectedNodeName = selectedNode.label.includes(": ")
+                          ? selectedNode.label.split(": ")[1]
+                          : selectedNode.label;
+
+                        const relevantRelations = activeExample.relations.filter(
+                          (r) => r.source === selectedNodeName || r.target === selectedNodeName
+                        );
+                        if (relevantRelations.length === 0) return null;
+
+                        return (
+                          <div class="mt-3">
+                            <div
+                              class="text-[10px] uppercase tracking-[0.18em] mb-2"
+                              style={{ color: labelGray }}
+                            >
+                              Relationships
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                              {relevantRelations.map((relation) => {
+                                const isSelectedSource = relation.source === selectedNodeName;
+                                const isSelectedTarget = relation.target === selectedNodeName;
+
+                                return (
+                                  <div
+                                    key={`${relation.source}-${relation.label}`}
+                                    class="flex flex-wrap items-center gap-1"
+                                  >
+                                    <span
+                                      class="px-1.5 py-0.5 rounded-full text-[10px]"
+                                      style={{
+                                        color: isSelectedSource ? accentPurple : textColor,
+                                        backgroundColor: isSelectedSource
+                                          ? "rgba(192, 132, 252, 0.12)"
+                                          : "rgba(103, 232, 249, 0.08)",
+                                        border: isSelectedSource
+                                          ? "1px solid rgba(192, 132, 252, 0.3)"
+                                          : "1px solid rgba(103, 232, 249, 0.22)",
+                                      }}
+                                    >
+                                      <span class="font-semibold">{relation.sourceType}</span> {relation.source}
+                                    </span>
+                                    <span
+                                      class="px-1 py-0.5 rounded-full text-[9px] uppercase tracking-[0.12em]"
+                                      style={{
+                                        color: accentCyan,
+                                        backgroundColor: "rgba(103, 232, 249, 0.06)",
+                                        border: "1px solid rgba(103, 232, 249, 0.18)",
+                                      }}
+                                    >
+                                      {relation.label}
+                                    </span>
+                                    <span
+                                      class="px-1.5 py-0.5 rounded-full text-[10px]"
+                                      style={{
+                                        color: isSelectedTarget ? accentPurple : textColor,
+                                        backgroundColor: isSelectedTarget
+                                          ? "rgba(192, 132, 252, 0.12)"
+                                          : "rgba(134, 239, 172, 0.08)",
+                                        border: isSelectedTarget
+                                          ? "1px solid rgba(192, 132, 252, 0.3)"
+                                          : "1px solid rgba(134, 239, 172, 0.22)",
+                                      }}
+                                    >
+                                      <span class="font-semibold">{relation.targetType}</span> {relation.target}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </DetailCard>
                   </div>
                 </div>
@@ -450,6 +596,21 @@ export function ExampleShowcase(props: {
 
                   <div class="min-w-0">
                     <DetailCard>
+                      <div class="mb-4">
+                        <div
+                          class="text-[11px] font-semibold uppercase tracking-[0.24em] mb-2"
+                          style={{ color }}
+                        >
+                          Freshness watcher
+                        </div>
+                        <p
+                          class="text-sm leading-6 m-0"
+                          style={{ color: textMuted }}
+                        >
+                          A scheduled watcher keeps this memory current as new source changes arrive.
+                        </p>
+                      </div>
+
                       <div class="flex flex-wrap items-center gap-2 mb-3">
                         <span
                           class="text-sm font-semibold"
@@ -543,7 +704,56 @@ export function ExampleShowcase(props: {
                           ) : null}
                         </div>
 
-                        {step.panel.items?.length ? (
+                        {panelTable ? (
+                          <div
+                            class="mb-4 overflow-hidden rounded-xl border"
+                            style={{
+                              borderColor: cardBorderSubtle,
+                              backgroundColor: deepBg,
+                            }}
+                          >
+                            <div class="overflow-x-auto">
+                              <table class="min-w-full border-collapse text-left">
+                                <thead>
+                                  <tr>
+                                    {panelTable.columns.map((column) => (
+                                      <th
+                                        key={column}
+                                        class="px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em]"
+                                        style={{
+                                          color,
+                                          borderBottom: `1px solid ${cardBorderSubtle}`,
+                                          backgroundColor: "rgba(255,255,255,0.02)",
+                                        }}
+                                      >
+                                        {column}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {panelTable.rows.map((row) => (
+                                    <tr key={row.join("-")}>
+                                      {row.map((cell, index) => (
+                                        <td
+                                          key={`${row[0] ?? "row"}-${index}`}
+                                          class="px-3 py-2 text-xs leading-5 align-top"
+                                          style={{
+                                            color:
+                                              index === 0 ? textColor : textMuted,
+                                            borderBottom: `1px solid ${cardBorderFaint}`,
+                                          }}
+                                        >
+                                          {cell}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : step.panel.items?.length ? (
                           <div class="grid gap-3 sm:grid-cols-2 mb-4">
                             {step.panel.items.map((item) => (
                               <div
@@ -574,6 +784,19 @@ export function ExampleShowcase(props: {
                                 >
                                   {item.detail}
                                 </div>
+                                {item.platform ? (
+                                  <div
+                                    class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-medium"
+                                    style={{
+                                      color: labelGray,
+                                      backgroundColor: "rgba(255,255,255,0.03)",
+                                      border: `1px solid ${cardBorderSubtle}`,
+                                    }}
+                                  >
+                                    <PlatformLogo platformId={item.platform.id} />
+                                    <span>{item.platform.label}</span>
+                                  </div>
+                                ) : null}
                               </div>
                             ))}
                           </div>

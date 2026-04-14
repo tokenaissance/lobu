@@ -74,22 +74,26 @@ const memoryStepPanels: Record<
         {
           meta: "Upload",
           label: "Draft agreement",
-          detail: "Capture the latest NDA, redlines, or negotiated fallback language directly from a file upload.",
+          detail:
+            "Capture the latest NDA, redlines, or negotiated fallback language directly from a file upload.",
         },
         {
           meta: "Sync",
           label: "Shared legal drive",
-          detail: "Pull prior templates, playbooks, and approved fallback clauses from the team document workspace.",
+          detail:
+            "Pull prior templates, playbooks, and approved fallback clauses from the team document workspace.",
         },
         {
           meta: "MCP",
           label: "Research tools",
-          detail: "Bring in legal research or internal clause libraries through MCP-backed integrations.",
+          detail:
+            "Bring in legal research or internal clause libraries through MCP-backed integrations.",
         },
         {
           meta: "Pipeline",
           label: "Clause extraction",
-          detail: "Feed parser output into structured entities so venue, residuals, and term risk stay queryable.",
+          detail:
+            "Feed parser output into structured entities so venue, residuals, and term risk stay queryable.",
         },
       ],
     },
@@ -101,132 +105,164 @@ const memoryStepPanels: Record<
         {
           meta: "OAuth",
           label: "Drive and document systems",
-          detail: "Counsel can connect shared docs without exposing tokens to the review agent.",
+          detail:
+            "Counsel can connect shared docs without exposing tokens to the review agent.",
         },
         {
           meta: "Credential",
           label: "Research providers",
-          detail: "API-backed legal tools stay behind the gateway proxy with centrally managed secrets.",
+          detail:
+            "API-backed legal tools stay behind the gateway proxy with centrally managed secrets.",
         },
         {
           meta: "Manual",
           label: "Negotiated drafts",
-          detail: "One-off uploads work even when a contract never lives in a connected SaaS app.",
+          detail:
+            "One-off uploads work even when a contract never lives in a connected SaaS app.",
         },
         {
           meta: "Isolation",
           label: "Runtime boundary",
-          detail: "The worker sees extracted context and proxy URLs, not raw account credentials.",
+          detail:
+            "The worker sees extracted context and proxy URLs, not raw account credentials.",
         },
       ],
     },
     reuse: {
-      title: "How legal memory gets reused",
+      title: "Legal agents",
       description:
-        "Once the graph exists, later tasks can recall the exact contract context instead of starting from scratch.",
+        "The same contract memory powers legal agents wherever teams work.",
       items: [
         {
-          meta: "Review",
-          label: "Open risk summary",
-          detail: "Ask which clauses still block approval and get a precise answer tied to the right contract.",
+          label: "Risk review agent",
+          detail:
+            "Flags unresolved clauses and approval blockers in active negotiations.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "Negotiation",
-          label: "Fallback language recall",
-          detail: "Reuse the exact language that resolved similar residuals or venue issues before.",
+          label: "Negotiation assistant",
+          detail:
+            "Recalls fallback language and prior concessions before the next draft.",
+          platform: { id: "claude", label: "Claude" },
         },
         {
-          meta: "Counterparty",
-          label: "Redwood negotiation history",
-          detail: "Pull prior asks, concessions, and remaining objections for the same external party.",
+          label: "Counterparty brief agent",
+          detail:
+            "Summarizes prior asks, objections, and open terms for the same external party.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Drafting",
-          label: "Next-draft preparation",
-          detail: "Carry unresolved risks and approved edits into the next review cycle automatically.",
+          label: "Draft prep workflow",
+          detail:
+            "Carries approved edits and unresolved risks into the next review cycle.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
       ],
     },
   },
   devops: {
     connect: {
-      title: "Operational source inputs",
+      title: "Operational events",
       description:
-        "Incident memory stays grounded because the graph is fed by the systems already tracking production state.",
-      items: [
-        {
-          meta: "Alert",
-          label: "Monitoring and paging",
-          detail: "Ingest outage signals, severity changes, and impacted services from on-call tooling.",
-        },
-        {
-          meta: "Code",
-          label: "GitHub activity",
-          detail: "Attach pull requests, fixes, and rollback blockers directly to the live incident record.",
-        },
-        {
-          meta: "Deploy",
-          label: "Rollout logs",
-          detail: "Store the deploy that triggered the issue so later handoffs keep the same timeline.",
-        },
-        {
-          meta: "Notes",
-          label: "Incident updates",
-          detail: "Fold channel updates and operator notes into the same structured graph.",
-        },
-      ],
+        "Turn live operational signals into structured incident memory.",
+      table: {
+        columns: ["Entity", "Events", "Sources", "Added context"],
+        rows: [
+          [
+            "Alerts",
+            "Triggered, resolved, severity changed",
+            "PagerDuty, Datadog",
+            "State, urgency, impact",
+          ],
+          [
+            "Code",
+            "PRs, fixes, rollbacks",
+            "GitHub, GitLab",
+            "Change timeline",
+          ],
+          [
+            "Deploys",
+            "Started, failed, rolled back",
+            "CI/CD, Argo, Kubernetes",
+            "Rollout history",
+          ],
+          [
+            "Notes",
+            "Updates, handoffs, comments",
+            "Slack, incident tools",
+            "Decisions and context",
+          ],
+        ],
+      },
     },
     auth: {
-      title: "How production access is handled",
+      title: "Connected accounts",
       description:
-        "Integrations stay outside the worker so responders can use live operational context without leaking infra credentials.",
-      items: [
-        {
-          meta: "OAuth",
-          label: "GitHub and SaaS tooling",
-          detail: "Authorize operational apps once, then route calls through the gateway proxy.",
-        },
-        {
-          meta: "Service account",
-          label: "Infrastructure APIs",
-          detail: "Use narrowly scoped machine credentials for deploy and environment metadata.",
-        },
-        {
-          meta: "Webhook",
-          label: "Incident imports",
-          detail: "Push historical or external incident records into the graph without interactive login.",
-        },
-        {
-          meta: "Isolation",
-          label: "Worker boundary",
-          detail: "The incident assistant can reason over state without direct access to privileged tokens.",
-        },
-      ],
+        "Let teams bring the tools they already use, while keeping credentials outside the worker.",
+      table: {
+        columns: ["Account", "Brought by", "Access", "Used for"],
+        rows: [
+          [
+            "GitHub / GitLab",
+            "User",
+            "OAuth",
+            "PRs, commits, diffs",
+          ],
+          [
+            "Slack / Linear / Notion",
+            "User",
+            "OAuth",
+            "Notes, tickets, team context",
+          ],
+          [
+            "PagerDuty / Datadog",
+            "User or admin",
+            "OAuth / token",
+            "Alerts and incident state",
+          ],
+          [
+            "AWS / GCP / Kubernetes",
+            "Org admin",
+            "Service account",
+            "Infra and deploy metadata",
+          ],
+          [
+            "Incident history",
+            "Org",
+            "Import / sync",
+            "Memory bootstrap",
+          ],
+        ],
+      },
     },
     reuse: {
-      title: "How incident memory gets reused",
+      title: "DevOps agents",
       description:
-        "The same structured incident graph supports live response, remediation, and later analysis.",
+        "The same incident memory powers operational agents wherever teams work.",
       items: [
         {
-          meta: "On-call",
-          label: "Handoff summaries",
-          detail: "New responders can see the affected service, triggering deploy, and blocked rollback path immediately.",
+          label: "Incident responder",
+          detail:
+            "Answers what broke, what changed, and what’s blocked now.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "Deploy",
-          label: "Rollback assistance",
-          detail: "Release workflows can query whether rollback is safe and what prerequisite PR still blocks it.",
+          label: "Deploy safety agent",
+          detail:
+            "Checks rollback readiness and deploy risk before action.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
         {
-          meta: "Chat",
-          label: "Status updates",
-          detail: "Chat agents answer with the current impact and remediation state instead of stale thread memory.",
+          label: "Status update agent",
+          detail:
+            "Drafts current impact and remediation updates from live state.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Postmortem",
-          label: "Timeline reconstruction",
-          detail: "The same entities become a durable base for follow-up analysis after the incident ends.",
+          label: "Postmortem assistant",
+          detail:
+            "Reuses the same timeline for follow-up analysis and action items.",
+          platform: { id: "claude", label: "Claude" },
         },
       ],
     },
@@ -240,22 +276,26 @@ const memoryStepPanels: Record<
         {
           meta: "Inbox",
           label: "Message threads",
-          detail: "Capture promises, preference changes, and ownership notes directly from conversations.",
+          detail:
+            "Capture promises, preference changes, and ownership notes directly from conversations.",
         },
         {
           meta: "CRM",
           label: "Account sync",
-          detail: "Pull company context, owners, and lifecycle state from the customer system of record.",
+          detail:
+            "Pull company context, owners, and lifecycle state from the customer system of record.",
         },
         {
           meta: "Email",
           label: "Follow-up history",
-          detail: "Attach promised summaries, deadlines, and replies to the right person record.",
+          detail:
+            "Attach promised summaries, deadlines, and replies to the right person record.",
         },
         {
           meta: "Knowledge",
           label: "Internal tools",
-          detail: "Bring in structured account data or operational notes through MCP and custom integrations.",
+          detail:
+            "Bring in structured account data or operational notes through MCP and custom integrations.",
         },
       ],
     },
@@ -267,49 +307,57 @@ const memoryStepPanels: Record<
         {
           meta: "OAuth",
           label: "Inbox and calendar context",
-          detail: "Connect communication tools so preferences and follow-ups stay in sync.",
+          detail:
+            "Connect communication tools so preferences and follow-ups stay in sync.",
         },
         {
           meta: "API key",
           label: "Internal support systems",
-          detail: "Store scoped credentials centrally for ticketing or account lookup tools.",
+          detail:
+            "Store scoped credentials centrally for ticketing or account lookup tools.",
         },
         {
           meta: "Import",
           label: "Historical contacts",
-          detail: "Load CSV or manual records to seed memory before the next live conversation.",
+          detail:
+            "Load CSV or manual records to seed memory before the next live conversation.",
         },
         {
           meta: "Isolation",
           label: "Agent boundary",
-          detail: "The support agent receives context, not the raw credentials behind it.",
+          detail:
+            "The support agent receives context, not the raw credentials behind it.",
         },
       ],
     },
     reuse: {
-      title: "How relationship memory gets reused",
+      title: "Support agents",
       description:
-        "The same contact graph helps agents answer consistently across channels and future follow-ups.",
+        "The same relationship memory powers support agents wherever teams work.",
       items: [
         {
-          meta: "Replies",
-          label: "Preference-aware responses",
-          detail: "Draft updates that match the customer’s preferred cadence and communication style.",
+          label: "Support responder",
+          detail:
+            "Drafts replies that match customer preferences and the latest promises.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "Handoffs",
-          label: "Owner continuity",
-          detail: "Keep the right internal owner and outstanding promise visible when a case moves teams.",
+          label: "Handoff assistant",
+          detail:
+            "Keeps owners, commitments, and next steps intact when a case moves teams.",
+          platform: { id: "claude", label: "Claude" },
         },
         {
-          meta: "Account context",
-          label: "Relationship summaries",
-          detail: "Instantly recall who the contact is, what they own, and what was promised last.",
+          label: "Account context agent",
+          detail:
+            "Recalls who the contact is, what they own, and what was promised last.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Follow-up",
-          label: "Next action tracking",
-          detail: "Turn prior asks into durable tasks that future workflows can pick up.",
+          label: "Follow-up workflow",
+          detail:
+            "Turns prior asks into durable next actions that future workflows can pick up.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
       ],
     },
@@ -323,22 +371,26 @@ const memoryStepPanels: Record<
         {
           meta: "ERP",
           label: "General ledger data",
-          detail: "Pull account state and period close context from the finance system of record.",
+          detail:
+            "Pull account state and period close context from the finance system of record.",
         },
         {
           meta: "Payments",
           label: "Stripe payouts and refunds",
-          detail: "Bring payout timing and refund behavior into the same variance graph.",
+          detail:
+            "Bring payout timing and refund behavior into the same variance graph.",
         },
         {
           meta: "Import",
           label: "CSV reconciliations",
-          detail: "Load one-off analyses and exceptions without losing the source artifact behind them.",
+          detail:
+            "Load one-off analyses and exceptions without losing the source artifact behind them.",
         },
         {
           meta: "Workflow",
           label: "Close checklist",
-          detail: "Connect reporting milestones and unresolved items to the same operational record.",
+          detail:
+            "Connect reporting milestones and unresolved items to the same operational record.",
         },
       ],
     },
@@ -350,49 +402,57 @@ const memoryStepPanels: Record<
         {
           meta: "API key",
           label: "Finance SaaS tools",
-          detail: "Use centrally managed credentials for accounting and payment providers.",
+          detail:
+            "Use centrally managed credentials for accounting and payment providers.",
         },
         {
           meta: "Service account",
           label: "Internal pipelines",
-          detail: "Attach warehouse or reconciliation jobs without exposing long-lived secrets.",
+          detail:
+            "Attach warehouse or reconciliation jobs without exposing long-lived secrets.",
         },
         {
           meta: "Manual",
           label: "Exception imports",
-          detail: "Allow operators to load one-off close evidence when automation is not the right path.",
+          detail:
+            "Allow operators to load one-off close evidence when automation is not the right path.",
         },
         {
           meta: "Isolation",
           label: "Worker boundary",
-          detail: "The agent reasons over reconciled state, not raw credentials or unrestricted system access.",
+          detail:
+            "The agent reasons over reconciled state, not raw credentials or unrestricted system access.",
         },
       ],
     },
     reuse: {
-      title: "How finance memory gets reused",
+      title: "Finance agents",
       description:
-        "Once captured, the same variance graph powers operational summaries, reporting, and audit-ready explanations.",
+        "The same variance memory powers finance agents wherever teams work.",
       items: [
         {
-          meta: "Close",
-          label: "Variance explanations",
-          detail: "Summarize why an account moved and what still needs reconciliation before close.",
+          label: "Variance analyst",
+          detail:
+            "Explains why an account moved and what still needs reconciliation before close.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "Reporting",
-          label: "Deck-ready context",
-          detail: "Carry the exact reconciliation note into month-end and leadership reporting workflows.",
+          label: "Reporting assistant",
+          detail:
+            "Carries reconciliation context into month-end updates and leadership reporting.",
+          platform: { id: "claude", label: "Claude" },
         },
         {
-          meta: "Ops",
-          label: "Exception triage",
-          detail: "Surface which refunds, payouts, or adjustments still need owner follow-up.",
+          label: "Exception triage agent",
+          detail:
+            "Surfaces which refunds, payouts, or adjustments still need owner follow-up.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Audit",
-          label: "Source-backed memory",
-          detail: "Keep the explanation attached to the originating systems and imported evidence.",
+          label: "Audit prep workflow",
+          detail:
+            "Keeps explanations attached to the originating systems and imported evidence.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
       ],
     },
@@ -406,22 +466,26 @@ const memoryStepPanels: Record<
         {
           meta: "CRM",
           label: "Account updates",
-          detail: "Track account ownership, renewal timing, and opportunity movement from the CRM.",
+          detail:
+            "Track account ownership, renewal timing, and opportunity movement from the CRM.",
         },
         {
           meta: "Product",
           label: "Usage and rollout signals",
-          detail: "Bring expansion health and adoption trends into the renewal story.",
+          detail:
+            "Bring expansion health and adoption trends into the renewal story.",
         },
         {
           meta: "Support",
           label: "Risk signals",
-          detail: "Attach escalations and service friction to the same account record.",
+          detail:
+            "Attach escalations and service friction to the same account record.",
         },
         {
           meta: "Notes",
           label: "Internal call notes",
-          detail: "Preserve pricing concerns, champion feedback, and next steps from humans in the loop.",
+          detail:
+            "Preserve pricing concerns, champion feedback, and next steps from humans in the loop.",
         },
       ],
     },
@@ -433,49 +497,57 @@ const memoryStepPanels: Record<
         {
           meta: "OAuth",
           label: "CRM and GTM SaaS",
-          detail: "Connect account systems without injecting raw tokens into the worker.",
+          detail:
+            "Connect account systems without injecting raw tokens into the worker.",
         },
         {
           meta: "API key",
           label: "Product and support data",
-          detail: "Store provider credentials centrally for telemetry or health signals.",
+          detail:
+            "Store provider credentials centrally for telemetry or health signals.",
         },
         {
           meta: "Service account",
           label: "Internal pipelines",
-          detail: "Sync warehouse or scoring outputs into the account graph on a schedule.",
+          detail:
+            "Sync warehouse or scoring outputs into the account graph on a schedule.",
         },
         {
           meta: "Import",
           label: "Historical account state",
-          detail: "Seed memory from spreadsheets or exports before automations are wired up.",
+          detail:
+            "Seed memory from spreadsheets or exports before automations are wired up.",
         },
       ],
     },
     reuse: {
-      title: "How account memory gets reused",
+      title: "Revenue agents",
       description:
-        "The same account graph can drive frontline responses and leadership reporting.",
+        "The same account memory powers revenue agents wherever teams work.",
       items: [
         {
-          meta: "CSM",
-          label: "Renewal prep",
-          detail: "Pull the current risks, owners, and blockers before a customer call or QBR.",
+          label: "Renewal prep agent",
+          detail:
+            "Pulls current risks, owners, and blockers before a customer call or QBR.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "Exec",
-          label: "Forecast and risk summaries",
-          detail: "Generate consistent leadership updates from the same account memory.",
+          label: "Forecast brief assistant",
+          detail:
+            "Generates consistent leadership updates from the same account memory.",
+          platform: { id: "claude", label: "Claude" },
         },
         {
-          meta: "Expansion",
-          label: "Pilot context",
-          detail: "Recall which team owns the rollout, where adoption is growing, and what is blocking expansion.",
+          label: "Expansion context agent",
+          detail:
+            "Recalls which team owns the rollout, where adoption is growing, and what is blocking expansion.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Workflow",
-          label: "Next best action",
-          detail: "Hand the right commercial follow-up to chat agents or planning tools.",
+          label: "Next-step workflow",
+          detail:
+            "Hands the right commercial follow-up to chat agents and planning tools.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
       ],
     },
@@ -489,22 +561,26 @@ const memoryStepPanels: Record<
         {
           meta: "Tracker",
           label: "GitHub and Linear",
-          detail: "Pull blockers, milestones, and implementation status from delivery systems.",
+          detail:
+            "Pull blockers, milestones, and implementation status from delivery systems.",
         },
         {
           meta: "Chat",
           label: "Slack updates",
-          detail: "Capture informal status changes and dependency mentions from the team thread.",
+          detail:
+            "Capture informal status changes and dependency mentions from the team thread.",
         },
         {
           meta: "Docs",
           label: "Launch and planning docs",
-          detail: "Attach review notes and project artifacts to the same graph as the rollout itself.",
+          detail:
+            "Attach review notes and project artifacts to the same graph as the rollout itself.",
         },
         {
           meta: "Events",
           label: "Internal app signals",
-          detail: "Ingest app-specific rollout or milestone updates through MCP and SDK integrations.",
+          detail:
+            "Ingest app-specific rollout or milestone updates through MCP and SDK integrations.",
         },
       ],
     },
@@ -516,49 +592,57 @@ const memoryStepPanels: Record<
         {
           meta: "OAuth",
           label: "Engineering tools",
-          detail: "Authorize GitHub, Linear, and docs once, then route requests through the proxy layer.",
+          detail:
+            "Authorize GitHub, Linear, and docs once, then route requests through the proxy layer.",
         },
         {
           meta: "API key",
           label: "Internal services",
-          detail: "Use scoped credentials for app-specific rollout metadata and delivery dashboards.",
+          detail:
+            "Use scoped credentials for app-specific rollout metadata and delivery dashboards.",
         },
         {
           meta: "Webhook",
           label: "Historical or event imports",
-          detail: "Feed older project state and new events into memory without manual copy-paste.",
+          detail:
+            "Feed older project state and new events into memory without manual copy-paste.",
         },
         {
           meta: "Isolation",
           label: "Agent boundary",
-          detail: "The planner sees shared context, while auth stays outside the runtime.",
+          detail:
+            "The planner sees shared context, while auth stays outside the runtime.",
         },
       ],
     },
     reuse: {
-      title: "How project memory gets reused",
+      title: "Delivery agents",
       description:
-        "The same structured project state supports standups, planning, and stakeholder reporting.",
+        "The same project memory powers delivery agents wherever teams work.",
       items: [
         {
-          meta: "Standup",
-          label: "Current blocker summaries",
-          detail: "Answer what is blocked, who owns it, and what milestone is at risk.",
+          label: "Standup agent",
+          detail:
+            "Answers what is blocked, who owns it, and which milestone is at risk.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "Planning",
-          label: "Dependency-aware updates",
-          detail: "Bring prior docs, owners, and dependencies into the next planning session.",
+          label: "Planning assistant",
+          detail:
+            "Brings prior docs, owners, and dependencies into the next planning session.",
+          platform: { id: "claude", label: "Claude" },
         },
         {
-          meta: "Launch",
-          label: "Readiness checks",
-          detail: "Use one shared memory graph for rollout status, docs, and unresolved risks.",
+          label: "Launch readiness agent",
+          detail:
+            "Uses one shared memory graph for rollout status, docs, and unresolved risks.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Reporting",
-          label: "Stakeholder communication",
-          detail: "Generate Monday risk updates from the same project record leadership already trusts.",
+          label: "Stakeholder update workflow",
+          detail:
+            "Generates Monday risk updates from the same project record leadership already trusts.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
       ],
     },
@@ -572,22 +656,26 @@ const memoryStepPanels: Record<
         {
           meta: "Upload",
           label: "Board memo and packet files",
-          detail: "Treat the original document as evidence while extracting decisions and assignments from it.",
+          detail:
+            "Treat the original document as evidence while extracting decisions and assignments from it.",
         },
         {
           meta: "Drive",
           label: "Cloud document systems",
-          detail: "Sync docs and presentations from connected workspaces without copying them by hand.",
+          detail:
+            "Sync docs and presentations from connected workspaces without copying them by hand.",
         },
         {
           meta: "Browser",
           label: "Authenticated knowledge systems",
-          detail: "Use browser-backed access for tools that do not expose a clean API surface.",
+          detail:
+            "Use browser-backed access for tools that do not expose a clean API surface.",
         },
         {
           meta: "SDK",
           label: "Custom internal feeds",
-          detail: "Attach finance, legal, or operating context through MCP and Connector SDK integrations.",
+          detail:
+            "Attach finance, legal, or operating context through MCP and Connector SDK integrations.",
         },
       ],
     },
@@ -599,49 +687,57 @@ const memoryStepPanels: Record<
         {
           meta: "OAuth",
           label: "Drive and docs",
-          detail: "Authorize cloud document providers once for recurring imports and lookups.",
+          detail:
+            "Authorize cloud document providers once for recurring imports and lookups.",
         },
         {
           meta: "Browser auth",
           label: "Knowledge tools",
-          detail: "Use browser-based sessions when source systems require interactive login.",
+          detail:
+            "Use browser-based sessions when source systems require interactive login.",
         },
         {
           meta: "API key",
           label: "Attached data services",
-          detail: "Combine document context with internal APIs or external knowledge tools behind the proxy.",
+          detail:
+            "Combine document context with internal APIs or external knowledge tools behind the proxy.",
         },
         {
           meta: "Manual",
           label: "Direct uploads",
-          detail: "Allow operators to capture important memos immediately, even before connectors are set up.",
+          detail:
+            "Allow operators to capture important memos immediately, even before connectors are set up.",
         },
       ],
     },
     reuse: {
-      title: "How decision memory gets reused",
+      title: "Leadership agents",
       description:
-        "The extracted decisions, blockers, and assignments become reusable context for later meetings and follow-ups.",
+        "The same decision memory powers leadership agents wherever teams work.",
       items: [
         {
-          meta: "Briefing",
-          label: "Decision recall",
-          detail: "Ask what was approved, what is blocked, and which region or budget line it affects.",
+          label: "Decision recall agent",
+          detail:
+            "Answers what was approved, what is blocked, and which region or budget line it affects.",
+          platform: { id: "claude", label: "Claude" },
         },
         {
-          meta: "Follow-up",
-          label: "Assignment tracking",
-          detail: "Keep Elena’s task and similar action items visible across future workflows.",
+          label: "Assignment tracker",
+          detail:
+            "Keeps action items visible across future workflows and follow-ups.",
+          platform: { id: "slack", label: "Slack" },
         },
         {
-          meta: "QA",
-          label: "Document question answering",
-          detail: "Answer from the extracted graph without re-reading every memo in full.",
+          label: "Document QA assistant",
+          detail:
+            "Answers from the extracted graph without re-reading every memo in full.",
+          platform: { id: "chatgpt", label: "ChatGPT" },
         },
         {
-          meta: "Board prep",
-          label: "Next packet context",
-          detail: "Carry pending decisions and blockers into the next briefing cycle automatically.",
+          label: "Board prep workflow",
+          detail:
+            "Carries pending decisions and blockers into the next briefing cycle.",
+          platform: { id: "openclaw", label: "OpenClaw" },
         },
       ],
     },
@@ -652,7 +748,8 @@ const fallbackSkills: Partial<
   Record<LandingUseCaseId, LandingUseCaseSkillsDefinition>
 > = {
   sales: {
-    description: "Track renewals, summarize deal risk, and monitor rollout signals",
+    description:
+      "Track renewals, summarize deal risk, and monitor rollout signals",
     agentId: "sales-ops",
     skillId: "sales-ops",
     skills: ["salesforce-mcp", "gong-mcp", "hubspot-sync"],
@@ -684,7 +781,8 @@ const fallbackSkills: Partial<
     ],
   },
   leadership: {
-    description: "Extract decisions, blockers, and assignments from executive materials",
+    description:
+      "Extract decisions, blockers, and assignments from executive materials",
     agentId: "leadership-ops",
     skillId: "leadership-ops",
     skills: ["google-drive-mcp", "meeting-notes", "board-packet-sync"],
@@ -747,10 +845,10 @@ const fallbackMemory: Partial<
       {
         id: "reuse",
         label: "4",
-        title: "Reuse context everywhere",
+        title: "Reuse context across agents",
         detail:
-          "The same clause and counterparty graph is available to review agents in chat, MCP clients, and later contract workflows.",
-        chips: ["Chat", "OpenClaw", "ChatGPT", "Claude"],
+          "The same contract memory powers legal agents wherever teams work.",
+        chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
       },
       {
         id: "fresh",
@@ -793,7 +891,10 @@ const fallbackMemory: Partial<
         { label: "Type", value: "Clause" },
         { label: "Clause", value: "Residuals" },
         { label: "State", value: "Broad language still present" },
-        { label: "Why it matters", value: "Could weaken confidentiality protections" },
+        {
+          label: "Why it matters",
+          value: "Could weaken confidentiality protections",
+        },
       ],
       "legal-risk": [
         { label: "Type", value: "Risk" },
@@ -853,20 +954,26 @@ const fallbackMemory: Partial<
     relations: [
       {
         source: "Redwood NDA",
+        sourceType: "Contract",
         label: "contains_clause",
         target: "Residuals clause",
+        targetType: "Clause",
         note: "The clause stays attached to the agreement being reviewed.",
       },
       {
         source: "Residuals clause",
+        sourceType: "Clause",
         label: "creates_risk",
         target: "Unlimited confidentiality term",
+        targetType: "Risk",
         note: "Risk is linked to the language that caused it.",
       },
       {
         source: "Redwood NDA",
+        sourceType: "Contract",
         label: "belongs_to_counterparty",
         target: "Redwood Capital",
+        targetType: "Counterparty",
         note: "Counterparty context remains queryable across future drafts.",
       },
     ],
@@ -898,7 +1005,7 @@ const fallbackMemory: Partial<
         label: "2",
         title: "Connect sources",
         detail:
-          "Ingest monitoring alerts, GitHub activity, deploy logs, and incident notes through MCP proxying or connector-backed syncs.",
+          "Turn live operational signals into structured incident memory.",
         chips: ["PagerDuty", "GitHub", "Deploy logs", "Custom SDK"],
         links: [docsLinks.mcpProxy, docsLinks.connectorSdk],
       },
@@ -907,16 +1014,16 @@ const fallbackMemory: Partial<
         label: "3",
         title: "Let users connect their data",
         detail:
-          "Support OAuth for SaaS tooling, service accounts for infrastructure APIs, and imports for historical incident records.",
+          "Let teams bring the tools they already use, while keeping credentials outside the worker.",
         chips: ["OAuth", "Service account", "API keys", "Historical import"],
         links: [docsLinks.memoryDocs, docsLinks.mcpAuthFlow],
       },
       {
         id: "reuse",
         label: "4",
-        title: "Reuse context everywhere",
+        title: "Reuse context across agents",
         detail:
-          "The same incident graph powers chat responses, deployment assistants, and MCP clients that need the latest service state.",
+          "The same incident memory powers operational agents wherever teams work.",
         chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
       },
       {
@@ -1020,20 +1127,26 @@ const fallbackMemory: Partial<
     relations: [
       {
         source: "checkout-api degradation",
+        sourceType: "Incident",
         label: "affects_service",
         target: "EU checkout",
+        targetType: "Service",
         note: "Impact stays attached to the service that is degraded.",
       },
       {
         source: "checkout-api degradation",
+        sourceType: "Incident",
         label: "triggered_by_deploy",
         target: "Deploy 2026.04.13.2",
+        targetType: "Deploy",
         note: "The rollout remains linked to the operational event it caused.",
       },
       {
         source: "checkout-api degradation",
+        sourceType: "Incident",
         label: "blocked_by_pr",
         target: "PR #482",
+        targetType: "Pull request",
         note: "The required fix remains queryable for future handoffs.",
       },
     ],
@@ -1081,10 +1194,10 @@ const fallbackMemory: Partial<
       {
         id: "reuse",
         label: "4",
-        title: "Reuse context everywhere",
+        title: "Reuse context across agents",
         detail:
-          "The same variance graph can power operator summaries, reporting assistants, and MCP clients that need reconciliation context.",
-        chips: ["Finance ops", "OpenClaw", "ChatGPT", "Claude"],
+          "The same variance memory powers finance agents wherever teams work.",
+        chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
       },
       {
         id: "fresh",
@@ -1187,20 +1300,26 @@ const fallbackMemory: Partial<
     relations: [
       {
         source: "Stripe payouts",
+        sourceType: "Transaction",
         label: "reconciles_to",
         target: "Account 4100",
+        targetType: "Account",
         note: "Transaction evidence stays linked to the account it rolls into.",
       },
       {
         source: "Refund timing mismatch",
+        sourceType: "Issue",
         label: "creates_variance",
         target: "$42k variance",
+        targetType: "Variance",
         note: "The likely cause stays attached to the anomaly it produced.",
       },
       {
         source: "$42k variance",
+        sourceType: "Variance",
         label: "summarized_in",
         target: "Month-end deck",
+        targetType: "Report",
         note: "Reporting context remains attached to the finance event it explains.",
       },
     ],
@@ -1210,7 +1329,8 @@ const fallbackMemory: Partial<
 const runtimeContent: Record<LandingUseCaseId, RuntimeJourney> = {
   legal: {
     requestLabel: "Incoming request",
-    request: "Review Redwood's NDA, flag risk, and tell me what still needs counsel approval.",
+    request:
+      "Review Redwood's NDA, flag risk, and tell me what still needs counsel approval.",
     summary:
       "Run a legal review agent in chat, bundle the tools it needs, and keep contract context in shared memory for the next draft.",
     steps: [
@@ -1271,7 +1391,8 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourney> = {
   },
   support: {
     requestLabel: "Incoming request",
-    request: "Draft a response for Alex Kim, note the owner, and remind me about the Thursday follow-up.",
+    request:
+      "Draft a response for Alex Kim, note the owner, and remind me about the Thursday follow-up.",
     summary:
       "Use one support workflow to pull account context, draft the next response, and keep relationship memory updated for the next conversation.",
     steps: [
@@ -1303,7 +1424,8 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourney> = {
   },
   finance: {
     requestLabel: "Incoming request",
-    request: "Explain the Stripe variance on Account 4100 and prep the month-end note.",
+    request:
+      "Explain the Stripe variance on Account 4100 and prep the month-end note.",
     summary:
       "Let a finance operator agent pull live sources, explain the variance, and store structured reconciliation context for the close.",
     steps: [
@@ -1335,7 +1457,8 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourney> = {
   },
   sales: {
     requestLabel: "Incoming request",
-    request: "What changed in Northstar before the October renewal, and what should we do next?",
+    request:
+      "What changed in Northstar before the October renewal, and what should we do next?",
     summary:
       "Combine revenue signals, rollout context, and shared account memory so teams can act before renewal risk grows.",
     steps: [
@@ -1367,7 +1490,8 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourney> = {
   },
   delivery: {
     requestLabel: "Incoming request",
-    request: "Give me the Monday Phoenix rollout update with blockers, owners, and the next escalation.",
+    request:
+      "Give me the Monday Phoenix rollout update with blockers, owners, and the next escalation.",
     summary:
       "Use one delivery workflow to inspect live rollout tools, summarize blockers, and keep the project graph fresh.",
     steps: [
@@ -1399,7 +1523,8 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourney> = {
   },
   leadership: {
     requestLabel: "Incoming request",
-    request: "Summarize this board memo: what was approved, what is blocked, and who owns the next action?",
+    request:
+      "Summarize this board memo: what was approved, what is blocked, and who owns the next action?",
     summary:
       "Turn executive materials into a workflow where agents can answer live questions and keep decision context durable.",
     steps: [

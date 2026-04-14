@@ -14,8 +14,10 @@ export type RecordNode = {
 
 export type ExampleRelation = {
   source: string;
+  sourceType: string;
   label: string;
   target: string;
+  targetType: string;
   note: string;
 };
 
@@ -28,12 +30,22 @@ export type HowItWorksPanelItem = {
   label: string;
   detail: string;
   meta?: string;
+  platform?: {
+    id: "slack" | "openclaw" | "chatgpt" | "claude";
+    label: string;
+  };
+};
+
+export type HowItWorksPanelTable = {
+  columns: string[];
+  rows: string[][];
 };
 
 export type HowItWorksPanel = {
   title: string;
   description?: string;
   items?: HowItWorksPanelItem[];
+  table?: HowItWorksPanelTable;
 };
 
 export type HowItWorksStep = {
@@ -250,7 +262,11 @@ export const landingUseCases = {
       skillId: "devops-control",
       skills: ["github-mcp", "pagerduty-mcp", "k8s-tools"],
       nixPackages: ["gh", "kubectl", "jq"],
-      allowedDomains: ["api.github.com", "api.pagerduty.com", ".k8s.example.com"],
+      allowedDomains: [
+        "api.github.com",
+        "api.pagerduty.com",
+        ".k8s.example.com",
+      ],
       mcpServer: "github-mcp",
       providerId: "anthropic",
       model: "claude/sonnet-4-5",
@@ -356,16 +372,10 @@ export const landingUseCases = {
         {
           id: "reuse",
           label: "4",
-          title: "Reuse context everywhere",
+          title: "Reuse context across agents",
           detail:
-            "The same contact graph is available in messaging apps and MCP clients like OpenClaw, ChatGPT, Claude, and any tool that can work against your MCP surface.",
-          chips: [
-            "Messaging apps",
-            "OpenClaw",
-            "ChatGPT",
-            "Claude",
-            "Any MCP client",
-          ],
+            "The same relationship memory powers support agents wherever teams work.",
+          chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
         },
         {
           id: "fresh",
@@ -597,8 +607,7 @@ export const landingUseCases = {
     },
     memory: {
       id: "company",
-      description:
-        "Track accounts, pilots, renewal risk, and buying signals.",
+      description: "Track accounts, pilots, renewal risk, and buying signals.",
       sourceLabel: "Example prompt",
       sourceText:
         "Remember that Northstar Foods expanded into EMEA, launched the Warehouse OS pilot under the Operations team, and raised a pricing concern ahead of the October renewal.",
@@ -645,10 +654,10 @@ export const landingUseCases = {
         {
           id: "reuse",
           label: "4",
-          title: "Reuse context everywhere",
+          title: "Reuse context across agents",
           detail:
-            "Shared account context can power revenue agents in Slack, operator workflows in chat, and MCP clients like OpenClaw, ChatGPT, and Claude.",
-          chips: ["Slack", "Messaging apps", "OpenClaw", "ChatGPT", "Claude"],
+            "The same account memory powers revenue agents wherever teams work.",
+          chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
         },
         {
           id: "fresh",
@@ -869,10 +878,10 @@ export const landingUseCases = {
         {
           id: "reuse",
           label: "4",
-          title: "Reuse context everywhere",
+          title: "Reuse context across agents",
           detail:
-            "Use the same project memory from standup bots, planning assistants, chat threads, and MCP clients like OpenClaw, ChatGPT, and Claude.",
-          chips: ["Standups", "Planning", "OpenClaw", "ChatGPT", "Claude"],
+            "The same project memory powers delivery agents wherever teams work.",
+          chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
         },
         {
           id: "fresh",
@@ -1110,16 +1119,10 @@ export const landingUseCases = {
         {
           id: "reuse",
           label: "4",
-          title: "Reuse context everywhere",
+          title: "Reuse context across agents",
           detail:
-            "The extracted decisions and assignments are available from document QA agents, messaging workflows, and MCP clients like OpenClaw, ChatGPT, and Claude.",
-          chips: [
-            "Document QA",
-            "Messaging apps",
-            "OpenClaw",
-            "ChatGPT",
-            "Claude",
-          ],
+            "The same decision memory powers leadership agents wherever teams work.",
+          chips: ["Slack", "OpenClaw", "ChatGPT", "Claude"],
         },
         {
           id: "fresh",
