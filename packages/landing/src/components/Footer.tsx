@@ -23,6 +23,9 @@ export function Footer() {
           class="flex items-center gap-5 text-xs"
           style={{ color: "var(--color-page-text-muted)" }}
         >
+          <a href="/terms" class="hover:underline">
+            Terms
+          </a>
           <a href="/privacy" class="hover:underline">
             Privacy
           </a>
