@@ -95,7 +95,7 @@ describe("chatCommand example integration", () => {
     captureTerminal({ stdout, stderr });
 
     globalThis.fetch = mock(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
 
         if (
@@ -220,7 +220,7 @@ describe("chatCommand example integration", () => {
     captureTerminal({ stdout, stderr });
 
     globalThis.fetch = mock(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
 
         if (
@@ -284,7 +284,7 @@ describe("chatCommand example integration", () => {
     captureTerminal({ stdout, stderr });
 
     globalThis.fetch = mock(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
 
         if (
@@ -336,7 +336,7 @@ describe("chatCommand example integration", () => {
     captureTerminal({ stdout, stderr });
 
     globalThis.fetch = mock(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
 
         if (
@@ -384,7 +384,7 @@ describe("chatCommand example integration", () => {
     captureTerminal({ stdout, stderr });
 
     globalThis.fetch = mock(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
 
         if (
