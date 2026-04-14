@@ -32,6 +32,7 @@ export function HeroSection(props: {
 }) {
   const activeUseCase = getLandingUseCaseShowcase(props.activeUseCaseId);
   const memoryHref = `/memory/for/${activeUseCase.id}`;
+  const skillsHref = `/skills/for/${activeUseCase.id}`;
   const owlettoUrl = getOwlettoUrl(activeUseCase.id);
 
   return (
@@ -80,7 +81,7 @@ export function HeroSection(props: {
           </a>{" "}
           and installable{" "}
           <a
-            href="/skills"
+            href={skillsHref}
             class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
             style={{ color: "var(--color-page-text-muted)" }}
           >
@@ -101,7 +102,7 @@ export function HeroSection(props: {
             Try now
           </a>
           <a
-            href={GITHUB_URL}
+            href={`${GITHUB_URL}/tree/main/examples/${activeUseCase.examplePath}`}
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-lg transition-all hover:opacity-90"
@@ -111,7 +112,7 @@ export function HeroSection(props: {
             }}
           >
             <ApiIcon />
-            GitHub
+            See example
           </a>
         </div>
 
