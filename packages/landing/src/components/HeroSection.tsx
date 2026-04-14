@@ -93,13 +93,15 @@ export function HeroSection(props: {
         <div class="flex flex-wrap gap-3 mb-6 justify-center items-center">
           <a
             href={owlettoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             class="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-lg transition-all hover:opacity-90"
             style={{
               backgroundColor: "var(--color-page-text)",
               color: "var(--color-page-bg)",
             }}
           >
-            Try now
+            Open in Owletto
           </a>
           <a
             href={`${GITHUB_URL}/tree/main/examples/${activeUseCase.examplePath}`}

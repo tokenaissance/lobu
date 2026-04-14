@@ -81,7 +81,7 @@ export function MemorySection(props: {
                 color: "var(--color-page-bg)",
               }}
             >
-              Try now
+              Open in Owletto
             </a>
           }
         />
