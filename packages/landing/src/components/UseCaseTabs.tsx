@@ -33,16 +33,20 @@ export function UseCaseTabs({
       <div class="mx-auto flex max-w-[44rem] flex-wrap items-center justify-center gap-2.5">
         {tabs.map((tab) => {
           const active = tab.id === activeId;
-          const commonClass =
-            "px-4 py-2.5 rounded-full text-sm font-medium leading-none whitespace-nowrap transition-all";
+          const commonClass = `px-4 py-2.5 rounded-full text-sm leading-none whitespace-nowrap transition-all ${
+            active ? "font-semibold" : "font-medium"
+          }`;
           const commonStyle = {
             backgroundColor: active
-              ? "rgba(122,162,247,0.16)"
+              ? "var(--color-tg-accent)"
               : "var(--color-page-surface)",
             color: active
-              ? "var(--color-page-text)"
+              ? "var(--color-page-bg)"
               : "var(--color-page-text-muted)",
-            border: "1px solid var(--color-page-border)",
+            border: active
+              ? "1px solid var(--color-tg-accent)"
+              : "1px solid var(--color-page-border)",
+            boxShadow: active ? "0 6px 18px rgba(122,162,247,0.22)" : "none",
           };
 
           if (hrefForId) {

@@ -139,6 +139,32 @@ That split lets agents keep using local files for active work while persisting t
 
 See also: [Architecture](/guides/architecture/) and [Agent Settings](/guides/agent-settings/).
 
+## Compatible Agent Clients
+
+Owletto memory can be used from MCP-compatible clients and agent runtimes, not just Lobu.
+
+Common examples include:
+
+- Claude Code
+- ChatGPT
+- OpenClaw
+- Codex
+- Cursor
+
+For the most up-to-date list of compatible clients and integration patterns, see the [Owletto CLI Reference](/reference/owletto-cli/#which-mcp-tools-are-available).
+
+For setup instructions by client, see:
+
+- [Connect from ChatGPT](/connect-from/chatgpt/)
+- [Connect from Claude](/connect-from/claude/)
+- [Install to OpenClaw](/connect-from/openclaw/)
+
+## Watchers
+
+Watchers analyze incoming event streams on a schedule and write structured results back into the memory graph.
+
+To inspect available watcher tooling and related MCP operations, see the [Owletto CLI Reference](/reference/owletto-cli/#which-mcp-tools-are-available).
+
 ## Tool-Level Workflow
 
 Agents that talk to Owletto directly usually use three core MCP tools:

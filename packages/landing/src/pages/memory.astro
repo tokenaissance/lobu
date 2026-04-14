@@ -5,6 +5,7 @@ import { Footer } from "../components/Footer";
 import { MemorySection } from "../components/MemorySection";
 import { Nav } from "../components/Nav";
 import { getLatestPosts } from "../latest-posts";
+import { getSurfaceHeroCopy } from "../use-case-showcases";
 
 const latestPosts = await getLatestPosts();
 ---
@@ -22,7 +23,12 @@ const latestPosts = await getLatestPosts();
   >
     <Nav currentPath={Astro.url.pathname} />
     <main class="relative z-[1]">
-      <MemorySection client:load linkTabsToPages latestPosts={latestPosts} />
+      <MemorySection
+        client:load
+        linkTabsToPages
+        latestPosts={latestPosts}
+        heroCopy={getSurfaceHeroCopy("memory")}
+      />
     </main>
     <Footer />
   </div>

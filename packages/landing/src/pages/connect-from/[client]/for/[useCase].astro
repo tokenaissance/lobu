@@ -1,0 +1,39 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import ConnectFromDocContent from "../../../../components/connect-from/ConnectFromDocContent.astro";
+import {
+  connectFromClientIds,
+  getConnectFromClientConfig,
+  type ConnectFromClientId,
+} from "../../../../connect-from-config";
+import {
+  getLandingUseCaseShowcase,
+  landingUseCaseShowcases,
+} from "../../../../use-case-showcases";
+
+export function getStaticPaths() {
+  return connectFromClientIds.flatMap((clientId) =>
+    landingUseCaseShowcases.map((useCase) => ({
+      params: { client: clientId, useCase: useCase.id },
+      props: { clientId, useCaseId: useCase.id },
+    }))
+  );
+}
+
+const { clientId, useCaseId } = Astro.props as {
+  clientId: ConnectFromClientId;
+  useCaseId: string;
+};
+const client = getConnectFromClientConfig(clientId);
+const showcase = getLandingUseCaseShowcase(useCaseId);
+---
+
+<StarlightPage
+  frontmatter={{
+    title: `${client.label} for ${showcase.label}`,
+    description: client.describe(showcase),
+  }}
+  hasSidebar={true}
+>
+  <ConnectFromDocContent clientId={clientId} useCaseId={showcase.id} />
+</StarlightPage>

@@ -6,6 +6,7 @@ import { MemorySection } from "../../../components/MemorySection";
 import { Nav } from "../../../components/Nav";
 import {
   getLandingUseCaseShowcase,
+  getSurfaceHeroCopy,
   landingUseCaseShowcases,
 } from "../../../use-case-showcases";
 import { getLatestPosts } from "../../../latest-posts";
@@ -40,6 +41,7 @@ const latestPosts = await getLatestPosts();
         defaultUseCaseId={showcase.id}
         linkTabsToPages
         latestPosts={latestPosts}
+        heroCopy={getSurfaceHeroCopy("memory", showcase.id)}
       />
     </main>
     <Footer />

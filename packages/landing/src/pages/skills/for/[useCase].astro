@@ -6,6 +6,7 @@ import { SkillsSection } from "../../../components/SkillsSection";
 import { Nav } from "../../../components/Nav";
 import {
   getLandingUseCaseShowcase,
+  getSurfaceHeroCopy,
   landingUseCaseShowcases,
 } from "../../../use-case-showcases";
 
@@ -22,7 +23,7 @@ const showcase = getLandingUseCaseShowcase(useCaseId);
 
 <BaseLayout
   title={`Skills for ${showcase.label} - Lobu`}
-  description={showcase.memory.description}
+  description={showcase.skills.description}
 >
   <div
     class="min-h-screen grid-lines"
@@ -37,6 +38,7 @@ const showcase = getLandingUseCaseShowcase(useCaseId);
         client:load
         defaultUseCaseId={showcase.id}
         linkTabsToPages
+        heroCopy={getSurfaceHeroCopy("skills", showcase.id)}
       />
     </main>
     <Footer />

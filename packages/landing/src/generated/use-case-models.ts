@@ -61,7 +61,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "agent-community",
       skillId: "agent-community",
-      description: "Discover aligned members, explain why they should meet, and draft warm introductions",
+      description:
+        "Discover aligned members, explain why they should meet, and draft warm introductions",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -86,8 +87,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Opportunity matcher",
       schedule: "0 */12 * * *",
-      prompt: "Monitor connected profiles, newsletters, websites, and member updates for new launches, posts, hiring signals, funding news, and project changes. Identify which members are likely to care, explain why, and queue approved intro or outreach drafts.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"signals\"],\"properties\":{\"signals\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\"},\"source\":{\"type\":\"string\"},\"related_topics\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"interested_members\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"reason\":{\"type\":\"string\"},\"suggested_action\":{\"type\":\"string\"}}}}}}",
+      prompt:
+        "Monitor connected profiles, newsletters, websites, and member updates for new launches, posts, hiring signals, funding news, and project changes. Identify which members are likely to care, explain why, and queue approved intro or outreach drafts.",
+      extractionSchema:
+        '{"type":"object","required":["signals"],"properties":{"signals":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},"source":{"type":"string"},"related_topics":{"type":"array","items":{"type":"string"}},"interested_members":{"type":"array","items":{"type":"string"}},"reason":{"type":"string"},"suggested_action":{"type":"string"}}}}}}',
     },
   },
   careops: {
@@ -117,7 +120,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "careops",
       skillId: "careops",
-      description: "Manage patient care, appointments, and treatment workflows for healthcare practices",
+      description:
+        "Manage patient care, appointments, and treatment workflows for healthcare practices",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -142,8 +146,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Patient care tracker",
       schedule: "0 7 * * *",
-      prompt: "Check patients for appointment changes, treatment progress, and insurance coverage status. Flag scheduling conflicts and care gaps.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"next_appointment\",\"treatment_status\",\"therapist_notes\",\"insurance_status\",\"upcoming_actions\"],\"properties\":{\"next_appointment\":{\"type\":\"string\"},\"treatment_status\":{\"type\":\"string\"},\"therapist_notes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"insurance_status\":{\"type\":\"string\"},\"upcoming_actions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Check patients for appointment changes, treatment progress, and insurance coverage status. Flag scheduling conflicts and care gaps.",
+      extractionSchema:
+        '{"type":"object","required":["next_appointment","treatment_status","therapist_notes","insurance_status","upcoming_actions"],"properties":{"next_appointment":{"type":"string"},"treatment_status":{"type":"string"},"therapist_notes":{"type":"array","items":{"type":"string"}},"insurance_status":{"type":"string"},"upcoming_actions":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   delivery: {
@@ -172,7 +178,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "delivery",
       skillId: "delivery",
-      description: "Help delivery teams keep milestones, blockers, owners, and artifacts aligned",
+      description:
+        "Help delivery teams keep milestones, blockers, owners, and artifacts aligned",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -196,8 +203,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Phoenix rollout tracker",
       schedule: "0 9 * * 1",
-      prompt: "Check project blockers, milestone progress, and generate the weekly risk summary for leadership.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"blockers_resolved\",\"milestone_state\",\"new_risks\",\"risk_summary\"],\"properties\":{\"blockers_resolved\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"milestone_state\":{\"type\":\"string\"},\"new_risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"risk_summary\":{\"type\":\"string\"}}}",
+      prompt:
+        "Check project blockers, milestone progress, and generate the weekly risk summary for leadership.",
+      extractionSchema:
+        '{"type":"object","required":["blockers_resolved","milestone_state","new_risks","risk_summary"],"properties":{"blockers_resolved":{"type":"array","items":{"type":"string"}},"milestone_state":{"type":"string"},"new_risks":{"type":"array","items":{"type":"string"}},"risk_summary":{"type":"string"}}}',
     },
   },
   devops: {
@@ -226,7 +235,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "devops-control",
       skillId: "devops-control",
-      description: "Help platform teams triage incidents, reviews, and deploy safety checks",
+      description:
+        "Help platform teams triage incidents, reviews, and deploy safety checks",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -250,8 +260,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Incident monitor",
       schedule: "*/15 * * * *",
-      prompt: "Check for active incidents, pending deploys, and blocked PRs. Highlight user impact and rollout risk for on-call triage.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"active_incidents\",\"pending_deploys\",\"blocked_prs\"],\"properties\":{\"active_incidents\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"pending_deploys\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"blocked_prs\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"rollback_candidates\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Check for active incidents, pending deploys, and blocked PRs. Highlight user impact and rollout risk for on-call triage.",
+      extractionSchema:
+        '{"type":"object","required":["active_incidents","pending_deploys","blocked_prs"],"properties":{"active_incidents":{"type":"array","items":{"type":"string"}},"pending_deploys":{"type":"array","items":{"type":"string"}},"blocked_prs":{"type":"array","items":{"type":"string"}},"rollback_candidates":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   ecommerce: {
@@ -281,7 +293,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "ecommerce-ops",
       skillId: "ecommerce-ops",
-      description: "Manage subscriptions, process order changes, and resolve customer requests",
+      description:
+        "Manage subscriptions, process order changes, and resolve customer requests",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -306,8 +319,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Customer activity tracker",
       schedule: "0 */6 * * *",
-      prompt: "Monitor customers for new orders, subscription changes, delivery requests, and support interactions.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"subscription_status\",\"pending_changes\",\"recent_orders\",\"communication_preferences\",\"open_requests\"],\"properties\":{\"subscription_status\":{\"type\":\"string\"},\"pending_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"recent_orders\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"communication_preferences\":{\"type\":\"string\"},\"open_requests\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Monitor customers for new orders, subscription changes, delivery requests, and support interactions.",
+      extractionSchema:
+        '{"type":"object","required":["subscription_status","pending_changes","recent_orders","communication_preferences","open_requests"],"properties":{"subscription_status":{"type":"string"},"pending_changes":{"type":"array","items":{"type":"string"}},"recent_orders":{"type":"array","items":{"type":"string"}},"communication_preferences":{"type":"string"},"open_requests":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   finance: {
@@ -336,7 +351,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "finance",
       skillId: "finance",
-      description: "Help finance teams reconcile data, explain variance, and prepare reporting runs",
+      description:
+        "Help finance teams reconcile data, explain variance, and prepare reporting runs",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -360,8 +376,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Reconciliation monitor",
       schedule: "0 6 * * 1-5",
-      prompt: "Check accounts for unreconciled transactions, new variances, and approaching reporting deadlines. Lead with exceptions that need review.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"unreconciled_count\",\"new_variances\",\"approaching_deadlines\"],\"properties\":{\"unreconciled_count\":{\"type\":\"integer\"},\"new_variances\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"approaching_deadlines\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"payment_risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Check accounts for unreconciled transactions, new variances, and approaching reporting deadlines. Lead with exceptions that need review.",
+      extractionSchema:
+        '{"type":"object","required":["unreconciled_count","new_variances","approaching_deadlines"],"properties":{"unreconciled_count":{"type":"integer"},"new_variances":{"type":"array","items":{"type":"string"}},"approaching_deadlines":{"type":"array","items":{"type":"string"}},"payment_risks":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   leadership: {
@@ -390,7 +408,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "leadership",
       skillId: "leadership",
-      description: "Help leadership teams turn memos, decisions, and board materials into reusable operating context",
+      description:
+        "Help leadership teams turn memos, decisions, and board materials into reusable operating context",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -414,8 +433,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Board action tracker",
       schedule: "0 8 * * *",
-      prompt: "Track board action items: check task delivery status, blocker resolution progress, and approaching deadlines for the next board packet.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"action_items\",\"blocked_items\",\"deadlines_approaching\",\"completion_status\"],\"properties\":{\"action_items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"blocked_items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"deadlines_approaching\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"completion_status\":{\"type\":\"string\"}}}",
+      prompt:
+        "Track board action items: check task delivery status, blocker resolution progress, and approaching deadlines for the next board packet.",
+      extractionSchema:
+        '{"type":"object","required":["action_items","blocked_items","deadlines_approaching","completion_status"],"properties":{"action_items":{"type":"array","items":{"type":"string"}},"blocked_items":{"type":"array","items":{"type":"string"}},"deadlines_approaching":{"type":"array","items":{"type":"string"}},"completion_status":{"type":"string"}}}',
     },
   },
   legal: {
@@ -445,7 +466,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "legal-review",
       skillId: "legal-review",
-      description: "Review contracts, summarize risk, and surface missing protections",
+      description:
+        "Review contracts, summarize risk, and surface missing protections",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -470,8 +492,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Contract review tracker",
       schedule: "0 8 * * 1-5",
-      prompt: "Review active contracts for approaching deadlines, unsigned agreements, and unresolved risk items. Flag any clauses that still need counsel approval.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"pending_contracts\",\"unresolved_risks\",\"approaching_deadlines\"],\"properties\":{\"pending_contracts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"unresolved_risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"approaching_deadlines\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"flagged_clauses\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Review active contracts for approaching deadlines, unsigned agreements, and unresolved risk items. Flag any clauses that still need counsel approval.",
+      extractionSchema:
+        '{"type":"object","required":["pending_contracts","unresolved_risks","approaching_deadlines"],"properties":{"pending_contracts":{"type":"array","items":{"type":"string"}},"unresolved_risks":{"type":"array","items":{"type":"string"}},"approaching_deadlines":{"type":"array","items":{"type":"string"}},"flagged_clauses":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   "market-intelligence": {
@@ -501,7 +525,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "market-intel",
       skillId: "market-intel",
-      description: "Track brands, products, and market signals across the competitive landscape",
+      description:
+        "Track brands, products, and market signals across the competitive landscape",
       skills: ["web-monitor", "github"],
       nixPackages: [],
       allowedDomains: [
@@ -527,8 +552,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Competitive brand tracker",
       schedule: "0 */6 * * *",
-      prompt: "Monitor tracked brands for new features, pricing changes, and competitive positioning against similar tools.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"new_features\",\"pricing_changes\",\"positioning_shifts\",\"competitive_mentions\"],\"properties\":{\"new_features\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"pricing_changes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"positioning_shifts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"competitive_mentions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Monitor tracked brands for new features, pricing changes, and competitive positioning against similar tools.",
+      extractionSchema:
+        '{"type":"object","required":["new_features","pricing_changes","positioning_shifts","competitive_mentions"],"properties":{"new_features":{"type":"array","items":{"type":"string"}},"pricing_changes":{"type":"array","items":{"type":"string"}},"positioning_shifts":{"type":"array","items":{"type":"string"}},"competitive_mentions":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   sales: {
@@ -557,7 +584,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "sales",
       skillId: "sales",
-      description: "Help revenue teams track account health, rollout progress, and renewal signals",
+      description:
+        "Help revenue teams track account health, rollout progress, and renewal signals",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -581,8 +609,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Account health monitor",
       schedule: "0 */12 * * *",
-      prompt: "Poll CRM data for tracked accounts. Track expansion progress, risk level changes, and renewal timeline.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"risk_level\",\"expansion_status\",\"renewal_blockers\",\"activity_delta\"],\"properties\":{\"risk_level\":{\"type\":\"string\"},\"expansion_status\":{\"type\":\"string\"},\"renewal_blockers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"activity_delta\":{\"type\":\"string\"}}}",
+      prompt:
+        "Poll CRM data for tracked accounts. Track expansion progress, risk level changes, and renewal timeline.",
+      extractionSchema:
+        '{"type":"object","required":["risk_level","expansion_status","renewal_blockers","activity_delta"],"properties":{"risk_level":{"type":"string"},"expansion_status":{"type":"string"},"renewal_blockers":{"type":"array","items":{"type":"string"}},"activity_delta":{"type":"string"}}}',
     },
   },
   support: {
@@ -611,7 +641,8 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     skills: {
       agentId: "support",
       skillId: "support",
-      description: "Help support teams route tickets, draft replies, and escalate urgent issues",
+      description:
+        "Help support teams route tickets, draft replies, and escalate urgent issues",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -635,8 +666,10 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
     watcher: {
       name: "Contact freshness",
       schedule: "0 0 * * *",
-      prompt: "Monitor contacts for role changes, new preferences, and overdue follow-ups. Update ownership and communication preferences as relationships change.",
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"status\",\"role_changed\",\"new_preferences\",\"overdue_tasks\"],\"properties\":{\"status\":{\"type\":\"string\"},\"role_changed\":{\"type\":\"boolean\"},\"new_preferences\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"overdue_tasks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+      prompt:
+        "Monitor contacts for role changes, new preferences, and overdue follow-ups. Update ownership and communication preferences as relationships change.",
+      extractionSchema:
+        '{"type":"object","required":["status","role_changed","new_preferences","overdue_tasks"],"properties":{"status":{"type":"string"},"role_changed":{"type":"boolean"},"new_preferences":{"type":"array","items":{"type":"string"}},"overdue_tasks":{"type":"array","items":{"type":"string"}}}}',
     },
   },
   "venture-capital": {
@@ -648,12 +681,20 @@ export const generatedUseCaseModels: Record<string, GeneratedUseCaseModel> = {
       user: [],
     },
     model: {
-      entities: ["Company", "Founder", "Fund Round", "Investor", "Product", "Sector"],
+      entities: [
+        "Company",
+        "Founder",
+        "Fund Round",
+        "Investor",
+        "Product",
+        "Sector",
+      ],
     },
     skills: {
       agentId: "vc-tracking",
       skillId: "vc-tracking",
-      description: "Track companies, founders, and investment opportunities for venture firms",
+      description:
+        "Track companies, founders, and investment opportunities for venture firms",
       skills: ["github"],
       nixPackages: [],
       allowedDomains: [
@@ -693,7 +734,8 @@ Produce a structured founder activity report:
 4. **Notable Signals**: Flag potential announcements, strategic shifts, or concerns.
 
 Be specific and cite actual tweets/posts as evidence.`,
-      extractionSchema: "{\"type\":\"object\",\"required\":[\"summary\",\"founders\",\"notable_signals\"],\"properties\":{\"summary\":{\"type\":\"string\"},\"founders\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"company\",\"activity_level\",\"themes\"],\"properties\":{\"name\":{\"type\":\"string\"},\"company\":{\"type\":\"string\"},\"activity_level\":{\"type\":\"string\",\"enum\":[\"high\",\"medium\",\"low\",\"inactive\"]},\"themes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"sentiment\":{\"type\":\"string\",\"enum\":[\"bullish\",\"neutral\",\"cautious\",\"concerned\"]},\"signals\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"notable_posts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}},\"cross_patterns\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"theme\":{\"type\":\"string\"},\"founders_involved\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}},\"notable_signals\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"signal\",\"founder\",\"impact\"],\"properties\":{\"signal\":{\"type\":\"string\"},\"founder\":{\"type\":\"string\"},\"impact\":{\"type\":\"string\",\"enum\":[\"high\",\"medium\",\"low\"]}}}}}}",
+      extractionSchema:
+        '{"type":"object","required":["summary","founders","notable_signals"],"properties":{"summary":{"type":"string"},"founders":{"type":"array","items":{"type":"object","required":["name","company","activity_level","themes"],"properties":{"name":{"type":"string"},"company":{"type":"string"},"activity_level":{"type":"string","enum":["high","medium","low","inactive"]},"themes":{"type":"array","items":{"type":"string"}},"sentiment":{"type":"string","enum":["bullish","neutral","cautious","concerned"]},"signals":{"type":"array","items":{"type":"string"}},"notable_posts":{"type":"array","items":{"type":"string"}}}}},"cross_patterns":{"type":"array","items":{"type":"object","properties":{"theme":{"type":"string"},"founders_involved":{"type":"array","items":{"type":"string"}}}}},"notable_signals":{"type":"array","items":{"type":"object","required":["signal","founder","impact"],"properties":{"signal":{"type":"string"},"founder":{"type":"string"},"impact":{"type":"string","enum":["high","medium","low"]}}}}}}',
     },
   },
 };

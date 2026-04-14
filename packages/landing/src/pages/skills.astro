@@ -4,6 +4,7 @@ import "../globals.css";
 import { Footer } from "../components/Footer";
 import { Nav } from "../components/Nav";
 import { SkillsSection } from "../components/SkillsSection";
+import { getSurfaceHeroCopy } from "../use-case-showcases";
 ---
 
 <BaseLayout title="Skills - Build and bundle agent skills" description="Develop skills with integrations, MCP servers, network policies, and system packages — all bundled into one installable unit.">
@@ -16,7 +17,11 @@ import { SkillsSection } from "../components/SkillsSection";
   >
     <Nav currentPath={Astro.url.pathname} />
     <main class="relative z-[1]">
-      <SkillsSection client:load linkTabsToCampaigns />
+      <SkillsSection
+        client:load
+        linkTabsToCampaigns
+        heroCopy={getSurfaceHeroCopy("skills")}
+      />
     </main>
     <Footer />
   </div>

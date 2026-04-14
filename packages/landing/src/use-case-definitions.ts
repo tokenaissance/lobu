@@ -50,6 +50,14 @@ export type HowItWorksPanel = {
   table?: HowItWorksPanelTable;
 };
 
+export type MemoryEventLog = {
+  title: string;
+  description: string;
+  columns: string[];
+  rows: string[][];
+  highlightedRows?: number[];
+};
+
 export type HowItWorksStep = {
   id: "model" | "connect" | "auth" | "reuse" | "fresh";
   label: string;
@@ -70,6 +78,7 @@ export type MemoryExample = {
   entityTypes: string[];
   entitySelections?: Record<string, string>;
   howItWorks: HowItWorksStep[];
+  eventLog: MemoryEventLog;
   highlights: MemoryField[];
   nodeHighlights?: Record<string, MemoryField[]>;
   watcher: {
@@ -132,6 +141,7 @@ export type LandingUseCaseMemoryDefinition = {
   sourceText: string;
   entitySelections?: Record<string, string>;
   howItWorks: HowItWorksStep[];
+  eventLog?: MemoryEventLog;
   highlights: MemoryField[];
   nodeHighlights?: Record<string, MemoryField[]>;
   watcher: {
@@ -163,6 +173,11 @@ export const technicalLinks = {
     href: "/reference/owletto-cli/#connector-sdk",
   },
   memoryDocs: { label: "Memory docs", href: "/getting-started/memory/" },
+  slackInstall: { label: "Slack install", href: "/platforms/slack/" },
+  watcherDocs: {
+    label: "Watcher docs",
+    href: "/getting-started/memory/#watchers",
+  },
   mcpAuthFlow: { label: "MCP auth flow", href: "/guides/mcp-proxy/" },
 };
 
@@ -182,7 +197,7 @@ function buildHowItWorks(config: {
   connect: HowItWorksStepConfig;
   auth: HowItWorksStepConfig;
   reuse: HowItWorksStepConfig;
-  fresh: { detail: string; title?: string };
+  fresh: { detail: string; title?: string; links?: ExampleLink[] };
 }): HowItWorksStep[] {
   return [
     {
@@ -222,6 +237,7 @@ function buildHowItWorks(config: {
       label: "5",
       title: config.fresh.title ?? "Keep it fresh",
       detail: config.fresh.detail,
+      links: config.fresh.links,
     },
   ];
 }
@@ -238,7 +254,7 @@ export const landingUseCases = {
       id: "contract",
       description:
         "Store contracts, clauses, counterparties, and risk so every review starts with context.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Redwood Capital's NDA keeps residuals broad, asks for Delaware venue, and still lacks a cap on the confidentiality term.",
       entitySelections: {
@@ -411,7 +427,7 @@ export const landingUseCases = {
       id: "incident",
       description:
         "Track incidents, services, deploys, and remediation work in one shared operational memory graph.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that checkout-api incident started right after deploy 2026.04.13.2, impacts EU checkout traffic, and rollback depends on PR #482 landing first.",
       entitySelections: {
@@ -578,7 +594,7 @@ export const landingUseCases = {
       id: "person",
       description:
         "Remember contacts, preferences, owners, and follow-ups across conversations.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Alex Kim from Acme Health owns vendor onboarding, prefers weekly email summaries, and asked us to send the draft by Thursday.",
       entitySelections: {
@@ -764,7 +780,7 @@ export const landingUseCases = {
       id: "variance",
       description:
         "Track accounts and transactions so close workflows can reuse the same structured state.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that March close shows a $42k Stripe payout variance on Account 4100, refunds are the likely cause, and the reconciliation note must land in the month-end deck.",
       entitySelections: {
@@ -933,7 +949,7 @@ export const landingUseCases = {
     memory: {
       id: "company",
       description: "Track accounts, pilots, renewal risk, and buying signals.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Northstar Foods expanded into EMEA, launched the Warehouse OS pilot under the Operations team, and raised a pricing concern ahead of the October renewal.",
       entitySelections: {
@@ -1126,7 +1142,7 @@ export const landingUseCases = {
       id: "project",
       description:
         "Keep milestones, blockers, owners, and reporting context in one shared record.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Phoenix migration is in phase two, Maya owns the rollout, infra is blocking the SSO cutover, the design review is in the launch doc, and leadership wants a risk update every Monday.",
       entitySelections: {
@@ -1324,7 +1340,7 @@ export const landingUseCases = {
       id: "document",
       description:
         "Turn decisions, blockers, and assignments from source documents into reusable context.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "From this board memo, remember that the LATAM expansion budget was approved, the warehouse lease decision is delayed pending legal review, and Elena needs to update the forecast for next week's board packet.",
       entitySelections: {
@@ -1768,7 +1784,7 @@ export const landingUseCases = {
       id: "brand",
       description:
         "Track brands, products, and market positioning with source-linked evidence.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Airtable launched Airtable Interfaces, added AI features to their product suite, and was mentioned in a comparison against Notion in three recent reviews.",
       entitySelections: {
@@ -1900,7 +1916,7 @@ export const landingUseCases = {
       id: "patient",
       description:
         "Coordinate patient care, track treatment progress, and manage therapist assignments.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that James McManus is assigned to therapist Nicole Musto for OCD treatment, has an appointment next Tuesday at 2 PM, and his treatment plan includes weekly exposure therapy sessions covered by Blue Cross Blue Shield.",
       entitySelections: {
@@ -2068,7 +2084,7 @@ export const landingUseCases = {
       id: "customer",
       description:
         "Track customers, subscriptions, order history, and preferences across interactions.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Emma Torres has a monthly coffee subscription on the Gold plan, requested to skip next month's delivery, and prefers email communication for order updates.",
       entitySelections: {
@@ -2236,7 +2252,7 @@ export const landingUseCases = {
       id: "company",
       description:
         "Track companies, founders, funding rounds, and investment signals with full context.",
-      sourceLabel: "Example prompt",
+      sourceLabel: "From your messaging app",
       sourceText:
         "Remember that Lovable raised a $653M Series B at a $6.6B valuation, was founded by Anton Osika and Fabian Hedin, operates in the AI Developer Tools sector, and their round was led by a16z.",
       entitySelections: {

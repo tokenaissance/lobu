@@ -330,7 +330,9 @@ function getConnectionHref(
   return `/connect-from/openclaw/for/${useCaseId}`;
 }
 
-function getConnectionLabel(platformId: "slack" | "openclaw" | "chatgpt" | "claude") {
+function getConnectionLabel(
+  platformId: "slack" | "openclaw" | "chatgpt" | "claude"
+) {
   if (platformId === "slack") {
     return "Slack";
   }
@@ -351,11 +353,7 @@ export function ExampleShowcase(props: {
   onActiveUseCaseChange?: (id: string) => void;
   showTabs?: boolean;
 }) {
-  const {
-    activeUseCaseId,
-    onActiveUseCaseChange,
-    showTabs = true,
-  } = props;
+  const { activeUseCaseId, onActiveUseCaseChange, showTabs = true } = props;
   const [internalUseCaseId, setInternalUseCaseId] = useState(
     activeUseCaseId ?? examples[0].useCaseId
   );
@@ -1083,8 +1081,12 @@ export function ExampleShowcase(props: {
                                       border: `1px solid ${cardBorderSubtle}`,
                                     }}
                                   >
-                                    <PlatformLogo platformId={item.platform.id} />
-                                    <span>{getConnectionLabel(item.platform.id)}</span>
+                                    <PlatformLogo
+                                      platformId={item.platform.id}
+                                    />
+                                    <span>
+                                      {getConnectionLabel(item.platform.id)}
+                                    </span>
                                   </a>
                                 ) : null}
                               </div>

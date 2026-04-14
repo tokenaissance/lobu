@@ -1,0 +1,164 @@
+---
+import {
+  connectFromClientIds,
+  getConnectFromClientConfig,
+  type ConnectFromClientId,
+} from "../../connect-from-config";
+import {
+  getLandingUseCaseShowcase,
+  getOwlettoMcpUrl,
+  getOwlettoOrgSlug,
+  getOwlettoScopedMcpUrl,
+  getOwlettoUrl,
+} from "../../use-case-showcases";
+import type { LandingUseCaseId } from "../../use-case-definitions";
+import ConnectFromUseCaseLinks from "./ConnectFromUseCaseLinks.astro";
+
+const { clientId, useCaseId } = Astro.props as {
+  clientId: ConnectFromClientId;
+  useCaseId?: LandingUseCaseId;
+};
+const client = getConnectFromClientConfig(clientId);
+const showcase = useCaseId ? getLandingUseCaseShowcase(useCaseId) : undefined;
+const owlettoUrl = showcase ? getOwlettoUrl(showcase.id) : undefined;
+const owlettoMcpUrl = getOwlettoMcpUrl();
+const owlettoOrgSlug = showcase ? getOwlettoOrgSlug(showcase.id) : undefined;
+const owlettoScopedMcpUrl = showcase
+  ? getOwlettoScopedMcpUrl(showcase.id)
+  : owlettoMcpUrl;
+
+const clientSwitcherLinks = connectFromClientIds
+  .filter((id) => id !== clientId)
+  .map((id) => {
+    const target = getConnectFromClientConfig(id);
+    return {
+      label: target.label,
+      href: showcase
+        ? `/connect-from/${id}/for/${showcase.id}/`
+        : `/connect-from/${id}/`,
+    };
+  });
+
+const relatedLinks = client.docsRelated.map((link) => {
+  if (!showcase) return link;
+
+  if (link.href === "/getting-started/memory/") {
+    return { ...link, href: `/memory/for/${showcase.id}/` };
+  }
+
+  if (link.href.startsWith("/connect-from/")) {
+    return {
+      ...link,
+      href: `${link.href.replace(/\/$/, "")}/for/${showcase.id}/`,
+    };
+  }
+
+  return link;
+});
+---
+
+{client.docsIntro.map((paragraph) => (
+  <p>{paragraph}</p>
+))}
+
+{clientSwitcherLinks.length ? (
+  <>
+    <h2>Other Clients</h2>
+    <p>Switch to another client while keeping the same setup context.</p>
+    <p>
+      {clientSwitcherLinks.map((link, index) => (
+        <>
+          {index > 0 ? " · " : ""}
+          <a href={link.href}>{link.label}</a>
+        </>
+      ))}
+    </p>
+  </>
+) : null}
+
+<h2>What You Need</h2>
+<ul>
+  {client.docsNeeds.map((item) => (
+    <li>{item}</li>
+  ))}
+</ul>
+
+<h2>{client.docsSetupTitle}</h2>
+<ol>
+  {client.docsSetupSteps.map((step) => (
+    <li>{step}</li>
+  ))}
+</ol>
+
+{client.docsSetupNote ? <p>{client.docsSetupNote}</p> : null}
+
+{client.docsExtraSection ? (
+  <>
+    <h2>{client.docsExtraSection.title}</h2>
+    {client.docsExtraSection.paragraphs.map((paragraph) => (
+      <p>{paragraph}</p>
+    ))}
+  </>
+) : null}
+
+{showcase ? (
+  <>
+    <h2>{showcase.label} Setup</h2>
+    <p>
+      Use the org-scoped Owletto MCP endpoint for the {showcase.label.toLowerCase()} example so the connected client stays pinned to that workspace.
+    </p>
+    <ul>
+      <li>
+        <strong>MCP URL:</strong> <code>{owlettoScopedMcpUrl}</code>
+      </li>
+      {owlettoOrgSlug ? (
+        <li>
+          <strong>Fixed organization:</strong> <code>{owlettoOrgSlug}</code>
+        </li>
+      ) : null}
+      <li>
+        <strong>Memory model:</strong> {showcase.memory.entityTypes.join(", ")}
+      </li>
+    </ul>
+
+    {owlettoOrgSlug ? (
+      <p>
+        This scoped endpoint should not expose organization switching tools.
+      </p>
+    ) : null}
+
+    <details>
+      <summary>Suggested instructions for {client.label}</summary>
+      <pre><code>{client.prompt(showcase)}</code></pre>
+    </details>
+
+    <p>
+      <a href={`/memory/for/${showcase.id}/`}>
+        View the {showcase.label} memory example
+      </a>
+      {" · "}
+      <a href={owlettoUrl} target="_blank" rel="noopener noreferrer">
+        Open the {showcase.label} Owletto workspace
+      </a>
+    </p>
+  </>
+) : (
+  <>
+    <h2>Use-Case Examples</h2>
+    <p>
+      Open a use-case-specific page to see the project context, memory model, and
+      the Owletto connection path for that example.
+    </p>
+
+    <ConnectFromUseCaseLinks clientId={clientId} />
+  </>
+)}
+
+<h2>Related Docs</h2>
+<ul>
+  {relatedLinks.map((link) => (
+    <li>
+      <a href={link.href}>{link.label}</a>
+    </li>
+  ))}
+</ul>

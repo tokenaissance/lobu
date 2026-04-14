@@ -71,6 +71,14 @@ export default defineConfig({
             { label: "REST API", link: "/platforms/rest-api/" },
           ],
         },
+        {
+          label: "Connect From",
+          items: [
+            { label: "ChatGPT", link: "/connect-from/chatgpt/" },
+            { label: "Claude", link: "/connect-from/claude/" },
+            { label: "OpenClaw", link: "/connect-from/openclaw/" },
+          ],
+        },
         { label: "Guides", autogenerate: { directory: "guides" } },
         {
           label: "Reference",

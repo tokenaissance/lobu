@@ -6,6 +6,7 @@ import { LandingPage } from "../../components/LandingPage";
 import { Nav } from "../../components/Nav";
 import {
   getLandingUseCaseShowcase,
+  getSurfaceHeroCopy,
   landingUseCaseShowcases,
 } from "../../use-case-showcases";
 
@@ -33,7 +34,12 @@ const showcase = getLandingUseCaseShowcase(useCaseId);
   >
     <Nav currentPath={Astro.url.pathname} />
     <main class="relative z-[1]">
-      <LandingPage client:load defaultUseCaseId={showcase.id} linkTabsToCampaigns />
+      <LandingPage
+        client:load
+        defaultUseCaseId={showcase.id}
+        linkTabsToCampaigns
+        heroCopy={getSurfaceHeroCopy("landing", showcase.id)}
+      />
     </main>
     <Footer />
   </div>
