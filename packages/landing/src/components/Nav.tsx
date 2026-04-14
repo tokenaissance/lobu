@@ -10,7 +10,10 @@ function getUseCaseFromPath(path: string): string | undefined {
 function getLeftLinks(currentPath: string) {
   const useCaseId = getUseCaseFromPath(currentPath);
   return [
-    { label: "Memory", href: useCaseId ? `/memory/for/${useCaseId}` : "/memory" },
+    {
+      label: "Memory",
+      href: useCaseId ? `/memory/for/${useCaseId}` : "/memory",
+    },
     { label: "Skills", href: "/skills" },
     { label: "Pricing", href: "/pricing" },
   ];

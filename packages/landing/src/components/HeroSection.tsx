@@ -1,6 +1,7 @@
 import type { LandingUseCaseId } from "../use-case-definitions";
 import {
   getLandingUseCaseShowcase,
+  getOwlettoUrl,
   landingUseCaseOptions,
 } from "../use-case-showcases";
 import { formatUseCaseSummaryTitle, UseCaseSummary } from "./UseCaseSummary";
@@ -31,6 +32,7 @@ export function HeroSection(props: {
 }) {
   const activeUseCase = getLandingUseCaseShowcase(props.activeUseCaseId);
   const memoryHref = `/memory/for/${activeUseCase.id}`;
+  const owlettoUrl = getOwlettoUrl(activeUseCase.id);
 
   return (
     <section class="pt-24 pb-4 px-8 relative">
@@ -89,7 +91,7 @@ export function HeroSection(props: {
         {/* CTA buttons */}
         <div class="flex flex-wrap gap-3 mb-6 justify-center items-center">
           <a
-            href="https://owletto.com"
+            href={owlettoUrl}
             class="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-lg transition-all hover:opacity-90"
             style={{
               backgroundColor: "var(--color-page-text)",

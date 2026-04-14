@@ -32,7 +32,7 @@ export function LandingPage(props: {
         <ArchitectureSection />
         <div class="section-divider" />
       </div>
-      <CTA />
+      <CTA activeUseCaseId={activeUseCaseId} />
     </>
   );
 }

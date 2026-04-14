@@ -56,6 +56,7 @@ export type LandingUseCaseShowcase = {
 
 const docsLinks = {
   owlettoDocs: { label: "What is Owletto?", href: "/getting-started/memory/" },
+  skillsPage: { label: "How skills work →", href: "/skills" },
   ...technicalLinks,
 };
 
@@ -2169,7 +2170,9 @@ function getMemoryDefinition(
       links:
         step.id === "model"
           ? [...(step.links ?? []), docsLinks.owlettoDocs]
-          : step.links,
+          : step.id === "reuse"
+            ? [...(step.links ?? []), docsLinks.skillsPage]
+            : step.links,
       panel:
         step.panel ??
         (step.id === "connect" || step.id === "auth" || step.id === "reuse"
@@ -2302,4 +2305,15 @@ export function getMemoryPrompt(showcase: LandingUseCaseShowcase) {
   const memory = showcase.memory;
 
   return `Initialize Owletto memory for ${showcase.label}. Model these entities: ${memory.entityTypes.join(", ")}. Use this source text as the first example: "${memory.sourceText}". Keep the extracted memory durable, typed, and linked so the runtime can reuse it across future tasks.`;
+}
+
+const OWLETTO_URL = "https://owletto.com";
+
+export function getOwlettoUrl(useCaseId?: LandingUseCaseId) {
+  if (!useCaseId) return OWLETTO_URL;
+  const def = landingUseCases[useCaseId];
+  if ("owlettoOrg" in def && def.owlettoOrg) {
+    return `${OWLETTO_URL}/${def.owlettoOrg}`;
+  }
+  return OWLETTO_URL;
 }

@@ -1,10 +1,10 @@
 import { useMemo, useState } from "preact/hooks";
 import type { LandingUseCaseId } from "../use-case-definitions";
-import { landingUseCases } from "../use-case-definitions";
 import {
   DEFAULT_LANDING_USE_CASE_ID,
   getLandingUseCaseShowcase,
   getMemoryPrompt,
+  getOwlettoUrl,
   landingUseCaseOptions,
 } from "../use-case-showcases";
 import { CommandHero } from "./CommandHero";
@@ -20,7 +20,6 @@ function SectionDivider() {
 }
 
 const GITHUB_URL = "https://github.com/lobu-ai/owletto";
-const OWLETTO_URL = "https://owletto.com";
 
 function GitHubIcon() {
   return (
@@ -50,13 +49,10 @@ export function MemorySection(props: {
     () => getLandingUseCaseShowcase(activeUseCaseId),
     [activeUseCaseId]
   );
-  const owlettoUrl = useMemo(() => {
-    const useCaseDef = landingUseCases[activeUseCaseId];
-    if ("owlettoOrg" in useCaseDef && useCaseDef.owlettoOrg) {
-      return `${OWLETTO_URL}/${useCaseDef.owlettoOrg}`;
-    }
-    return OWLETTO_URL;
-  }, [activeUseCaseId]);
+  const owlettoUrl = useMemo(
+    () => getOwlettoUrl(activeUseCaseId),
+    [activeUseCaseId]
+  );
 
   return (
     <section class="pt-32 pb-24 px-4 sm:px-8">
@@ -96,7 +92,9 @@ export function MemorySection(props: {
             activeId={activeUseCaseId}
             label="Pick a use case"
             onSelect={props.linkTabsToPages ? undefined : setActiveUseCaseId}
-            hrefForId={props.linkTabsToPages ? (id) => `/memory/for/${id}` : undefined}
+            hrefForId={
+              props.linkTabsToPages ? (id) => `/memory/for/${id}` : undefined
+            }
           />
         </div>
 

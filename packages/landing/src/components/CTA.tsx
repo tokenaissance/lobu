@@ -1,6 +1,10 @@
+import type { LandingUseCaseId } from "../use-case-definitions";
+import { getOwlettoUrl } from "../use-case-showcases";
 import { ScheduleCallButton, ScheduleCallIcon } from "./ScheduleDialog";
 
-export function CTA() {
+export function CTA(props: { activeUseCaseId?: LandingUseCaseId }) {
+  const owlettoUrl = getOwlettoUrl(props.activeUseCaseId);
+
   return (
     <section class="py-14 px-8 text-center">
       <div class="max-w-2xl mx-auto">
@@ -17,45 +21,16 @@ export function CTA() {
           Get started locally, then self-host or embed with TypeScript.
         </p>
         <div class="flex flex-wrap justify-center gap-3 mb-8">
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 font-mono text-[13px] font-semibold px-6 py-3 rounded-lg transition-all hover:opacity-90 cursor-pointer"
+          <a
+            href={owlettoUrl}
+            class="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-lg transition-all hover:opacity-90"
             style={{
               backgroundColor: "var(--color-page-text)",
               color: "var(--color-page-bg)",
             }}
-            onClick={(e) => {
-              const button = e.currentTarget as HTMLButtonElement;
-              navigator.clipboard
-                .writeText("npx @lobu/cli@latest init")
-                .then(() => {
-                  const original = button.innerHTML;
-                  button.innerHTML =
-                    '<span style="color: var(--color-tg-accent)">Copied!</span>';
-                  setTimeout(() => {
-                    button.innerHTML = original;
-                  }, 2000);
-                });
-            }}
           >
-            <span style={{ color: "var(--color-tg-accent)" }}>$</span> npx
-            @lobu/cli@latest init
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style={{ opacity: 0.5 }}
-              aria-hidden="true"
-            >
-              <rect x="9" y="9" width="13" height="13" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-          </button>
+            See demo now
+          </a>
           <ScheduleCallButton
             class="inline-flex items-center gap-2 text-sm font-medium px-6 py-3 rounded-lg transition-all hover:opacity-90"
             style={{

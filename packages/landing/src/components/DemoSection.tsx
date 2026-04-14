@@ -265,7 +265,7 @@ export function DemoSection(props: {
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card
-            title="Runtime"
+            title="Skills"
             description={activeUseCase.skills.description}
             href="/skills"
             hrefLabel="Skills page"
