@@ -1,4 +1,0 @@
-version: 1
-slug: triggered-by-deploy
-name: Triggered by Deploy
-description: Link operational events back to the rollout or config change that caused them.

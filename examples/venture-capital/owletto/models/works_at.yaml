@@ -1,0 +1,4 @@
+version: 1
+type: relationship
+slug: works_at
+name: Works At

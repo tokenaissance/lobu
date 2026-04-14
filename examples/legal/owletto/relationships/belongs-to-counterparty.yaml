@@ -1,4 +1,0 @@
-version: 1
-slug: belongs-to-counterparty
-name: Belongs to Counterparty
-description: Tie agreements and negotiation context back to the right external party.

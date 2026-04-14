@@ -1,0 +1,68 @@
+version: 1
+type: entity
+slug: company
+name: Company
+description: Portfolio company or deal pipeline company
+icon: building
+color: "#2563eb"
+metadata_schema:
+  type: object
+  properties:
+    market:
+      type: string
+      x-table-column: true
+      x-table-label: Market
+    sector:
+      type: string
+      enum:
+        - bio-health
+        - ai
+        - fintech
+        - crypto
+        - consumer
+      x-table-column: true
+      x-table-label: Sector
+    category:
+      type: string
+      enum:
+        - portfolio
+        - recruiter
+        - prospect
+      x-table-column: true
+      x-table-label: Category
+    location:
+      type: string
+      x-table-column: true
+      x-table-label: Location
+    one_liner:
+      type: string
+    team_size:
+      type: integer
+    founding_year:
+      type: integer
+    funding_raised:
+      type: string
+    valuation:
+      type: string
+    revenue:
+      type: string
+    growth_rate:
+      type: string
+    traction_score:
+      type: number
+    thesis:
+      type: string
+    stage:
+      type: string
+      enum:
+        - idea
+        - pre-seed
+        - seed
+        - series-a
+        - series-b
+        - series-c
+        - growth
+        - public
+    linkedin_url:
+      type: string
+      format: uri

@@ -1,0 +1,5 @@
+version: 1
+type: relationship
+slug: prefers
+name: Prefers
+description: Persist communication preferences so future replies stay aligned.

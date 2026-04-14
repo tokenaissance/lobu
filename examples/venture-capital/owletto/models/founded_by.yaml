@@ -1,0 +1,13 @@
+version: 1
+type: relationship
+slug: founded_by
+name: Founded By
+description: Company was founded by this person
+metadata_schema:
+  type: object
+  properties:
+    equity_pct:
+      type: number
+    founding_date:
+      type: string
+      format: date

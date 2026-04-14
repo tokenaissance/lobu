@@ -1,0 +1,5 @@
+version: 1
+type: relationship
+slug: placed-order
+name: Placed Order
+description: Link orders to customers so purchase history stays queryable.

@@ -1,0 +1,5 @@
+version: 1
+type: relationship
+slug: affects
+name: Affects
+description: Connect commercial signals directly to the renewal or expansion they influence.

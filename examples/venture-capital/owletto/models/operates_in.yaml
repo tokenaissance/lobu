@@ -1,0 +1,5 @@
+version: 1
+type: relationship
+slug: operates_in
+name: Operates In
+description: Company operates in this market

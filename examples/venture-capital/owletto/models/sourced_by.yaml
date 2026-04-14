@@ -1,0 +1,4 @@
+version: 1
+type: relationship
+slug: sourced_by
+name: Sourced By

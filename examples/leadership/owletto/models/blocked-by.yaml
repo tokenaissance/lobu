@@ -1,0 +1,5 @@
+version: 1
+type: relationship
+slug: blocked-by
+name: Blocked By
+description: Attach blocked decisions to the dependency that is holding them up.

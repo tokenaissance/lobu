@@ -58,9 +58,12 @@ function readYamlDir<T = Record<string, unknown>>(dirPath: string): T[] {
 // Re-use the canonical types from the sibling owletto repo.
 // If the owletto package is not available (e.g. CI), these minimal
 // aliases cover the fields we actually read.
-type EntityYaml = import("../../owletto/packages/cli/src/lib/schema.ts").EntitySchema;
-type WatcherYaml = import("../../owletto/packages/cli/src/lib/schema.ts").WatcherSchema;
-type ProjectYaml = import("../../owletto/packages/cli/src/lib/schema.ts").ProjectSchema;
+type EntityYaml =
+  import("../../owletto/packages/cli/src/lib/schema.ts").EntitySchema;
+type WatcherYaml =
+  import("../../owletto/packages/cli/src/lib/schema.ts").WatcherSchema;
+type ProjectYaml =
+  import("../../owletto/packages/cli/src/lib/schema.ts").ProjectSchema;
 
 // ── TOML types ───────────────────────────────────────────────────────
 
@@ -116,12 +119,16 @@ function buildModel(exampleName: string): UseCaseModel | null {
   const project = readYamlFile<ProjectYaml>(projectPath)!;
   const owlettoOrg = project.org;
 
-  // 2. entities
-  const entities = readYamlDir<EntityYaml>(join(owlettoDir, "entities"));
+  // 2. Load all models from models/ directory
+  type AnyModel = EntityYaml | WatcherYaml;
+  const allModels = readYamlDir<AnyModel>(join(owlettoDir, "models"));
+  const entities = allModels.filter(
+    (m): m is EntityYaml => (m as Record<string, unknown>).type === "entity"
+  );
   const entityNames = entities.map((e) => e.name);
-
-  // 3. watchers — first watcher only
-  const watchers = readYamlDir<WatcherYaml>(join(owlettoDir, "watchers"));
+  const watchers = allModels.filter(
+    (m): m is WatcherYaml => (m as Record<string, unknown>).type === "watcher"
+  );
   const firstWatcher = watchers[0];
   const watcher = firstWatcher
     ? {

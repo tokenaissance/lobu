@@ -1,0 +1,5 @@
+version: 1
+type: relationship
+slug: reconciles-to
+name: Reconciles To
+description: Tie transactions and balances back to the accounts they roll into.
