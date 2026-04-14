@@ -3,8 +3,9 @@ import {
   getLandingUseCaseShowcase,
   getOwlettoUrl,
   landingUseCaseOptions,
+  type SurfaceHeroCopy,
 } from "../use-case-showcases";
-import { formatUseCaseSummaryTitle, UseCaseSummary } from "./UseCaseSummary";
+import { HighlightedText } from "./HighlightedText";
 import { UseCaseTabs } from "./UseCaseTabs";
 
 const ApiIcon = () => (
@@ -29,6 +30,7 @@ export function HeroSection(props: {
   activeUseCaseId?: LandingUseCaseId;
   onActiveUseCaseChange?: (id: LandingUseCaseId) => void;
   linkTabsToCampaigns?: boolean;
+  heroCopy?: SurfaceHeroCopy;
 }) {
   const activeUseCase = getLandingUseCaseShowcase(props.activeUseCaseId);
   const memoryHref = `/memory/for/${activeUseCase.id}`;
@@ -42,53 +44,60 @@ export function HeroSection(props: {
           class="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1] mb-5"
           style={{ color: "var(--color-page-text)" }}
         >
-          Your{" "}
-          <span
-            style={{
-              color: "var(--color-tg-accent)",
-            }}
-          >
-            AI team
-          </span>
-          , running in your infrastructure
+          <HighlightedText
+            text={
+              props.heroCopy?.title ??
+              "Your AI team, running in your infrastructure"
+            }
+            highlight={props.heroCopy?.highlight ?? "AI team"}
+          />
         </h1>
-        <p
-          class="text-lg mx-auto mb-4 leading-relaxed"
-          style={{ color: "var(--color-page-text-muted)" }}
-        >
-          <a
-            href="/guides/security"
-            class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+        {props.heroCopy ? (
+          <p
+            class="text-lg mx-auto mb-4 leading-relaxed max-w-3xl"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            Sandboxed
-          </a>{" "}
-          persistent agents powered by the{" "}
-          <a
-            href="/getting-started/comparison/"
-            class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+            {props.heroCopy.description}
+          </p>
+        ) : (
+          <p
+            class="text-lg mx-auto mb-4 leading-relaxed"
             style={{ color: "var(--color-page-text-muted)" }}
           >
-            OpenClaw harness
-          </a>
-          , <br />
-          <a
-            href={memoryHref}
-            class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
-            style={{ color: "var(--color-page-text-muted)" }}
-          >
-            long-term memory
-          </a>{" "}
-          and installable{" "}
-          <a
-            href={skillsHref}
-            class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
-            style={{ color: "var(--color-page-text-muted)" }}
-          >
-            skills
-          </a>
-          .
-        </p>
+            <a
+              href="/guides/security"
+              class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+              style={{ color: "var(--color-page-text-muted)" }}
+            >
+              Sandboxed
+            </a>{" "}
+            persistent agents powered by the{" "}
+            <a
+              href="/getting-started/comparison/"
+              class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+              style={{ color: "var(--color-page-text-muted)" }}
+            >
+              OpenClaw harness
+            </a>
+            , <br />
+            <a
+              href={memoryHref}
+              class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+              style={{ color: "var(--color-page-text-muted)" }}
+            >
+              long-term memory
+            </a>{" "}
+            and installable{" "}
+            <a
+              href={skillsHref}
+              class="underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80"
+              style={{ color: "var(--color-page-text-muted)" }}
+            >
+              skills
+            </a>
+            .
+          </p>
+        )}
         {/* CTA buttons */}
         <div class="flex flex-wrap gap-3 mb-6 justify-center items-center">
           <a
@@ -131,11 +140,6 @@ export function HeroSection(props: {
             hrefForId={
               props.linkTabsToCampaigns ? (id) => `/for/${id}` : undefined
             }
-          />
-          <UseCaseSummary
-            title={formatUseCaseSummaryTitle(activeUseCase.label)}
-            description={activeUseCase.memory.description}
-            className="mt-4 mb-0"
           />
         </div>
       </div>

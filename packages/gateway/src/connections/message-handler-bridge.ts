@@ -13,6 +13,7 @@ import {
 import type Redis from "ioredis";
 import type { CommandDispatcher } from "../commands/command-dispatcher";
 import { createChatReply } from "../commands/command-reply-adapters";
+import type { ArtifactStore } from "../files/artifact-store";
 import type { CoreServices } from "../platform";
 import {
   buildMessagePayload,
@@ -33,6 +34,38 @@ interface HistoryEntry {
   content: string;
   authorName?: string;
   timestamp: number;
+}
+
+/**
+ * Inbound file shape passed to the worker on platformMetadata.files.
+ * `downloadUrl` is a signed, time-limited public artifact URL the worker
+ * can fetch over the proxy without any platform-specific auth.
+ */
+export interface IngestedFile {
+  id: string;
+  name: string;
+  mimetype: string;
+  size: number;
+  downloadUrl: string;
+}
+
+const AUDIO_MIMES_PREFIX = ["audio/"] as const;
+const AUDIO_MIMES_EXACT = new Set(["application/ogg"]);
+
+function isAudioAttachment(mime: string | undefined): boolean {
+  if (!mime) return false;
+  if (AUDIO_MIMES_EXACT.has(mime)) return true;
+  return AUDIO_MIMES_PREFIX.some((p) => mime.startsWith(p));
+}
+
+function deriveFilename(
+  attachment: { name?: string; mimeType?: string; type?: string },
+  index: number
+): string {
+  if (attachment.name?.trim()) return attachment.name.trim();
+  const ext = attachment.mimeType?.split("/")[1]?.split(";")[0];
+  const stem = attachment.type || "attachment";
+  return ext ? `${stem}-${index + 1}.${ext}` : `${stem}-${index + 1}`;
 }
 
 export function isSenderAllowed(
@@ -77,6 +110,8 @@ export function registerMessageHandlers(
 
 class MessageHandlerBridge {
   private redis: Redis;
+  private artifactStore: ArtifactStore;
+  private publicGatewayUrl: string;
 
   constructor(
     private connection: PlatformConnection,
@@ -85,6 +120,90 @@ class MessageHandlerBridge {
     private commandDispatcher?: CommandDispatcher
   ) {
     this.redis = services.getQueue().getRedisClient();
+    this.artifactStore = services.getArtifactStore();
+    this.publicGatewayUrl = services.getPublicGatewayUrl();
+  }
+
+  /**
+   * Fetch every inbound attachment via the chat SDK's auth-aware
+   * `Attachment.fetchData()` and publish each as a gateway artifact.
+   * The returned list is what the worker sees on `platformMetadata.files`,
+   * with `downloadUrl` pointing at a signed public URL it can fetch over
+   * its egress proxy — no platform-specific auth ever crosses the
+   * gateway/worker boundary.
+   *
+   * Audio attachments still need their bytes for transcription, so we hand
+   * the raw buffer back via the `audioBytes` slot rather than re-fetching.
+   */
+  private async ingestAttachments(message: {
+    attachments?: Array<{
+      data?: Buffer | Blob;
+      fetchData?: () => Promise<Buffer>;
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      type?: string;
+    }>;
+  }): Promise<{
+    files: IngestedFile[];
+    audioBytes: Array<{ buffer: Buffer; mimeType: string }>;
+  }> {
+    const attachments = message.attachments;
+    if (!attachments?.length) return { files: [], audioBytes: [] };
+
+    const files: IngestedFile[] = [];
+    const audioBytes: Array<{ buffer: Buffer; mimeType: string }> = [];
+
+    for (let i = 0; i < attachments.length; i++) {
+      const att = attachments[i]!;
+      try {
+        let buffer: Buffer | undefined;
+        if (att.data) {
+          buffer = Buffer.isBuffer(att.data)
+            ? att.data
+            : Buffer.from(await (att.data as Blob).arrayBuffer());
+        } else if (att.fetchData) {
+          buffer = await att.fetchData();
+        }
+        if (!buffer || buffer.length === 0) {
+          logger.warn(
+            { mimeType: att.mimeType, type: att.type, name: att.name },
+            "Skipping inbound attachment with no fetchable data"
+          );
+          continue;
+        }
+        const mimeType = att.mimeType || "application/octet-stream";
+        if (isAudioAttachment(mimeType)) {
+          audioBytes.push({ buffer, mimeType });
+        }
+        const filename = deriveFilename(att, i);
+        const published = await this.artifactStore.publish({
+          buffer,
+          filename,
+          contentType: mimeType,
+          publicGatewayUrl: this.publicGatewayUrl,
+        });
+        files.push({
+          id: published.artifactId,
+          name: published.filename,
+          mimetype: published.contentType,
+          size: published.size,
+          downloadUrl: published.downloadUrl,
+        });
+      } catch (error) {
+        logger.error(
+          {
+            error: String(error),
+            mimeType: att.mimeType,
+            type: att.type,
+            name: att.name,
+          },
+          "Failed to ingest inbound attachment"
+        );
+      }
+    }
+
+    return { files, audioBytes };
   }
 
   async handleMessage(
@@ -207,37 +326,33 @@ class MessageHandlerBridge {
       }
     }
 
-    // Gap 7: Audio transcription
+    // Ingest every inbound attachment as an artifact, regardless of type.
+    // Workers consume them via `platformMetadata.files`; we never hand the
+    // worker platform-specific file IDs or bot tokens.
+    const { files: ingestedFiles, audioBytes } =
+      await this.ingestAttachments(message);
+
+    // Gap 7: Audio transcription — runs over the bytes we already fetched.
     let messageText = message.text ?? "";
     const transcriptionService = this.services.getTranscriptionService();
-    if (transcriptionService && message.attachments?.length) {
-      for (const attachment of message.attachments) {
-        const mime = attachment.mimeType ?? "";
-        if (
-          mime.startsWith("audio/") ||
-          mime === "application/ogg" ||
-          mime.startsWith("video/note")
-        ) {
-          try {
-            const data = await attachment.fetchData?.();
-            if (data) {
-              const result = await transcriptionService.transcribe(
-                Buffer.from(data),
-                agentId,
-                mime
-              );
-              if ("text" in result && result.text) {
-                messageText = messageText
-                  ? `${messageText}\n\n[Voice message]: ${result.text}`
-                  : result.text;
-              }
-            }
-          } catch (error) {
-            logger.warn(
-              { error: String(error), messageId },
-              "Audio transcription failed"
-            );
+    if (transcriptionService && audioBytes.length > 0) {
+      for (const audio of audioBytes) {
+        try {
+          const result = await transcriptionService.transcribe(
+            audio.buffer,
+            agentId,
+            audio.mimeType
+          );
+          if ("text" in result && result.text) {
+            messageText = messageText
+              ? `${messageText}\n\n[Voice message]: ${result.text}`
+              : result.text;
           }
+        } catch (error) {
+          logger.warn(
+            { error: String(error), messageId },
+            "Audio transcription failed"
+          );
         }
       }
     }
@@ -343,6 +458,7 @@ class MessageHandlerBridge {
           responseThreadId: thread.id,
           conversationHistory:
             conversationHistory.length > 0 ? conversationHistory : undefined,
+          ...(ingestedFiles.length > 0 && { files: ingestedFiles }),
           ...(sessionReset && { sessionReset: true }),
         },
         agentOptions,

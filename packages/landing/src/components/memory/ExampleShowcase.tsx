@@ -4,14 +4,9 @@ import { examples, type RecordNode } from "../../memory-examples";
 import { landingUseCaseOptions } from "../../use-case-showcases";
 import { CompactContentRail } from "../CompactContentRail";
 import { SectionHeader } from "../SectionHeader";
-import { formatUseCaseSummaryTitle, UseCaseSummary } from "../UseCaseSummary";
 import { UseCaseTabs } from "../UseCaseTabs";
 import {
-  accentAmber,
   accentCyan,
-  accentGreen,
-  accentPink,
-  accentPurple,
   cardBg,
   cardBorder,
   cardBorderFaint,
@@ -179,12 +174,19 @@ function PlatformLogo({
   );
 }
 
+const primaryAccent = "var(--color-tg-accent)";
+const primaryAccentSoft = "rgba(var(--color-tg-accent-rgb), 0.08)";
+const primaryAccentSoftStrong = "rgba(var(--color-tg-accent-rgb), 0.12)";
+const primaryAccentBorder = "1px solid rgba(var(--color-tg-accent-rgb), 0.24)";
+const primaryAccentBorderStrong =
+  "1px solid rgba(var(--color-tg-accent-rgb), 0.3)";
+
 const stepColors = {
-  model: accentPurple,
-  connect: accentAmber,
-  auth: accentCyan,
-  reuse: accentGreen,
-  fresh: accentPink,
+  model: primaryAccent,
+  connect: primaryAccent,
+  auth: primaryAccent,
+  reuse: primaryAccent,
+  fresh: primaryAccent,
 };
 
 function formatStepLabel(label: string) {
@@ -248,11 +250,26 @@ function StepChip({
   onClick?: () => void;
   color: string;
 }) {
+  const isPrimaryAccent = color === primaryAccent;
   const style = {
     color: active ? darkBase : textColor,
-    backgroundColor: active ? color : `${color}14`,
-    borderColor: active ? `${color}b8` : `${color}47`,
-    boxShadow: active ? `0 8px 24px ${color}29` : "none",
+    backgroundColor: active
+      ? color
+      : isPrimaryAccent
+        ? primaryAccentSoft
+        : `${color}14`,
+    borderColor: active
+      ? isPrimaryAccent
+        ? "rgba(var(--color-tg-accent-rgb), 0.72)"
+        : `${color}b8`
+      : isPrimaryAccent
+        ? "rgba(var(--color-tg-accent-rgb), 0.28)"
+        : `${color}47`,
+    boxShadow: active
+      ? isPrimaryAccent
+        ? "0 8px 24px rgba(var(--color-tg-accent-rgb), 0.16)"
+        : `0 8px 24px ${color}29`
+      : "none",
   };
 
   if (!onClick) {
@@ -294,17 +311,50 @@ function LinkRow({ links }: { links: Array<{ label: string; href: string }> }) {
   );
 }
 
+function getConnectionHref(
+  platformId: "slack" | "openclaw" | "chatgpt" | "claude",
+  useCaseId: string
+) {
+  if (platformId === "slack") {
+    return "/platforms/slack/";
+  }
+
+  if (platformId === "chatgpt") {
+    return `/connect-from/chatgpt/for/${useCaseId}`;
+  }
+
+  if (platformId === "claude") {
+    return `/connect-from/claude/for/${useCaseId}`;
+  }
+
+  return `/connect-from/openclaw/for/${useCaseId}`;
+}
+
+function getConnectionLabel(platformId: "slack" | "openclaw" | "chatgpt" | "claude") {
+  if (platformId === "slack") {
+    return "Slack";
+  }
+
+  if (platformId === "chatgpt") {
+    return "Connect from ChatGPT";
+  }
+
+  if (platformId === "claude") {
+    return "Connect from Claude";
+  }
+
+  return "Install to OpenClaw";
+}
+
 export function ExampleShowcase(props: {
   activeUseCaseId?: string;
   onActiveUseCaseChange?: (id: string) => void;
   showTabs?: boolean;
-  summaryTitlePrefix?: string;
 }) {
   const {
     activeUseCaseId,
     onActiveUseCaseChange,
     showTabs = true,
-    summaryTitlePrefix = "",
   } = props;
   const [internalUseCaseId, setInternalUseCaseId] = useState(
     activeUseCaseId ?? examples[0].useCaseId
@@ -335,6 +385,7 @@ export function ExampleShowcase(props: {
       ([, nodeId]) => nodeId === selectedNodeId
     )?.[0] ?? selectedNode.kind;
   const selectedNodeAliases = getNodeAliases(selectedNode, selectedHighlights);
+  const evidenceTrailToggleId = `evidence-trail-${activeExample.useCaseId}`;
 
   const switchExample = (id: string) => {
     onActiveUseCaseChange?.(id);
@@ -354,15 +405,7 @@ export function ExampleShowcase(props: {
         />
       ) : null}
 
-      <UseCaseSummary
-        title={formatUseCaseSummaryTitle(
-          activeExample.title,
-          summaryTitlePrefix
-        )}
-        description={activeExample.description}
-      />
-
-      <div class="text-center mb-4">
+      <div class="text-center mb-4 mt-6">
         <a
           href={`https://github.com/lobu-ai/lobu/tree/main/examples/${activeExample.examplePath}`}
           target="_blank"
@@ -393,12 +436,15 @@ export function ExampleShowcase(props: {
           }}
         >
           <div class="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
-            <div
-              class="text-xs uppercase tracking-[0.24em] mb-3"
-              style={{ color: labelGray }}
-            >
-              {activeExample.sourceLabel}
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div
+                class="text-xs uppercase tracking-[0.24em]"
+                style={{ color: labelGray }}
+              >
+                {activeExample.sourceLabel}
+              </div>
             </div>
+
             <p
               class="text-lg sm:text-[1rem] lg:text-[1.05rem] leading-8 sm:leading-9 m-0"
               style={{ color: textColor }}
@@ -407,13 +453,62 @@ export function ExampleShowcase(props: {
             </p>
           </div>
 
+          <input
+            id={evidenceTrailToggleId}
+            type="checkbox"
+            class="peer sr-only"
+          />
+
           <div
-            class="px-3 sm:px-4 py-3 border-t flex flex-wrap items-center justify-end gap-2"
+            class="px-3 sm:px-4 py-3 border-t flex flex-wrap items-center justify-between gap-2"
             style={{
               borderColor: cardBorderSubtle,
               backgroundColor: "rgba(255,255,255,0.02)",
             }}
           >
+            <div class="flex items-center gap-2">
+              <label
+                for={evidenceTrailToggleId}
+                class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium border cursor-pointer transition-all hover:opacity-90 peer-checked:hidden"
+                style={{
+                  color: primaryAccent,
+                  backgroundColor: "rgba(var(--color-tg-accent-rgb), 0.08)",
+                  borderColor: "rgba(var(--color-tg-accent-rgb), 0.22)",
+                }}
+              >
+                <span
+                  class="w-4 h-4 rounded-full flex items-center justify-center text-[9px]"
+                  style={{
+                    color: primaryAccent,
+                    backgroundColor: "rgba(var(--color-tg-accent-rgb), 0.12)",
+                  }}
+                >
+                  +
+                </span>
+                Show evidence trail
+              </label>
+              <label
+                for={evidenceTrailToggleId}
+                class="hidden items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium border cursor-pointer transition-all hover:opacity-90 peer-checked:inline-flex"
+                style={{
+                  color: textColor,
+                  backgroundColor: primaryAccentSoft,
+                  borderColor: "rgba(var(--color-tg-accent-rgb), 0.35)",
+                }}
+              >
+                <span
+                  class="w-4 h-4 rounded-full flex items-center justify-center text-[9px]"
+                  style={{
+                    color: darkBase,
+                    backgroundColor: "var(--color-tg-accent)",
+                  }}
+                >
+                  −
+                </span>
+                Hide evidence trail
+              </label>
+            </div>
+
             <div
               class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium border"
               style={{
@@ -432,6 +527,106 @@ export function ExampleShowcase(props: {
                 →
               </span>
               Send message
+            </div>
+          </div>
+
+          <div
+            class="hidden peer-checked:block px-4 sm:px-5 py-3 border-t"
+            style={{ borderColor: cardBorderSubtle }}
+          >
+            <div class="grid gap-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div
+                  class="text-xs uppercase tracking-[0.24em]"
+                  style={{ color: labelGray }}
+                >
+                  {activeExample.eventLog.title}
+                </div>
+                <span
+                  class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]"
+                  style={{
+                    color: primaryAccent,
+                    backgroundColor: primaryAccentSoft,
+                    border: primaryAccentBorder,
+                  }}
+                >
+                  Prompt additions highlighted
+                </span>
+              </div>
+              <p
+                class="text-xs leading-5 m-0 max-w-3xl"
+                style={{ color: textMuted }}
+              >
+                {activeExample.eventLog.description}
+              </p>
+
+              <div
+                class="overflow-hidden rounded-lg border"
+                style={{
+                  borderColor: cardBorderSubtle,
+                  backgroundColor: deepBg,
+                }}
+              >
+                <div class="overflow-x-auto">
+                  <table class="min-w-full border-collapse text-left">
+                    <thead>
+                      <tr>
+                        {activeExample.eventLog.columns.map((column) => (
+                          <th
+                            key={column}
+                            class="px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.16em]"
+                            style={{
+                              color: labelGray,
+                              borderBottom: `1px solid ${cardBorderSubtle}`,
+                              backgroundColor: innerCardBg,
+                            }}
+                          >
+                            {column}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeExample.eventLog.rows.map((row, rowIndex) => {
+                        const highlighted =
+                          activeExample.eventLog.highlightedRows?.includes(
+                            rowIndex
+                          ) ?? false;
+
+                        return (
+                          <tr
+                            key={`${row[0]}-${row[1]}`}
+                            style={{
+                              backgroundColor: highlighted
+                                ? "rgba(var(--color-tg-accent-rgb), 0.08)"
+                                : "transparent",
+                            }}
+                          >
+                            {row.map((cell, cellIndex) => (
+                              <td
+                                key={`${row[0]}-${row[1]}-${cellIndex}`}
+                                class="px-2.5 py-2 align-top text-[11px] leading-4"
+                                style={{
+                                  color:
+                                    cellIndex === 1 ? primaryAccent : textColor,
+                                  borderTop:
+                                    rowIndex === 0
+                                      ? "none"
+                                      : `1px solid ${cardBorderFaint}`,
+                                  fontWeight:
+                                    highlighted && cellIndex === 3 ? 600 : 400,
+                                }}
+                              >
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -489,7 +684,7 @@ export function ExampleShowcase(props: {
                                       ? () => setSelectedNodeId(targetNodeId)
                                       : undefined
                                   }
-                                  color={accentPurple}
+                                  color={primaryAccent}
                                 />
                               );
                             }
@@ -503,7 +698,7 @@ export function ExampleShowcase(props: {
                     <DetailCard>
                       <div
                         class="text-[11px] font-semibold uppercase tracking-[0.24em] mb-3"
-                        style={{ color: accentPurple }}
+                        style={{ color: primaryAccent }}
                       >
                         Selected node
                       </div>
@@ -525,9 +720,9 @@ export function ExampleShowcase(props: {
                         <span
                           class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em]"
                           style={{
-                            color: accentPurple,
-                            backgroundColor: "rgba(192, 132, 252, 0.08)",
-                            border: "1px solid rgba(192, 132, 252, 0.24)",
+                            color: primaryAccent,
+                            backgroundColor: primaryAccentSoft,
+                            border: primaryAccentBorder,
                           }}
                         >
                           {selectedNode.kind}
@@ -601,13 +796,13 @@ export function ExampleShowcase(props: {
                                       class="px-1.5 py-0.5 rounded-full text-[10px]"
                                       style={{
                                         color: isSelectedSource
-                                          ? accentPurple
+                                          ? primaryAccent
                                           : textColor,
                                         backgroundColor: isSelectedSource
-                                          ? "rgba(192, 132, 252, 0.12)"
+                                          ? primaryAccentSoftStrong
                                           : "rgba(103, 232, 249, 0.08)",
                                         border: isSelectedSource
-                                          ? "1px solid rgba(192, 132, 252, 0.3)"
+                                          ? primaryAccentBorderStrong
                                           : "1px solid rgba(103, 232, 249, 0.22)",
                                       }}
                                     >
@@ -632,13 +827,13 @@ export function ExampleShowcase(props: {
                                       class="px-1.5 py-0.5 rounded-full text-[10px]"
                                       style={{
                                         color: isSelectedTarget
-                                          ? accentPurple
+                                          ? primaryAccent
                                           : textColor,
                                         backgroundColor: isSelectedTarget
-                                          ? "rgba(192, 132, 252, 0.12)"
+                                          ? primaryAccentSoftStrong
                                           : "rgba(134, 239, 172, 0.08)",
                                         border: isSelectedTarget
-                                          ? "1px solid rgba(192, 132, 252, 0.3)"
+                                          ? primaryAccentBorderStrong
                                           : "1px solid rgba(134, 239, 172, 0.22)",
                                       }}
                                     >
@@ -703,9 +898,9 @@ export function ExampleShowcase(props: {
                         <span
                           class="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-[0.14em]"
                           style={{
-                            color: accentPink,
-                            backgroundColor: "rgba(251, 113, 133, 0.08)",
-                            border: "1px solid rgba(251, 113, 133, 0.22)",
+                            color: primaryAccent,
+                            backgroundColor: primaryAccentSoft,
+                            border: primaryAccentBorder,
                           }}
                         >
                           {activeExample.watcher.schedule}
@@ -721,7 +916,7 @@ export function ExampleShowcase(props: {
                         <div>
                           <div
                             class="text-[10px] uppercase tracking-[0.18em] mb-0.5"
-                            style={{ color: accentPink }}
+                            style={{ color: primaryAccent }}
                           >
                             Extraction schema
                           </div>
@@ -729,7 +924,7 @@ export function ExampleShowcase(props: {
                             class="text-[11px] leading-5 block px-2 py-1.5 rounded-lg"
                             style={{
                               color: textColor,
-                              backgroundColor: "rgba(251, 113, 133, 0.06)",
+                              backgroundColor: primaryAccentSoft,
                             }}
                           >
                             {activeExample.watcher.extractionSchema}
@@ -738,7 +933,7 @@ export function ExampleShowcase(props: {
                         <div>
                           <div
                             class="text-[10px] uppercase tracking-[0.18em] mb-0.5"
-                            style={{ color: accentPink }}
+                            style={{ color: primaryAccent }}
                           >
                             Schema evolution
                           </div>
@@ -876,19 +1071,21 @@ export function ExampleShowcase(props: {
                                   {item.detail}
                                 </div>
                                 {item.platform ? (
-                                  <div
-                                    class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-medium"
+                                  <a
+                                    href={getConnectionHref(
+                                      item.platform.id,
+                                      activeExample.useCaseId
+                                    )}
+                                    class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-medium transition-colors hover:opacity-80"
                                     style={{
                                       color: labelGray,
                                       backgroundColor: "rgba(255,255,255,0.03)",
                                       border: `1px solid ${cardBorderSubtle}`,
                                     }}
                                   >
-                                    <PlatformLogo
-                                      platformId={item.platform.id}
-                                    />
-                                    <span>{item.platform.label}</span>
-                                  </div>
+                                    <PlatformLogo platformId={item.platform.id} />
+                                    <span>{getConnectionLabel(item.platform.id)}</span>
+                                  </a>
                                 ) : null}
                               </div>
                             ))}

@@ -6,12 +6,13 @@ import {
   getSkillsPrompt,
   landingUseCaseOptions,
   type ShowcaseSkillWorkspacePreview,
+  type SurfaceHeroCopy,
 } from "../use-case-showcases";
 import { CommandHero } from "./CommandHero";
+import { HighlightedText } from "./HighlightedText";
 import { ContentRail } from "./ContentRail";
 import { SkillsWorkflowSection } from "./SkillsWorkflowSection";
 import { ScheduleCallButton, ScheduleCallIcon } from "./ScheduleDialog";
-import { formatUseCaseSummaryTitle, UseCaseSummary } from "./UseCaseSummary";
 import { UseCaseTabs } from "./UseCaseTabs";
 
 const GITHUB_URL = "https://github.com/lobu-ai/lobu";
@@ -681,6 +682,7 @@ export function SkillsSection(props: {
   defaultUseCaseId?: LandingUseCaseId;
   linkTabsToCampaigns?: boolean;
   linkTabsToPages?: boolean;
+  heroCopy?: SurfaceHeroCopy;
 }) {
   const [activeUseCaseId, setActiveUseCaseId] = useState<LandingUseCaseId>(
     props.defaultUseCaseId ?? DEFAULT_LANDING_USE_CASE_ID
@@ -696,17 +698,21 @@ export function SkillsSection(props: {
       <div class="max-w-[72rem] mx-auto">
         <CommandHero
           title={
-            <>
-              Build reliable agents with{" "}
-              <span style={{ color: "var(--color-tg-accent)" }}>
-                CLI-like skills
-              </span>
-            </>
+            <HighlightedText
+              text={
+                props.heroCopy?.title ??
+                "Build reliable agents with CLI-like skills"
+              }
+              highlight={props.heroCopy?.highlight ?? "CLI-like skills"}
+            />
           }
-          description="A skill isn't a prompt template, it's a full sandboxed computer. All capabilities bundled into one installable unit."
+          description={
+            props.heroCopy?.description ??
+            "A skill isn't a prompt template, it's a full sandboxed computer. All capabilities bundled into one installable unit."
+          }
           command={INIT_COMMAND}
           prompt={getSkillsPrompt(activeUseCase)}
-          startTitle="Start a new agent in seconds"
+          startTitle={props.heroCopy?.startTitle ?? "Start a new agent in seconds"}
         />
 
         <div class="mb-16 text-center">
@@ -727,11 +733,6 @@ export function SkillsSection(props: {
                   : undefined
             }
             className="mb-5"
-          />
-
-          <UseCaseSummary
-            title={formatUseCaseSummaryTitle(activeUseCase.label)}
-            description={activeUseCase.memory.description}
           />
 
           <ContentRail>

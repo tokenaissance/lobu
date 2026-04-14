@@ -6,8 +6,10 @@ import {
   getMemoryPrompt,
   getOwlettoUrl,
   landingUseCaseOptions,
+  type SurfaceHeroCopy,
 } from "../use-case-showcases";
 import { CommandHero } from "./CommandHero";
+import { HighlightedText } from "./HighlightedText";
 import { CompactContentRail } from "./CompactContentRail";
 import { ExampleShowcase } from "./memory/ExampleShowcase";
 import { LatestBlogPosts, type LatestBlogPost } from "./LatestBlogPosts";
@@ -41,6 +43,7 @@ export function MemorySection(props: {
   defaultUseCaseId?: LandingUseCaseId;
   linkTabsToPages?: boolean;
   latestPosts: LatestBlogPost[];
+  heroCopy?: SurfaceHeroCopy;
 }) {
   const [activeUseCaseId, setActiveUseCaseId] = useState<LandingUseCaseId>(
     props.defaultUseCaseId ?? DEFAULT_LANDING_USE_CASE_ID
@@ -59,17 +62,21 @@ export function MemorySection(props: {
       <div class="max-w-[72rem] mx-auto">
         <CommandHero
           title={
-            <>
-              Turn data into shared,{" "}
-              <span style={{ color: "var(--color-tg-accent)" }}>
-                structured memory
-              </span>
-            </>
+            <HighlightedText
+              text={
+                props.heroCopy?.title ??
+                "Turn data into shared, structured memory"
+              }
+              highlight={props.heroCopy?.highlight ?? "structured memory"}
+            />
           }
-          description="Owletto gives every Lobu use case the same durable graph: connectors, recall, and managed auth without leaking credentials to the runtime."
+          description={
+            props.heroCopy?.description ??
+            "Owletto gives every Lobu use case the same durable graph: connectors, recall, and managed auth without leaking credentials to the runtime."
+          }
           command={INIT_COMMAND}
           prompt={getMemoryPrompt(activeUseCase)}
-          startTitle="Start Owletto in seconds"
+          startTitle={props.heroCopy?.startTitle ?? "Start Owletto in seconds"}
           actions={
             <a
               href={owlettoUrl}
@@ -102,7 +109,6 @@ export function MemorySection(props: {
           activeUseCaseId={activeUseCaseId}
           onActiveUseCaseChange={setActiveUseCaseId}
           showTabs={false}
-          summaryTitlePrefix="Lobu for "
         />
 
         <SectionDivider />
