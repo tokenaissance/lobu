@@ -44,8 +44,8 @@ COPY packages/gateway/ ./packages/gateway/
 COPY packages/worker/ ./packages/worker/
 # Copy CLI's mcp-servers.json (referenced by gateway's mcp-registry)
 COPY packages/cli/src/mcp-servers.json ./packages/cli/src/mcp-servers.json
-# Copy system skills config (provider catalog, integrations, MCP configs)
-COPY config/system-skills.json ./config/system-skills.json
+# Copy bundled provider registry
+COPY config/providers.json ./config/providers.json
 
 # Build core package dist (used by Node.js in production, Bun uses src/ via conditional exports)
 WORKDIR /app/packages/core

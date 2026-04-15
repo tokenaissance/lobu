@@ -18,9 +18,6 @@ dir = "./agents/my-agent"
 id = "openrouter"
 key = "$OPENROUTER_API_KEY"
 
-[agents.my-agent.skills]
-enabled = ["github"]
-
 [agents.my-agent.network]
 allowed = ["github.com"]
 
@@ -61,10 +58,8 @@ type = "slack"
 botToken = "$SLACK_BOT_TOKEN"
 signingSecret = "$SLACK_SIGNING_SECRET"
 
-# Skills and MCP servers
-[agents.support.skills]
-enabled = ["github", "linear", "google-workspace"]
-
+# Local skills live in skills/<name>/SKILL.md or agents/<id>/skills/<name>/SKILL.md
+# MCP servers can still be configured inline here.
 [agents.support.skills.mcp.custom-tools]
 url = "https://my-mcp.example.com"
 headers = { Authorization = "Bearer $MCP_TOKEN" }
@@ -220,7 +215,6 @@ credentials = "$GOOGLE_CHAT_CREDENTIALS"
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `enabled` | array of strings | no | Skill IDs from the registry (browse with `lobu skills list`) |
 | `mcp` | table | no | Custom MCP server definitions |
 
 ### `[agents.<id>.skills.mcp.<name>]`

@@ -3,7 +3,7 @@
  * real agent interactions. Content reflects actual Lobu architecture:
  * - Domain allowlist / gateway proxy enforcement
  * - MCP tool approval flow
- * - Skill installation with real skill IDs from system-skills.json
+ * - Provider installation with real provider IDs from providers.json
  * - Settings-page link buttons
  */
 
@@ -48,7 +48,7 @@ export const PERMISSION_SCENARIO: UseCase = {
 
 /**
  * Skill install flow — user asks for a capability, agent proposes installing
- * a Lobu skill (real ID from system-skills.json), OAuth flows handled by
+ * a Lobu provider (real ID from providers.json), OAuth flows handled by
  * Owletto, user approves via in-chat button.
  */
 export const SKILL_INSTALL_SCENARIO: UseCase = {

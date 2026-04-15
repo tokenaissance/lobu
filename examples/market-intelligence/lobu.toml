@@ -11,9 +11,6 @@ id = "anthropic"
 model = "claude/sonnet-4-5"
 key = "$ANTHROPIC_API_KEY"
 
-# Skills from the registry
-[agents.market-intel.skills]
-enabled = ["web-monitor", "github"]
 
 [agents.market-intel.network]
 allowed = ["producthunt.com", "crunchbase.com", ".techcrunch.com", "github.com", ".github.com", ".githubusercontent.com"]

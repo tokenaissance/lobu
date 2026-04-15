@@ -44,8 +44,8 @@ export * from "./constants";
 export * from "./errors";
 // Integration types
 export type {
-  SystemSkillEntry,
-  SystemSkillsConfigFile,
+  ProviderRegistryEntry,
+  ProvidersConfigFile,
 } from "./integration-types";
 // lobu.toml zod schema (canonical — used by CLI and gateway)
 export {

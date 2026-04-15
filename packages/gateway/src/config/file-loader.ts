@@ -6,7 +6,6 @@ import type {
   LobuTomlConfig,
   TomlMcpServerEntry as McpServerEntry,
   SkillConfig,
-  SystemSkillEntry,
   ToolsEntry,
 } from "@lobu/core";
 import {
@@ -50,7 +49,6 @@ export async function loadAgentConfigFromFiles(
   if (!config) return [];
 
   const rootSkillsDir = join(projectPath, "skills");
-  const registrySkills = await loadSystemSkillsRegistry(projectPath);
 
   const agents: FileLoadedAgent[] = [];
 
@@ -60,8 +58,7 @@ export async function loadAgentConfigFromFiles(
         agentId,
         agentConfig,
         projectPath,
-        rootSkillsDir,
-        registrySkills
+        rootSkillsDir
       );
       agents.push(agent);
     } catch (err) {
@@ -220,8 +217,7 @@ async function buildAgentConfig(
   agentId: string,
   agentConfig: AgentEntry,
   projectPath: string,
-  rootSkillsDir: string,
-  registrySkills: Map<string, SystemSkillEntry>
+  rootSkillsDir: string
 ): Promise<FileLoadedAgent> {
   const agentDir = resolve(projectPath, agentConfig.dir);
   const markdown = await loadAgentMarkdown(agentDir);
@@ -251,12 +247,11 @@ async function buildAgentConfig(
     }
   }
 
-  // Skills (system + local)
-  const systemSkills = buildSystemSkills(agentConfig, registrySkills);
+  // Skills (local only)
   const localSkills = buildLocalSkills(skillFiles);
-  if (systemSkills.length > 0 || localSkills.length > 0) {
+  if (localSkills.length > 0) {
     settings.skillsConfig = {
-      skills: [...systemSkills, ...localSkills],
+      skills: localSkills,
     };
   }
 
@@ -307,8 +302,7 @@ async function buildAgentConfig(
   // Note: skills can declare nix packages, network domains, and MCP servers —
   // but NOT tool pre-approvals. Pre-approving destructive MCP tools is an
   // operator-only escape hatch (see `[agents.<id>.tools]` in lobu.toml).
-  const allSkills = [...systemSkills, ...localSkills];
-  for (const skill of allSkills) {
+  for (const skill of localSkills) {
     if (skill.nixPackages?.length) {
       mergedNixPackages.push(...skill.nixPackages);
     }
@@ -394,36 +388,6 @@ async function buildAgentConfig(
     credentials,
     connections,
   };
-}
-
-// ── System Skills ─────────────────────────────────────────────────────────
-
-function buildSystemSkills(
-  agentConfig: AgentEntry,
-  registrySkills: Map<string, SystemSkillEntry>
-): SkillConfig[] {
-  return agentConfig.skills.enabled
-    .map((skillId) => registrySkills.get(skillId))
-    .filter((skill): skill is SystemSkillEntry => !!skill)
-    .map((skill) => ({
-      repo: `system/${skill.id}`,
-      name: skill.name,
-      description: skill.description,
-      instructions: skill.instructions,
-      enabled: true,
-      system: true,
-      mcpServers: skill.mcpServers?.map((mcp) => ({
-        id: mcp.id,
-        name: mcp.name,
-        url: mcp.url,
-        type: mcp.type,
-        command: mcp.command,
-        args: mcp.args,
-      })),
-      nixPackages: skill.nixPackages,
-      networkConfig: skill.networkConfig,
-      providers: skill.providers?.length ? [skill.id] : undefined,
-    }));
 }
 
 /**
@@ -630,33 +594,6 @@ async function loadSkillFiles(dirs: string[]): Promise<LoadedSkillFile[]> {
   }
 
   return Array.from(skillMap.values());
-}
-
-// ── System Skills Registry ────────────────────────────────────────────────
-
-async function loadSystemSkillsRegistry(
-  projectPath: string
-): Promise<Map<string, SystemSkillEntry>> {
-  const configPath = resolve(projectPath, "config/system-skills.json");
-  try {
-    const raw = await readFile(configPath, "utf-8");
-    const data = JSON.parse(raw) as { skills: SystemSkillEntry[] };
-    if (!Array.isArray(data.skills)) return new Map();
-    return new Map(data.skills.map((skill) => [skill.id, skill]));
-  } catch {
-    // Fallback: try relative to process.cwd() (Docker mounts config/ at repo root)
-    try {
-      const fallbackPath = resolve(process.cwd(), "config/system-skills.json");
-      if (fallbackPath === configPath) return new Map();
-      const raw = await readFile(fallbackPath, "utf-8");
-      const data = JSON.parse(raw) as { skills: SystemSkillEntry[] };
-      if (!Array.isArray(data.skills)) return new Map();
-      return new Map(data.skills.map((skill) => [skill.id, skill]));
-    } catch {
-      logger.debug("No system-skills.json found");
-      return new Map();
-    }
-  }
 }
 
 // ── Env Var Resolution ────────────────────────────────────────────────────

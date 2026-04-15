@@ -8,10 +8,10 @@ import ora from "ora";
 import { promptPlatformConfig } from "../commands/connections/platforms.js";
 import { secretsSetCommand } from "../commands/secrets.js";
 import {
-  isProviderSkill,
-  loadSkillsRegistry,
-  type RegistrySkill,
-} from "../commands/skills/registry.js";
+  getProviderById,
+  loadProviderRegistry,
+  type RegistryProvider,
+} from "../commands/providers/registry.js";
 import { renderTemplate } from "../utils/template.js";
 
 const DEFAULT_OWLETTO_MCP_URL = "https://owletto.com/mcp";
@@ -160,8 +160,8 @@ export async function initCommand(
     },
   ]);
 
-  // Provider selection (from system-skills.json registry)
-  const providerSkills = loadSkillsRegistry().filter(isProviderSkill);
+  // Provider selection (from the bundled providers registry)
+  const providerSkills = loadProviderRegistry();
   const providerChoices = [
     { name: "Skip — I'll add a provider later", value: "" },
     ...providerSkills.map((s) => ({
@@ -181,9 +181,9 @@ export async function initCommand(
   ]);
 
   let providerApiKey = "";
-  let selectedProvider: RegistrySkill | undefined;
+  let selectedProvider: RegistryProvider | undefined;
   if (providerId) {
-    selectedProvider = providerSkills.find((s) => s.id === providerId);
+    selectedProvider = getProviderById(providerId);
     const p = selectedProvider?.providers?.[0];
     if (p) {
       const { apiKey } = await inquirer.prompt([
@@ -198,24 +198,8 @@ export async function initCommand(
     }
   }
 
-  // Skills selection (system skills from registry, excluding provider-only skills)
-  const systemSkills = loadSkillsRegistry().filter(
-    (s) => !isProviderSkill(s) && !s.hidden
-  );
-  const { skillIds } = await inquirer.prompt([
-    {
-      type: "checkbox",
-      name: "skillIds",
-      message: "Enable skills?",
-      choices: systemSkills.map((s) => ({
-        name: `${s.name} — ${s.description}`,
-        value: s.id,
-        checked: s.id === "github",
-      })),
-      when: systemSkills.length > 0,
-    },
-  ]);
-  const selectedSkillIds: string[] = skillIds || [];
+  // Define skills locally via skills/<name>/SKILL.md or
+  // agents/<id>/skills/<name>/SKILL.md.
 
   // Connection (messaging platform) selection
   const platformChoices = [
@@ -391,7 +375,6 @@ export async function initCommand(
       connectionType: platformType || undefined,
       connectionConfig:
         Object.keys(connectionConfig).length > 0 ? connectionConfig : undefined,
-      skillIds: selectedSkillIds,
       includeOwlettoMemory,
     });
 
@@ -664,7 +647,6 @@ export async function generateLobuToml(
     providerModel?: string;
     connectionType?: string;
     connectionConfig?: Record<string, string>;
-    skillIds?: string[];
     includeOwlettoMemory?: boolean;
   }
 ): Promise<void> {
@@ -724,9 +706,8 @@ export async function generateLobuToml(
 
   lines.push(
     "",
-    "# Skills from the registry",
+    "# Local skills live in skills/<name>/SKILL.md or agents/<id>/skills/<name>/SKILL.md",
     `[agents.${id}.skills]`,
-    `enabled = [${(options.skillIds ?? []).map((s) => `"${s}"`).join(", ")}]`,
     "",
     "# MCP servers (add custom tool servers with optional OAuth):",
     `# [agents.${id}.skills.mcp.my-mcp]`,

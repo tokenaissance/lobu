@@ -47,7 +47,7 @@ export interface AgentSettings {
   soulMd?: string;
   userMd?: string;
   identityMd?: string;
-  /** Skills configuration — enabled skills from the skills registry. */
+  /** Skills configuration loaded from local SKILL.md files. */
   skillsConfig?: SkillsConfig;
   /** Tool permission configuration — allowed/denied tools (worker-side visibility). */
   toolsConfig?: ToolsConfig;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { McpRegistryService } from "../services/mcp-registry";
-import type { SystemConfigResolver } from "../services/system-config-resolver";
+import type { ProviderConfigResolver } from "../services/provider-config-resolver";
 
 // --- McpRegistryService ---
 
@@ -15,7 +15,7 @@ function createMockResolver(
 ) {
   return {
     getMcpRegistryServers: async () => entries,
-  } as unknown as SystemConfigResolver;
+  } as unknown as ProviderConfigResolver;
 }
 
 const mcpEntries = [

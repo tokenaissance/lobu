@@ -7,7 +7,7 @@ import {
   CommandRegistry,
   createLogger,
   moduleRegistry,
-  type SystemSkillEntry,
+  type ProviderRegistryEntry,
 } from "@lobu/core";
 import { AgentMetadataStore } from "../auth/agent-metadata-store";
 import { ApiKeyProviderModule } from "../auth/api-key-provider-module";
@@ -71,8 +71,8 @@ import { ImageGenerationService } from "./image-generation-service";
 import { InstructionService } from "./instruction-service";
 import { RedisSessionStore, SessionManager } from "./session-manager";
 import { SettingsResolver } from "./settings-resolver";
-import { SystemConfigResolver } from "./system-config-resolver";
-import { SystemSkillsService } from "./system-skills-service";
+import { ProviderConfigResolver } from "./provider-config-resolver";
+import { ProviderRegistryService } from "./provider-registry-service";
 import { TranscriptionService } from "./transcription-service";
 
 const logger = createLogger("core-services");
@@ -116,10 +116,10 @@ export class CoreServices {
   private grantStore?: GrantStore;
 
   // ============================================================================
-  // System Skills Service
+  // Bundled Provider Registry
   // ============================================================================
-  private systemSkillsService?: SystemSkillsService;
-  private systemConfigResolver?: SystemConfigResolver;
+  private providerRegistryService?: ProviderRegistryService;
+  private providerConfigResolver?: ProviderConfigResolver;
 
   // ============================================================================
   // Worker Gateway
@@ -181,7 +181,7 @@ export class CoreServices {
     configStore?: AgentConfigStore;
     connectionStore?: AgentConnectionStore;
     accessStore?: AgentAccessStore;
-    systemSkills?: SystemSkillEntry[];
+    providerRegistry?: ProviderRegistryEntry[];
     secretStore?: SecretStoreRegistry;
     providerCredentialResolver?: RuntimeProviderCredentialResolver;
   };
@@ -192,7 +192,7 @@ export class CoreServices {
       configStore?: AgentConfigStore;
       connectionStore?: AgentConnectionStore;
       accessStore?: AgentAccessStore;
-      systemSkills?: SystemSkillEntry[];
+      providerRegistry?: ProviderRegistryEntry[];
       secretStore?: SecretStoreRegistry;
       providerCredentialResolver?: RuntimeProviderCredentialResolver;
     }
@@ -633,31 +633,33 @@ export class CoreServices {
     });
     logger.debug("Bedrock provider module registered");
 
-    // Initialize system skills — use injected skills if provided, else load from file
-    if (this.options?.systemSkills) {
-      this.systemSkillsService = new SystemSkillsService(
+    // Initialize bundled provider registry — use injected providers if
+    // provided, else load from config/providers.json.
+    const injectedProviders = this.options?.providerRegistry;
+    if (injectedProviders) {
+      this.providerRegistryService = new ProviderRegistryService(
         undefined,
-        this.options.systemSkills
+        injectedProviders
       );
     } else {
-      this.systemSkillsService = new SystemSkillsService(
-        "config/system-skills.json"
+      this.providerRegistryService = new ProviderRegistryService(
+        "config/providers.json"
       );
     }
-    this.systemConfigResolver = new SystemConfigResolver(
-      this.systemSkillsService
+    this.providerConfigResolver = new ProviderConfigResolver(
+      this.providerRegistryService
     );
-    logger.debug("System skills service initialized");
+    logger.debug("Provider registry service initialized");
 
     this.transcriptionService?.setProviderConfigSource(() =>
-      this.systemConfigResolver
-        ? this.systemConfigResolver.getProviderConfigs()
+      this.providerConfigResolver
+        ? this.providerConfigResolver.getProviderConfigs()
         : Promise.resolve({})
     );
 
-    // Register config-driven providers from system skills
+    // Register config-driven providers from the bundled providers registry
     const configProviders =
-      await this.systemConfigResolver.getProviderConfigs();
+      await this.providerConfigResolver.getProviderConfigs();
     const registeredIds = new Set(
       getModelProviderModules().map((m) => m.providerId)
     );
@@ -740,7 +742,7 @@ export class CoreServices {
     // Initialize simplified MCP config service (no OAuth discovery)
     this.mcpConfigService = new McpConfigService({
       agentSettingsStore: this.agentSettingsStore,
-      configResolver: this.systemConfigResolver,
+      configResolver: this.providerConfigResolver,
     });
 
     // Initialize instruction service (needed by WorkerGateway)
@@ -837,7 +839,6 @@ export class CoreServices {
       this.mcpProxy,
       this.providerCatalogService,
       this.settingsResolver,
-      this.systemSkillsService,
       this.secretStore
     );
     logger.debug("Worker gateway initialized");
@@ -1226,12 +1227,12 @@ export class CoreServices {
     return this.grantStore;
   }
 
-  getSystemSkillsService(): SystemSkillsService | undefined {
-    return this.systemSkillsService;
+  getProviderRegistryService(): ProviderRegistryService | undefined {
+    return this.providerRegistryService;
   }
 
-  getSystemConfigResolver(): SystemConfigResolver | undefined {
-    return this.systemConfigResolver;
+  getProviderConfigResolver(): ProviderConfigResolver | undefined {
+    return this.providerConfigResolver;
   }
 
   getExternalAuthClient(): ExternalAuthClient | undefined {

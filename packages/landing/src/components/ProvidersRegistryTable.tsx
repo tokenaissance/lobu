@@ -1,4 +1,4 @@
-import skillsConfig from "@skills-config";
+import providersConfig from "@providers-config";
 
 interface ProviderConfig {
   displayName: string;
@@ -8,15 +8,15 @@ interface ProviderConfig {
   modelsEndpoint?: string;
 }
 
-interface SkillEntry {
+interface ProviderEntry {
   id: string;
   providers?: ProviderConfig[];
 }
 
-const skills = (skillsConfig as { skills: SkillEntry[] }).skills;
-const providerRows = skills.flatMap((skill) =>
-  (skill.providers ?? []).map((provider) => ({
-    id: skill.id,
+const providers = (providersConfig as { providers: ProviderEntry[] }).providers;
+const providerRows = providers.flatMap((providerEntry) =>
+  (providerEntry.providers ?? []).map((provider) => ({
+    id: providerEntry.id,
     displayName: provider.displayName,
     defaultModel: provider.defaultModel ?? "—",
     sdkCompat: provider.sdkCompat ?? "—",

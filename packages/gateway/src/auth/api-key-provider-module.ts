@@ -36,7 +36,7 @@ export interface ApiKeyProviderConfig {
  * Any model provider that only needs a "paste your API key" flow
  * can be instantiated from this class without writing a full module.
  *
- * Config-driven providers (from system-skills.json) set sdkCompat,
+ * Config-driven providers (from providers.json) set sdkCompat,
  * defaultModel, and registryAlias to enable dynamic worker model resolution.
  */
 export class ApiKeyProviderModule extends BaseProviderModule {

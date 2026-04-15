@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyOwlettoMemoryEnvFromProject } from "../config/file-loader";
+import {
+  applyOwlettoMemoryEnvFromProject,
+  loadAgentConfigFromFiles,
+} from "../config/file-loader";
 
 const originalMemoryUrl = process.env.MEMORY_URL;
 
@@ -99,5 +102,45 @@ org: careops
 
     expect(memoryUrl).toBeNull();
     expect(process.env.MEMORY_URL).toBe("https://memory.example.com/mcp");
+  });
+});
+
+describe("loadAgentConfigFromFiles — local skills only", () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = mkdtempSync(join(tmpdir(), "lobu-file-loader-local-skills-"));
+    mkdirSync(join(projectDir, "agents", "support"), { recursive: true });
+    mkdirSync(join(projectDir, "skills", "research"), { recursive: true });
+    writeFileSync(
+      join(projectDir, "skills", "research", "SKILL.md"),
+      "Research carefully.",
+      "utf-8"
+    );
+  });
+
+  afterEach(() => {
+    rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  test("loads local skills without any bundled skill registry", async () => {
+    writeFileSync(
+      join(projectDir, "lobu.toml"),
+      `
+[agents.support]
+name = "support"
+dir = "./agents/support"
+
+[memory.owletto]
+enabled = true
+`,
+      "utf-8"
+    );
+
+    const agents = await loadAgentConfigFromFiles(projectDir);
+    const repos =
+      agents[0]?.settings.skillsConfig?.skills.map((s) => s.repo) ?? [];
+
+    expect(repos).toEqual(["local/research"]);
   });
 });

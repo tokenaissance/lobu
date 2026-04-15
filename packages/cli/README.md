@@ -20,8 +20,8 @@ Scaffold a new Lobu project with interactive prompts:
 - **Gateway port** and optional **public URL** (for OAuth callbacks)
 - **Admin password**
 - **Worker network access** (isolated, allowlist, or unrestricted)
-- **AI provider** selection from the skills registry + API key
-- **Skills** to enable (from `config/system-skills.json`)
+- **AI provider** selection from the bundled provider registry + API key
+- **Providers** to enable (from `config/providers.json`)
 - **Messaging platform** (Telegram, Slack, Discord, or none)
 - **Memory** selection (filesystem, Owletto Cloud, Owletto Local, or custom Owletto URL)
 

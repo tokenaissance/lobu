@@ -6,14 +6,14 @@ import {
   setSecrets,
 } from "../../config/agent-helpers.js";
 import { CONFIG_FILENAME } from "../../config/loader.js";
-import { getSkillById, isProviderSkill } from "../skills/registry.js";
+import { getProviderById } from "./registry.js";
 
 export async function providersAddCommand(
   cwd: string,
   providerId: string
 ): Promise<void> {
-  const skill = getSkillById(providerId);
-  if (!skill || !isProviderSkill(skill)) {
+  const providerEntry = getProviderById(providerId);
+  if (!providerEntry) {
     console.log(chalk.red(`\n  Provider "${providerId}" not found.`));
     console.log(
       chalk.dim(
@@ -36,7 +36,7 @@ export async function providersAddCommand(
     return;
   }
 
-  const provider = skill.providers?.[0];
+  const provider = providerEntry.providers?.[0];
   if (!provider) return;
 
   const defaultModel = provider.defaultModel;

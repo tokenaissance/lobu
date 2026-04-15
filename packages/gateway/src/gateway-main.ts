@@ -5,7 +5,7 @@ import {
   type AgentConfigStore,
   type AgentConnectionStore,
   createLogger,
-  type SystemSkillEntry,
+  type ProviderRegistryEntry,
 } from "@lobu/core";
 import type { GatewayConfig } from "./config";
 import type { RuntimeProviderCredentialResolver } from "./embedded";
@@ -36,8 +36,8 @@ export interface GatewayOptions {
   connectionStore?: AgentConnectionStore;
   /** Grants + user-agent associations store. Defaults to InMemoryAgentStore. */
   accessStore?: AgentAccessStore;
-  /** Provide system skills programmatically (skips file loading). */
-  systemSkills?: SystemSkillEntry[];
+  /** Provide bundled providers programmatically (skips file loading). */
+  providerRegistry?: ProviderRegistryEntry[];
   /** Override the default secret-store registry (embedded mode). */
   secretStore?: SecretStoreRegistry;
   /** Resolve provider credentials dynamically at runtime (embedded mode). */
@@ -58,7 +58,7 @@ export class Gateway {
       configStore: options?.configStore,
       connectionStore: options?.connectionStore,
       accessStore: options?.accessStore,
-      systemSkills: options?.systemSkills,
+      providerRegistry: options?.providerRegistry,
       secretStore: options?.secretStore,
       providerCredentialResolver: options?.providerCredentialResolver,
     });

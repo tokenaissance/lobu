@@ -17,9 +17,9 @@ if (fs.existsSync(jsonSrc)) {
   fs.cpSync(jsonSrc, jsonDest);
 }
 
-// Copy system-skills.json from monorepo config
-const skillsSrc = "../../config/system-skills.json";
-const skillsDest = "dist/system-skills.json";
-if (fs.existsSync(skillsSrc)) {
-  fs.cpSync(skillsSrc, skillsDest);
+// Copy providers.json from monorepo config
+const providersSrc = "../../config/providers.json";
+const providersDest = "dist/providers.json";
+if (fs.existsSync(providersSrc)) {
+  fs.cpSync(providersSrc, providersDest);
 }

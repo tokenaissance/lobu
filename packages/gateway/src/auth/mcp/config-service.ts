@@ -3,7 +3,7 @@ import {
   createLogger,
   verifyWorkerToken,
 } from "@lobu/core";
-import type { SystemConfigResolver } from "../../services/system-config-resolver";
+import type { ProviderConfigResolver } from "../../services/provider-config-resolver";
 import type { AgentSettingsStore } from "../settings/agent-settings-store";
 
 const logger = createLogger("mcp-config-service");
@@ -40,13 +40,13 @@ interface LoadedConfig {
 
 interface McpConfigServiceOptions {
   agentSettingsStore?: AgentSettingsStore;
-  configResolver?: SystemConfigResolver;
+  configResolver?: ProviderConfigResolver;
 }
 
 export class McpConfigService {
   private cache?: LoadedConfig;
   private agentSettingsStore?: AgentSettingsStore;
-  private configResolver?: SystemConfigResolver;
+  private configResolver?: ProviderConfigResolver;
 
   constructor(options: McpConfigServiceOptions = {}) {
     this.agentSettingsStore = options.agentSettingsStore;
@@ -55,7 +55,7 @@ export class McpConfigService {
   }
 
   /**
-   * Register additional global MCP servers (e.g. from system skills).
+   * Register additional global MCP servers.
    */
   registerGlobalServers(servers: Record<string, any>): void {
     if (!this.cache) {
@@ -76,7 +76,7 @@ export class McpConfigService {
     }
 
     logger.info(
-      `Registered ${Object.keys(servers).length} global MCP(s) from system skills: ${Object.keys(servers).join(", ")}`
+      `Registered ${Object.keys(servers).length} global MCP(s): ${Object.keys(servers).join(", ")}`
     );
   }
 

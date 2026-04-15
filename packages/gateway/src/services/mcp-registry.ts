@@ -1,5 +1,5 @@
 import { createLogger } from "@lobu/core";
-import type { SystemConfigResolver } from "./system-config-resolver";
+import type { ProviderConfigResolver } from "./provider-config-resolver";
 
 const logger = createLogger("mcp-registry");
 
@@ -33,7 +33,7 @@ export class McpRegistryService {
   private registry: McpRegistryEntry[] = [];
   private loaded = false;
 
-  constructor(private readonly resolver?: SystemConfigResolver) {}
+  constructor(private readonly resolver?: ProviderConfigResolver) {}
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;

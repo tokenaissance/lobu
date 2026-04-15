@@ -601,9 +601,9 @@ export function createGatewayApp(
       }
     }
 
-    const systemSkillsService = coreServices.getSystemSkillsService();
+    const providerRegistryService = coreServices.getProviderRegistryService();
 
-    if (systemSkillsService) {
+    if (providerRegistryService) {
       const { SystemEnvStore } = require("../auth/system-env-store");
       const { setEnvResolver } = require("../auth/mcp/string-substitution");
       const systemEnvStore = new SystemEnvStore(coreServices.getSecretStore());

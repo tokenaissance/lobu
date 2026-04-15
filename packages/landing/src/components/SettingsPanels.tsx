@@ -1,4 +1,4 @@
-import skillsConfig from "@skills-config";
+import providersConfig from "@providers-config";
 
 function PanelShell({
   title,
@@ -137,7 +137,7 @@ export function ConnectionsPanel() {
 
 // --- Setup: Model providers ---
 
-type LandingProviderSkill = {
+type LandingProviderEntry = {
   providers?: Array<{
     displayName: string;
     defaultModel?: string;
@@ -145,8 +145,8 @@ type LandingProviderSkill = {
 };
 
 const modelProviders = (
-  skillsConfig as { skills: LandingProviderSkill[] }
-).skills.flatMap((skill) => skill.providers ?? []);
+  providersConfig as { providers: LandingProviderEntry[] }
+).providers.flatMap((provider) => provider.providers ?? []);
 
 export function ModelsPanel() {
   const providers = modelProviders.map((provider, index) => ({

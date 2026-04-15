@@ -21,7 +21,7 @@ Workers call `tools/list` and `tools/call` — credential handling is invisible.
 
 MCP servers come from two sources, merged per agent:
 
-1. **Skills registry** (`config/system-skills.json`) — global MCPs available to every agent.
+1. **Agent settings + local skills** — MCP servers come from per-agent settings and local `SKILL.md` files.
 2. **Per-agent settings** — MCPs added through the settings page or agent-driven install.
 
 Global MCPs take precedence when IDs collide.
@@ -211,7 +211,7 @@ MCP tools can declare [annotations](https://modelcontextprotocol.io/docs/concept
 
 ## Configuration reference
 
-### Adding an MCP to the skills registry
+### Adding an MCP via local skills or agent settings
 
 Skills-registry entries wrap one or more MCP server definitions:
 

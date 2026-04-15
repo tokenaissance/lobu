@@ -31,7 +31,7 @@ Settings page provider order is drag-sortable via handle, with per-provider mode
 - **Workers must NEVER see real credentials.** Provider credentials are resolved by the gateway proxy using agentId from the URL path (`/api/proxy/{slug}/a/{agentId}/...`). Workers only receive opaque placeholders in env vars.
 
 #### MCP
-- MCP servers are registered via the skills registry (`config/system-skills.json`) or per-agent settings.
+- Bundled LLM providers are registered via `config/providers.json`; MCP servers come from per-agent settings or local SKILL.md files.
 - Workers discover MCP tools at startup and register them as first-class agent tools (direct function calls, not curl instructions).
 - Workers call MCP tools through the gateway proxy using their JWT token.
 - Built-in MCPs available to workers: AskUser (request user input), UploadFile (share files with user).

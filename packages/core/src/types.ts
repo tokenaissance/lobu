@@ -176,7 +176,7 @@ export interface SkillConfig {
   instructions?: string;
   /** Whether this skill is currently enabled */
   enabled: boolean;
-  /** True for system-defined skills (from system-skills.json). Cannot be removed by users. */
+  /** True for non-user-managed runtime skills. */
   system?: boolean;
   /** Cached SKILL.md content (fetched from GitHub) */
   content?: string;

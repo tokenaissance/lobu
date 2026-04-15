@@ -11,9 +11,6 @@ id = "anthropic"
 model = "claude/sonnet-4-5"
 key = "$ANTHROPIC_API_KEY"
 
-# Skills from the registry
-[agents.legal-review.skills]
-enabled = ["github"]
 
 [agents.legal-review.network]
 allowed = ["github.com", ".github.com", ".githubusercontent.com", "registry.npmjs.org", ".npmjs.org"]

@@ -1,6 +1,6 @@
 /**
  * Shared types for config-driven LLM providers.
- * Loaded from the `providers` section of system skills config.
+ * Loaded from the bundled provider registry config.
  */
 
 export interface ProviderConfigEntry {

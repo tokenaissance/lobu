@@ -54,7 +54,6 @@ const mcpServerSchema = z.object({
 // ── Skills ──────────────────────────────────────────────────────────────────
 
 const skillsSchema = z.object({
-  enabled: z.array(z.string()).default([]),
   mcp: z.record(z.string(), mcpServerSchema).optional(),
 });
 
@@ -119,7 +118,7 @@ const agentEntrySchema = z.object({
   dir: z.string(),
   providers: z.array(providerSchema).default([]),
   connections: z.array(connectionSchema).default([]),
-  skills: skillsSchema.default({ enabled: [] }),
+  skills: skillsSchema.default({}),
   network: networkSchema.optional(),
   tools: toolsSchema.optional(),
   worker: workerSchema.optional(),

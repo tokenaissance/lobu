@@ -7,28 +7,15 @@
 
 import type { ProviderConfigEntry } from "./provider-config-types";
 
-// System Skills Config (config/system-skills.json)
+// Bundled provider registry (config/providers.json)
 
-export interface SystemSkillEntry {
+export interface ProviderRegistryEntry {
   id: string;
   name: string;
   description?: string;
-  instructions?: string;
-  hidden?: boolean;
-  mcpServers?: import("./types").SkillMcpServer[];
-  providers?: ProviderConfigEntry[];
-  nixPackages?: string[];
-  /**
-   * Network access the skill requires.
-   * When the skill is enabled on an agent, these domains are merged into
-   * the agent's `networkConfig.allowedDomains` at load time.
-   */
-  networkConfig?: {
-    allowedDomains?: string[];
-    deniedDomains?: string[];
-  };
+  providers: ProviderConfigEntry[];
 }
 
-export interface SystemSkillsConfigFile {
-  skills: SystemSkillEntry[];
+export interface ProvidersConfigFile {
+  providers: ProviderRegistryEntry[];
 }

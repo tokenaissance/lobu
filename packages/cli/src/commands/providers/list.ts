@@ -1,27 +1,26 @@
 import chalk from "chalk";
-import { isProviderSkill, loadSkillsRegistry } from "../skills/registry.js";
+import { loadProviderRegistry } from "./registry.js";
 
 export async function providersListCommand(): Promise<void> {
-  const skills = loadSkillsRegistry();
-  const providerSkills = skills.filter(isProviderSkill);
+  const providers = loadProviderRegistry();
 
-  if (providerSkills.length === 0) {
-    console.log(chalk.yellow("\n  No providers found in registry.\n"));
+  if (providers.length === 0) {
+    console.log(chalk.yellow("\n  No providers found in the bundled registry.\n"));
     return;
   }
 
   console.log(chalk.bold("\n  Available LLM Providers:\n"));
 
-  const maxIdLen = Math.max(...providerSkills.map((s) => s.id.length));
+  const maxIdLen = Math.max(...providers.map((provider) => provider.id.length));
 
-  for (const skill of providerSkills) {
-    const p = skill.providers?.[0];
-    if (!p) continue;
-    const model = p.defaultModel
-      ? chalk.dim(` default: ${p.defaultModel}`)
+  for (const provider of providers) {
+    const meta = provider.providers[0];
+    if (!meta) continue;
+    const model = meta.defaultModel
+      ? chalk.dim(` default: ${meta.defaultModel}`)
       : "";
     console.log(
-      `  ${chalk.cyan(skill.id.padEnd(maxIdLen))}  ${p.displayName}${model}`
+      `  ${chalk.cyan(provider.id.padEnd(maxIdLen))}  ${meta.displayName}${model}`
     );
   }
 

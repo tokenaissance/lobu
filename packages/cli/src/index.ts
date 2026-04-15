@@ -251,11 +251,11 @@ export async function runCli(
   // ─── skills ─────────────────────────────────────────────────────────
   const skills = program
     .command("skills")
-    .description("Browse and manage skills from the registry");
+    .description("Local skill guidance (bundled skill registry removed)");
 
   skills
     .command("list")
-    .description("Browse the skill registry")
+    .description("Show how to define local skills")
     .action(async () => {
       const { skillsListCommand } = await import("./commands/skills/list.js");
       await skillsListCommand();
@@ -263,7 +263,7 @@ export async function runCli(
 
   skills
     .command("search <query>")
-    .description("Search skills by name or description")
+    .description("Explain local skill-based workflow")
     .action(async (query: string) => {
       const { skillsSearchCommand } = await import(
         "./commands/skills/search.js"
@@ -273,7 +273,7 @@ export async function runCli(
 
   skills
     .command("add <id>")
-    .description("Add a skill to lobu.toml")
+    .description("Explain how to define a local skill")
     .action(async (id: string) => {
       const { skillsAddCommand } = await import("./commands/skills/add.js");
       await skillsAddCommand(process.cwd(), id);
@@ -281,7 +281,7 @@ export async function runCli(
 
   skills
     .command("info <id>")
-    .description("Show skill details and required secrets")
+    .description("Explain local skill definitions")
     .action(async (id: string) => {
       const { skillsInfoCommand } = await import("./commands/skills/info.js");
       await skillsInfoCommand(id);

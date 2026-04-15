@@ -20,7 +20,6 @@ import { resolveEffectiveModelRef } from "../auth/settings/model-selection";
 import type { IMessageQueue } from "../infrastructure/queue";
 import type { InstructionService } from "../services/instruction-service";
 import type { SettingsResolver } from "../services/settings-resolver";
-import type { SystemSkillsService } from "../services/system-skills-service";
 import type { ISessionManager } from "../session";
 import { type SSEWriter, WorkerConnectionManager } from "./connection-manager";
 import { WorkerJobRouter } from "./job-router";
@@ -43,7 +42,6 @@ export class WorkerGateway {
   private mcpProxy?: McpProxy;
   private providerCatalogService?: ProviderCatalogService;
   private settingsResolver?: SettingsResolver;
-  private systemSkillsService?: SystemSkillsService;
   private secretStore?: WritableSecretStore;
 
   constructor(
@@ -55,7 +53,6 @@ export class WorkerGateway {
     mcpProxy?: McpProxy,
     providerCatalogService?: ProviderCatalogService,
     settingsResolver?: SettingsResolver,
-    systemSkillsService?: SystemSkillsService,
     secretStore?: WritableSecretStore
   ) {
     this.queue = queue;
@@ -71,7 +68,6 @@ export class WorkerGateway {
     this.mcpProxy = mcpProxy;
     this.providerCatalogService = providerCatalogService;
     this.settingsResolver = settingsResolver;
-    this.systemSkillsService = systemSkillsService;
     this.secretStore = secretStore;
 
     // Setup Hono app
@@ -499,64 +495,7 @@ export class WorkerGateway {
         }
       }
 
-      let systemSkillsInstructions = "";
-      if (this.systemSkillsService) {
-        try {
-          const runtimeSystemSkills =
-            await this.systemSkillsService.getRuntimeSystemSkills();
-
-          if (runtimeSystemSkills.length > 0) {
-            // Only write SKILL.md files for system skills without instructions
-            // (skills with instructions are fully inlined — no cat needed)
-            const existingSkillNames = new Set(skillsConfig.map((s) => s.name));
-            let hasSkillFiles = false;
-            for (const skill of runtimeSystemSkills) {
-              if (skill.instructions?.trim()) continue;
-              const workspaceSkillName = `system-${skill.id}`;
-              if (!existingSkillNames.has(workspaceSkillName)) {
-                skillsConfig.push({
-                  name: workspaceSkillName,
-                  content: skill.content,
-                });
-                hasSkillFiles = true;
-              }
-            }
-
-            const summaryLines = runtimeSystemSkills.map((skill, index) => {
-              const description = skill.description
-                ? ` - ${skill.description}`
-                : "";
-              const line = `${index + 1}. ${skill.name} (\`${skill.repo}\`)${description}`;
-              if (skill.instructions?.trim()) {
-                return `${line}\n   → ${skill.instructions.trim()}`;
-              }
-              return line;
-            });
-
-            const catHint = hasSkillFiles
-              ? "\n\nRead full instructions using `cat .skills/system-*/SKILL.md` when needed."
-              : "";
-
-            systemSkillsInstructions =
-              [
-                "## Built-in System Skills",
-                "",
-                "These system skills are always available in this workspace:",
-                "",
-                ...summaryLines,
-              ].join("\n") + catHint;
-          }
-        } catch (error) {
-          logger.error("Failed to fetch runtime system skills", { error });
-        }
-      }
-
-      const mergedSkillsInstructions = [
-        contextData.skillsInstructions,
-        systemSkillsInstructions,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      const mergedSkillsInstructions = contextData.skillsInstructions || "";
 
       logger.info(
         `Session context for ${userId}: ${Object.keys(mcpConfig.mcpServers || {}).length} MCPs, ${contextData.agentInstructions.length} chars agent instructions, ${contextData.platformInstructions.length} chars platform instructions, ${contextData.networkInstructions.length} chars network instructions, ${mergedSkillsInstructions.length} chars skills instructions, ${enrichedMcpStatus.length} MCP status entries, ${Object.keys(mcpTools).length} MCP tool lists, ${Object.keys(mcpInstructions).length} MCP instructions, ${skillsConfig.length} skills, provider: ${providerConfig.defaultProvider || "none"}`

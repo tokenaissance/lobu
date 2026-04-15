@@ -22,9 +22,6 @@ type = "slack"
 botToken = "$SLACK_BOT_TOKEN"
 signingSecret = "$SLACK_SIGNING_SECRET"
 
-# Skills from the registry
-[agents.careops.skills]
-enabled = ["github"]
 
 [agents.careops.network]
 allowed = ["github.com", ".github.com", ".githubusercontent.com", "registry.npmjs.org", ".npmjs.org"]

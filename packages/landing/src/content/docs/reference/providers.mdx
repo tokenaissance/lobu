@@ -3,12 +3,12 @@ title: Providers
 description: Full registry of config-driven LLM providers used by Lobu.
 ---
 
-import skillsConfig from "@skills-config";
+import providersConfig from "@providers-config";
 import { ProvidersRegistryTable } from "../../../components/ProvidersRegistryTable";
 
-export const providerConfigEntries = (skillsConfig.skills || [])
-  .filter((skill) => (skill.providers?.length || 0) > 0)
-  .map((skill) => ({ id: skill.id, providers: skill.providers }));
+export const providerConfigEntries = (providersConfig.providers || []).map(
+  (provider) => ({ id: provider.id, providers: provider.providers })
+);
 
 Lobu model providers are config-driven and loaded from a single source of truth.
 
@@ -16,8 +16,8 @@ See also: [Skills](/getting-started/skills/) and [Capabilities](/getting-started
 
 ## Source of truth
 
-- Local file: `config/system-skills.json`
-- GitHub source: [config/system-skills.json](https://github.com/lobu-ai/lobu/blob/main/config/system-skills.json)
+- Local file: `config/providers.json`
+- GitHub source: [config/providers.json](https://github.com/lobu-ai/lobu/blob/main/config/providers.json)
 
 ## Provider registry
 
@@ -26,7 +26,7 @@ See also: [Skills](/getting-started/skills/) and [Capabilities](/getting-started
 ## Full providers config
 
 <details>
-  <summary>View provider entries from <code>system-skills.json</code></summary>
+  <summary>View provider entries from <code>providers.json</code></summary>
   <pre>
     <code>{JSON.stringify(providerConfigEntries, null, 2)}</code>
   </pre>
