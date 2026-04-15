@@ -8,7 +8,7 @@ on:
         required: false
         type: string
       model:
-        description: "Model override (e.g. openrouter/openai/gpt-oss-20b:free)"
+        description: "Model override (e.g. z-ai/glm-4.7)"
         required: false
         type: string
   schedule:
@@ -28,11 +28,13 @@ jobs:
   eval:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Requires OPENROUTER_API_KEY secret to be configured
+    # Requires Z_AI_API_KEY secret to be configured
     strategy:
       fail-fast: false
       matrix:
-        example: ${{ fromJSON(inputs.example && format('["{0}"]', inputs.example) || '["hr-assistant"]') }}
+        example: ${{ fromJSON(inputs.example && format('["{0}"]', inputs.example) || '["careops"]') }}
+    env:
+      Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +42,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.5
+
+      - name: Require Z_AI_API_KEY secret
+        run: |
+          if [ -z "$Z_AI_API_KEY" ]; then
+            echo "Z_AI_API_KEY secret is not configured"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: bun install
@@ -52,36 +61,6 @@ jobs:
       - name: Build local gateway image
         run: docker build -f docker/Dockerfile.gateway -t lobu-gateway:ci .
 
-      - name: Require OpenRouter secret
-        run: |
-          if [ -z "${{ secrets.OPENROUTER_API_KEY }}" ]; then
-            echo "OPENROUTER_API_KEY secret is not configured"
-            exit 1
-          fi
-
-      - name: Select healthy free OpenRouter model
-        run: |
-          OPENROUTER_API_KEY='${{ secrets.OPENROUTER_API_KEY }}' \
-          OPENROUTER_SELECTOR_VERBOSE=1 \
-          bun scripts/select-openrouter-model.mjs --write "$RUNNER_TEMP/openrouter.env"
-          cat "$RUNNER_TEMP/openrouter.env"
-
-      - name: Apply selected model to example config
-        working-directory: examples/${{ matrix.example }}
-        run: |
-          source "$RUNNER_TEMP/openrouter.env"
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          path = Path('lobu.toml')
-          text = path.read_text()
-          target = 'model = "openrouter/openai/gpt-oss-20b:free"'
-          replacement = f'model = "{os.environ["OPENROUTER_MODEL_REF"]}"'
-          if target not in text:
-              raise SystemExit(f"Expected model line not found in {path}")
-          path.write_text(text.replace(target, replacement, 1))
-          PY
-
       - name: Create .env for example
         working-directory: examples/${{ matrix.example }}
         run: |
@@ -89,14 +68,16 @@ jobs:
           ADMIN_PASSWORD=ci-eval-password
           ENCRYPTION_KEY=$(openssl rand -hex 32)
           GATEWAY_PORT=8081
-          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+          Z_AI_API_KEY=${Z_AI_API_KEY}
           EOF
 
       - name: Start stack
         working-directory: examples/${{ matrix.example }}
         run: |
           mkdir -p data && chmod 777 data
-          # Disable Redis write-stop-on-error for CI and use the gateway image built from this checkout
+          # Use the gateway image built from this checkout and tame Redis
+          # for ephemeral CI. Z_AI_API_KEY passthrough already exists in
+          # the base docker-compose.yml.
           cat > docker-compose.override.yml <<'YAML'
           services:
             redis:
@@ -120,7 +101,7 @@ jobs:
             sleep 2
           done
 
-      - name: Run evals
+      - name: Run all evals
         working-directory: examples/${{ matrix.example }}
         env:
           ADMIN_PASSWORD: ci-eval-password
@@ -129,7 +110,7 @@ jobs:
           if [ -n "${{ inputs.model }}" ]; then
             MODEL_FLAG="-m ${{ inputs.model }}"
           fi
-          node ../../packages/cli/bin/lobu.js eval smoke --ci --output eval-results.json $MODEL_FLAG
+          node ../../packages/cli/bin/lobu.js eval --ci --output eval-results.json $MODEL_FLAG
 
       - name: Gateway logs
         if: always()
