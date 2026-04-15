@@ -101,7 +101,7 @@ lobu eval ping               # run a specific eval
 lobu eval -m claude/sonnet   # eval with a specific model
 lobu eval --list             # list available evals
 ```
-Eval definitions live in `agents/{name}/evals/*.yaml`. See `docs/EVALS.md` for format details.
+Eval definitions live in `agents/{name}/evals/*.yaml`. See [lobu.ai/guides/evals](https://lobu.ai/guides/evals/) for format details.
 
 - If you create ephemeral files, you MUST delete them when you're done with them.
 - Use Docker to build and run the bot in development mode, K8S for production.

@@ -42,31 +42,26 @@ await lobu.initialize();
 const app = lobu.getApp(); // Hono app with .fetch(Request) → Response
 ```
 
-`getApp()` returns a [Hono](https://hono.dev) application. Hono implements the Web Standard `fetch(Request) → Response` interface, which means it can be mounted in any framework that speaks Web Standard Request/Response — or adapted to Node.js `IncomingMessage`/`ServerResponse` with a thin wrapper.
+`getApp()` returns a [Hono](https://hono.dev) application. Hono implements the Web Standard `fetch(Request) → Response` interface, which means it can be mounted in any framework that speaks Web Standard Request/Response — or adapted to Node.js `IncomingMessage`/`ServerResponse` via `@hono/node-server`'s `getRequestListener`.
+
+All examples below reuse the `new Lobu({ ... })` config shown above.
 
 ---
 
 ## Next.js (App Router)
 
-Next.js App Router route handlers use Web Standard `Request` and `Response` natively, so the integration is direct.
-
-Create a catch-all route at `app/api/lobu/[...path]/route.ts`:
+Web Standard `Request`/`Response` — direct `app.fetch(req)`.
 
 ```typescript
 // app/api/lobu/[...path]/route.ts
 import { Lobu } from "@lobu/gateway";
 
-const lobu = new Lobu({
-  redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
-});
-
+const lobu = new Lobu({ /* ...config... */ });
 const initialized = lobu.initialize();
 
 async function handler(req: Request) {
   await initialized;
-  const app = lobu.getApp();
-  return app.fetch(req);
+  return lobu.getApp().fetch(req);
 }
 
 export const GET = handler;
@@ -81,7 +76,7 @@ Call `lobu.initialize()` once and await the returned promise in each request. Th
 
 ## Next.js (Pages Router)
 
-Pages Router API routes use Node.js `req`/`res` objects. Use the `@hono/node-server` adapter:
+Node.js `req`/`res` — use `@hono/node-server`'s `getRequestListener`.
 
 ```typescript
 // pages/api/lobu/[...path].ts
@@ -89,17 +84,12 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { Lobu } from "@lobu/gateway";
 import { getRequestListener } from "@hono/node-server";
 
-const lobu = new Lobu({
-  redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
-});
-
+const lobu = new Lobu({ /* ...config... */ });
 const initialized = lobu.initialize();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   await initialized;
-  const listener = getRequestListener(lobu.getApp().fetch);
-  listener(req, res);
+  getRequestListener(lobu.getApp().fetch)(req, res);
 }
 ```
 
@@ -113,46 +103,28 @@ import { Lobu } from "@lobu/gateway";
 import { getRequestListener } from "@hono/node-server";
 
 const app = express();
-
-const lobu = new Lobu({
-  redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
-});
-
+const lobu = new Lobu({ /* ...config... */ });
 await lobu.initialize();
-const listener = getRequestListener(lobu.getApp().fetch);
 
-app.use("/lobu", (req, res) => {
-  listener(req, res);
-});
-
+app.use("/lobu", getRequestListener(lobu.getApp().fetch));
 app.listen(3000);
 ```
 
----
-
 ## Hono
 
-Since Lobu's app is already a Hono instance, mounting is a one-liner:
+Lobu's app is already a Hono instance — mount directly:
 
 ```typescript
 import { Hono } from "hono";
 import { Lobu } from "@lobu/gateway";
 
 const app = new Hono();
-
-const lobu = new Lobu({
-  redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
-});
-
+const lobu = new Lobu({ /* ...config... */ });
 await lobu.initialize();
-app.route("/lobu", lobu.getApp());
 
+app.route("/lobu", lobu.getApp());
 export default app;
 ```
-
----
 
 ## Fastify
 
@@ -162,36 +134,22 @@ import { Lobu } from "@lobu/gateway";
 import { getRequestListener } from "@hono/node-server";
 
 const fastify = Fastify();
-
-const lobu = new Lobu({
-  redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
-});
-
+const lobu = new Lobu({ /* ...config... */ });
 await lobu.initialize();
+
 const listener = getRequestListener(lobu.getApp().fetch);
-
-fastify.all("/lobu/*", (req, reply) => {
-  listener(req.raw, reply.raw);
-});
-
+fastify.all("/lobu/*", (req, reply) => listener(req.raw, reply.raw));
 await fastify.listen({ port: 3000 });
 ```
 
----
-
 ## Bun / Deno
 
-Bun and Deno natively support the `fetch` handler pattern:
+Native `fetch` handler — no adapter needed:
 
 ```typescript
 import { Lobu } from "@lobu/gateway";
 
-const lobu = new Lobu({
-  redis: process.env.REDIS_URL!,
-  agents: [{ id: "support", providers: [{ id: "openai", key: process.env.OPENAI_API_KEY! }] }],
-});
-
+const lobu = new Lobu({ /* ...config... */ });
 await lobu.initialize();
 
 export default {

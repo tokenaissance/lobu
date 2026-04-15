@@ -61,52 +61,17 @@ const relatedLinks = client.docsRelated.map((link) => {
   <p>{paragraph}</p>
 ))}
 
-{clientSwitcherLinks.length ? (
-  <>
-    <h2>Other Clients</h2>
-    <p>Switch to another client while keeping the same setup context.</p>
-    <p>
-      {clientSwitcherLinks.map((link, index) => (
-        <>
-          {index > 0 ? " · " : ""}
-          <a href={link.href}>{link.label}</a>
-        </>
-      ))}
-    </p>
-  </>
-) : null}
+<h2>Try it</h2>
+<p>
+  {showcase
+    ? `Use the org-scoped Owletto MCP endpoint for the ${showcase.label.toLowerCase()} example so the connected client stays pinned to that workspace.`
+    : "Pick a use case to see the project context, memory model, and the Owletto connection path for that example."}
+</p>
 
-<h2>What You Need</h2>
-<ul>
-  {client.docsNeeds.map((item) => (
-    <li>{item}</li>
-  ))}
-</ul>
-
-<h2>{client.docsSetupTitle}</h2>
-<ol>
-  {client.docsSetupSteps.map((step) => (
-    <li>{step}</li>
-  ))}
-</ol>
-
-{client.docsSetupNote ? <p>{client.docsSetupNote}</p> : null}
-
-{client.docsExtraSection ? (
-  <>
-    <h2>{client.docsExtraSection.title}</h2>
-    {client.docsExtraSection.paragraphs.map((paragraph) => (
-      <p>{paragraph}</p>
-    ))}
-  </>
-) : null}
+<ConnectFromUseCaseLinks clientId={clientId} activeUseCaseId={showcase?.id} />
 
 {showcase ? (
   <>
-    <h2>{showcase.label} Setup</h2>
-    <p>
-      Use the org-scoped Owletto MCP endpoint for the {showcase.label.toLowerCase()} example so the connected client stays pinned to that workspace.
-    </p>
     <ul>
       <li>
         <strong>MCP URL:</strong> <code>{owlettoScopedMcpUrl}</code>
@@ -142,23 +107,43 @@ const relatedLinks = client.docsRelated.map((link) => {
       </a>
     </p>
   </>
-) : (
-  <>
-    <h2>Use-Case Examples</h2>
-    <p>
-      Open a use-case-specific page to see the project context, memory model, and
-      the Owletto connection path for that example.
-    </p>
+) : null}
 
-    <ConnectFromUseCaseLinks clientId={clientId} />
+<h2>What You Need</h2>
+<ul>
+  {client.docsNeeds.map((item) => (
+    <li>{item}</li>
+  ))}
+</ul>
+
+<h2>{client.docsSetupTitle}</h2>
+<ol>
+  {client.docsSetupSteps.map((step) => (
+    <li>{step}</li>
+  ))}
+</ol>
+
+{client.docsSetupNote ? <p>{client.docsSetupNote}</p> : null}
+
+{client.docsExtraSection ? (
+  <>
+    <h2>{client.docsExtraSection.title}</h2>
+    {client.docsExtraSection.paragraphs.map((paragraph) => (
+      <p>{paragraph}</p>
+    ))}
   </>
-)}
+) : null}
 
 <h2>Related Docs</h2>
 <ul>
   {relatedLinks.map((link) => (
     <li>
       <a href={link.href}>{link.label}</a>
+    </li>
+  ))}
+  {clientSwitcherLinks.map((link) => (
+    <li>
+      <a href={link.href}>Connect from {link.label}</a>
     </li>
   ))}
 </ul>

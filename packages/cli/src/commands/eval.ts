@@ -76,7 +76,7 @@ export async function evalCommand(
     );
     console.error(
       chalk.dim(
-        "  Create YAML eval files in your agent's evals/ directory. See docs/EVALS.md\n"
+        "  Create YAML eval files in your agent's evals/ directory. See https://lobu.ai/guides/evals/\n"
       )
     );
     process.exit(1);

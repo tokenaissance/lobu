@@ -213,76 +213,49 @@ MCP tools can declare [annotations](https://modelcontextprotocol.io/docs/concept
 
 ### Adding an MCP to the skills registry
 
-Basic MCP with no auth:
+Skills-registry entries wrap one or more MCP server definitions:
 
 ```json
 {
   "id": "my-mcp",
   "name": "My MCP Server",
   "description": "What this MCP does",
-  "mcpServers": [{
-    "id": "my-mcp",
-    "name": "My MCP",
-    "url": "https://mcp.example.com",
-    "type": "sse"
-  }]
+  "mcpServers": [ /* one of the server configs below */ ]
 }
 ```
 
-With static auth headers (env var substitution):
+The inner `mcpServers[]` entry varies by auth mode:
 
+**No auth**
+```json
+{ "id": "my-mcp", "name": "My MCP", "url": "https://mcp.example.com", "type": "sse" }
+```
+
+**Static auth headers** (`${env:VAR}` substitution)
 ```json
 {
-  "id": "my-mcp",
-  "name": "My MCP Server",
-  "description": "What this MCP does",
-  "mcpServers": [{
-    "id": "my-mcp",
-    "name": "My MCP",
-    "url": "https://mcp.example.com",
-    "type": "sse",
-    "headers": {
-      "Authorization": "Bearer ${env:MY_MCP_TOKEN}"
-    }
-  }]
+  "id": "my-mcp", "name": "My MCP", "url": "https://mcp.example.com", "type": "sse",
+  "headers": { "Authorization": "Bearer ${env:MY_MCP_TOKEN}" }
 }
 ```
 
-With per-user OAuth — auto-derived endpoints (just add `oauth: {}`):
-
+**Per-user OAuth, auto-derived endpoints**
 ```json
 {
-  "id": "my-mcp",
-  "name": "My MCP Server",
-  "description": "What this MCP does",
-  "mcpServers": [{
-    "id": "my-mcp",
-    "name": "My MCP",
-    "url": "https://mcp.example.com",
-    "type": "sse",
-    "oauth": {}
-  }]
+  "id": "my-mcp", "name": "My MCP", "url": "https://mcp.example.com", "type": "sse",
+  "oauth": {}
 }
 ```
 
-With per-user OAuth — pre-registered client and custom endpoints:
-
+**Per-user OAuth, pre-registered client or custom endpoints**
 ```json
 {
-  "id": "my-mcp",
-  "name": "My MCP Server",
-  "description": "What this MCP does",
-  "mcpServers": [{
-    "id": "my-mcp",
-    "name": "My MCP",
-    "url": "https://mcp.example.com",
-    "type": "sse",
-    "oauth": {
-      "clientId": "my-pre-registered-client",
-      "tokenUrl": "https://auth.example.com/oauth/token",
-      "deviceAuthorizationUrl": "https://auth.example.com/oauth/device_authorization",
-      "scopes": ["read", "write"]
-    }
-  }]
+  "id": "my-mcp", "name": "My MCP", "url": "https://mcp.example.com", "type": "sse",
+  "oauth": {
+    "clientId": "my-pre-registered-client",
+    "tokenUrl": "https://auth.example.com/oauth/token",
+    "deviceAuthorizationUrl": "https://auth.example.com/oauth/device_authorization",
+    "scopes": ["read", "write"]
+  }
 }
 ```

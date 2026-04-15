@@ -30,6 +30,26 @@ type ConnectFromClientConfig = {
   docsRelated: ConnectFromDocLink[];
 };
 
+const MCP_CLIENT_NEEDS = [
+  "An Owletto MCP endpoint (shared or org-scoped)",
+  "A valid Owletto login",
+  "A workspace or organization selected in Owletto",
+];
+
+const mcpClientSteps = (label: string) => [
+  `Open ${label}'s MCP connection flow.`,
+  "Add your Owletto MCP endpoint.",
+  "Complete the normal Owletto auth flow.",
+  `Verify ${label} can access the memory tools you expect.`,
+];
+
+const mcpClientDescribe =
+  (label: string) => (showcase: LandingUseCaseShowcase) =>
+    `Use the ${showcase.label.toLowerCase()} Owletto workspace as the shared memory layer for ${label}, then reuse the same entities, relations, and watcher outputs from this example.`;
+
+const mcpClientPrompt = (label: string) => (showcase: LandingUseCaseShowcase) =>
+  `Connect ${label} to Owletto for ${showcase.label}. Reuse the same memory model shown here: ${showcase.memory.entityTypes.join(", ")}. Keep ${label} pointed at the Owletto workspace for this project so it can search, read, and save shared memory.`;
+
 export const connectFromClientConfigs: Record<
   ConnectFromClientId,
   ConnectFromClientConfig
@@ -41,38 +61,19 @@ export const connectFromClientConfigs: Record<
     docsLabel: "ChatGPT setup docs",
     command: "npx owletto@latest init",
     startTitle: "Connect ChatGPT in seconds",
-    describe: (showcase) =>
-      `Use the ${showcase.label.toLowerCase()} Owletto workspace as the shared memory layer for ChatGPT, then reuse the same entities, relations, and watcher outputs from this example.`,
-    prompt: (showcase) =>
-      `Connect ChatGPT to Owletto for ${showcase.label}. Reuse the same memory model shown here: ${showcase.memory.entityTypes.join(", ")}. Keep ChatGPT pointed at the Owletto workspace for this project so it can search, read, and save shared memory.`,
+    describe: mcpClientDescribe("ChatGPT"),
+    prompt: mcpClientPrompt("ChatGPT"),
     docsIntro: [
       "Use your Owletto MCP endpoint (or an org-scoped endpoint for fixed workspaces) as the memory source when connecting from ChatGPT.",
     ],
-    docsNeeds: [
-      "An Owletto MCP endpoint (shared or org-scoped)",
-      "A valid Owletto login",
-      "A workspace or organization selected in Owletto",
-    ],
+    docsNeeds: MCP_CLIENT_NEEDS,
     docsSetupTitle: "Connect ChatGPT",
-    docsSetupSteps: [
-      "Open ChatGPT's MCP connection flow.",
-      "Add your Owletto MCP endpoint.",
-      "Complete the normal Owletto auth flow.",
-      "Verify ChatGPT can access the memory tools you expect.",
-    ],
+    docsSetupSteps: mcpClientSteps("ChatGPT"),
     docsSetupNote:
       "Start with the same endpoint and auth flow described in the Owletto CLI Reference.",
     docsRelated: [
       { label: "Memory", href: "/getting-started/memory/" },
-      {
-        label: "Owletto CLI Reference",
-        href: "/reference/owletto-cli/",
-      },
-      { label: "Connect from Claude", href: "/connect-from/claude/" },
-      {
-        label: "Install to OpenClaw",
-        href: "/connect-from/openclaw/",
-      },
+      { label: "Owletto CLI Reference", href: "/reference/owletto-cli/" },
     ],
   },
   claude: {
@@ -82,25 +83,14 @@ export const connectFromClientConfigs: Record<
     docsLabel: "Claude setup docs",
     command: "npx owletto@latest init",
     startTitle: "Connect Claude in seconds",
-    describe: (showcase) =>
-      `Use the ${showcase.label.toLowerCase()} Owletto workspace as the shared memory layer for Claude, then reuse the same entities, relations, and watcher outputs from this example.`,
-    prompt: (showcase) =>
-      `Connect Claude to Owletto for ${showcase.label}. Reuse the same memory model shown here: ${showcase.memory.entityTypes.join(", ")}. Keep Claude pointed at the Owletto workspace for this project so it can search, read, and save shared memory.`,
+    describe: mcpClientDescribe("Claude"),
+    prompt: mcpClientPrompt("Claude"),
     docsIntro: [
       "Use the same Owletto MCP endpoint (or an org-scoped endpoint for fixed workspaces) from Claude when you want Claude-based workflows to read and write shared memory.",
     ],
-    docsNeeds: [
-      "An Owletto MCP endpoint (shared or org-scoped)",
-      "A valid Owletto login",
-      "A workspace or organization selected in Owletto",
-    ],
+    docsNeeds: MCP_CLIENT_NEEDS,
     docsSetupTitle: "Connect Claude",
-    docsSetupSteps: [
-      "Open Claude's MCP connection flow.",
-      "Add your Owletto MCP endpoint.",
-      "Complete the normal Owletto auth flow.",
-      "Verify Claude can access the memory tools you expect.",
-    ],
+    docsSetupSteps: mcpClientSteps("Claude"),
     docsSetupNote:
       "In practice, this uses Claude's MCP connection flow with your Owletto endpoint and standard Owletto auth.",
     docsExtraSection: {
@@ -114,15 +104,7 @@ export const connectFromClientConfigs: Record<
     docsRelated: [
       { label: "Memory", href: "/getting-started/memory/" },
       { label: "Skills", href: "/getting-started/skills/" },
-      {
-        label: "Owletto CLI Reference",
-        href: "/reference/owletto-cli/",
-      },
-      { label: "Connect from ChatGPT", href: "/connect-from/chatgpt/" },
-      {
-        label: "Install to OpenClaw",
-        href: "/connect-from/openclaw/",
-      },
+      { label: "Owletto CLI Reference", href: "/reference/owletto-cli/" },
     ],
   },
   openclaw: {
@@ -156,12 +138,7 @@ export const connectFromClientConfigs: Record<
       "The fastest path is owletto configure, which writes the plugin config for you.",
     docsRelated: [
       { label: "Memory", href: "/getting-started/memory/" },
-      {
-        label: "Owletto CLI Reference",
-        href: "/reference/owletto-cli/",
-      },
-      { label: "Connect from ChatGPT", href: "/connect-from/chatgpt/" },
-      { label: "Connect from Claude", href: "/connect-from/claude/" },
+      { label: "Owletto CLI Reference", href: "/reference/owletto-cli/" },
     ],
   },
 };
