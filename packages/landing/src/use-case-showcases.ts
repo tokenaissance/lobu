@@ -16,18 +16,28 @@ type RuntimeStep = {
   chips?: string[];
 };
 
+export type TraceRow = {
+  kind: "skill" | "memory_recall" | "memory_upsert" | "memory_link";
+  source: string;
+  call: string;
+  result: string;
+};
+
 type RuntimeJourney = {
   requestLabel: string;
   request: string;
   summary: string;
   steps: RuntimeStep[];
+  trace?: TraceRow[];
+  responseLabel: string;
+  response: string;
   outcomeLabel: string;
   outcome: string[];
 };
 
 type RuntimeJourneyInput = Omit<
   RuntimeJourney,
-  "requestLabel" | "outcomeLabel"
+  "requestLabel" | "outcomeLabel" | "responseLabel"
 >;
 
 type CampaignMeta = {
@@ -1221,6 +1231,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
           "Owletto stores the contract, clause, risk, and counterparty graph so future reviews begin with the same evidence.",
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Legal",
+        call: "docusign.contracts.get(redwood-nda)",
+        result: "37 pages · 9 clauses",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(counterparty: Redwood, topic: risk)",
+        result: "Acme NDA blocked Sep — similar §7 language",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Contract Redwood-NDA-v2)",
+        result: 'linked Clause §7 "uncapped indemnity"',
+      },
+      {
+        kind: "skill",
+        source: "Legal",
+        call: "jira.create(legal-review)",
+        result: "REV-88 assigned to Priya",
+      },
+      {
+        kind: "memory_link",
+        source: "Owletto",
+        call: "link(Contract → Clause §7 → Risk)",
+        result: "flagged counsel-required",
+      },
+    ],
+    response:
+      "Clause §7 carries uncapped indemnity language — the same pattern that blocked the Acme NDA in September, so it needs counsel sign-off before you countersign. I've filed REV-88 with Priya and linked the clause to the Redwood counterparty record for future drafts.",
     outcome: [
       "Clause-level risk summary with citations",
       "Recommended edits and unresolved approval items",
@@ -1251,6 +1295,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["incident memory", "service graph"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "DevOps",
+        call: "pagerduty.incidents.list(active)",
+        result: "INC-4421 checkout p95 latency · sev-2",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(service: checkout, topic: rollback)",
+        result: "checkout-v41 last safe · v42 tied to INC-4102",
+      },
+      {
+        kind: "skill",
+        source: "DevOps",
+        call: "k8s.deploy.status(checkout)",
+        result: "rollout 3/5 pods unhealthy · ReplicaSet checkout-v43",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Incident INC-4421 → checkout-v43)",
+        result: "linked to deploy, PR #882, oncall Priya",
+      },
+      {
+        kind: "skill",
+        source: "DevOps",
+        call: "approval.request(rollback checkout → v41)",
+        result: "awaiting oncall confirmation",
+      },
+    ],
+    response:
+      "Blocker is INC-4421: the checkout-v43 rollout has 3 of 5 pods unhealthy and ties to PR #882. checkout-v41 was the last safe version, so I've queued a rollback and it's waiting on oncall confirmation before it executes.",
     outcome: [
       "A current deploy-risk answer with blockers called out",
       "Incident and rollback context shared across the team",
@@ -1282,6 +1360,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["contact memory", "follow-ups", "preferences"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Support",
+        call: "zendesk.tickets.get(alex-kim)",
+        result: "Ticket #4912 · billing question",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(customer: Alex Kim)",
+        result: "Feb billing escalation · tone: direct, concise",
+      },
+      {
+        kind: "skill",
+        source: "Support",
+        call: "zendesk.drafts.create(alex-kim-reply)",
+        result: "reply drafted in Alex's tone",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Account alex-kim)",
+        result: "owner=Priya · next-touch=Thu 10am",
+      },
+      {
+        kind: "skill",
+        source: "Support",
+        call: "reminder.schedule(alex-kim, thu-10am)",
+        result: "set for Oct 24 10:00",
+      },
+    ],
+    response:
+      "Draft reply to Alex is ready in your outbox, matched to his usual tone. Owner set to Priya and a Thursday 10am follow-up is on the calendar.",
     outcome: [
       "Faster first replies with consistent context",
       "Less re-triage across shifts and escalations",
@@ -1313,6 +1425,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["variance memory", "reporting context"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Finance",
+        call: "netsuite.accounts.get(4100)",
+        result: "balance $187,420 · variance $12,480",
+      },
+      {
+        kind: "skill",
+        source: "Finance",
+        call: "stripe.refunds.list(since: Oct 20)",
+        result: "3 refunds · posted Oct 23",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(account: 4100, topic: variance)",
+        result: "Sep same merchant · 3-day settlement lag",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Variance Oct-4100-12480)",
+        result: "linked merchant STR-44",
+      },
+      {
+        kind: "skill",
+        source: "Finance",
+        call: "notes.draft(month-end-4100)",
+        result: "draft ready for sign-off",
+      },
+    ],
+    response:
+      "The 4100 variance traces to merchant STR-44 — same 3-day settlement lag we saw in September, $12,480 net. Month-end note is drafted and ready for your sign-off.",
     outcome: [
       "A structured explanation for the variance",
       "Operator-ready notes for the month-end deck",
@@ -1344,6 +1490,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["account memory", "renewal risk"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Sales",
+        call: "salesforce.accounts.get(northstar)",
+        result: "ARR $420K · renewal Oct 31",
+      },
+      {
+        kind: "skill",
+        source: "Sales",
+        call: "linkedin.company.changes(northstar)",
+        result: "Maria Rivera → Globex (Aug)",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(account: northstar)",
+        result: "champion=Maria · exec-sponsor=Jane",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Contact Jake Chen)",
+        result: "new renewal owner at Northstar",
+      },
+      {
+        kind: "skill",
+        source: "Sales",
+        call: "gong.calls.usage(northstar, 60d)",
+        result: "usage down 38% since Aug",
+      },
+    ],
+    response:
+      "Northstar's renewal owner changed — Jake Chen is the new contact after Maria moved roles, and usage is down 38% since August. Recommend an exec sync with Jake and Jane before the Oct renewal to reset the relationship.",
     outcome: [
       "Renewal summaries grounded in account evidence",
       "Expansion and risk signals in one place",
@@ -1375,6 +1555,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["project memory", "blockers", "owners"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Delivery",
+        call: "linear.projects.get(phoenix)",
+        result: "72% complete · 28 shards pending",
+      },
+      {
+        kind: "skill",
+        source: "Delivery",
+        call: "datadog.errors(phoenix-shard-14)",
+        result: "DB timeout since Mon 03:14",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(project: phoenix, topic: shards)",
+        result: "Apollo rollout had same shard-pattern",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Blocker phoenix-shard-14)",
+        result: "owner=Lena (backend)",
+      },
+      {
+        kind: "skill",
+        source: "Delivery",
+        call: "slack.message.draft(@rahul)",
+        result: "escalation draft ready",
+      },
+    ],
+    response:
+      "Phoenix is blocked on shard-14 — same pattern we saw in the Apollo rollout — and Lena owns the fix on the backend side. Escalation draft to Rahul is ready if shard-14 isn't cleared by end of day Tuesday.",
     outcome: [
       "Consistent rollout updates with owners and blockers",
       "Project context that survives across standups and escalations",
@@ -1406,6 +1620,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["decision memory", "assignments", "blockers"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Leadership",
+        call: "notion.pages.get(board-memo-q4)",
+        result: "8 decisions · 3 action items",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(topic: Series A)",
+        result: "seed approval same pattern · closed in 2 wks",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Decision bridge-4M-approved)",
+        result: "linked to Board Q4",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Blocker q1-hiring-freeze)",
+        result: "condition: until close",
+      },
+      {
+        kind: "skill",
+        source: "Leadership",
+        call: "linear.tasks.create(priya-counter)",
+        result: "due Fri Apr 25",
+      },
+    ],
+    response:
+      "Board approved the $4M Series A bridge and the Q1 hiring freeze. Blocked: the Frankfurt office lease pending legal diligence — Priya owns the counter with a decision due Fri Apr 25.",
     outcome: [
       "Action-oriented board summaries grounded in source material",
       "Durable decision history across review cycles",
@@ -1437,6 +1685,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["member graph", "connected profiles", "intro history"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Community",
+        call: "github.search.users(topic: embeddings)",
+        result: "42 recent contributors",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(member: Sarah, topic: needs)",
+        result: "needs infra feedback · embeddings, MCP",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(members, overlap: embeddings)",
+        result: "Devon Lin · Mira Sato",
+      },
+      {
+        kind: "memory_link",
+        source: "Owletto",
+        call: "link(Sarah ↔ Devon)",
+        result: "match · shared topic: embeddings",
+      },
+      {
+        kind: "skill",
+        source: "Community",
+        call: "intros.draft(sarah-devon)",
+        result: "draft ready · references Devon's repo",
+      },
+    ],
+    response:
+      "Top matches for Sarah this week are Devon Lin (shipped a similar embeddings eval harness) and Mira Sato (deep MCP work). Intro drafts for both are queued in your outbox referencing Devon's repo and Mira's recent post.",
     outcome: [
       "Higher-quality member discovery and introductions",
       "Fresh profile context without manual curation",
@@ -1468,6 +1750,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["brand memory", "mentions", "positioning"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Market",
+        call: "producthunt.launches(since: Mar 11)",
+        result: "Airtable AI · 3 competitors",
+      },
+      {
+        kind: "skill",
+        source: "Market",
+        call: "reddit.reviews(airtable, 7d)",
+        result: "12 posts · 2 flag reliability",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(product: Airtable)",
+        result: "Q3 scan: automation strong, docs weak",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Release airtable-ai-mar18)",
+        result: "linked Product Airtable",
+      },
+      {
+        kind: "memory_link",
+        source: "Owletto",
+        call: "link(Airtable ↔ Notion)",
+        result: "competitor pair updated",
+      },
+    ],
+    response:
+      "Airtable AI launched this week — automation-heavy but Reddit's flagging reliability issues (12 posts, 2 with concerns). Versus Notion: Airtable still leads on automation depth, Notion still leads on docs and collaboration — the Q3 gap hasn't closed.",
     outcome: [
       "Weekly competitive scans with feature and pricing changes",
       "Durable brand and product memory for pattern recognition",
@@ -1499,6 +1815,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["customer memory", "subscriptions", "preferences"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "Store",
+        call: "shopify.subscriptions.get(emma-k)",
+        result: "monthly · $20/mo · next Apr 3",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(customer: Emma K, topic: cancel)",
+        result: "Aug 2024 · 14-day retention window",
+      },
+      {
+        kind: "skill",
+        source: "Store",
+        call: "shopify.subscriptions.update(emma-k, annual)",
+        result: "$199/yr · saves $48",
+      },
+      {
+        kind: "skill",
+        source: "Store",
+        call: "shopify.orders.skip(emma-k, april)",
+        result: "next ship May 3",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Customer emma-k)",
+        result: "plan=annual · cancel-risk=low",
+      },
+    ],
+    response:
+      "Emma's plan switched from monthly to annual ($199/yr, saves $48) and April's shipment is skipped — next delivery May 3. Confirmation email is queued with the updated billing date.",
     outcome: [
       "Faster subscription and order changes with approval flows",
       "Customer context that persists across interactions",
@@ -1530,6 +1880,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["patient memory", "therapists", "treatments"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "CareOps",
+        call: "athena.appointments.get(james-mcmanus)",
+        result: "Apr 24 · Dr. Patel · 2:00pm",
+      },
+      {
+        kind: "skill",
+        source: "CareOps",
+        call: "athena.sessions.list(james-mcmanus)",
+        result: "8 of 12 complete · PHQ-9 down 17→9",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(patient: James M)",
+        result: "PHQ-9 baseline 17 · weekly exposure therapy",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Treatment james-12wk)",
+        result: "progress 67% · on-track",
+      },
+      {
+        kind: "skill",
+        source: "CareOps",
+        call: "insurance.reauth.check(james)",
+        result: "re-auth due May 1",
+      },
+    ],
+    response:
+      "James's next appointment is Apr 24 at 2:00pm with Dr. Patel. Treatment progress: 8 of 12 sessions complete, PHQ-9 down from 17 to 9 — on track. Insurance re-auth is due May 1.",
     outcome: [
       "Current patient status and appointment availability",
       "Treatment progress summaries across sessions",
@@ -1561,6 +1945,40 @@ const runtimeContent: Record<LandingUseCaseId, RuntimeJourneyInput> = {
         chips: ["portfolio memory", "deal flow", "network"],
       },
     ],
+    trace: [
+      {
+        kind: "skill",
+        source: "VC",
+        call: "crunchbase.companies.get(lovable)",
+        result: "$15M Series A · Accel led",
+      },
+      {
+        kind: "skill",
+        source: "VC",
+        call: "market.launches(ai-dev-tools, 30d)",
+        result: "v0 · Bolt · Replit Agent",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(sector: ai-dev-tools)",
+        result: "Q4 thesis · Lovable in portfolio",
+      },
+      {
+        kind: "memory_recall",
+        source: "Owletto",
+        call: "recall(network, topic: replit-alumni)",
+        result: "Adam K. · ex-Replit, warm intro",
+      },
+      {
+        kind: "memory_upsert",
+        source: "Owletto",
+        call: "upsert(Round lovable-series-a)",
+        result: "linked Company Lovable · Lead Accel",
+      },
+    ],
+    response:
+      "Lovable just closed a $15M Series A led by Accel — already in portfolio. Also worth tracking: v0, Bolt, and Replit Agent in the same prompt-to-app space. Adam K. (ex-Replit) is a warm intro through your network.",
     outcome: [
       "Company summaries with funding and team history",
       "Portfolio health and competitive signals",
@@ -2674,6 +3092,7 @@ export const landingUseCaseShowcases: LandingUseCaseShowcase[] = (
   const runtime: RuntimeJourney = {
     ...input,
     requestLabel: "Incoming request",
+    responseLabel: "Agent response",
     outcomeLabel: "What the team gets",
   };
 
@@ -2830,6 +3249,81 @@ export const landingUseCaseOptions = landingUseCaseShowcases.map((useCase) => ({
   id: useCase.id,
   label: useCase.label,
 }));
+
+export type LandingUseCaseScope = "personal" | "organizations" | "public";
+
+const useCaseScopeMap: Record<LandingUseCaseId, LandingUseCaseScope> = {
+  legal: "organizations",
+  devops: "organizations",
+  support: "organizations",
+  finance: "organizations",
+  sales: "organizations",
+  delivery: "organizations",
+  ecommerce: "organizations",
+  careops: "organizations",
+  leadership: "personal",
+  "venture-capital": "personal",
+  "agent-community": "public",
+  "market-intelligence": "public",
+};
+
+const useCaseEmojiMap: Record<LandingUseCaseId, string> = {
+  legal: "\u2696\uFE0F",
+  devops: "\uD83D\uDEA8",
+  support: "\uD83D\uDCAC",
+  finance: "\uD83D\uDCCA",
+  sales: "\uD83D\uDCC8",
+  delivery: "\uD83D\uDCE6",
+  leadership: "\uD83E\uDDED",
+  ecommerce: "\uD83D\uDED2",
+  "venture-capital": "\uD83D\uDCBC",
+  careops: "\uD83C\uDFE5",
+  "agent-community": "\uD83E\uDD1D",
+  "market-intelligence": "\uD83D\uDD2D",
+};
+
+const landingUseCaseScopeMeta: Array<{
+  id: LandingUseCaseScope;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "personal",
+    label: "Personal",
+    description:
+      "Solo-professional memory — your own decisions, deals, and context.",
+  },
+  {
+    id: "organizations",
+    label: "Organizations",
+    description: "Team agents with shared memory and shared skills.",
+  },
+  {
+    id: "public",
+    label: "Public",
+    description:
+      "Community-scale memory — members, markets, and open knowledge.",
+  },
+];
+
+export const landingUseCaseGroupedOptions = landingUseCaseScopeMeta
+  .map((scope) => ({
+    ...scope,
+    useCases: landingUseCaseShowcases
+      .filter((uc) => useCaseScopeMap[uc.id] === scope.id)
+      .map((uc) => ({
+        id: uc.id,
+        label: uc.label,
+        emoji: useCaseEmojiMap[uc.id],
+      })),
+  }))
+  .filter((group) => group.useCases.length > 0);
+
+export function getLandingUseCaseScope(
+  useCaseId: LandingUseCaseId
+): LandingUseCaseScope {
+  return useCaseScopeMap[useCaseId];
+}
 
 export function getLandingUseCaseShowcase(
   useCaseId?: string
