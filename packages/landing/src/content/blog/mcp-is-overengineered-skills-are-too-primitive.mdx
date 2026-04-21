@@ -127,17 +127,14 @@ Same SKILL.md. Same environment. Every time.
 
 First boot pays the install cost. After that packages are cached on the workspace volume (Docker) or PVC (Kubernetes), so they survive container restarts and scale-to-zero.
 
-#### The CLI
+#### Starter skills
 
 ```bash
-$ npx @lobu/cli@latest skills search "video"
-  video-processor  Process and transcode video files  [integration]
-
-$ npx @lobu/cli@latest skills add video-processor
-  Added "video-processor" to lobu.toml
+$ npx skills add lobu-ai/lobu --skill lobu --agent openclaw -y
+$ npx skills add lobu-ai/lobu --skill owletto --agent openclaw -y
 ```
 
-Next time the agent starts it has ffmpeg, jq, mediainfo, cloud storage access, and the right sandbox rules. No manual setup.
+Those commands install the repo's public skills through `npx skills`. With the OpenClaw target, they materialize local `skills/` folders you can commit, customize, and let your runtime discover like any other local skill.
 
 ---
 

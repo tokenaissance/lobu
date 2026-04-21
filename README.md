@@ -28,6 +28,21 @@ npx @lobu/cli@latest init my-bot
 cd my-bot && npx @lobu/cli@latest run -d
 ```
 
+## Public Skills
+
+Install the Lobu skill into the local `skills/` directory used by Lobu/OpenClaw:
+
+```bash
+npx skills add lobu-ai/lobu --skill lobu --agent openclaw -y
+```
+
+Install the Owletto skill separately when the agent should understand Owletto memory and tooling:
+
+```bash
+npx skills add lobu-ai/lobu --skill owletto --agent openclaw -y
+npx owletto@latest init
+```
+
 ### Deployment modes
 
 - **Docker Compose** — `docker compose up` (single-machine production).

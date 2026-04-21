@@ -31,7 +31,7 @@ npx @lobu/cli@latest init my-agent
 Generates:
 
 - `lobu.toml` — agent configuration (skills, providers, connections, network)
-- `docker-compose.yml` — service definitions (gateway, Redis, optional Lobu memory)
+- `docker-compose.yml` — service definitions (gateway, Redis, optional Owletto)
 - `.env` — credentials and environment variables
 - `agents/{name}/` — agent directory with `IDENTITY.md`, `SOUL.md`, `USER.md`, and `skills/`
 - `skills/` — shared skills directory (available to all agents)
@@ -219,23 +219,23 @@ npx @lobu/cli@latest secrets delete OPENAI_API_KEY
 
 ---
 
-### `skills`
+### Skills (via `npx skills`)
 
-Browse and manage skills from the registry.
+Lobu discovers local `SKILL.md` folders, but the public Lobu and Owletto skills are installed with `npx skills`, not a `lobu` subcommand.
 
 ```bash
-npx @lobu/cli@latest skills list                # browse all skills
-npx @lobu/cli@latest skills search "calendar"   # search by name or description
-npx @lobu/cli@latest skills info google-workspace  # show details and required secrets
-npx @lobu/cli@latest skills add google-workspace   # add to lobu.toml
+npx skills add lobu-ai/lobu --skill lobu --agent openclaw -y
+npx skills add lobu-ai/lobu --skill owletto --agent openclaw -y
+npx skills add lobu-ai/lobu --skill owletto-openclaw --agent openclaw -y
 ```
 
-| Subcommand | Description |
-|------------|-------------|
-| `list` | Browse the skill registry |
-| `search <query>` | Search skills by name or description |
-| `info <id>` | Show skill details and required secrets |
-| `add <id>` | Add a skill to `lobu.toml` |
+Use:
+
+- `lobu` for Lobu project structure, `lobu.toml`, prompts, evals, and workspace conventions
+- `owletto` for Owletto memory, knowledge tools, watchers, and client setup
+- `owletto-openclaw` for OpenClaw-specific Owletto plugin setup
+
+With `--agent openclaw -y`, `npx skills` copies the selected skill into the repo-local `skills/` directory that Lobu/OpenClaw discovers automatically.
 
 ---
 
@@ -261,9 +261,12 @@ npx @lobu/cli@latest init my-agent
 
 # 2. Configure
 cd my-agent
-npx @lobu/cli@latest skills add google-workspace
+npx skills add lobu-ai/lobu --skill lobu --agent openclaw -y
 npx @lobu/cli@latest providers add gemini
 npx @lobu/cli@latest secrets set GEMINI_API_KEY ...
+
+# Optional: install the Owletto skill separately
+npx skills add lobu-ai/lobu --skill owletto --agent openclaw -y
 
 # 3. Validate
 npx @lobu/cli@latest validate

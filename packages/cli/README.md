@@ -10,6 +10,21 @@ cd my-bot
 docker compose up -d
 ```
 
+## Public Skills
+
+Install the Lobu skill into the local `skills/` directory used by Lobu/OpenClaw:
+
+```bash
+npx skills add lobu-ai/lobu --skill lobu --agent openclaw -y
+```
+
+Install the Owletto skill separately when the project also needs Owletto guidance:
+
+```bash
+npx skills add lobu-ai/lobu --skill owletto --agent openclaw -y
+npx owletto@latest init
+```
+
 ## Commands
 
 ### `lobu init [name]`
@@ -23,17 +38,17 @@ Scaffold a new Lobu project with interactive prompts:
 - **AI provider** selection from the bundled provider registry + API key
 - **Providers** to enable (from `config/providers.json`)
 - **Messaging platform** (Telegram, Slack, Discord, or none)
-- **Memory** selection (filesystem, Lobu Cloud, Lobu memory Local, or custom Lobu memory URL)
+- **Memory** selection (filesystem, Lobu Cloud, Owletto Local, or custom Owletto URL)
 
 **Generates:** `docker-compose.yml`, `.env`, `Dockerfile.worker`, `lobu.toml`, `IDENTITY.md`, `.gitignore`, `README.md`
 
-When Lobu memory is enabled, `lobu init` also scaffolds the file-first memory layout:
+When Owletto-backed memory is enabled, `lobu init` also scaffolds the file-first memory layout:
 
 - `[memory.owletto]` in `lobu.toml` (org, name, description, models, data)
 - `models/`
 - `data/`
 
-For Lobu memory Local or a custom Lobu memory deployment, `.env` keeps `MEMORY_URL` as the optional base MCP URL override.
+For Owletto Local or a custom Owletto deployment, `.env` keeps `MEMORY_URL` as the optional base MCP URL override.
 
 ## Worker Customization
 

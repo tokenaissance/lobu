@@ -274,6 +274,7 @@ export async function runCli(
       await providersAddCommand(process.cwd(), id);
     });
 
+
   // ─── connections ────────────────────────────────────────────────────
   const connections = program
     .command("connections")

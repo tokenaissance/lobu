@@ -1,6 +1,8 @@
 ---
 name: lobu-operator
 description: Repo-specific operational skill for Lobu-managed agents working inside this repository. Covers dev workflow, build commands, validation, and repo constraints.
+metadata:
+  internal: true
 ---
 
 # Lobu Operator — Repo Guide

@@ -1,6 +1,14 @@
 # Client Install Paths
 
-Use the workspace or org-scoped MCP URL provided by the product surface. Do not replace it with a hardcoded hosted URL unless the user asked for that exact instance.
+Install the Owletto skill first:
+
+```bash
+npx skills add lobu-ai/lobu --skill owletto
+```
+
+For a Lobu/OpenClaw project-local install, add `--agent openclaw -y`.
+
+Then use the workspace or org-scoped MCP URL provided by the product surface. Do not replace it with a hardcoded hosted URL unless the user asked for that exact instance.
 
 ## Claude Code
 

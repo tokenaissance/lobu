@@ -54,7 +54,7 @@ If the repository already provides project-specific test scripts, use those.
 ## Useful Suggestions
 
 - Add or reorder providers in `lobu.toml`
-- Enable built-in skills with `npx @lobu/cli@latest skills list`, `search`, or `add`
+- Install public skills with `npx skills add lobu-ai/lobu --skill <name> --agent openclaw -y`
 - Add a custom MCP server under `[agents.<id>.skills.mcp.*]`
 - Add a shared skill under `skills/` for repeated workflows
 - Add evals for risky behaviors and policy constraints
