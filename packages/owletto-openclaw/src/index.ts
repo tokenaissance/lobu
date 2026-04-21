@@ -859,6 +859,10 @@ interface McpBootstrap {
 }
 
 function fetchMcpBootstrapSync(config: ResolvedPluginConfig): McpBootstrap {
+  if (!config.mcpUrl) {
+    return { tools: [], instructions: null, sessionId: null };
+  }
+
   let token: string | null = sessionToken || config.token || null;
   if (!token && config.tokenCommand) {
     try {
