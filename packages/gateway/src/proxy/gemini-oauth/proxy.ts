@@ -45,14 +45,29 @@ const PROVIDER_ID = "gemini-cli";
  * That library:
  *   - dereferences `$ref`/`definitions` (fixes "required field not in properties")
  *   - folds `const: X` into `enum: [X]`
- *   - rewrites `patternProperties` as `additionalProperties`
+ *   - rewrites `patternProperties` as `additionalProperties` + `x-patternProperties`
  *   - converts `exclusiveMinimum/Maximum` from draft-07 boolean to number
  *   - strips `$schema`, `$id`, `id`
+ *
+ * Gemini's schema is stricter than OpenAPI 3 (no vendor extensions), so we
+ * drop any `x-*` keys the library produced as a final pass.
  */
+function stripVendorExtensions(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripVendorExtensions);
+  if (!node || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (k.startsWith("x-")) continue;
+    out[k] = stripVendorExtensions(v);
+  }
+  return out;
+}
+
 function sanitizeToolSchema(schema: unknown): unknown {
   if (!schema || typeof schema !== "object") return schema;
   try {
-    return jsonSchemaToOpenApi(schema as Record<string, unknown>);
+    const converted = jsonSchemaToOpenApi(schema as Record<string, unknown>);
+    return stripVendorExtensions(converted);
   } catch (err) {
     logger.warn(
       { err: String(err) },
