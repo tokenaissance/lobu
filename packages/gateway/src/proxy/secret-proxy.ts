@@ -12,55 +12,6 @@ const logger = createLogger("secret-proxy");
 const PLACEHOLDER_PREFIX = "lobu_secret_";
 const REDIS_KEY_PREFIX = "lobu:secret:";
 
-// Pi-coding-agent's default system prompt names itself as a non-Claude-Code
-// harness ("You are an expert coding assistant operating inside pi...") and
-// bundles a "Pi documentation" block with pi-specific paths. When routing
-// through Claude OAuth (Max plan), Anthropic's impersonation gate rejects
-// this content with a misleading HTTP 400 "You're out of extra usage". We
-// can't easily rewrite the worker-side prompt because pi-coding-agent resets
-// it on every turn, so sanitize at the single egress point instead.
-const PI_OPENER =
-  "You are an expert coding assistant operating inside pi, a coding agent harness.";
-const PI_OPENER_REPLACEMENT = "You are an expert coding assistant.";
-const PI_DOCS_BLOCK_RE =
-  /\n\nPi documentation \(read only when the user asks about pi itself[\s\S]*?follow links to related docs \(e\.g\., tui\.md for TUI API details\)/;
-
-function sanitizePiSystemText(text: string): string {
-  return text
-    .replace(PI_DOCS_BLOCK_RE, "")
-    .replaceAll(PI_OPENER, PI_OPENER_REPLACEMENT);
-}
-
-function sanitizeAnthropicBodyForOAuth(raw: string): string {
-  try {
-    const parsed = JSON.parse(raw) as {
-      system?: unknown;
-    };
-    if (!Array.isArray(parsed.system)) return raw;
-    let changed = false;
-    const nextSystem = parsed.system.map((block) => {
-      if (
-        block &&
-        typeof block === "object" &&
-        "text" in block &&
-        typeof (block as { text?: unknown }).text === "string"
-      ) {
-        const original = (block as { text: string }).text;
-        const sanitized = sanitizePiSystemText(original);
-        if (sanitized !== original) {
-          changed = true;
-          return { ...(block as object), text: sanitized };
-        }
-      }
-      return block;
-    });
-    if (!changed) return raw;
-    return JSON.stringify({ ...parsed, system: nextSystem });
-  } catch {
-    return raw;
-  }
-}
-
 function safeDecodePathSegment(value: string | undefined): string | undefined {
   if (!value) return undefined;
   try {
@@ -258,10 +209,10 @@ export class SecretProxy {
 
     // Copy request body for non-GET/HEAD
     const method = c.req.method;
-    let body: string | undefined;
-    if (method !== "GET" && method !== "HEAD") {
-      body = await c.req.text();
-    }
+    const body =
+      method !== "GET" && method !== "HEAD"
+        ? await c.req.text()
+        : undefined;
 
     // Build headers, swapping placeholder secrets in auth headers
     const headers: Record<string, string> = {};
@@ -342,23 +293,6 @@ export class SecretProxy {
             ? "authorization"
             : "Authorization";
           headers[headerName] = `Bearer ${swapped}`;
-        }
-      }
-    }
-
-    // Anthropic OAuth rejects pi-coding-agent's system prompt text. Strip
-    // pi-identifier content at egress so the request passes impersonation
-    // checks (see sanitizeAnthropicBodyForOAuth above).
-    if (
-      body &&
-      upstream.includes("api.anthropic.com") &&
-      headers["content-type"]?.includes("application/json")
-    ) {
-      const next = sanitizeAnthropicBodyForOAuth(body);
-      if (next !== body) {
-        body = next;
-        if (headers["content-length"]) {
-          headers["content-length"] = String(Buffer.byteLength(body));
         }
       }
     }

@@ -15,6 +15,7 @@ import { getModel, type ImageContent } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
   createAgentSession,
+  DefaultResourceLoader,
   ModelRegistry,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
@@ -97,35 +98,6 @@ const DEFAULT_MEMORY_FLUSH_CONFIG: ResolvedMemoryFlushConfig = {
   prompt:
     "Write any lasting notes to memory using available memory tools. Reply with NO_REPLY if nothing to store.",
 };
-
-/**
- * Pi-coding-agent's buildSystemPrompt() (in `@mariozechner/pi-coding-agent`)
- * always opens the system prompt with this exact sentence. Lobu agents can
- * override their identity via IDENTITY.md, but unless we strip out this
- * opener the model sees two competing role declarations and tends to favour
- * "expert coding assistant" because it appears first.
- *
- * This helper substitutes the opener with the agent's identity and keeps the
- * rest of the base prompt (tools list, guidelines, docs paths, cwd) intact.
- *
- * If the upstream package ever changes the opener wording, this becomes a
- * no-op and `replaced === original`. In that case we fall back to prepending
- * the identity with a small framing note so identity still wins ordering.
- */
-const PI_CODING_AGENT_OPENER_RE =
-  /^You are an expert coding assistant operating inside pi, a coding agent harness\.[^\n]*/;
-
-export function replaceBasePromptIdentity(
-  basePrompt: string,
-  identity: string
-): string {
-  if (PI_CODING_AGENT_OPENER_RE.test(basePrompt)) {
-    return basePrompt.replace(PI_CODING_AGENT_OPENER_RE, identity);
-  }
-  // Upstream wording drifted — prepend identity with a framing note rather
-  // than silently letting the upstream opener win.
-  return `${identity}\n\nThe section below describes the runtime tooling available to you. It does not change your role.\n\n${basePrompt}`;
-}
 
 /**
  * Returns true iff the given URL points at OpenAI's real API host.
@@ -1270,6 +1242,28 @@ Use it when the user references past discussions or you need context.`);
       messageProvider: this.config.platform,
     };
 
+    // Own the system prompt from the start. pi-coding-agent's default
+    // prompt declares itself "pi, a coding agent harness" + ships a "Pi
+    // documentation" block — Anthropic's OAuth impersonation gate rejects
+    // that. Giving ResourceLoader a `systemPrompt` makes pi take the
+    // customPrompt branch in buildSystemPrompt, which skips the pi opener
+    // and docs block entirely and keeps our identity stable across the
+    // per-turn `_baseSystemPrompt` rebuild.
+    const identity = context.agentInstructions?.trim();
+    const systemPromptBody = [identity, finalInstructionsUpdated]
+      .filter(Boolean)
+      .join("\n\n---\n\n");
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: workspaceDir,
+      settingsManager,
+      systemPrompt: systemPromptBody,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+    });
+    await resourceLoader.reload();
+
     try {
       const createdSession = await createAgentSession({
         cwd: workspaceDir,
@@ -1280,28 +1274,9 @@ Use it when the user references past discussions or you need context.`);
         settingsManager,
         authStorage,
         modelRegistry,
+        resourceLoader,
       });
       session = createdSession.session;
-
-      // Pi-coding-agent's base prompt opens with "You are an expert coding
-      // assistant operating inside pi, a coding agent harness…" — that anchor
-      // overrides any IDENTITY.md the agent ships with. Replace just that
-      // opener with the agent's real identity (or the lobu default) so the
-      // tools/guidelines/cwd footer below it still applies, but the role on
-      // top is the one we actually want.
-      const basePrompt = session.systemPrompt;
-      const identity = context.agentInstructions?.trim();
-      const finalSystemPrompt = identity
-        ? [
-            replaceBasePromptIdentity(basePrompt, identity),
-            finalInstructionsUpdated,
-          ]
-            .filter(Boolean)
-            .join("\n\n---\n\n")
-        : [basePrompt, finalInstructionsUpdated]
-            .filter(Boolean)
-            .join("\n\n---\n\n");
-      session.agent.setSystemPrompt(finalSystemPrompt);
 
       let resolveTurnDone: (() => void) | null = null;
       let turnNonce = 0;
