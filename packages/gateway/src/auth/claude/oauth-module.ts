@@ -11,6 +11,14 @@ import type { ModelPreferenceStore } from "../settings/model-preference-store";
 
 const logger = createLogger("claude-oauth-module");
 
+// Pi-ai's anthropic provider gates OAuth vs API-key behaviour purely on the
+// presence of `sk-ant-oat` in the token value (isOAuthToken). The worker only
+// ever sees a placeholder, so for OAuth profiles the placeholder must keep
+// that substring — otherwise pi-ai sends x-api-key + skips the
+// `oauth-2025-04-20` beta headers, and Anthropic rejects the real token on
+// the gateway-rewritten request.
+const OAUTH_PROXY_PLACEHOLDER = "sk-ant-oat01-lobu-proxy";
+
 /**
  * Claude OAuth Module - Handles credential injection and model preferences for Claude.
  * OAuth login/logout is handled by the generic settings web page routes.
@@ -28,10 +36,16 @@ export class ClaudeOAuthModule extends BaseProviderModule {
         providerDisplayName: "Claude",
         providerIconUrl:
           "https://www.google.com/s2/favicons?domain=anthropic.com&sz=128",
-        credentialEnvVarName: "CLAUDE_CODE_OAUTH_TOKEN",
+        // pi-ai reads ANTHROPIC_OAUTH_TOKEN || ANTHROPIC_API_KEY for the
+        // anthropic provider — the env var CLAUDE_CODE_OAUTH_TOKEN is only
+        // consumed by the acpx CLI backend, not the native API path. Use
+        // ANTHROPIC_API_KEY as the primary credential slot so the placeholder
+        // swap lands on the value pi-ai actually reads.
+        credentialEnvVarName: "ANTHROPIC_API_KEY",
         secretEnvVarNames: [
           "ANTHROPIC_API_KEY",
           "ANTHROPIC_AUTH_TOKEN",
+          "ANTHROPIC_OAUTH_TOKEN",
           "CLAUDE_CODE_OAUTH_TOKEN",
         ],
         slug: "anthropic",
@@ -55,7 +69,9 @@ export class ClaudeOAuthModule extends BaseProviderModule {
 
   override hasSystemKey(): boolean {
     return !!(
+      resolveEnv("ANTHROPIC_API_KEY") ||
       resolveEnv("ANTHROPIC_AUTH_TOKEN") ||
+      resolveEnv("ANTHROPIC_OAUTH_TOKEN") ||
       resolveEnv("CLAUDE_CODE_OAUTH_TOKEN")
     );
   }
@@ -63,18 +79,17 @@ export class ClaudeOAuthModule extends BaseProviderModule {
   override injectSystemKeyFallback(
     envVars: Record<string, string>
   ): Record<string, string> {
-    if (!envVars.ANTHROPIC_API_KEY && !envVars.CLAUDE_CODE_OAUTH_TOKEN) {
-      // Prefer ANTHROPIC_AUTH_TOKEN (explicit user config in .env) over
-      // ANTHROPIC_API_KEY (which may be injected by Claude Code's shell env).
-      const systemApiKey =
-        resolveEnv("ANTHROPIC_AUTH_TOKEN") || resolveEnv("ANTHROPIC_API_KEY");
-      const systemOAuthToken = resolveEnv("CLAUDE_CODE_OAUTH_TOKEN");
-
-      if (systemApiKey) {
-        envVars.ANTHROPIC_API_KEY = systemApiKey;
-      } else if (systemOAuthToken) {
-        envVars.CLAUDE_CODE_OAUTH_TOKEN = systemOAuthToken;
-      }
+    if (envVars.ANTHROPIC_API_KEY) return envVars;
+    // Prefer an explicit OAuth token (ANTHROPIC_OAUTH_TOKEN or
+    // CLAUDE_CODE_OAUTH_TOKEN) when present — callers set those intentionally
+    // and pi-ai still reads them out of ANTHROPIC_API_KEY via isOAuthToken.
+    const systemKey =
+      resolveEnv("ANTHROPIC_OAUTH_TOKEN") ||
+      resolveEnv("CLAUDE_CODE_OAUTH_TOKEN") ||
+      resolveEnv("ANTHROPIC_AUTH_TOKEN") ||
+      resolveEnv("ANTHROPIC_API_KEY");
+    if (systemKey) {
+      envVars.ANTHROPIC_API_KEY = systemKey;
     }
     return envVars;
   }
@@ -93,17 +108,39 @@ export class ClaudeOAuthModule extends BaseProviderModule {
 
     if (profile?.credential) {
       logger.info(`Injecting ${profile.authType} profile for space ${agentId}`);
-      if (profile.authType === "oauth") {
-        envVars.CLAUDE_CODE_OAUTH_TOKEN = profile.credential;
-      } else {
-        envVars.ANTHROPIC_API_KEY = profile.credential;
-      }
+      // Always target ANTHROPIC_API_KEY — pi-ai detects OAuth tokens by the
+      // `sk-ant-oat` substring in the value itself, so the env var name is
+      // just the slot. This keeps placeholder-swap-in-proxy working for both
+      // OAuth and API-key profiles.
+      envVars.ANTHROPIC_API_KEY = profile.credential;
     }
 
     // AGENT_DEFAULT_MODEL is now delivered dynamically via session context.
     // No longer baked into static container env vars.
 
     return envVars;
+  }
+
+  override async buildCredentialPlaceholder(
+    agentId: string,
+    context?: import("../../embedded").ProviderCredentialContext
+  ): Promise<string> {
+    const profile = await this.authProfilesManager.getBestProfile(
+      agentId,
+      this.providerId,
+      undefined,
+      context
+    );
+    // Detect OAuth tokens by value prefix, not profile.authType: declared
+    // lobu.toml providers are seeded as `authType: "api-key"` regardless of
+    // what the credential actually is, so we mirror pi-ai's own detection
+    // (`apiKey.includes("sk-ant-oat")`). For OAuth, the placeholder must
+    // contain `sk-ant-oat` so pi-ai routes via `Authorization: Bearer` and
+    // the claude-code/oauth beta headers. The proxy overwrites the real
+    // token on egress.
+    const cred = profile?.credential ?? "";
+    if (cred.includes("sk-ant-oat")) return OAUTH_PROXY_PLACEHOLDER;
+    return "lobu-proxy";
   }
 
   getCliBackendConfig() {
