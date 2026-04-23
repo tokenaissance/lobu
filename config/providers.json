@@ -51,11 +51,11 @@
           "displayName": "Gemini CLI (OAuth)",
           "iconUrl": "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=128",
           "envVarName": "GEMINI_CLI_OAUTH_KEY",
-          "upstreamBaseUrl": "http://127.0.0.1/__gemini_cli_intercepted__",
+          "upstreamBaseUrl": "https://cloudcode-pa.googleapis.com",
           "apiKeyInstructions": "Paste the contents of <code>~/.gemini/oauth_creds.json</code> (the JSON file the Gemini CLI stores after you run <code>gemini auth login</code>).",
           "apiKeyPlaceholder": "{\"access_token\":\"...\",\"refresh_token\":\"...\"}",
-          "sdkCompat": "openai",
-          "defaultModel": "gemini-2.5-flash"
+          "defaultModel": "gemini-2.5-flash",
+          "registryAlias": "google-gemini-cli"
         }
       ]
     },

@@ -11,7 +11,7 @@ dir = "./agents/careops"
 # Paste the JSON from ~/.gemini/oauth_creds.json into $GEMINI_CLI_OAUTH_KEY.
 [[agents.careops.providers]]
 id = "gemini-cli"
-model = "gemini-cli/gemini-2.5-flash-lite"
+model = "gemini-cli/gemini-2.5-flash"
 key = "$GEMINI_CLI_OAUTH_KEY"
 
 # Secondary: OpenAI — only used by the built-in GenerateImage tool

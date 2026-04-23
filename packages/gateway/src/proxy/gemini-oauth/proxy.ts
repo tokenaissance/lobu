@@ -1,13 +1,34 @@
+/**
+ * Thin credential-swap proxy for Google Code Assist.
+ *
+ * Pattern: the worker runs pi-ai's `google-gemini-cli` provider natively, so
+ * requests arrive here in Gemini-native `:streamGenerateContent` (or
+ * `:generateContent`) shape already. Our only job is:
+ *
+ *   1. Look up the agent's OAuth profile.
+ *   2. Refresh the access token if expired, discover the cloudaicompanion
+ *      project if we haven't yet (cached).
+ *   3. Replace the top-level `project` field in the request body with the
+ *      real projectId.
+ *   4. Swap `Authorization: Bearer <placeholder>` → `Bearer <real-access>`.
+ *   5. Add pi-ai's Code Assist headers (User-Agent / X-Goog-Api-Client /
+ *      Client-Metadata).
+ *   6. Forward to `cloudcode-pa.googleapis.com` and stream the response back
+ *      untouched.
+ *
+ * No OpenAI/Gemini translation, no retry ladder, no tier manipulation — pi-ai
+ * already handles those inside the worker.
+ */
+
 import { createLogger } from "@lobu/core";
 import { Hono } from "hono";
 import type { AuthProfilesManager } from "../../auth/settings/auth-profiles-manager";
-import { getCodeAssistClient, type OAuthCreds } from "./code-assist-client";
 import {
-  geminiResponseToOpenAI,
-  openaiRequestToGemini,
-  type OpenAIChatRequest,
-  transformStream,
-} from "./openai-adapter";
+  buildUpstreamHeaders,
+  codeAssistUpstreamUrl,
+  type OAuthCreds,
+  resolveCodeAssist,
+} from "./code-assist-client";
 
 const logger = createLogger("gemini-oauth-proxy");
 
@@ -36,23 +57,21 @@ function parseCreds(raw: string): OAuthCreds | null {
   }
 }
 
-/**
- * Sub-app mounted at a slug (e.g. `/gemini-cli`).
- * Routes follow the same `/a/{agentId}/...` layout as the secret proxy, but
- * instead of passing traffic through it translates OpenAI Chat Completions
- * to Google Code Assist calls backed by the agent's OAuth auth profile.
- */
 export function createGeminiOAuthProxyApp(
-  options: GeminiOAuthProxyOptions
+  options: GeminiOAuthProxyOptions,
 ): Hono {
   const app = new Hono();
 
-  app.post("/a/:agentId/chat/completions", async (c) => {
+  app.get("/health", (c) =>
+    c.json({ service: "gemini-oauth-proxy", status: "enabled" }),
+  );
+
+  app.all("/a/:agentId/*", async (c) => {
     const agentId = decodeURIComponent(c.req.param("agentId"));
 
     const profile = await options.authProfilesManager.getBestProfile(
       agentId,
-      PROVIDER_ID
+      PROVIDER_ID,
     );
     if (!profile?.credential) {
       logger.warn({ agentId }, "No gemini-cli auth profile for agent");
@@ -61,11 +80,11 @@ export function createGeminiOAuthProxyApp(
           error: {
             message:
               "Agent has no gemini-cli auth profile configured. Install the 'gemini-cli' provider and paste ~/.gemini/oauth_creds.json.",
-            type: "authentication_error",
-            code: "no_credentials",
+            code: 401,
+            status: "UNAUTHENTICATED",
           },
         },
-        401
+        401,
       );
     }
 
@@ -76,93 +95,123 @@ export function createGeminiOAuthProxyApp(
           error: {
             message:
               "gemini-cli credential is not valid JSON with refresh_token",
-            type: "invalid_request_error",
-            code: "invalid_credential",
+            code: 400,
+            status: "INVALID_ARGUMENT",
           },
         },
-        400
+        400,
       );
     }
 
-    let openaiReq: OpenAIChatRequest;
+    let accessToken: string;
+    let projectId: string;
     try {
-      openaiReq = (await c.req.json()) as OpenAIChatRequest;
-    } catch {
-      return c.json(
-        {
-          error: {
-            message: "Invalid JSON body",
-            type: "invalid_request_error",
-          },
-        },
-        400
-      );
-    }
-
-    const { model, request } = openaiRequestToGemini(openaiReq);
-    const geminiRequest = request as unknown as Record<string, unknown>;
-    const client = getCodeAssistClient(creds);
-
-    try {
-      if (openaiReq.stream) {
-        const upstream = await client.streamGenerateContent({
-          model,
-          request: geminiRequest,
-        });
-        if (!upstream.ok || !upstream.body) {
-          const errText = upstream.body
-            ? await upstream.text().catch(() => "")
-            : "";
-          logger.warn(
-            {
-              agentId,
-              status: upstream.status,
-              errText: errText.slice(0, 300),
-            },
-            "Code Assist stream returned non-2xx"
-          );
-          return c.json(
-            {
-              error: {
-                message: `Code Assist error: ${upstream.status} ${errText.slice(0, 300)}`,
-                type: "upstream_error",
-              },
-            },
-            upstream.status as 500
-          );
-        }
-        return new Response(transformStream(upstream.body, model), {
-          status: 200,
-          headers: {
-            "content-type": "text/event-stream",
-            "cache-control": "no-cache",
-            connection: "keep-alive",
-          },
-        });
-      }
-
-      const response = await client.generateContent({
-        model,
-        request: geminiRequest,
-      });
-      return c.json(geminiResponseToOpenAI(response, model));
+      const resolved = await resolveCodeAssist(creds);
+      accessToken = resolved.accessToken;
+      projectId = resolved.projectId;
     } catch (err) {
-      logger.error({ agentId, err: String(err) }, "Code Assist call failed");
+      logger.error(
+        { agentId, err: String(err) },
+        "Code Assist resolve failed",
+      );
       return c.json(
         {
           error: {
             message: err instanceof Error ? err.message : String(err),
-            type: "upstream_error",
+            code: 500,
+            status: "INTERNAL",
           },
         },
-        502
+        500,
       );
     }
-  });
 
-  app.get("/health", (c) =>
-    c.json({ service: "gemini-oauth-proxy", status: "enabled" })
-  );
+    // Forward path: everything after `/a/<agentId>`. The wildcard in the route
+    // parameter strips the leading prefix for us via c.req.path.
+    const url = new URL(c.req.url);
+    const prefix = `/a/${encodeURIComponent(agentId)}`;
+    const idx = url.pathname.indexOf(prefix);
+    const upstreamPath =
+      idx >= 0 ? url.pathname.slice(idx + prefix.length) : url.pathname;
+    const upstreamUrl = codeAssistUpstreamUrl(upstreamPath, url.search);
+
+    const method = c.req.method;
+    let upstreamBody: string | undefined;
+    if (method !== "GET" && method !== "HEAD") {
+      const raw = await c.req.text();
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          parsed.project = projectId;
+          upstreamBody = JSON.stringify(parsed);
+        } catch {
+          // Non-JSON body (shouldn't happen for Code Assist); forward as-is.
+          upstreamBody = raw;
+        }
+      }
+    }
+
+    const upstreamHeaders = buildUpstreamHeaders(
+      accessToken,
+      Object.fromEntries(
+        Object.entries(c.req.header()).filter(([_, v]) => typeof v === "string"),
+      ) as Record<string, string>,
+    );
+
+    logger.info(
+      { agentId, method, upstreamUrl },
+      "Forwarding Code Assist request",
+    );
+
+    const response = await fetch(upstreamUrl, {
+      method,
+      headers: upstreamHeaders,
+      body: upstreamBody,
+    });
+
+    if (!response.ok) {
+      const errBody = await response
+        .clone()
+        .text()
+        .catch(() => "");
+      logger.warn(
+        { status: response.status, upstreamUrl, errBody: errBody.slice(0, 300) },
+        "Code Assist returned non-2xx",
+      );
+    }
+
+    const responseHeaders = new Headers();
+    response.headers.forEach((value, key) => {
+      if (
+        !["transfer-encoding", "connection", "upgrade", "content-encoding"].includes(
+          key.toLowerCase(),
+        )
+      ) {
+        responseHeaders.set(key, value);
+      }
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    if (
+      contentType.includes("text/event-stream") ||
+      response.headers.get("transfer-encoding") === "chunked"
+    ) {
+      responseHeaders.set("Cache-Control", "no-cache");
+      responseHeaders.set("Connection", "keep-alive");
+      if (response.body) {
+        return new Response(response.body as ReadableStream, {
+          status: response.status,
+          headers: responseHeaders,
+        });
+      }
+    }
+
+    const text = await response.text();
+    return new Response(text, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  });
 
   return app;
 }

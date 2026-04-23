@@ -125,9 +125,10 @@ export function createGatewayApp(
     return c.text(getMetricsText());
   });
 
-  // Gemini CLI OAuth proxy must mount BEFORE the SecretProxy catch-all, since
-  // it translates OpenAI → Google Code Assist calls using an OAuth credential
-  // rather than swapping a bearer token and forwarding.
+  // Gemini CLI OAuth proxy must mount BEFORE the SecretProxy catch-all. Unlike
+  // the generic secret proxy it also refreshes the OAuth access token, discovers
+  // the cloudaicompanion projectId, and stamps it into the forwarded body —
+  // SecretProxy only swaps a bearer header.
   if (coreServices?.getAuthProfilesManager) {
     const authProfilesManager = coreServices.getAuthProfilesManager();
     if (authProfilesManager) {
