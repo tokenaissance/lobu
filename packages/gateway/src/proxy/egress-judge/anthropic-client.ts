@@ -49,21 +49,33 @@ export class AnthropicJudgeClient implements JudgeClient {
 }
 
 /**
- * Parse a strict `{ verdict, reason }` JSON response. Tolerates leading or
- * trailing whitespace, a JSON-in-markdown code fence, and trailing commas
- * from underscored models — but does not try to extract JSON from prose.
- * Invalid shape throws.
+ * Parse a `{ verdict, reason }` JSON response. Accepts:
+ *   - strict JSON,
+ *   - JSON inside ```json``` code fences,
+ *   - JSON embedded in prose (falls back to extracting the first `{…}`
+ *     balanced object — Haiku sometimes wraps the verdict in a sentence
+ *     despite instructions).
+ * Invalid verdict values or missing `verdict` still throw.
  */
 export function parseVerdict(raw: string): JudgeVerdict {
   const cleaned = stripCodeFence(raw.trim());
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (err) {
-    throw new Error(
-      `Judge response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`
-    );
+  const candidates = [cleaned, extractFirstJsonObject(cleaned)].filter(
+    (s): s is string => typeof s === "string" && s.length > 0
+  );
+  let lastErr: unknown;
+  for (const candidate of candidates) {
+    try {
+      return validateVerdict(JSON.parse(candidate));
+    } catch (err) {
+      lastErr = err;
+    }
   }
+  throw new Error(
+    `Judge response was not valid verdict JSON: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`
+  );
+}
+
+function validateVerdict(parsed: unknown): JudgeVerdict {
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Judge response was not a JSON object");
   }
@@ -78,7 +90,27 @@ export function parseVerdict(raw: string): JudgeVerdict {
 }
 
 function stripCodeFence(text: string): string {
-  // ```json ... ``` or ``` ... ```
   const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return fenced?.[1] ? fenced[1].trim() : text;
+}
+
+/**
+ * Find the first balanced `{...}` substring. Used as a fallback when the
+ * judge wraps JSON in prose. Returns undefined if no balanced object is
+ * found. Does not handle braces inside strings — acceptable since our
+ * verdicts are small and flat.
+ */
+function extractFirstJsonObject(text: string): string | undefined {
+  const start = text.indexOf("{");
+  if (start === -1) return undefined;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return undefined;
 }

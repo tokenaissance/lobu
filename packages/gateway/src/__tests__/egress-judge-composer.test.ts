@@ -89,4 +89,24 @@ describe("parseVerdict", () => {
   test("throws when the response is an array instead of an object", () => {
     expect(() => parseVerdict("[]")).toThrow();
   });
+
+  test("extracts JSON from prose when the judge ignores the fixed format", () => {
+    const raw =
+      'Here is my analysis. The request looks fine: {"verdict":"allow","reason":"ok"}. Done.';
+    expect(parseVerdict(raw)).toEqual({ verdict: "allow", reason: "ok" });
+  });
+
+  test("handles unfenced JSON with leading/trailing whitespace", () => {
+    const raw = '\n\n  {"verdict":"deny","reason":"off-policy"}  \n';
+    expect(parseVerdict(raw)).toEqual({
+      verdict: "deny",
+      reason: "off-policy",
+    });
+  });
+
+  test("still rejects prose with no verdict JSON at all", () => {
+    expect(() =>
+      parseVerdict("I am unable to decide without more context.")
+    ).toThrow();
+  });
 });
