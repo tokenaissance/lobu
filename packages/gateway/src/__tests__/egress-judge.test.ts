@@ -20,8 +20,6 @@ class StubClient implements JudgeClient {
 
 function rule(overrides: Partial<ResolvedJudgeRule> = {}): ResolvedJudgeRule {
   return {
-    agentId: "agent-a",
-    hostname: "api.github.com",
     judgeName: "default",
     policy: "allow only repos the user owns",
     policyHash: "policy-hash-1",

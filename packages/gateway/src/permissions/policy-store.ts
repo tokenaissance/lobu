@@ -21,13 +21,11 @@ export interface JudgePolicyBundle {
 }
 
 /**
- * Resolved judge decision data returned by {@link PolicyStore.resolve}.
+ * Resolved judge rule data returned by {@link PolicyStore.resolve}.
  * `policy` is the composed policy text (skill's selected judge + agent's
  * extra policy), `policyHash` keys the verdict cache.
  */
 export interface ResolvedJudgeRule {
-  agentId: string;
-  hostname: string;
   judgeName: string;
   policy: string;
   policyHash: string;
@@ -97,8 +95,6 @@ export class PolicyStore {
     }
 
     return {
-      agentId,
-      hostname,
       judgeName,
       policy: judge.policy,
       policyHash: judge.policyHash,
