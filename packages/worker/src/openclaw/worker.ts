@@ -1257,9 +1257,13 @@ Use it when the user references past discussions or you need context.`);
       noPromptTemplates: true,
       noThemes: true,
     });
-    await resourceLoader.reload();
 
     try {
+      // Reload inside try/finally so a failure here still triggers the
+      // existing cleanup (stopPluginServices) — plugin services have already
+      // been started above, and a thrown reload would otherwise leak them.
+      await resourceLoader.reload();
+
       const createdSession = await createAgentSession({
         cwd: workspaceDir,
         model,
