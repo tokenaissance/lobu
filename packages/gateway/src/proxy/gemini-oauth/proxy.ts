@@ -74,6 +74,39 @@ function stripVendorExtensions(node: unknown): unknown {
   return out;
 }
 
+// JSON Schema keywords Gemini's tool-calling API rejects with HTTP 400.
+// Used by the conservative fallback when full conversion fails.
+const GEMINI_INCOMPATIBLE_KEYS = new Set([
+  "$ref",
+  "$defs",
+  "definitions",
+  "const",
+  "patternProperties",
+  "if",
+  "then",
+  "else",
+  "not",
+  "dependencies",
+  "dependentSchemas",
+  "dependentRequired",
+  "unevaluatedProperties",
+  "unevaluatedItems",
+  "contains",
+  "propertyNames",
+]);
+
+function stripGeminiIncompatibleKeys(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripGeminiIncompatibleKeys);
+  if (!node || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (k.startsWith("x-")) continue;
+    if (GEMINI_INCOMPATIBLE_KEYS.has(k)) continue;
+    out[k] = stripGeminiIncompatibleKeys(v);
+  }
+  return out;
+}
+
 async function sanitizeToolSchema(schema: unknown): Promise<unknown> {
   if (!schema || typeof schema !== "object") return schema;
   try {
@@ -83,11 +116,14 @@ async function sanitizeToolSchema(schema: unknown): Promise<unknown> {
     );
     return stripVendorExtensions(converted);
   } catch (err) {
+    // Conversion failed (e.g. external $ref with resolution disabled).
+    // Forwarding the raw schema would still trip Gemini on $ref/const/etc.,
+    // so fall back to a conservative local strip of known-incompatible keys.
     logger.warn(
       { err: String(err) },
-      "JSON Schema → OpenAPI conversion failed; forwarding schema as-is"
+      "JSON Schema → OpenAPI conversion failed; applying conservative fallback strip"
     );
-    return schema;
+    return stripGeminiIncompatibleKeys(schema);
   }
 }
 
