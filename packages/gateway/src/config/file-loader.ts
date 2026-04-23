@@ -12,6 +12,7 @@ import type {
 import {
   createLogger,
   lobuConfigSchema,
+  normalizeDomainPattern,
   normalizeDomainPatterns,
 } from "@lobu/core";
 import { parse as parseToml } from "smol-toml";
@@ -261,6 +262,22 @@ async function buildAgentConfig(
   const mergedDeniedDomains: string[] = [
     ...(agentConfig.network?.denied || []),
   ];
+  // Judged domains and named judges aggregate across agent-level config and
+  // every enabled skill. Per-domain entries from later skills overwrite
+  // earlier ones; named judges with the same key likewise — last writer wins.
+  const mergedJudgedDomains = new Map<
+    string,
+    { domain: string; judge?: string }
+  >();
+  const mergedJudges: Record<string, string> = {};
+  if (agentConfig.network?.judge) {
+    for (const rule of agentConfig.network.judge) {
+      mergedJudgedDomains.set(rule.domain, rule);
+    }
+  }
+  if (agentConfig.network?.judges) {
+    Object.assign(mergedJudges, agentConfig.network.judges);
+  }
 
   // Nix packages — start with agent-level, then merge skill-level
   const mergedNixPackages: string[] = [
@@ -314,6 +331,14 @@ async function buildAgentConfig(
     if (skill.networkConfig?.deniedDomains?.length) {
       mergedDeniedDomains.push(...skill.networkConfig.deniedDomains);
     }
+    if (skill.networkConfig?.judgedDomains?.length) {
+      for (const rule of skill.networkConfig.judgedDomains) {
+        mergedJudgedDomains.set(rule.domain, rule);
+      }
+    }
+    if (skill.networkConfig?.judges) {
+      Object.assign(mergedJudges, skill.networkConfig.judges);
+    }
     // Merge skill-level MCP servers
     if (skill.mcpServers?.length) {
       for (const mcp of skill.mcpServers) {
@@ -330,7 +355,14 @@ async function buildAgentConfig(
   }
 
   // Apply merged network config
-  if (mergedAllowedDomains.length > 0 || mergedDeniedDomains.length > 0) {
+  const hasJudgedDomains = mergedJudgedDomains.size > 0;
+  const hasJudges = Object.keys(mergedJudges).length > 0;
+  if (
+    mergedAllowedDomains.length > 0 ||
+    mergedDeniedDomains.length > 0 ||
+    hasJudgedDomains ||
+    hasJudges
+  ) {
     settings.networkConfig = {
       allowedDomains:
         mergedAllowedDomains.length > 0
@@ -340,6 +372,10 @@ async function buildAgentConfig(
         mergedDeniedDomains.length > 0
           ? [...new Set(mergedDeniedDomains)]
           : undefined,
+      ...(hasJudgedDomains
+        ? { judgedDomains: Array.from(mergedJudgedDomains.values()) }
+        : {}),
+      ...(hasJudges ? { judges: mergedJudges } : {}),
     };
   }
 
@@ -348,6 +384,17 @@ async function buildAgentConfig(
     settings.nixConfig = {
       packages: [...new Set(mergedNixPackages)],
     };
+  }
+
+  // Apply agent-level egress judge config (operator-level overrides).
+  if (agentConfig.egress) {
+    const egress = agentConfig.egress;
+    const egressConfig: AgentSettings["egressConfig"] = {};
+    if (egress.extra_policy) egressConfig.extraPolicy = egress.extra_policy;
+    if (egress.judge_model) egressConfig.judgeModel = egress.judge_model;
+    if (Object.keys(egressConfig).length > 0) {
+      settings.egressConfig = egressConfig;
+    }
   }
 
   // Apply agent-level tool configuration (worker-side policy + operator
@@ -489,10 +536,22 @@ function buildLocalSkills(skillFiles: LoadedSkillFile[]): SkillConfig[] {
     if (fm) {
       if (fm.description) skill.description = fm.description;
       if (fm.nixPackages?.length) skill.nixPackages = fm.nixPackages;
-      if (fm.network) {
+      if (fm.network || fm.judges) {
+        const judgedDomains = (fm.network?.judge ?? [])
+          .map((entry) =>
+            typeof entry === "string"
+              ? { domain: entry }
+              : { domain: entry.domain, judge: entry.judge }
+          )
+          .map((rule) => ({
+            domain: normalizeDomainPattern(rule.domain),
+            ...(rule.judge ? { judge: rule.judge } : {}),
+          }));
         skill.networkConfig = {
-          allowedDomains: normalizeDomainPatterns(fm.network.allow),
-          deniedDomains: normalizeDomainPatterns(fm.network.deny),
+          allowedDomains: normalizeDomainPatterns(fm.network?.allow),
+          deniedDomains: normalizeDomainPatterns(fm.network?.deny),
+          ...(judgedDomains.length > 0 ? { judgedDomains } : {}),
+          ...(fm.judges ? { judges: fm.judges } : {}),
         };
       }
       if (fm.mcpServers && Object.keys(fm.mcpServers).length > 0) {
@@ -544,7 +603,21 @@ interface SkillFrontmatter {
   name?: string;
   description?: string;
   nixPackages?: string[];
-  network?: { allow?: string[]; deny?: string[] };
+  network?: {
+    allow?: string[];
+    deny?: string[];
+    /**
+     * Domains routed through the LLM egress judge. Each entry is either
+     * a bare domain string (uses the skill's "default" judge) or an
+     * object `{ domain, judge }` referencing a named judge in `judges`.
+     */
+    judge?: Array<string | { domain: string; judge?: string }>;
+  };
+  /**
+   * Named judge policies used by `network.judge`. The key "default" is
+   * applied when a judge entry omits `judge`.
+   */
+  judges?: Record<string, string>;
   mcpServers?: Record<
     string,
     {

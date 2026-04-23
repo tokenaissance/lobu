@@ -165,6 +165,9 @@ export async function resolveAgentOptions(
   if (settings.networkConfig) {
     mergedOptions.networkConfig = settings.networkConfig;
   }
+  if (settings.egressConfig) {
+    mergedOptions.egressConfig = settings.egressConfig;
+  }
   if (settings.nixConfig) {
     mergedOptions.nixConfig = settings.nixConfig;
   }
@@ -240,6 +243,7 @@ export function buildMessagePayload(params: {
 }): MessagePayload {
   const {
     networkConfig,
+    egressConfig,
     nixConfig,
     mcpServers,
     preApprovedTools,
@@ -259,6 +263,7 @@ export function buildMessagePayload(params: {
     platformMetadata: params.platformMetadata,
     agentOptions: remainingOptions,
     networkConfig,
+    egressConfig,
     nixConfig,
     mcpConfig: mcpServers ? { mcpServers } : undefined,
     preApprovedTools,

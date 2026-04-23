@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import {
+  type AgentEgressConfig,
   type AgentMcpConfig,
   createLogger,
   type NetworkConfig,
@@ -45,6 +46,9 @@ export interface MessagePayload {
 
   // Per-agent network configuration for sandbox isolation
   networkConfig?: NetworkConfig;
+
+  // Per-agent egress judge configuration (operator-level overrides for the LLM egress judge).
+  egressConfig?: AgentEgressConfig;
 
   // Per-agent MCP configuration (additive to global MCPs)
   mcpConfig?: AgentMcpConfig;

@@ -12,6 +12,10 @@ import type { MessagePayload } from "../infrastructure/queue/queue-producer";
 import type { ModelProviderModule } from "../modules/module-system";
 import type { GrantStore } from "../permissions/grant-store";
 import {
+  buildPolicyBundle,
+  type PolicyStore,
+} from "../permissions/policy-store";
+import {
   deleteSecretMappings,
   generatePlaceholder,
 } from "../proxy/secret-proxy";
@@ -187,6 +191,7 @@ export abstract class BaseDeploymentManager {
    */
   protected secretStore?: WritableSecretStore;
   protected grantStore?: GrantStore;
+  protected policyStore?: PolicyStore;
   /**
    * Per-agent cache of the last-synced grant pattern set. Used to
    * (a) skip redundant `grantStore.grant()` writes when the set is
@@ -245,6 +250,13 @@ export abstract class BaseDeploymentManager {
    */
   setGrantStore(store: GrantStore): void {
     this.grantStore = store;
+  }
+
+  /**
+   * Inject policy store for syncing per-agent egress judge rules.
+   */
+  setPolicyStore(store: PolicyStore): void {
+    this.policyStore = store;
   }
 
   /**
@@ -468,6 +480,25 @@ export abstract class BaseDeploymentManager {
       logger.info(
         `Synced pre-approved tool patterns as grants for ${deploymentName}: ${messageData.preApprovedTools.join(", ")}`
       );
+    }
+
+    // Sync per-agent egress judge policies (judgedDomains + named judges +
+    // operator extra_policy) into the policy store so the HTTP proxy can
+    // resolve them at request time.
+    if (this.policyStore && agentId) {
+      const bundle = buildPolicyBundle({
+        judgedDomains: messageData.networkConfig?.judgedDomains,
+        judges: messageData.networkConfig?.judges,
+        egressConfig: messageData.egressConfig,
+      });
+      if (bundle) {
+        this.policyStore.set(agentId, bundle);
+        logger.info(
+          `Synced egress judge policy for ${deploymentName}: ${bundle.judgedDomains.length} rule(s), ${Object.keys(bundle.judges).length} judge(s)`
+        );
+      } else {
+        this.policyStore.clear(agentId);
+      }
     }
 
     // Auto-add Nix cache domains as permanent grants when Nix packages are configured

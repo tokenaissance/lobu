@@ -55,6 +55,7 @@ import {
   setScheduleServiceInstance,
 } from "../orchestration/scheduled-wakeup";
 import { GrantStore } from "../permissions/grant-store";
+import { PolicyStore } from "../permissions/policy-store";
 import { SecretProxy } from "../proxy/secret-proxy";
 import { TokenRefreshJob } from "../proxy/token-refresh-job";
 import {
@@ -122,6 +123,7 @@ export class CoreServices {
   // Permissions
   // ============================================================================
   private grantStore?: GrantStore;
+  private policyStore?: PolicyStore;
 
   // ============================================================================
   // Bundled Provider Registry
@@ -359,6 +361,11 @@ export class CoreServices {
     // Initialize grant store for unified permissions
     this.grantStore = new GrantStore(redisClient);
     logger.debug("Grant store initialized");
+
+    // Policy store for egress judge (per-agent judged-domain rules + named
+    // judges + operator extra_policy). In-memory; synced on each deployment.
+    this.policyStore = new PolicyStore();
+    logger.debug("Policy store initialized");
 
     const redisSecretStore = new RedisSecretStore(
       redisClient,
@@ -1215,6 +1222,10 @@ export class CoreServices {
 
   getGrantStore(): GrantStore | undefined {
     return this.grantStore;
+  }
+
+  getPolicyStore(): PolicyStore | undefined {
+    return this.policyStore;
   }
 
   getProviderRegistryService(): ProviderRegistryService | undefined {

@@ -1202,11 +1202,21 @@ export async function startGateway(config: GatewayConfig): Promise<void> {
     logger.debug("Grant store connected to HTTP proxy");
   }
 
+  // Wire policy store + egress judge into the HTTP proxy for judged-domain
+  // rules declared by skills or agent config.
+  const policyStore = coreServices.getPolicyStore();
+  if (policyStore) {
+    const { setProxyPolicyStore } = await import("../proxy/http-proxy");
+    setProxyPolicyStore(policyStore);
+    logger.debug("Policy store connected to HTTP proxy");
+  }
+
   await orchestrator.injectCoreServices(
     coreServices.getQueue().getRedisClient(),
     coreServices.getSecretStore(),
     coreServices.getProviderCatalogService(),
-    coreServices.getGrantStore() ?? undefined
+    coreServices.getGrantStore() ?? undefined,
+    coreServices.getPolicyStore() ?? undefined
   );
   logger.debug("Orchestrator configured with core services");
 
