@@ -72,7 +72,10 @@ export class CircuitBreaker {
     if (next.consecutiveFailures >= this.failureThreshold) {
       next.openUntil = Date.now() + this.cooldownMs;
     }
-    if (!this.state.has(policyHash) && this.state.size >= MAX_TRACKED_POLICIES) {
+    if (
+      !this.state.has(policyHash) &&
+      this.state.size >= MAX_TRACKED_POLICIES
+    ) {
       const oldest = this.state.keys().next().value;
       if (oldest !== undefined) this.state.delete(oldest);
     }
