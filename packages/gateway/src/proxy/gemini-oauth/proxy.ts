@@ -21,7 +21,7 @@
  */
 
 import { createLogger } from "@lobu/core";
-import { convertSync as jsonSchemaToOpenApi } from "@openapi-contrib/json-schema-to-openapi-schema";
+import { convert as jsonSchemaToOpenApi } from "@openapi-contrib/json-schema-to-openapi-schema";
 import { Hono } from "hono";
 import type { AuthProfilesManager } from "../../auth/settings/auth-profiles-manager";
 import {
@@ -43,7 +43,7 @@ const PROVIDER_ID = "gemini-cli";
  *
  * Run each tool's parameters through `@openapi-contrib/json-schema-to-openapi-schema`.
  * That library:
- *   - dereferences `$ref`/`definitions` (fixes "required field not in properties")
+ *   - dereferences local `$ref`/`definitions` (fixes "required field not in properties")
  *   - folds `const: X` into `enum: [X]`
  *   - rewrites `patternProperties` as `additionalProperties` + `x-patternProperties`
  *   - converts `exclusiveMinimum/Maximum` from draft-07 boolean to number
@@ -52,6 +52,17 @@ const PROVIDER_ID = "gemini-cli";
  * Gemini's schema is stricter than OpenAPI 3 (no vendor extensions), so we
  * drop any `x-*` keys the library produced as a final pass.
  */
+const SCHEMA_CONVERTER_OPTIONS = {
+  dereference: true,
+  dereferenceOptions: {
+    // Tool schemas are worker-controlled input; never fetch remote $ref URLs
+    // from the gateway while preparing a provider request.
+    resolve: {
+      external: false,
+    },
+  },
+} as const;
+
 function stripVendorExtensions(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(stripVendorExtensions);
   if (!node || typeof node !== "object") return node;
@@ -63,10 +74,13 @@ function stripVendorExtensions(node: unknown): unknown {
   return out;
 }
 
-function sanitizeToolSchema(schema: unknown): unknown {
+async function sanitizeToolSchema(schema: unknown): Promise<unknown> {
   if (!schema || typeof schema !== "object") return schema;
   try {
-    const converted = jsonSchemaToOpenApi(schema as Record<string, unknown>);
+    const converted = await jsonSchemaToOpenApi(
+      schema as Record<string, unknown>,
+      SCHEMA_CONVERTER_OPTIONS
+    );
     return stripVendorExtensions(converted);
   } catch (err) {
     logger.warn(
@@ -77,29 +91,44 @@ function sanitizeToolSchema(schema: unknown): unknown {
   }
 }
 
-function sanitizeRequestBody(body: Record<string, unknown>): void {
+async function sanitizeRequestBody(
+  body: Record<string, unknown>
+): Promise<void> {
   const req = body.request;
   if (!req || typeof req !== "object") return;
   const tools = (req as Record<string, unknown>).tools;
   if (!Array.isArray(tools)) return;
-  (req as Record<string, unknown>).tools = tools.map((tool) => {
-    if (!tool || typeof tool !== "object") return tool;
-    const t = tool as Record<string, unknown>;
-    const decls = t.functionDeclarations;
-    if (!Array.isArray(decls)) return tool;
-    return {
-      ...t,
-      functionDeclarations: decls.map((d) => {
-        if (!d || typeof d !== "object") return d;
-        const decl = d as Record<string, unknown>;
-        if (decl.parameters) {
-          return { ...decl, parameters: sanitizeToolSchema(decl.parameters) };
-        }
-        return decl;
-      }),
-    };
-  });
+  (req as Record<string, unknown>).tools = await Promise.all(
+    tools.map(async (tool) => {
+      if (!tool || typeof tool !== "object") return tool;
+      const t = tool as Record<string, unknown>;
+      const decls = t.functionDeclarations;
+      if (!Array.isArray(decls)) return tool;
+      return {
+        ...t,
+        functionDeclarations: await Promise.all(
+          decls.map(async (d) => {
+            if (!d || typeof d !== "object") return d;
+            const decl = d as Record<string, unknown>;
+            if ("parameters" in decl) {
+              return {
+                ...decl,
+                parameters: await sanitizeToolSchema(decl.parameters),
+              };
+            }
+            return decl;
+          })
+        ),
+      };
+    })
+  );
 }
+
+export const __testOnly = {
+  sanitizeRequestBody,
+  sanitizeToolSchema,
+  stripVendorExtensions,
+};
 
 export interface GeminiOAuthProxyOptions {
   authProfilesManager: AuthProfilesManager;
@@ -207,7 +236,7 @@ export function createGeminiOAuthProxyApp(
         try {
           const parsed = JSON.parse(raw) as Record<string, unknown>;
           parsed.project = projectId;
-          sanitizeRequestBody(parsed);
+          await sanitizeRequestBody(parsed);
           upstreamBody = JSON.stringify(parsed);
         } catch {
           // Non-JSON body (shouldn't happen for Code Assist); forward as-is.
