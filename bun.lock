@@ -80,6 +80,7 @@
         "@openapi-contrib/json-schema-to-openapi-schema": "^4.3.2",
         "@scalar/hono-api-reference": "^0.9.39",
         "@sentry/node": "^10.19.0",
+        "@types/json-schema": "^7.0.15",
         "bullmq": "^5.31.5",
         "chat": "^4.26.0",
         "commander": "^14.0.1",
