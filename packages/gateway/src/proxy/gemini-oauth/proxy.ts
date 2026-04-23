@@ -35,21 +35,46 @@ const logger = createLogger("gemini-oauth-proxy");
 const PROVIDER_ID = "gemini-cli";
 
 /**
- * Gemini's Code Assist tool-calling API rejects JSON Schema keywords it doesn't
- * know about (notably `const`, which is standard JSON Schema but not in the
- * OpenAPI subset Google accepts). Walk the schema and rewrite `const: X` as
- * `enum: [X]` — semantically equivalent and supported.
+ * Gemini's Code Assist tool-calling API only accepts a subset of JSON Schema
+ * (the OpenAPI 3 "Schema Object"). Unknown keywords (`const`, `patternProperties`,
+ * `$schema`, `$ref`, `additionalProperties`, `unevaluatedProperties`, etc.) are
+ * rejected with a 400. Walk the schema, allow only known-good keys, and fold
+ * `const: X` into `enum: [X]` so we don't drop information.
  */
+const ALLOWED_SCHEMA_KEYS = new Set<string>([
+  "type",
+  "format",
+  "description",
+  "nullable",
+  "enum",
+  "items",
+  "properties",
+  "required",
+  "default",
+  "example",
+  "anyOf",
+  "allOf",
+  "oneOf",
+  "minimum",
+  "maximum",
+  "minLength",
+  "maxLength",
+  "minItems",
+  "maxItems",
+  "pattern",
+  "title",
+]);
+
 function sanitizeToolSchema(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(sanitizeToolSchema);
   if (!node || typeof node !== "object") return node;
   const obj = node as Record<string, unknown>;
   const out: Record<string, unknown> = {};
+  if ("const" in obj && !("enum" in obj)) {
+    out.enum = [obj.const];
+  }
   for (const [k, v] of Object.entries(obj)) {
-    if (k === "const") {
-      if (!("enum" in obj)) out.enum = [v];
-      continue;
-    }
+    if (!ALLOWED_SCHEMA_KEYS.has(k)) continue;
     out[k] = sanitizeToolSchema(v);
   }
   return out;
