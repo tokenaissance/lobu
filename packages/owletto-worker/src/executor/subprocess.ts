@@ -62,9 +62,15 @@ export class SubprocessExecutor implements SyncExecutor {
       const childRunnerTsPath = join(__dirname, 'child-runner.ts');
 
       const execArgv = [`--max-old-space-size=${this.options.maxOldSpaceSize}`];
+      // Bun loads TS natively; `--import tsx` breaks here because tsx's exports
+      // map is unresolvable under bun. Only fall back to tsx on plain Node.
+      const runningUnderBun = typeof (process as unknown as { versions?: { bun?: string } })
+        .versions?.bun === 'string';
       if (!existsSync(childRunnerPath) && existsSync(childRunnerTsPath)) {
         childRunnerPath = childRunnerTsPath;
-        execArgv.unshift('--import', 'tsx');
+        if (!runningUnderBun) {
+          execArgv.unshift('--import', 'tsx');
+        }
       }
 
       // Node subprocess execution is process isolation, not a security sandbox.
