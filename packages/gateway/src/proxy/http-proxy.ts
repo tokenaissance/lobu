@@ -102,9 +102,6 @@ export function setProxyEgressJudge(judge: EgressJudge): void {
   proxyEgressJudge = judge;
 }
 
-/**
- * Get global network config (lazy loaded)
- */
 function getGlobalConfig(): ResolvedNetworkConfig {
   if (!globalConfig) {
     globalConfig = {
@@ -482,6 +479,13 @@ function logAccessDecision(
   agentId: string | undefined,
   decision: AccessDecision
 ): void {
+  // Audit log only fires for non-trivial decisions — every judge
+  // invocation and every denial. Globally-allowed fast-path requests are
+  // the common case on busy gateways and flooding the log with them turns
+  // a useful audit stream into noise (and costs serialization per req).
+  if (decision.allowed && decision.source === "global") {
+    return;
+  }
   logger.info("egress-decision", {
     method,
     hostname,

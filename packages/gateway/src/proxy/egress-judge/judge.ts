@@ -43,7 +43,6 @@ export class EgressJudge {
   private readonly inFlight = new Map<string, Promise<JudgeDecision>>();
   private readonly defaultModel: string;
   private _client: JudgeClient | undefined;
-  private readonly clientOverridden: boolean;
 
   constructor(options: EgressJudgeOptions = {}) {
     this.cache = new VerdictCache(
@@ -56,13 +55,11 @@ export class EgressJudge {
     );
     this.defaultModel = options.defaultModel ?? DEFAULT_JUDGE_MODEL;
     this._client = options.client;
-    this.clientOverridden = !!options.client;
   }
 
   /**
-   * Lazy client getter. We defer construction of the Anthropic client until
-   * the first judge call so gateways that never invoke the judge don't need
-   * ANTHROPIC_API_KEY set.
+   * Defer Anthropic client construction until the first judge call so
+   * gateways with no `judge`-action rules never require ANTHROPIC_API_KEY.
    */
   private get client(): JudgeClient {
     if (!this._client) {
@@ -158,16 +155,5 @@ export class EgressJudge {
         judgeName: rule.judgeName,
       };
     }
-  }
-
-  /** For tests. */
-  _debug(): {
-    cacheSize: number;
-    clientOverridden: boolean;
-  } {
-    return {
-      cacheSize: this.cache.size(),
-      clientOverridden: this.clientOverridden,
-    };
   }
 }

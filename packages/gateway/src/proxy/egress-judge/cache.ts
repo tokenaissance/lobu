@@ -45,7 +45,6 @@ export class VerdictCache {
       this.entries.delete(key);
       return undefined;
     }
-    // Touch: move-to-end to refresh LRU position.
     entry.touch = ++this.counter;
     this.entries.delete(key);
     this.entries.set(key, entry);

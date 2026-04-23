@@ -11,6 +11,14 @@
  * The breaker is keyed by policy hash, not by agent — if a skill's policy
  * is broken (e.g. malformed), only requests using that policy are denied.
  */
+/**
+ * Cap on tracked policy hashes. With churn (agents redeployed frequently
+ * with new policies) the state map would otherwise grow forever. When the
+ * cap is hit we evict the oldest inserted entry — a no-op for any policy
+ * that's been healthy long enough to fall out of the window.
+ */
+const MAX_TRACKED_POLICIES = 1000;
+
 export class CircuitBreaker {
   private readonly state = new Map<
     string,
@@ -45,9 +53,6 @@ export class CircuitBreaker {
   }
 
   onSuccess(policyHash: string): void {
-    const entry = this.state.get(policyHash);
-    if (!entry) return;
-    // Success closes the breaker entirely.
     this.state.delete(policyHash);
   }
 
@@ -66,6 +71,10 @@ export class CircuitBreaker {
     };
     if (next.consecutiveFailures >= this.failureThreshold) {
       next.openUntil = Date.now() + this.cooldownMs;
+    }
+    if (!this.state.has(policyHash) && this.state.size >= MAX_TRACKED_POLICIES) {
+      const oldest = this.state.keys().next().value;
+      if (oldest !== undefined) this.state.delete(oldest);
     }
     this.state.set(policyHash, next);
   }
