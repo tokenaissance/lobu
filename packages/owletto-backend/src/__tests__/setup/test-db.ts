@@ -5,25 +5,9 @@
  * Uses a separate test database to avoid affecting development data.
  */
 
-import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import postgres from 'postgres';
 import { listMigrationFiles, loadMigrationUpSection } from '../../db/migration-loader';
-
-function resolveMigrationsDir(): string | null {
-  // Candidate list: cwd (when invoked from repo root), the monorepo root
-  // walked up from this file (when invoked from the package dir — e.g. vitest),
-  // and the package-local override if a maintainer ever moves migrations
-  // into packages/owletto-backend/db/migrations.
-  const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    join(process.cwd(), 'db/migrations'),
-    join(here, '../../../../../db/migrations'),
-    join(here, '../../../db/migrations'),
-  ];
-  return candidates.find((p) => existsSync(p)) ?? null;
-}
 
 const TEST_SEED_USER_ID = 'test-seed-user';
 const TEST_SEED_USER_EMAIL = 'test-seed-user@example.com';
@@ -91,20 +75,15 @@ export async function setupTestDatabase(): Promise<void> {
   await db`CREATE EXTENSION IF NOT EXISTS "vector"`;
   await db`CREATE EXTENSION IF NOT EXISTS "pg_trgm"`;
 
-  // Run migrations in order. Resolve the migrations dir from multiple
-  // candidates so tests work whether invoked from repo root or from the
-  // package dir (vitest's default).
-  const migrationsDir = resolveMigrationsDir();
-  if (!migrationsDir) {
-    console.warn('No migrations directory found, skipping migrations');
-    return;
-  }
+  // Run migrations in order
+  // Use process.cwd() since globalSetup runs from project root
+  const migrationsDir = join(process.cwd(), 'db/migrations');
 
   let migrationFiles: string[];
   try {
     migrationFiles = listMigrationFiles(migrationsDir);
   } catch (_err) {
-    console.warn(`Failed to list migrations in ${migrationsDir}, skipping`);
+    console.warn('No migrations directory found, skipping migrations');
     return;
   }
 
