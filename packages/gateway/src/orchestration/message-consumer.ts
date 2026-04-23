@@ -447,8 +447,10 @@ export class MessageConsumer {
             { traceId, conversationId, deploymentName },
             "Existing thread - ensuring worker exists"
           );
-          // Sync network config domains to grant store (picks up settings changes)
+          // Sync network config domains + egress judge policies so settings
+          // changes take effect for already-running workers.
           await this.deploymentManager.syncNetworkConfigGrants(dataWithTrace);
+          this.deploymentManager.syncEgressPolicies(dataWithTrace);
           try {
             await this.deploymentManager.scaleDeployment(deploymentName, 1);
             logger.info(

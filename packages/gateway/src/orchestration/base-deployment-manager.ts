@@ -485,21 +485,7 @@ export abstract class BaseDeploymentManager {
     // Sync per-agent egress judge policies (judgedDomains + named judges +
     // operator extra_policy) into the policy store so the HTTP proxy can
     // resolve them at request time.
-    if (this.policyStore && agentId) {
-      const bundle = buildPolicyBundle({
-        judgedDomains: messageData.networkConfig?.judgedDomains,
-        judges: messageData.networkConfig?.judges,
-        egressConfig: messageData.egressConfig,
-      });
-      if (bundle) {
-        this.policyStore.set(agentId, bundle);
-        logger.info(
-          `Synced egress judge policy for ${deploymentName}: ${bundle.judgedDomains.length} rule(s), ${Object.keys(bundle.judges).length} judge(s)`
-        );
-      } else {
-        this.policyStore.clear(agentId);
-      }
-    }
+    this.syncEgressPolicies(messageData);
 
     // Auto-add Nix cache domains as permanent grants when Nix packages are configured
     if (
@@ -520,6 +506,28 @@ export abstract class BaseDeploymentManager {
         `Added Nix cache domains as grants for ${deploymentName}: ${NIX_DOMAINS.join(", ")}`
       );
     }
+  }
+
+  /**
+   * Sync per-agent egress judge policies for a running worker. Called on
+   * deployment creation and on every message so judged-domain / egress model
+   * changes take effect without recreating the worker.
+   */
+  syncEgressPolicies(messageData: MessagePayload): void {
+    const agentId = messageData.agentId;
+    if (!this.policyStore || !agentId) return;
+
+    const bundle = buildPolicyBundle({
+      judgedDomains: messageData.networkConfig?.judgedDomains,
+      judges: messageData.networkConfig?.judges,
+      egressConfig: messageData.egressConfig,
+    });
+    if (bundle) {
+      this.policyStore.set(agentId, bundle);
+      return;
+    }
+
+    this.policyStore.markAbsent(agentId);
   }
 
   /**

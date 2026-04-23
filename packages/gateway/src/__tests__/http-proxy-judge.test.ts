@@ -9,6 +9,7 @@ import type { JudgeClient, JudgeVerdict } from "../proxy/egress-judge";
 import {
   __testOnly,
   setProxyEgressJudge,
+  setProxyPolicyLoader,
   setProxyPolicyStore,
   startHttpProxy,
   stopHttpProxy,
@@ -165,6 +166,37 @@ describe("HTTP Proxy — egress judge integration", () => {
     const res = await rawProxyRequest("http://unknown.example.com/", auth());
     expect(res.statusCode).toBe(403);
     expect(fakeClient.calls).toBe(0);
+  });
+
+  test("hydrates judged rules lazily when the local policy store is cold", async () => {
+    fakeClient.calls = 0;
+    fakeClient.impl = async () => ({
+      verdict: "deny",
+      reason: "lazy-hydrate",
+    });
+
+    const coldStore = new PolicyStore();
+    setProxyPolicyStore(coldStore);
+    setProxyPolicyLoader(async (agentId: string) => {
+      if (agentId === "agent-a") {
+        coldStore.set(agentId, {
+          judgedDomains: [{ domain: "example.com" }],
+          judges: { default: "allow only reads from trusted sources" },
+        });
+        return;
+      }
+      coldStore.markAbsent(agentId);
+    });
+
+    try {
+      const res = await rawProxyRequest("http://example.com/lazy", auth());
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toContain("lazy-hydrate");
+      expect(fakeClient.calls).toBe(1);
+    } finally {
+      setProxyPolicyStore(policyStore);
+      setProxyPolicyLoader(null);
+    }
   });
 
   test("consults the judge and forwards when the verdict is allow", async () => {

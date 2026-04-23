@@ -65,7 +65,7 @@ judges:
     });
   });
 
-  test("lets later skills overwrite earlier named judges with the same key", async () => {
+  test("loads skills in deterministic order so later names win on duplicate judges", async () => {
     writeToml("");
     mkdirSync(join(projectDir, "agents", "support", "skills", "s2"), {
       recursive: true,
@@ -82,12 +82,33 @@ judges:
     );
 
     const agents = await loadAgentConfigFromFiles(projectDir);
-    // Either s1 or s2 wins — assert only one value sticks so the merge
-    // doesn't accidentally concatenate or break the shape.
     const judges = agents[0]?.settings.networkConfig?.judges;
-    expect(judges).toBeDefined();
-    expect(Object.keys(judges as object)).toEqual(["default"]);
-    expect((judges as Record<string, string>).default).toMatch(/^from s/);
+    expect(judges).toEqual({ default: "from s2" });
+  });
+
+  test("normalizes equivalent judged-domain patterns before merge precedence", async () => {
+    writeToml(`
+[agents.support.network]
+judge = [
+  { domain = ".slack.com", judge = "agent" }
+]
+[agents.support.network.judges]
+agent = "from agent"
+`);
+    writeSkill(`
+name: s1
+network:
+  judge:
+    - domain: "*.Slack.COM"
+      judge: skill
+judges:
+  skill: "from skill"
+`);
+
+    const agents = await loadAgentConfigFromFiles(projectDir);
+    expect(agents[0]?.settings.networkConfig?.judgedDomains).toEqual([
+      { domain: ".slack.com", judge: "skill" },
+    ]);
   });
 
   test("maps [agents.<id>.egress] to settings.egressConfig", async () => {

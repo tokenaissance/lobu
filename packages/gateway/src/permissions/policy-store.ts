@@ -52,10 +52,12 @@ interface PreparedBundle {
  */
 export class PolicyStore {
   private readonly policies = new Map<string, PreparedBundle>();
+  private readonly hydratedAgents = new Set<string>();
 
   set(agentId: string, bundle: JudgePolicyBundle): void {
     const prepared = prepareBundle(agentId, bundle);
     this.policies.set(agentId, prepared);
+    this.hydratedAgents.add(agentId);
     logger.debug("Set egress policy bundle", {
       agentId,
       domains: prepared.judgedDomains.length,
@@ -64,8 +66,23 @@ export class PolicyStore {
     });
   }
 
+  /**
+   * Mark an agent as hydrated even when it has no judged-domain rules.
+   * This lets the proxy avoid re-loading settings on every miss while still
+   * distinguishing "loaded and empty" from "not loaded yet".
+   */
+  markAbsent(agentId: string): void {
+    this.policies.delete(agentId);
+    this.hydratedAgents.add(agentId);
+  }
+
+  has(agentId: string): boolean {
+    return this.hydratedAgents.has(agentId);
+  }
+
   clear(agentId: string): void {
     this.policies.delete(agentId);
+    this.hydratedAgents.delete(agentId);
   }
 
   /**

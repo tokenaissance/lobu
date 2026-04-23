@@ -120,13 +120,21 @@ describe("PolicyStore.resolve", () => {
     expect(a).not.toBe(b);
   });
 
-  test("clear removes the bundle", () => {
+  test("markAbsent records a hydrated agent with no bundle", () => {
+    const store = new PolicyStore();
+    store.markAbsent("agent-a");
+    expect(store.has("agent-a")).toBe(true);
+    expect(store.resolve("agent-a", "x.com")).toBeUndefined();
+  });
+
+  test("clear removes the bundle and hydration marker", () => {
     const store = new PolicyStore();
     store.set("agent-a", {
       judgedDomains: [{ domain: "x.com" }],
       judges: { default: "p" },
     });
     store.clear("agent-a");
+    expect(store.has("agent-a")).toBe(false);
     expect(store.resolve("agent-a", "x.com")).toBeUndefined();
   });
 });

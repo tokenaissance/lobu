@@ -7,6 +7,7 @@ import {
   type OrchestratorConfig,
 } from "../orchestration/base-deployment-manager";
 import { GrantStore } from "../permissions/grant-store";
+import { PolicyStore } from "../permissions/policy-store";
 
 /** Minimal concrete subclass — only exists so we can test grant syncing. */
 class TestDeploymentManager extends BaseDeploymentManager {
@@ -73,6 +74,43 @@ function buildPayload(overrides: Partial<MessagePayload>): MessagePayload {
     ...overrides,
   };
 }
+
+describe("BaseDeploymentManager.syncEgressPolicies", () => {
+  test("hydrates judged-domain policies for a running worker", async () => {
+    const manager = new TestDeploymentManager(TEST_CONFIG);
+    const policyStore = new PolicyStore();
+    manager.setPolicyStore(policyStore);
+
+    manager.syncEgressPolicies(
+      buildPayload({
+        networkConfig: {
+          judgedDomains: [{ domain: ".slack.com", judge: "strict" }],
+          judges: { strict: "deny writes" },
+        },
+        egressConfig: { judgeModel: "claude-haiku-4-5-20251001" },
+      })
+    );
+
+    expect(policyStore.has("agent-1")).toBe(true);
+    expect(policyStore.resolve("agent-1", "api.slack.com")).toEqual({
+      judgeName: "strict",
+      policy: "deny writes",
+      policyHash: expect.any(String),
+      judgeModel: "claude-haiku-4-5-20251001",
+    });
+  });
+
+  test("marks agents with no judged domains as hydrated-empty", () => {
+    const manager = new TestDeploymentManager(TEST_CONFIG);
+    const policyStore = new PolicyStore();
+    manager.setPolicyStore(policyStore);
+
+    manager.syncEgressPolicies(buildPayload({}));
+
+    expect(policyStore.has("agent-1")).toBe(true);
+    expect(policyStore.resolve("agent-1", "example.com")).toBeUndefined();
+  });
+});
 
 describe("BaseDeploymentManager.syncNetworkConfigGrants", () => {
   let redis: MockRedisClient;

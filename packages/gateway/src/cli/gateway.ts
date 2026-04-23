@@ -1206,8 +1206,28 @@ export async function startGateway(config: GatewayConfig): Promise<void> {
   // rules declared by skills or agent config.
   const policyStore = coreServices.getPolicyStore();
   if (policyStore) {
-    const { setProxyPolicyStore } = await import("../proxy/http-proxy");
+    const { buildPolicyBundle } = await import("../permissions/policy-store");
+    const { setProxyPolicyLoader, setProxyPolicyStore } = await import(
+      "../proxy/http-proxy"
+    );
+    const settingsResolver = coreServices.getSettingsResolver();
+
     setProxyPolicyStore(policyStore);
+    if (settingsResolver) {
+      setProxyPolicyLoader(async (agentId: string) => {
+        const settings = await settingsResolver.getEffectiveSettings(agentId);
+        const bundle = buildPolicyBundle({
+          judgedDomains: settings?.networkConfig?.judgedDomains,
+          judges: settings?.networkConfig?.judges,
+          egressConfig: settings?.egressConfig,
+        });
+        if (bundle) {
+          policyStore.set(agentId, bundle);
+          return;
+        }
+        policyStore.markAbsent(agentId);
+      });
+    }
     logger.debug("Policy store connected to HTTP proxy");
   }
 
@@ -1220,17 +1240,17 @@ export async function startGateway(config: GatewayConfig): Promise<void> {
   );
   logger.debug("Orchestrator configured with core services");
 
-  // Wire reload-from-files notifications to the deployment manager's
-  // grant-sync cache so that changes to `networkConfig.allowedDomains` or
-  // `preApprovedTools` in lobu.toml take effect on the next message —
-  // without this, the cached hash short-circuits both grants AND revokes.
+  // Wire reload-from-files notifications so in-memory sync state is dropped
+  // and the next message / proxy request rehydrates the latest grant + egress
+  // policy config from disk.
   const deploymentManager = orchestrator.getDeploymentManager();
   coreServices.onReloadFromFiles((agentIds: string[]) => {
     for (const agentId of agentIds) {
       deploymentManager.invalidateGrantSyncCache(agentId);
+      policyStore?.clear(agentId);
     }
     logger.debug(
-      `Invalidated grant-sync cache for ${agentIds.length} reloaded agent(s)`
+      `Invalidated grant-sync cache and egress policy cache for ${agentIds.length} reloaded agent(s)`
     );
   });
 

@@ -272,7 +272,8 @@ async function buildAgentConfig(
   const mergedJudges: Record<string, string> = {};
   if (agentConfig.network?.judge) {
     for (const rule of agentConfig.network.judge) {
-      mergedJudgedDomains.set(rule.domain, rule);
+      const domain = normalizeDomainPattern(rule.domain);
+      mergedJudgedDomains.set(domain, { ...rule, domain });
     }
   }
   if (agentConfig.network?.judges) {
@@ -333,7 +334,8 @@ async function buildAgentConfig(
     }
     if (skill.networkConfig?.judgedDomains?.length) {
       for (const rule of skill.networkConfig.judgedDomains) {
-        mergedJudgedDomains.set(rule.domain, rule);
+        const domain = normalizeDomainPattern(rule.domain);
+        mergedJudgedDomains.set(domain, { ...rule, domain });
       }
     }
     if (skill.networkConfig?.judges) {
@@ -672,7 +674,9 @@ async function loadSkillFiles(dirs: string[]): Promise<LoadedSkillFile[]> {
     const resolvedDir = resolve(dir);
     let entries: string[];
     try {
-      entries = await readdir(resolvedDir);
+      entries = (await readdir(resolvedDir)).sort((a, b) =>
+        a.localeCompare(b)
+      );
     } catch {
       continue;
     }

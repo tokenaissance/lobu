@@ -12,7 +12,10 @@ import {
   loadDisallowedDomains,
 } from "../config/network-allowlist";
 import type { GrantStore } from "../permissions/grant-store";
-import type { PolicyStore } from "../permissions/policy-store";
+import type {
+  PolicyStore,
+  ResolvedJudgeRule,
+} from "../permissions/policy-store";
 import { EgressJudge } from "./egress-judge";
 import type { JudgeDecision } from "./egress-judge";
 
@@ -72,6 +75,8 @@ let proxyGrantStore: GrantStore | null = null;
 // when a request matches a `judgedDomains` rule — most traffic never
 // touches it.
 let proxyPolicyStore: PolicyStore | null = null;
+let proxyPolicyLoader: ((agentId: string) => Promise<void>) | null = null;
+const proxyPolicyLoadsInFlight = new Map<string, Promise<void>>();
 let proxyEgressJudge: EgressJudge | null = null;
 
 /**
@@ -92,6 +97,17 @@ export function setProxyPolicyStore(store: PolicyStore): void {
   if (!proxyEgressJudge) {
     proxyEgressJudge = new EgressJudge();
   }
+}
+
+/**
+ * Provide a lazy loader that hydrates an agent's judged-domain policy bundle
+ * into {@link proxyPolicyStore} on first proxy access. This lets fresh gateway
+ * processes recover policy state for already-running workers.
+ */
+export function setProxyPolicyLoader(
+  loader: ((agentId: string) => Promise<void>) | null
+): void {
+  proxyPolicyLoader = loader;
 }
 
 /**
@@ -121,6 +137,40 @@ interface AccessDecision {
   allowed: boolean;
   source: "global" | "grant" | "judge";
   judge?: JudgeDecision;
+}
+
+async function resolveJudgeRule(
+  agentId: string,
+  hostname: string
+): Promise<ResolvedJudgeRule | undefined> {
+  if (!proxyPolicyStore) {
+    return undefined;
+  }
+
+  const existing = proxyPolicyStore.resolve(agentId, hostname);
+  if (existing || !proxyPolicyLoader || proxyPolicyStore.has(agentId)) {
+    return existing;
+  }
+
+  let pending = proxyPolicyLoadsInFlight.get(agentId);
+  if (!pending) {
+    pending = proxyPolicyLoader(agentId).finally(() => {
+      proxyPolicyLoadsInFlight.delete(agentId);
+    });
+    proxyPolicyLoadsInFlight.set(agentId, pending);
+  }
+
+  try {
+    await pending;
+  } catch (error) {
+    logger.error("Failed to hydrate egress policy for agent", {
+      agentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+
+  return proxyPolicyStore.resolve(agentId, hostname);
 }
 
 /**
@@ -177,7 +227,7 @@ async function checkDomainAccess(
 
   // Fall through to the LLM egress judge when a matching rule exists.
   if (proxyPolicyStore && proxyEgressJudge && agentId) {
-    const rule = proxyPolicyStore.resolve(agentId, hostname);
+    const rule = await resolveJudgeRule(agentId, hostname);
     if (rule) {
       const decision = await proxyEgressJudge.decide(
         {
@@ -272,6 +322,8 @@ export const __testOnly = {
     globalConfig = null;
     proxyGrantStore = null;
     proxyPolicyStore = null;
+    proxyPolicyLoader = null;
+    proxyPolicyLoadsInFlight.clear();
     proxyEgressJudge = null;
   },
 };

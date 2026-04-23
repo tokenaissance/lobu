@@ -6,7 +6,10 @@
  */
 
 import { z } from "zod";
-import { normalizeDomainPatterns } from "./utils/network-domains";
+import {
+  normalizeDomainPattern,
+  normalizeDomainPatterns,
+} from "./utils/network-domains";
 
 // ── Provider ────────────────────────────────────────────────────────────────
 
@@ -114,9 +117,9 @@ const networkSchema = z
     denied: normalizeDomainPatterns(network.denied),
     judge: network.judge?.map((entry) =>
       typeof entry === "string"
-        ? { domain: entry }
+        ? { domain: normalizeDomainPattern(entry) }
         : {
-            domain: entry.domain,
+            domain: normalizeDomainPattern(entry.domain),
             ...(entry.judge ? { judge: entry.judge } : {}),
           }
     ),
