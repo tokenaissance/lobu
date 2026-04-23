@@ -41,9 +41,9 @@ describe("ClaudeOAuthModule", () => {
     process.env.ANTHROPIC_OAUTH_TOKEN = "sk-ant-oat01-system";
     const module = createModule();
 
-    await expect(
-      module.buildCredentialPlaceholder("agent-1")
-    ).resolves.toBe("sk-ant-oat01-lobu-proxy");
+    await expect(module.buildCredentialPlaceholder("agent-1")).resolves.toBe(
+      "sk-ant-oat01-lobu-proxy"
+    );
   });
 
   test("uses bearer auth for OAuth-shaped credentials declared as api-key profiles", async () => {
@@ -79,9 +79,7 @@ describe("ClaudeOAuthModule", () => {
     const options = await module.getModelOptions("agent-1", "user-1");
 
     expect(capturedUrl).toBe("https://api.anthropic.com/v1/models");
-    expect(capturedHeaders?.Authorization).toBe(
-      "Bearer sk-ant-oat01-declared"
-    );
+    expect(capturedHeaders?.Authorization).toBe("Bearer sk-ant-oat01-declared");
     expect(capturedHeaders?.["x-api-key"]).toBeUndefined();
     expect(options).toEqual([
       {
