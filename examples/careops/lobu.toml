@@ -6,11 +6,9 @@ name = "careops"
 description = "Manage patient care, appointments, and treatment workflows for healthcare practices"
 dir = "./agents/careops"
 
-# Primary: Claude Sonnet 4.5 via Anthropic OAuth (Claude Code / Max plan
-# token). Pi-ai detects OAuth via the `sk-ant-oat` prefix in the key value
-# and routes with the `claude-code-20250219,oauth-2025-04-20` beta headers.
-# Paste the OAuth access token from your Claude subscription into
-# $ANTHROPIC_OAUTH_TOKEN — an API key (`sk-ant-api...`) also works.
+# Primary: Claude Sonnet 4.5 via Anthropic OAuth. Paste the OAuth access token
+# from your Claude subscription into $ANTHROPIC_OAUTH_TOKEN; an API key
+# (`sk-ant-api...`) also works.
 [[agents.careops.providers]]
 id = "claude"
 model = "anthropic/claude-sonnet-4-5"

@@ -1242,13 +1242,8 @@ Use it when the user references past discussions or you need context.`);
       messageProvider: this.config.platform,
     };
 
-    // Own the system prompt from the start. pi-coding-agent's default
-    // prompt declares itself "pi, a coding agent harness" + ships a "Pi
-    // documentation" block — Anthropic's OAuth impersonation gate rejects
-    // that. Giving ResourceLoader a `systemPrompt` makes pi take the
-    // customPrompt branch in buildSystemPrompt, which skips the pi opener
-    // and docs block entirely and keeps our identity stable across the
-    // per-turn `_baseSystemPrompt` rebuild.
+    // Own the system prompt from ResourceLoader so pi-coding-agent skips its
+    // default "pi" opener/docs block and keeps Lobu's identity on rebuilds.
     const identity = context.agentInstructions?.trim();
     const systemPromptBody = [identity, finalInstructionsUpdated]
       .filter(Boolean)

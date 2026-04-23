@@ -210,9 +210,7 @@ export class SecretProxy {
     // Copy request body for non-GET/HEAD
     const method = c.req.method;
     const body =
-      method !== "GET" && method !== "HEAD"
-        ? await c.req.text()
-        : undefined;
+      method !== "GET" && method !== "HEAD" ? await c.req.text() : undefined;
 
     // Build headers, swapping placeholder secrets in auth headers
     const headers: Record<string, string> = {};
