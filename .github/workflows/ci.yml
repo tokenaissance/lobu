@@ -159,11 +159,15 @@ jobs:
       - name: Create .env for example
         working-directory: examples/careops
         run: |
+          # GEMINI_CLI_OAUTH_KEY is a JSON blob — containing `{"`, `:`, etc. —
+          # that docker compose's .env parser rejects. It's already set at the
+          # job level, so docker compose picks it up via the shell environment
+          # and passes it through via `${GEMINI_CLI_OAUTH_KEY:-}` in the compose
+          # file. Keep it out of .env.
           cat > .env <<EOF
           ADMIN_PASSWORD=ci-eval-password
           ENCRYPTION_KEY=$(openssl rand -hex 32)
           GATEWAY_PORT=8081
-          GEMINI_CLI_OAUTH_KEY=${GEMINI_CLI_OAUTH_KEY}
           EOF
 
       - name: Start stack
