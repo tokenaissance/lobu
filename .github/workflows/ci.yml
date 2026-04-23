@@ -160,6 +160,88 @@ jobs:
             echo "::notice::Docs/config-only diff; skipping smoke eval."
           fi
 
+  # Boot-only smoke test. Runs on every non-docs PR (including forks) to
+  # verify the docker-compose stack is valid, gateway starts, and /health
+  # responds — without depending on any LLM-provider secret. Complements
+  # `smoke-example` below, which exercises a real agent run but is gated on
+  # GEMINI_CLI_OAUTH_KEY and skipped on fork PRs.
+  smoke-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test, format-lint, typecheck, detect-smoke]
+    if: needs.detect-smoke.outputs.run == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-submodule
+        with:
+          deploy-key: ${{ secrets.OWLETTO_WEB_DEPLOY_KEY }}
+
+      - name: Build local gateway image
+        run: docker build -f docker/Dockerfile.gateway -t lobu-gateway:ci .
+
+      - name: Create .env for example
+        working-directory: examples/careops
+        run: |
+          cat > .env <<EOF
+          ADMIN_PASSWORD=ci-smoke-password
+          ENCRYPTION_KEY=$(openssl rand -hex 32)
+          GATEWAY_PORT=8081
+          EOF
+
+      - name: Start stack
+        working-directory: examples/careops
+        run: |
+          mkdir -p data && chmod 777 data
+          cat > docker-compose.override.yml <<'YAML'
+          services:
+            redis:
+              command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --save "" --stop-writes-on-bgsave-error no --dir /tmp
+            gateway:
+              image: lobu-gateway:ci
+              pull_policy: never
+          YAML
+          docker compose up -d
+          echo "Waiting for gateway to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8081/health > /dev/null 2>&1; then
+              echo "Gateway is ready after ${i}s."
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Gateway failed to start within 60s"
+              docker compose logs gateway
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Probe gateway endpoints
+        run: |
+          # /health must return 200 and surface a JSON status field.
+          status=$(curl -sf http://localhost:8081/health | jq -r '.status // empty')
+          if [ "$status" != "ok" ]; then
+            echo "Unexpected /health payload (status='$status')"
+            curl -s http://localhost:8081/health
+            exit 1
+          fi
+          # Authenticated route must challenge (401/403), not time out or 500.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/api/v1/connections)
+          case "$code" in
+            401|403) echo "Connections endpoint correctly requires auth (HTTP $code)" ;;
+            *) echo "Connections endpoint returned unexpected HTTP $code"; exit 1 ;;
+          esac
+
+      - name: Gateway logs on failure
+        if: failure()
+        working-directory: examples/careops
+        run: docker compose logs gateway 2>&1 | tail -200
+
+      - name: Stop stack
+        if: always()
+        working-directory: examples/careops
+        run: docker compose down
+
   smoke-example:
     runs-on: ubuntu-latest
     timeout-minutes: 45
