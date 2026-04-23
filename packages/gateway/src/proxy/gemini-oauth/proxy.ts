@@ -21,6 +21,7 @@
  */
 
 import { createLogger } from "@lobu/core";
+import { convertSync as jsonSchemaToOpenApi } from "@openapi-contrib/json-schema-to-openapi-schema";
 import { Hono } from "hono";
 import type { AuthProfilesManager } from "../../auth/settings/auth-profiles-manager";
 import {
@@ -35,49 +36,30 @@ const logger = createLogger("gemini-oauth-proxy");
 const PROVIDER_ID = "gemini-cli";
 
 /**
- * Gemini's Code Assist tool-calling API only accepts a subset of JSON Schema
- * (the OpenAPI 3 "Schema Object"). Unknown keywords (`const`, `patternProperties`,
- * `$schema`, `$ref`, `additionalProperties`, `unevaluatedProperties`, etc.) are
- * rejected with a 400. Walk the schema, allow only known-good keys, and fold
- * `const: X` into `enum: [X]` so we don't drop information.
+ * Gemini's Code Assist tool-calling API accepts the OpenAPI 3 Schema Object,
+ * not full JSON Schema. Tool declarations from upstream providers (pi-ai,
+ * MCP servers) often ship raw JSON Schema — `const`, `patternProperties`,
+ * `$ref`, `$schema`, `exclusiveMinimum` as number, etc. — which Gemini 400s on.
+ *
+ * Convert each tool's parameters through `@openapi-contrib/json-schema-to-openapi-schema`
+ * before forwarding. That library:
+ *   - dereferences `$ref`/`definitions` (fixes "required field not in properties")
+ *   - folds `const: X` into `enum: [X]`
+ *   - rewrites `patternProperties` as `additionalProperties`
+ *   - converts `exclusiveMinimum/Maximum` from draft-07 boolean to number
+ *   - strips `$schema`, `$id`, `id`
  */
-const ALLOWED_SCHEMA_KEYS = new Set<string>([
-  "type",
-  "format",
-  "description",
-  "nullable",
-  "enum",
-  "items",
-  "properties",
-  "required",
-  "default",
-  "example",
-  "anyOf",
-  "allOf",
-  "oneOf",
-  "minimum",
-  "maximum",
-  "minLength",
-  "maxLength",
-  "minItems",
-  "maxItems",
-  "pattern",
-  "title",
-]);
-
-function sanitizeToolSchema(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(sanitizeToolSchema);
-  if (!node || typeof node !== "object") return node;
-  const obj = node as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  if ("const" in obj && !("enum" in obj)) {
-    out.enum = [obj.const];
+function sanitizeToolSchema(schema: unknown): unknown {
+  if (!schema || typeof schema !== "object") return schema;
+  try {
+    return jsonSchemaToOpenApi(schema as Record<string, unknown>);
+  } catch (err) {
+    logger.warn(
+      { err: String(err) },
+      "JSON Schema → OpenAPI conversion failed; forwarding schema as-is"
+    );
+    return schema;
   }
-  for (const [k, v] of Object.entries(obj)) {
-    if (!ALLOWED_SCHEMA_KEYS.has(k)) continue;
-    out[k] = sanitizeToolSchema(v);
-  }
-  return out;
 }
 
 function sanitizeRequestBody(body: Record<string, unknown>): void {
