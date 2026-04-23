@@ -125,6 +125,23 @@ export function createGatewayApp(
     return c.text(getMetricsText());
   });
 
+  // Gemini CLI OAuth proxy must mount BEFORE the SecretProxy catch-all, since
+  // it translates OpenAI → Google Code Assist calls using an OAuth credential
+  // rather than swapping a bearer token and forwarding.
+  if (coreServices?.getAuthProfilesManager) {
+    const authProfilesManager = coreServices.getAuthProfilesManager();
+    if (authProfilesManager) {
+      const {
+        createGeminiOAuthProxyApp,
+      } = require("../proxy/gemini-oauth/proxy");
+      const geminiOAuthApp = createGeminiOAuthProxyApp({
+        authProfilesManager,
+      });
+      app.route("/api/proxy/gemini-cli", geminiOAuthApp);
+      logger.debug("Gemini OAuth proxy enabled at :8080/api/proxy/gemini-cli");
+    }
+  }
+
   if (secretProxy) {
     app.route("/api/proxy", secretProxy.getApp());
     logger.debug("Secret proxy enabled at :8080/api/proxy");
