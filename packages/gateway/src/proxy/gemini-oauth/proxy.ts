@@ -34,6 +34,51 @@ const logger = createLogger("gemini-oauth-proxy");
 
 const PROVIDER_ID = "gemini-cli";
 
+/**
+ * Gemini's Code Assist tool-calling API rejects JSON Schema keywords it doesn't
+ * know about (notably `const`, which is standard JSON Schema but not in the
+ * OpenAPI subset Google accepts). Walk the schema and rewrite `const: X` as
+ * `enum: [X]` — semantically equivalent and supported.
+ */
+function sanitizeToolSchema(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(sanitizeToolSchema);
+  if (!node || typeof node !== "object") return node;
+  const obj = node as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === "const") {
+      if (!("enum" in obj)) out.enum = [v];
+      continue;
+    }
+    out[k] = sanitizeToolSchema(v);
+  }
+  return out;
+}
+
+function sanitizeRequestBody(body: Record<string, unknown>): void {
+  const req = body.request;
+  if (!req || typeof req !== "object") return;
+  const tools = (req as Record<string, unknown>).tools;
+  if (!Array.isArray(tools)) return;
+  (req as Record<string, unknown>).tools = tools.map((tool) => {
+    if (!tool || typeof tool !== "object") return tool;
+    const t = tool as Record<string, unknown>;
+    const decls = t.functionDeclarations;
+    if (!Array.isArray(decls)) return tool;
+    return {
+      ...t,
+      functionDeclarations: decls.map((d) => {
+        if (!d || typeof d !== "object") return d;
+        const decl = d as Record<string, unknown>;
+        if (decl.parameters) {
+          return { ...decl, parameters: sanitizeToolSchema(decl.parameters) };
+        }
+        return decl;
+      }),
+    };
+  });
+}
+
 export interface GeminiOAuthProxyOptions {
   authProfilesManager: AuthProfilesManager;
 }
@@ -140,6 +185,7 @@ export function createGeminiOAuthProxyApp(
         try {
           const parsed = JSON.parse(raw) as Record<string, unknown>;
           parsed.project = projectId;
+          sanitizeRequestBody(parsed);
           upstreamBody = JSON.stringify(parsed);
         } catch {
           // Non-JSON body (shouldn't happen for Code Assist); forward as-is.
