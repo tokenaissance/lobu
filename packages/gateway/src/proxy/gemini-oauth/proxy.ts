@@ -58,12 +58,12 @@ function parseCreds(raw: string): OAuthCreds | null {
 }
 
 export function createGeminiOAuthProxyApp(
-  options: GeminiOAuthProxyOptions,
+  options: GeminiOAuthProxyOptions
 ): Hono {
   const app = new Hono();
 
   app.get("/health", (c) =>
-    c.json({ service: "gemini-oauth-proxy", status: "enabled" }),
+    c.json({ service: "gemini-oauth-proxy", status: "enabled" })
   );
 
   app.all("/a/:agentId/*", async (c) => {
@@ -71,7 +71,7 @@ export function createGeminiOAuthProxyApp(
 
     const profile = await options.authProfilesManager.getBestProfile(
       agentId,
-      PROVIDER_ID,
+      PROVIDER_ID
     );
     if (!profile?.credential) {
       logger.warn({ agentId }, "No gemini-cli auth profile for agent");
@@ -84,7 +84,7 @@ export function createGeminiOAuthProxyApp(
             status: "UNAUTHENTICATED",
           },
         },
-        401,
+        401
       );
     }
 
@@ -99,7 +99,7 @@ export function createGeminiOAuthProxyApp(
             status: "INVALID_ARGUMENT",
           },
         },
-        400,
+        400
       );
     }
 
@@ -110,10 +110,7 @@ export function createGeminiOAuthProxyApp(
       accessToken = resolved.accessToken;
       projectId = resolved.projectId;
     } catch (err) {
-      logger.error(
-        { agentId, err: String(err) },
-        "Code Assist resolve failed",
-      );
+      logger.error({ agentId, err: String(err) }, "Code Assist resolve failed");
       return c.json(
         {
           error: {
@@ -122,7 +119,7 @@ export function createGeminiOAuthProxyApp(
             status: "INTERNAL",
           },
         },
-        500,
+        500
       );
     }
 
@@ -154,13 +151,13 @@ export function createGeminiOAuthProxyApp(
     const upstreamHeaders = buildUpstreamHeaders(
       accessToken,
       Object.fromEntries(
-        Object.entries(c.req.header()).filter(([_, v]) => typeof v === "string"),
-      ) as Record<string, string>,
+        Object.entries(c.req.header()).filter(([_, v]) => typeof v === "string")
+      ) as Record<string, string>
     );
 
     logger.info(
       { agentId, method, upstreamUrl },
-      "Forwarding Code Assist request",
+      "Forwarding Code Assist request"
     );
 
     const response = await fetch(upstreamUrl, {
@@ -175,17 +172,24 @@ export function createGeminiOAuthProxyApp(
         .text()
         .catch(() => "");
       logger.warn(
-        { status: response.status, upstreamUrl, errBody: errBody.slice(0, 300) },
-        "Code Assist returned non-2xx",
+        {
+          status: response.status,
+          upstreamUrl,
+          errBody: errBody.slice(0, 300),
+        },
+        "Code Assist returned non-2xx"
       );
     }
 
     const responseHeaders = new Headers();
     response.headers.forEach((value, key) => {
       if (
-        !["transfer-encoding", "connection", "upgrade", "content-encoding"].includes(
-          key.toLowerCase(),
-        )
+        ![
+          "transfer-encoding",
+          "connection",
+          "upgrade",
+          "content-encoding",
+        ].includes(key.toLowerCase())
       ) {
         responseHeaders.set(key, value);
       }
