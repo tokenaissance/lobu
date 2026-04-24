@@ -1253,7 +1253,8 @@ Use it when the user references past discussions or you need context.`);
       settingsManager,
       systemPrompt: systemPromptBody,
       noExtensions: true,
-      noSkills: true,
+      // Skills synced into `.skills/` above must reach the model — keep
+      // skill discovery enabled even though we suppress pi's other defaults.
       noPromptTemplates: true,
       noThemes: true,
     });

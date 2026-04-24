@@ -46,6 +46,21 @@ describe("ClaudeOAuthModule", () => {
     );
   });
 
+  test("prefers explicit ANTHROPIC_AUTH_TOKEN over ambient CLAUDE_CODE_OAUTH_TOKEN", async () => {
+    // Common shell setup: Claude Code OAuth is auto-injected, but the user
+    // explicitly set ANTHROPIC_AUTH_TOKEN. The explicit value must win.
+    process.env.ANTHROPIC_AUTH_TOKEN = "explicit-anthropic-token";
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-claude-code-ambient";
+    const module = createModule();
+
+    // buildCredentialPlaceholder calls resolveSystemCredential under the
+    // hood; an OAuth-shaped fallback would return the OAuth proxy
+    // placeholder, while the explicit api-key-shaped token returns "lobu-proxy".
+    await expect(module.buildCredentialPlaceholder("agent-1")).resolves.toBe(
+      "lobu-proxy"
+    );
+  });
+
   test("uses bearer auth for OAuth-shaped credentials declared as api-key profiles", async () => {
     const module = createModule({
       id: "declared",

@@ -66,10 +66,14 @@ export class ClaudeOAuthModule extends BaseProviderModule {
   // ---- Overrides for multi-env-var logic ----
 
   private resolveSystemCredential(): string | undefined {
+    // Precedence: explicit Anthropic env vars first (operator intent),
+    // then CLAUDE_CODE_OAUTH_TOKEN as a fallback for shells that auto-inject
+    // the Claude Code login token. Reversing that order would let an
+    // ambient OAuth token shadow an explicitly-configured Anthropic token.
     return (
       resolveEnv("ANTHROPIC_OAUTH_TOKEN") ||
-      resolveEnv("CLAUDE_CODE_OAUTH_TOKEN") ||
       resolveEnv("ANTHROPIC_AUTH_TOKEN") ||
+      resolveEnv("CLAUDE_CODE_OAUTH_TOKEN") ||
       resolveEnv("ANTHROPIC_API_KEY")
     );
   }
