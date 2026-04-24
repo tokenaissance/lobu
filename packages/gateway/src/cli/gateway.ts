@@ -18,7 +18,6 @@ import { createAuthProfileLabel } from "../auth/settings/auth-profiles-manager.j
 import { SystemEnvStore } from "../auth/system-env-store.js";
 import type { GatewayConfig } from "../config/index.js";
 import { getModelProviderModules } from "../modules/module-system.js";
-import { createGeminiOAuthProxyApp } from "../proxy/gemini-oauth/proxy.js";
 import { createAudioRoutes } from "../routes/internal/audio.js";
 import { createDeviceAuthRoutes } from "../routes/internal/device-auth.js";
 import { createFileRoutes } from "../routes/internal/files.js";
@@ -163,21 +162,6 @@ export function createGatewayApp(
     c.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
     return c.text(getMetricsText());
   });
-
-  // Gemini CLI OAuth proxy must mount BEFORE the SecretProxy catch-all. Unlike
-  // the generic secret proxy it also refreshes the OAuth access token, discovers
-  // the cloudaicompanion projectId, and stamps it into the forwarded body —
-  // SecretProxy only swaps a bearer header.
-  if (coreServices?.getAuthProfilesManager) {
-    const authProfilesManager = coreServices.getAuthProfilesManager();
-    if (authProfilesManager) {
-      const geminiOAuthApp = createGeminiOAuthProxyApp({
-        authProfilesManager,
-      });
-      app.route("/api/proxy/gemini-cli", geminiOAuthApp);
-      logger.debug("Gemini OAuth proxy enabled at :8080/api/proxy/gemini-cli");
-    }
-  }
 
   if (secretProxy) {
     app.route("/api/proxy", secretProxy.getApp());

@@ -20,10 +20,16 @@ key = "$GEMINI_API_KEY"
 id = "openai"
 key = "$OPENAI_API_KEY"
 
-# Alternative providers — swap one of these in if you prefer.
+# Sub-agent: Google's gemini CLI as a Bash shell-out (acpx). The agent
+# can delegate tasks to gemini when useful. Requires `gemini auth login`
+# on the host running the worker; lobu doesn't manage these credentials.
+[[agents.careops.providers]]
+id = "gemini-cli"
+
+# Alternative primary providers — swap one of these in if you prefer.
 # [[agents.careops.providers]]
 # id = "openrouter"
-# model = "google/gemini-2.5-flash-lite"
+# model = "openrouter/google/gemini-2.5-flash"
 # key = "$OPENROUTER_API_KEY"
 #
 # [[agents.careops.providers]]

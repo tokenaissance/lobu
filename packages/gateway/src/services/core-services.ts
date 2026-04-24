@@ -15,6 +15,7 @@ import { BedrockProviderModule } from "../auth/bedrock/provider-module.js";
 import { ChatGPTOAuthModule } from "../auth/chatgpt/index.js";
 import { ClaudeOAuthModule } from "../auth/claude/oauth-module.js";
 import { ExternalAuthClient } from "../auth/external/client.js";
+import { GeminiCliModule } from "../auth/gemini/index.js";
 import { McpConfigService } from "../auth/mcp/config-service.js";
 import { McpProxy } from "../auth/mcp/proxy.js";
 import { McpToolCache } from "../auth/mcp/tool-cache.js";
@@ -622,6 +623,13 @@ export class CoreServices {
     logger.debug(
       `ChatGPT OAuth module registered (system token: ${chatgptOAuthModule.hasSystemKey() ? "available" : "not available"})`
     );
+
+    // Register Gemini CLI module — exposes Google's gemini CLI as a sub-agent
+    // shell-out via acpx. Not a primary-model path; credentials live in the
+    // local gemini CLI's ~/.gemini/oauth_creds.json.
+    const geminiCliModule = new GeminiCliModule(this.authProfilesManager);
+    moduleRegistry.register(geminiCliModule);
+    logger.debug("Gemini CLI module registered (acpx sub-agent shell-out)");
 
     const bedrockModelCatalog = new BedrockModelCatalog();
     const bedrockProviderModule = new BedrockProviderModule(
