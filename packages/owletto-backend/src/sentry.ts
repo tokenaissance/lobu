@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from '@sentry/node';
+import { ToolUserError } from './utils/errors';
 
 /**
  * Track an MCP tool call with Sentry
@@ -39,25 +40,29 @@ export async function trackMCPToolCall<T>(
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
-        // Capture error with full context
-        Sentry.captureException(error, {
-          tags: {
-            tool_name: toolName,
-            status: 'error',
-          },
-          extra: {
-            arguments: sanitizeArguments(args),
-            error_message: errorMessage,
-          },
-        });
+        // 4xx-class outcomes raised by the tool itself (bad path, not found,
+        // schema validation) aren't operational errors — annotate the span
+        // but skip Sentry capture to keep the alert feed clean.
+        const isUserError = error instanceof ToolUserError;
 
-        // Set error attributes on span
+        if (!isUserError) {
+          Sentry.captureException(error, {
+            tags: {
+              tool_name: toolName,
+              status: 'error',
+            },
+            extra: {
+              arguments: sanitizeArguments(args),
+              error_message: errorMessage,
+            },
+          });
+        }
+
         span?.setAttributes({
-          'mcp.tool.status': 'error',
+          'mcp.tool.status': isUserError ? 'user_error' : 'error',
           'mcp.tool.error': errorMessage,
         });
 
-        // Re-throw the error
         throw error;
       }
     }

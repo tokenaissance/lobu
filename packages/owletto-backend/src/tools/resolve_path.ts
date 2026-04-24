@@ -17,6 +17,7 @@ import {
   type DataSourceInput,
   executeDataSources,
 } from '../utils/execute-data-sources';
+import { ToolUserError } from '../utils/errors';
 import { resolveMemberSchemaFieldsFromSchema } from '../utils/member-entity-type';
 import { stripMemberEmailsFromRows } from '../utils/member-redaction';
 import { RESERVED_PATHS } from '../utils/reserved';
@@ -277,7 +278,7 @@ async function _resolvePath(
     .filter(Boolean);
 
   if (segments.length === 0) {
-    throw new Error('Path must include an owner');
+    throw new ToolUserError('Path must include an owner', 400);
   }
 
   const ownerRaw = segments[0];
@@ -285,7 +286,7 @@ async function _resolvePath(
   const ownerSlug = isUserSpace ? ownerRaw.slice(1) : ownerRaw;
 
   if (RESERVED_PATHS.includes(ownerSlug)) {
-    throw new Error(`Owner '${ownerSlug}' is reserved`);
+    throw new ToolUserError(`Owner '${ownerSlug}' is reserved`, 400);
   }
 
   const pgSql = createDbClientFromEnv(env);
@@ -296,7 +297,10 @@ async function _resolvePath(
   );
 
   if (!resolved) {
-    throw new Error(`${isUserSpace ? 'User' : 'Organization'} '${ownerSlug}' not found`);
+    throw new ToolUserError(
+      `${isUserSpace ? 'User' : 'Organization'} '${ownerSlug}' not found`,
+      404
+    );
   }
 
   const workspace: ResolvedWorkspace = {
@@ -319,7 +323,13 @@ async function _resolvePath(
   entitySegments = remaining;
 
   if (entitySegments.length % 2 !== 0) {
-    throw new Error('Entity path must be in [type]/[slug] pairs');
+    // Frontend routes like /:owner/agents/:slug/settings have a UI subroute
+    // appended after the entity tail. Treat the malformed-pair case as a
+    // not-found so the client can fall back without surfacing a 500.
+    throw new ToolUserError(
+      `Entity path '${normalized}' is not resolvable: expected [type]/[slug] pairs after the owner`,
+      404
+    );
   }
 
   const parsedSegments: Array<{ entity_type: string; slug: string }> = [];
@@ -331,7 +341,7 @@ async function _resolvePath(
   }
 
   if (workspace.type !== 'organization') {
-    throw new Error('Entity paths require an organization namespace');
+    throw new ToolUserError('Entity paths require an organization namespace', 400);
   }
 
   let parentId: number | null = null;
@@ -358,7 +368,10 @@ async function _resolvePath(
       `);
 
       if (row.length === 0) {
-        throw new Error(`Entity not found for ${segment.entity_type}/${segment.slug}`);
+        throw new ToolUserError(
+          `Entity not found for ${segment.entity_type}/${segment.slug}`,
+          404
+        );
       }
 
       const entityRow = row[0] as unknown as ResolvedEntityRow;
@@ -460,8 +473,9 @@ async function _resolvePath(
     let processedEntityTabs = await processTabsDataSources(mergedTabs, entityDataCtx, sql);
     let redactedTemplateData = entityTemplateData;
     if (entityRow.entity_type === '$member' && !ctx.memberRole) {
-      throw new Error(
-        'Member details are only visible to members of this workspace. Join the workspace to see members.'
+      throw new ToolUserError(
+        'Member details are only visible to members of this workspace. Join the workspace to see members.',
+        403
       );
     }
     const rawEntityMetadata = entityRow.metadata ?? {};

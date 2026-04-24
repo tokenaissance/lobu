@@ -24,7 +24,7 @@ import { executeTool, extractAuthContext, toToolContext } from './tools/execute'
 import { getContent } from './tools/get_content';
 import { getWatcher } from './tools/get_watchers';
 import { getTool } from './tools/registry';
-import { errorMessage } from './utils/errors';
+import { ToolUserError, errorMessage } from './utils/errors';
 import { toJsonSafe } from './utils/json';
 import logger from './utils/logger';
 import { ACTIVE_RUN_STATUSES, runStatusLiteral } from './utils/run-statuses';
@@ -227,6 +227,9 @@ export async function restToolProxy(
     const result = await executeTool(toolName, args, c.env, authCtx);
     return c.json(toJsonSafe(result));
   } catch (error) {
+    if (error instanceof ToolUserError) {
+      return c.json({ error: error.message }, error.httpStatus as 400 | 404);
+    }
     return c.json({ error: errorMessage(error) }, 400);
   }
 }
