@@ -169,6 +169,21 @@ async function upsertEmbedding(eventId: number, embedding?: number[] | null): Pr
   `;
 }
 
+function isEventsClientIdForeignKeyViolation(error: unknown): boolean {
+  const err = error as {
+    code?: unknown;
+    constraint?: unknown;
+    constraint_name?: unknown;
+    message?: unknown;
+  };
+  if (err?.code !== '23503') return false;
+  return (
+    err.constraint === 'events_client_id_fkey' ||
+    err.constraint_name === 'events_client_id_fkey' ||
+    (typeof err.message === 'string' && err.message.includes('events_client_id_fkey'))
+  );
+}
+
 /**
  * Insert a single event into the events table.
  *
@@ -183,6 +198,8 @@ export async function insertEvent(
 
   const entityIdsValue = params.entityIds.length > 0 ? `{${params.entityIds.join(',')}}` : null;
   let supersedesEventId = params.supersedesEventId ?? null;
+
+  const requestedClientId = params.clientId ?? null;
 
   if (options?.onConflictUpdate) {
     const existing = await findCurrentEventByOrigin(sql, params);
@@ -201,7 +218,7 @@ export async function insertEvent(
     }
   }
 
-  const result = await sql`
+  const insertWithClientId = (clientId: string | null) => sql`
     INSERT INTO events (
       entity_ids, organization_id, source_id, origin_id, title,
       payload_type, payload_text, payload_data, payload_template, attachments, metadata,
@@ -234,7 +251,7 @@ export async function insertEvent(
       ${params.feedId ?? null},
       ${params.runId ?? null},
       ${params.semanticType},
-      ${params.clientId ?? null},
+      ${clientId},
       ${params.createdBy ?? null},
       ${params.interactionType ?? 'none'},
       ${params.interactionStatus ?? null},
@@ -246,6 +263,20 @@ export async function insertEvent(
     )
     RETURNING id, entity_ids, origin_id, title, semantic_type, created_at
   `;
+
+  let result: Awaited<ReturnType<typeof insertWithClientId>>;
+  try {
+    result = await insertWithClientId(requestedClientId);
+  } catch (error) {
+    if (!requestedClientId || !isEventsClientIdForeignKeyViolation(error)) {
+      throw error;
+    }
+    logger.warn(
+      { clientId: requestedClientId },
+      '[insert-event] retrying insert with client_id NULL — referenced oauth_clients row no longer exists'
+    );
+    result = await insertWithClientId(null);
+  }
 
   const inserted = result[0] as InsertedEvent;
   await upsertEmbedding(inserted.id, params.embedding);
