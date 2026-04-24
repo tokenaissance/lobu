@@ -5,7 +5,8 @@
  * for creating additional connections when needed.
  */
 
-import postgres from 'postgres';
+import { PostgresJSDialect } from 'kysely-postgres-js';
+import postgres, { type Sql } from 'postgres';
 import type { Env } from '../index';
 import logger from '../utils/logger';
 
@@ -59,15 +60,32 @@ const PG_OID_JSONB = 3802;
 // PostgreSQL client factory
 // =========================================================
 
-function createDbClient(connectionString: string, maxConnections?: number): DbClient {
+interface CreatedDbClient {
+  /** Client used by application code; in pglite mode this is queue-serialized. */
+  wrapped: DbClient;
+  /** Raw postgres.js Sql client. Bypasses the serialization queue — only safe
+   *  for callers that own their own connection (e.g. Kysely via reserve()). */
+  raw: Sql;
+}
+
+function createDbClient(connectionString: string, maxConnections?: number): CreatedDbClient {
   const embeddedCompatMode = process.env.OWLETTO_DISABLE_PREPARE === '1';
   const embeddedProtocolOptions = embeddedCompatMode
     ? ({ max_pipeline: 1, prepare: false } as Record<string, unknown>)
     : {};
 
   const rawClient = postgres(connectionString, {
-    max: maxConnections ?? parseInt(process.env.DB_POOL_MAX || '10', 10),
-    idle_timeout: 20,
+    max: maxConnections ?? parseInt(process.env.DB_POOL_MAX || '20', 10),
+    // Keep connections forever client-side. Postgres handles eviction via its
+    // own idle/lifetime settings; recycling every 20s on the client side
+    // forces every spotty-traffic burst to pay a ~1s TCP+TLS handshake.
+    idle_timeout: 0,
+    // Cap connection lifetime so long-lived sockets survive a finite duration
+    // (defends against PG-side state drift, certificate rotations, etc.).
+    max_lifetime: 60 * 30,
+    connection: {
+      application_name: 'owletto-backend',
+    },
     fetch_types: false,
     ...embeddedProtocolOptions,
     transform: {
@@ -106,13 +124,15 @@ function createDbClient(connectionString: string, maxConnections?: number): DbCl
         serialize: (value: number) => String(value),
       },
     },
-  }) as unknown as DbClient;
+  });
+
+  const dbClient = rawClient as unknown as DbClient;
 
   if (!embeddedCompatMode) {
-    return rawClient;
+    return { wrapped: dbClient, raw: rawClient };
   }
 
-  return createSerializedClient(rawClient);
+  return { wrapped: createSerializedClient(dbClient), raw: rawClient };
 }
 
 function createSerializedClient(client: DbClient): DbClient {
@@ -156,21 +176,27 @@ export function createDbClientFromEnv(_env: Env): DbClient {
 // =========================================================
 
 let dbSingleton: DbClient | null = null;
+let rawDbSingleton: Sql | null = null;
+
+function ensureSingleton(): void {
+  if (dbSingleton) return;
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL is required');
+  }
+  const created = createDbClient(url);
+  dbSingleton = created.wrapped;
+  rawDbSingleton = created.raw;
+  logger.info('[DB] PostgreSQL singleton pool created');
+}
 
 /**
  * Get the singleton PostgreSQL client.
  * Lazily created from DATABASE_URL on first call.
  */
 export function getDb(): DbClient {
-  if (!dbSingleton) {
-    const url = process.env.DATABASE_URL;
-    if (!url) {
-      throw new Error('DATABASE_URL is required');
-    }
-    dbSingleton = createDbClient(url);
-    logger.info('[DB] PostgreSQL singleton pool created');
-  }
-  return dbSingleton;
+  ensureSingleton();
+  return dbSingleton as DbClient;
 }
 
 /**
@@ -178,8 +204,30 @@ export function getDb(): DbClient {
  * Primarily used by tests that need strict connection handoff between setup and workers.
  */
 export async function closeDbSingleton(): Promise<void> {
-  if (dbSingleton?.end) {
+  if (rawDbSingleton?.end) {
+    await rawDbSingleton.end();
+  } else if (dbSingleton?.end) {
     await dbSingleton.end();
   }
   dbSingleton = null;
+  rawDbSingleton = null;
+}
+
+/**
+ * Kysely dialect bound to the singleton postgres.js client. Used by better-auth
+ * so that auth queries share the same connection pool as the rest of the app
+ * instead of opening a second pg.Pool with its own (cold-prone) connections.
+ *
+ * Uses the raw (un-wrapped) postgres.js client because PostgresJSDialect calls
+ * sql.reserve() to acquire a dedicated connection — a code path the in-process
+ * pglite serialization wrapper doesn't proxy. This matches the pre-refactor
+ * behavior where better-auth ran on its own pg.Pool entirely outside the
+ * wrapper, so pglite tests that exercise auth retain their existing semantics.
+ */
+export function getAuthDialect(): PostgresJSDialect {
+  ensureSingleton();
+  if (!rawDbSingleton) {
+    throw new Error('rawDbSingleton was not initialized');
+  }
+  return new PostgresJSDialect({ postgres: rawDbSingleton });
 }
