@@ -416,7 +416,10 @@ async function _resolvePath(
       `);
 
     if (row.length === 0) {
-      throw new Error(`Entity not found for ${segment.entity_type}/${segment.slug}`);
+      throw new ToolUserError(
+        `Entity not found for ${segment.entity_type}/${segment.slug}`,
+        404
+      );
     }
 
     const entityRow = row[0] as unknown as ResolvedEntityRow & {
