@@ -21,6 +21,7 @@ describe('installAgentFromTemplate', () => {
     templateOrg = await createTestOrganization({
       name: 'Personal Finance Template',
       slug: 'personal-finance-tpl',
+      visibility: 'public',
     });
     templateAgent = await createTestAgent({
       organizationId: templateOrg.id,
@@ -43,6 +44,57 @@ describe('installAgentFromTemplate', () => {
       VALUES
         ('for_tax_year', 'For Tax Year', NULL, '{"type":"object"}'::jsonb, ${templateOrg.id}, ${user.id}, 'active')
     `;
+    const watcherRows = await sql`
+      INSERT INTO watchers (
+        organization_id, slug, name, description, status, created_by,
+        model_config, sources, schedule, agent_id
+      ) VALUES (
+        ${templateOrg.id}, 'gmail-tx', 'Gmail extractor', 'Extract finance events', 'active', ${user.id},
+        '{"model":"test"}'::jsonb,
+        '[{"name":"gmail_messages","query":"SELECT id FROM events"}]'::jsonb,
+        '*/30 * * * *', ${templateAgent.agentId}
+      )
+      RETURNING id
+    `;
+    const watcherId = watcherRows[0].id as number;
+    const watcherVersionRows = await sql`
+      INSERT INTO watcher_versions (
+        watcher_id, version, name, description, created_by, prompt,
+        extraction_schema, required_source_types, recommended_source_types,
+        reactions_guidance
+      ) VALUES (
+        ${watcherId}, 1, 'Gmail extractor v1', 'Current template', ${user.id}, 'Extract {{sources.gmail_messages}}',
+        '{"type":"object","properties":{"transactions":{"type":"array"}}}'::jsonb,
+        '{google.gmail}'::text[], '{document}'::text[], 'Create transaction entities'
+      )
+      RETURNING id
+    `;
+    await sql`
+      UPDATE watchers
+      SET current_version_id = ${watcherVersionRows[0].id as number}
+      WHERE id = ${watcherId}
+    `;
+    const classifierRows = await sql`
+      INSERT INTO event_classifiers (
+        organization_id, slug, name, description, attribute_key, status,
+        created_by, watcher_id
+      ) VALUES (
+        ${templateOrg.id}, 'tax-relevance', 'Tax relevance', 'Classify tax relevance', 'tax_relevance',
+        'active', ${user.id}, ${watcherId}
+      )
+      RETURNING id
+    `;
+    await sql`
+      INSERT INTO event_classifier_versions (
+        classifier_id, version, is_current, attribute_values, min_similarity,
+        fallback_value, change_notes, created_by, preferred_model, extraction_config
+      ) VALUES (
+        ${classifierRows[0].id as number}, 1, true,
+        '[{"value":"income","description":"Taxable income"}]'::jsonb,
+        0.75, 'none', 'Initial template', ${user.id}, '@cf/meta/llama-3.1-8b-instruct',
+        '{"mode":"llm"}'::jsonb
+      )
+    `;
   });
 
   it('creates a new agent row in the target org with template_agent_id set', async () => {
@@ -55,6 +107,8 @@ describe('installAgentFromTemplate', () => {
     expect(result.created).toBe(true);
     expect(result.mirrored.entity_types).toBe(2);
     expect(result.mirrored.entity_relationship_types).toBe(1);
+    expect(result.mirrored.watchers).toBe(1);
+    expect(result.mirrored.event_classifiers).toBe(1);
 
     const sql = getTestDb();
     const rows = await sql`
@@ -95,6 +149,60 @@ describe('installAgentFromTemplate', () => {
     expect(rows[0].managed_by_template_agent_id).toBe(templateAgent.agentId);
   });
 
+  it('mirrors watcher definitions with the installed agent as owner', async () => {
+    const sql = getTestDb();
+    const rows = await sql`
+      SELECT
+        w.slug,
+        w.agent_id,
+        w.connection_id,
+        w.entity_ids,
+        w.managed_by_template_agent_id,
+        w.source_template_org_id,
+        v.prompt,
+        v.reactions_guidance
+      FROM watchers w
+      JOIN watcher_versions v ON v.id = w.current_version_id
+      WHERE w.organization_id = ${userOrg.id}
+        AND w.slug = 'gmail-tx'
+      LIMIT 1
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].managed_by_template_agent_id).toBe(templateAgent.agentId);
+    expect(rows[0].source_template_org_id).toBe(templateOrg.id);
+    expect(rows[0].connection_id).toBeNull();
+    expect(rows[0].entity_ids).toBeNull();
+    expect(rows[0].agent_id).toBeTruthy();
+    expect(rows[0].prompt).toContain('{{sources.gmail_messages}}');
+    expect(rows[0].reactions_guidance).toContain('transaction');
+  });
+
+  it('mirrors watcher-scoped classifiers and their current version', async () => {
+    const sql = getTestDb();
+    const rows = await sql`
+      SELECT
+        c.slug,
+        c.watcher_id,
+        c.managed_by_template_agent_id,
+        v.version,
+        v.is_current,
+        v.fallback_value,
+        v.extraction_config
+      FROM event_classifiers c
+      JOIN event_classifier_versions v ON v.classifier_id = c.id
+      WHERE c.organization_id = ${userOrg.id}
+        AND c.slug = 'tax-relevance'
+      LIMIT 1
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].managed_by_template_agent_id).toBe(templateAgent.agentId);
+    expect(rows[0].watcher_id).toBeTruthy();
+    expect(rows[0].version).toBe(1);
+    expect(rows[0].is_current).toBe(true);
+    expect(rows[0].fallback_value).toBe('none');
+    expect(rows[0].extraction_config).toEqual({ mode: 'llm' });
+  });
+
   it('is idempotent: re-installing updates rather than creating duplicates', async () => {
     const result = await installAgentFromTemplate({
       templateAgentId: templateAgent.agentId,
@@ -119,6 +227,22 @@ describe('installAgentFromTemplate', () => {
         AND managed_by_template_agent_id = ${templateAgent.agentId}
     `;
     expect(typeCount[0].count).toBe(2);
+
+    const watcherCount = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM watchers
+      WHERE organization_id = ${userOrg.id}
+        AND managed_by_template_agent_id = ${templateAgent.agentId}
+    `;
+    expect(watcherCount[0].count).toBe(1);
+
+    const classifierCount = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM event_classifiers
+      WHERE organization_id = ${userOrg.id}
+        AND managed_by_template_agent_id = ${templateAgent.agentId}
+    `;
+    expect(classifierCount[0].count).toBe(1);
   });
 
   it('re-sync propagates template changes to the mirror', async () => {
@@ -148,6 +272,41 @@ describe('installAgentFromTemplate', () => {
         AND slug = 'tax_year'
     `;
     expect(mirrored[0].description).toBe('UK fiscal year (6 April to 5 April)');
+  });
+
+  it('refuses to install a template from a private org', async () => {
+    const privateTemplateOrg = await createTestOrganization({ name: 'Private Template' });
+    const privateTemplateAgent = await createTestAgent({
+      organizationId: privateTemplateOrg.id,
+      name: 'Private Template Agent',
+    });
+
+    await expect(
+      installAgentFromTemplate({
+        templateAgentId: privateTemplateAgent.agentId,
+        targetOrganizationId: userOrg.id,
+        userId: user.id,
+      })
+    ).rejects.toThrow(/organization is not public/);
+  });
+
+  it('refuses to install an already-installed agent as a source template', async () => {
+    const sql = getTestDb();
+    const installed = await sql`
+      SELECT id FROM agents
+      WHERE template_agent_id = ${templateAgent.agentId}
+        AND organization_id = ${userOrg.id}
+      LIMIT 1
+    `;
+    const otherOrg = await createTestOrganization({ name: 'Other Install Target' });
+
+    await expect(
+      installAgentFromTemplate({
+        templateAgentId: installed[0].id as string,
+        targetOrganizationId: otherOrg.id,
+        userId: user.id,
+      })
+    ).rejects.toThrow(/cannot be used as a source template/);
   });
 
   it('refuses to install into the template org itself', async () => {
