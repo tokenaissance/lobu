@@ -14,43 +14,43 @@
 --   template agent is later renamed.
 
 ALTER TABLE public.entity_types
-    ADD COLUMN managed_by_template_agent_id text,
-    ADD COLUMN source_template_org_id text;
+    ADD COLUMN IF NOT EXISTS managed_by_template_agent_id text,
+    ADD COLUMN IF NOT EXISTS source_template_org_id text;
 
 ALTER TABLE public.entity_relationship_types
-    ADD COLUMN managed_by_template_agent_id text,
-    ADD COLUMN source_template_org_id text;
+    ADD COLUMN IF NOT EXISTS managed_by_template_agent_id text,
+    ADD COLUMN IF NOT EXISTS source_template_org_id text;
 
 ALTER TABLE public.event_classifiers
-    ADD COLUMN managed_by_template_agent_id text,
-    ADD COLUMN source_template_org_id text;
+    ADD COLUMN IF NOT EXISTS managed_by_template_agent_id text,
+    ADD COLUMN IF NOT EXISTS source_template_org_id text;
 
 ALTER TABLE public.watchers
-    ADD COLUMN managed_by_template_agent_id text,
-    ADD COLUMN source_template_org_id text;
+    ADD COLUMN IF NOT EXISTS managed_by_template_agent_id text,
+    ADD COLUMN IF NOT EXISTS source_template_org_id text;
 
-CREATE INDEX idx_entity_types_managed_by_template
+CREATE INDEX IF NOT EXISTS idx_entity_types_template_agent_id
     ON public.entity_types (managed_by_template_agent_id)
     WHERE managed_by_template_agent_id IS NOT NULL;
 
-CREATE INDEX idx_entity_relationship_types_managed_by_template
+CREATE INDEX IF NOT EXISTS idx_entity_relationship_types_template_agent_id
     ON public.entity_relationship_types (managed_by_template_agent_id)
     WHERE managed_by_template_agent_id IS NOT NULL;
 
-CREATE INDEX idx_event_classifiers_managed_by_template
+CREATE INDEX IF NOT EXISTS idx_event_classifiers_template_agent_id
     ON public.event_classifiers (managed_by_template_agent_id)
     WHERE managed_by_template_agent_id IS NOT NULL;
 
-CREATE INDEX idx_watchers_managed_by_template
+CREATE INDEX IF NOT EXISTS idx_watchers_template_agent_id
     ON public.watchers (managed_by_template_agent_id)
     WHERE managed_by_template_agent_id IS NOT NULL;
 
 -- migrate:down
 
-DROP INDEX IF EXISTS public.idx_watchers_managed_by_template;
-DROP INDEX IF EXISTS public.idx_event_classifiers_managed_by_template;
-DROP INDEX IF EXISTS public.idx_entity_relationship_types_managed_by_template;
-DROP INDEX IF EXISTS public.idx_entity_types_managed_by_template;
+DROP INDEX IF EXISTS public.idx_watchers_template_agent_id;
+DROP INDEX IF EXISTS public.idx_event_classifiers_template_agent_id;
+DROP INDEX IF EXISTS public.idx_entity_relationship_types_template_agent_id;
+DROP INDEX IF EXISTS public.idx_entity_types_template_agent_id;
 
 ALTER TABLE public.watchers
     DROP COLUMN IF EXISTS source_template_org_id,
