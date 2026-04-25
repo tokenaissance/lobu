@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RESERVED_SLUGS,
   deriveSlugCandidate,
+  personalOrgLockKey,
   slugify,
 } from '../personal-org-provisioning';
 
@@ -84,6 +85,20 @@ describe('deriveSlugCandidate', () => {
         email: null,
       })
     ).toBe('burak');
+  });
+});
+
+describe('personalOrgLockKey', () => {
+  it('returns a stable signed int32 advisory-lock key', () => {
+    const key = personalOrgLockKey('user_abc123');
+    expect(personalOrgLockKey('user_abc123')).toBe(key);
+    expect(Number.isInteger(key)).toBe(true);
+    expect(key).toBeGreaterThanOrEqual(-2147483648);
+    expect(key).toBeLessThanOrEqual(2147483647);
+  });
+
+  it('varies by user id', () => {
+    expect(personalOrgLockKey('user_a')).not.toBe(personalOrgLockKey('user_b'));
   });
 });
 

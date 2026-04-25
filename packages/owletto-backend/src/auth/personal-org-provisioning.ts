@@ -45,6 +45,11 @@ export const RESERVED_SLUGS = new Set([
 
 const MAX_SLUG_LENGTH = 48;
 const MAX_COLLISION_ATTEMPTS = 100;
+// Namespace for pg_advisory_xact_lock(key1, key2). Kept in the signed int32
+// range required by PostgreSQL's two-key advisory lock overload.
+const PERSONAL_ORG_LOCK_NAMESPACE = 0x706f7267; // "porg"
+
+type Sql = ReturnType<typeof getDb>;
 
 export function slugify(input: string): string {
   return input
@@ -66,7 +71,7 @@ export function deriveSlugCandidate(user: UserLike): string {
   return `user-${user.id.slice(0, 8).toLowerCase()}`;
 }
 
-async function findAvailableSlug(base: string, sql: ReturnType<typeof getDb>): Promise<string> {
+async function findAvailableSlug(base: string, sql: Sql): Promise<string> {
   const safeBase = RESERVED_SLUGS.has(base) ? `${base}-1` : base;
   let candidate = safeBase;
   for (let attempt = 0; attempt < MAX_COLLISION_ATTEMPTS; attempt++) {
@@ -88,31 +93,63 @@ interface EnsureResult {
   created: boolean;
 }
 
-export async function ensurePersonalOrganization(user: UserLike): Promise<EnsureResult> {
-  const sql = getDb();
+export function personalOrgLockKey(userId: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < userId.length; i++) {
+    hash ^= userId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash | 0;
+}
 
+async function lockPersonalOrgForUser(userId: string, sql: Sql): Promise<void> {
+  await sql`
+    SELECT pg_advisory_xact_lock(
+      ${PERSONAL_ORG_LOCK_NAMESPACE},
+      ${personalOrgLockKey(userId)}
+    )
+  `;
+}
+
+async function findExistingPersonalOrg(
+  userId: string,
+  sql: Sql
+): Promise<{ id: string; slug: string } | null> {
   // Idempotency: an org tagged with this user.id in metadata is already this
   // user's personal one. Re-running the hook (e.g. after a transient failure)
-  // is a no-op.
-  const tagFragment = `"personal_org_for_user_id":"${user.id}"`;
+  // is a no-op. The ORDER BY keeps resolution deterministic if legacy data ever
+  // contains duplicates.
+  const tagFragment = `"personal_org_for_user_id":"${userId}"`;
   const existing = await sql`
     SELECT id, slug FROM "organization"
     WHERE metadata IS NOT NULL AND metadata LIKE ${`%${tagFragment}%`}
+    ORDER BY "createdAt" ASC, id ASC
     LIMIT 1
   `;
-  if (existing.length > 0) {
-    const row = existing[0] as { id: string; slug: string };
-    return { organizationId: row.id, slug: row.slug, created: false };
-  }
+  if (existing.length === 0) return null;
+  return existing[0] as { id: string; slug: string };
+}
 
-  const baseSlug = deriveSlugCandidate(user);
-  const slug = await findAvailableSlug(baseSlug, sql);
-  const orgId = `org_${generateSecureToken(8)}`;
-  const memberId = `member_${generateSecureToken(8)}`;
-  const orgName = user.name?.trim() || user.email?.split('@')[0] || slug;
-  const metadata = JSON.stringify({ personal_org_for_user_id: user.id });
+export async function ensurePersonalOrganization(user: UserLike): Promise<EnsureResult> {
+  const sql = getDb();
+  let result: EnsureResult | null = null;
 
   await sql.begin(async (tx) => {
+    await lockPersonalOrgForUser(user.id, tx);
+
+    const existing = await findExistingPersonalOrg(user.id, tx);
+    if (existing) {
+      result = { organizationId: existing.id, slug: existing.slug, created: false };
+      return;
+    }
+
+    const baseSlug = deriveSlugCandidate(user);
+    const slug = await findAvailableSlug(baseSlug, tx);
+    const orgId = `org_${generateSecureToken(8)}`;
+    const memberId = `member_${generateSecureToken(8)}`;
+    const orgName = user.name?.trim() || user.email?.split('@')[0] || slug;
+    const metadata = JSON.stringify({ personal_org_for_user_id: user.id });
+
     await tx`
       INSERT INTO "organization" (id, name, slug, visibility, metadata, "createdAt")
       VALUES (${orgId}, ${orgName}, ${slug}, 'private', ${metadata}, NOW())
@@ -121,7 +158,12 @@ export async function ensurePersonalOrganization(user: UserLike): Promise<Ensure
       INSERT INTO "member" (id, "userId", "organizationId", role, "createdAt")
       VALUES (${memberId}, ${user.id}, ${orgId}, 'owner', NOW())
     `;
+
+    result = { organizationId: orgId, slug, created: true };
   });
 
-  return { organizationId: orgId, slug, created: true };
+  if (!result) {
+    throw new Error('Personal organization transaction did not produce a result');
+  }
+  return result;
 }
