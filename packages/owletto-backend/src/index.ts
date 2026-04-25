@@ -24,6 +24,7 @@ import { getDb } from './db/client';
 import * as invalidationEmitter from './events/emitter';
 import { isExcludedSpaPath } from './http/spa-route-filter';
 import { installRoutes } from './agents/install-routes';
+import { installTokenRoutes } from './agents/install-token-routes';
 import { agentRoutes } from './lobu/agent-routes';
 import { clientRoutes, platformSchemaRoutes } from './lobu/client-routes';
 import { isLobuGatewayRunning } from './lobu/gateway';
@@ -441,8 +442,10 @@ app.route('/api', credentialRoutes);
 /**
  * Template agent installation routes
  * POST /api/install — install a template agent into the caller's personal org
+ * POST /api/install/token — mint an install token for chat-side claim
  */
 app.route('/api', installRoutes);
+app.route('/api', installTokenRoutes);
 
 /**
  * OAuth 2.1 Authorization Server routes
