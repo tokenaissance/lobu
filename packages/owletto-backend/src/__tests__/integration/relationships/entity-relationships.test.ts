@@ -580,6 +580,51 @@ describe('Entity Relationships', () => {
       ).rejects.toThrow(/organization/i);
     });
 
+    it('should allow cross-org relationship when target is in a public-catalog org', async () => {
+      const publicOrg = await createTestOrganization({
+        name: 'Public Catalog Org',
+        visibility: 'public',
+      });
+      const publicEntity = await createTestEntity({
+        name: 'Public Canonical Entity',
+        entity_type: 'brand',
+        organization_id: publicOrg.id,
+      });
+
+      const result = await mcpToolsCall(
+        'manage_entity',
+        {
+          action: 'link',
+          from_entity_id: entityA1.id,
+          to_entity_id: publicEntity.id,
+          relationship_type_slug: 'depends-on',
+        },
+        { token: tokenA }
+      );
+      expect(result.action).toBe('link');
+      // Relationship's organization_id is the source's (caller's) org, not the target's.
+      expect(result.relationship.organization_id).toBe(orgA.id);
+    });
+
+    it('should reject a relationship whose source is in a different org from the caller', async () => {
+      // userA is signed in (tokenA → orgA), but the source entity is in orgB.
+      // Even though tokenA's caller has access to read entityB1, they cannot
+      // author a relationship *from* it — sources must always be in the
+      // caller's org.
+      await expect(
+        mcpToolsCall(
+          'manage_entity',
+          {
+            action: 'link',
+            from_entity_id: entityB1.id,
+            to_entity_id: entityA2.id,
+            relationship_type_slug: 'depends-on',
+          },
+          { token: tokenA }
+        )
+      ).rejects.toThrow(/does not belong to your organization/i);
+    });
+
     it('should reject nonexistent relationship type', async () => {
       await expect(
         mcpToolsCall(
