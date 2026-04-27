@@ -88,6 +88,17 @@ export async function proxyWellKnown(context: PagesContext): Promise<Response> {
     "server-timing",
     `wellknown_upstream;dur=${Date.now() - startedAt}`
   );
+  // Public discovery: agent scanners and browser-based clients fetch these
+  // cross-origin. Upstream advertises CORS for app.lobu.ai only, which blocks
+  // anyone else. Override to a public allowlist.
+  headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  headers.delete("access-control-allow-credentials");
+  const existingVary = headers.get("vary");
+  headers.set(
+    "vary",
+    existingVary ? `${existingVary}, Accept` : "Accept"
+  );
 
   return new Response(upstream.body, {
     status: upstream.status,
