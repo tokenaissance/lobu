@@ -1,0 +1,139 @@
+name: Submodule Drift
+
+# Surfaces when packages/owletto-web (private) has merged commits past the
+# parent's pinned SHA — i.e. the two-PR rule's parent bump is missing.
+# Bot tag-update commits (FluxCD image automation) are exempted only when both
+# the author and exact subject match — a sloppy human commit cannot slip past.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BOT_AUTHOR_EMAIL: fluxcd@lobu.ai
+  BOT_SUBJECT: "chore: update images"
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - id: submodule
+        uses: ./.github/actions/setup-submodule
+        with:
+          deploy-key: ${{ secrets.OWLETTO_WEB_DEPLOY_KEY }}
+
+      - name: Fork PR — fail if it modifies the submodule pointer, otherwise skip
+        if: |
+          steps.submodule.outputs.stubbed == 'true'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # actions/checkout@v4 with default fetch-depth=1 only has the merge
+          # commit; pull the two endpoints by SHA so ls-tree can resolve them.
+          git fetch --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+          base_pointer=$(git ls-tree "$BASE_SHA" packages/owletto-web | awk '{print $3}')
+          head_pointer=$(git ls-tree "$HEAD_SHA" packages/owletto-web | awk '{print $3}')
+          if [ "$base_pointer" != "$head_pointer" ]; then
+            echo "::error::Fork PRs cannot change the packages/owletto-web pointer."
+            echo "  base: $base_pointer"
+            echo "  head: $head_pointer"
+            echo "Submodule bumps must come from a same-repo PR (deploy-key-authorized)."
+            exit 1
+          fi
+          echo "::notice::Fork PR with unchanged submodule pointer — drift check skipped."
+
+      - name: Fail when deploy key is missing on a same-repo run
+        if: |
+          steps.submodule.outputs.stubbed == 'true'
+          && !(github.event_name == 'pull_request'
+            && github.event.pull_request.head.repo.full_name != github.repository)
+        run: |
+          echo "::error::OWLETTO_WEB_DEPLOY_KEY is missing for a same-repo run; drift check cannot run."
+          exit 1
+
+      - name: Check for unmerged non-bot commits on owletto-web/main
+        if: steps.submodule.outputs.stubbed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PINNED=$(git -C packages/owletto-web rev-parse HEAD)
+          git -C packages/owletto-web fetch --quiet origin main
+          REMOTE=$(git -C packages/owletto-web rev-parse origin/main)
+
+          echo "Pinned (parent):   $PINNED"
+          echo "owletto-web/main:  $REMOTE"
+
+          # Hard rule: parent must never pin a SHA that isn't on owletto-web/main.
+          # FluxCD reads charts from owletto-web/main; an off-main pin breaks deploy.
+          if ! git -C packages/owletto-web merge-base --is-ancestor "$PINNED" origin/main; then
+            echo "::error::Pinned SHA $PINNED is not reachable from owletto-web/main."
+            echo "This violates the rule against pinning unmerged submodule SHAs (see AGENTS.md)."
+            exit 1
+          fi
+
+          if [ "$PINNED" = "$REMOTE" ]; then
+            echo "Submodule pin matches owletto-web/main — no drift."
+            exit 0
+          fi
+
+          # Capture the log first so set -e propagates a git failure (process
+          # substitution would swallow it). tformat: guarantees a trailing
+          # newline so `read` doesn't drop the last commit.
+          LOG=$(git -C packages/owletto-web log \
+            --pretty='tformat:%h|%ae|%s' "$PINNED..origin/main")
+
+          # Walk each commit; exempt only those whose author email AND exact
+          # subject match the FluxCD image-tag bot AND that touch only deploy
+          # paths — a forged "chore: update images" with random contents
+          # outside deploy/ is treated as drift.
+          DRIFT=""
+          while IFS='|' read -r sha email subject; do
+            [ -z "$sha" ] && continue
+            if [ "$email" = "$BOT_AUTHOR_EMAIL" ] && [ "$subject" = "$BOT_SUBJECT" ]; then
+              outside=$(git -C packages/owletto-web show --name-only \
+                --pretty='format:' "$sha" \
+                | sed '/^$/d' \
+                | grep -v '^deploy/' || true)
+              if [ -z "$outside" ]; then
+                continue
+              fi
+              echo "::warning::Commit $sha matches bot author/subject but touches non-deploy paths; treating as drift."
+            fi
+            DRIFT+="$sha $subject"$'\n'
+          done <<< "$LOG"
+
+          if [ -z "$DRIFT" ]; then
+            echo "owletto-web/main is ahead, but only by FluxCD image-tag commits — no parent bump needed."
+            exit 0
+          fi
+
+          echo "::error::owletto-web/main has merged commits past the pinned SHA. The parent bump PR is missing."
+          echo ""
+          echo "Pinned:           $PINNED"
+          echo "owletto-web/main: $REMOTE"
+          echo ""
+          echo "Commits needing a parent bump:"
+          printf '%s' "$DRIFT"
+          echo ""
+          echo "Fix (open as a separate PR):"
+          echo "  git -C packages/owletto-web fetch origin"
+          echo "  git -C packages/owletto-web checkout origin/main"
+          echo "  git add packages/owletto-web"
+          echo "  git commit -m 'chore(submodule): bump owletto-web to current main'"
+          exit 1
