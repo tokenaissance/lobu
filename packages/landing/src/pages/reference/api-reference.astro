@@ -8,7 +8,7 @@ const specOrigin = import.meta.env.DEV
 
 let spec: string | null = null;
 try {
-  const res = await fetch(`${specOrigin}/api/docs/openapi.json`);
+  const res = await fetch(`${specOrigin}/openapi.json`);
   if (res.ok) {
     const text = await res.text();
     if (text.length > 0) spec = text;
@@ -20,7 +20,7 @@ try {
 const config = JSON.stringify({
   ...(spec
     ? { content: spec }
-    : { url: `${specOrigin}/api/docs/openapi.json` }),
+    : { url: `${specOrigin}/openapi.json` }),
   theme: "kepler",
   layout: "modern",
   defaultHttpClient: { targetKey: "js", clientKey: "fetch" },
