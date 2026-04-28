@@ -33,12 +33,19 @@ export const METHOD_METADATA: Record<string, MethodMetadata> = {
 
   // entities
   "entities.list": {
-    summary: "List entities in the current organization with optional filters.",
+    summary:
+      "List entities in the current organization with optional filters. Returns `{ action, entities, metadata }` where `entities` is the page and `metadata` carries `total_count`, `has_more`, `limit`, `offset`.",
     access: "read",
-    example: "const rows = await client.entities.list({ entity_type: 'company' });",
+    example:
+      "const { entities } = await client.entities.list({ entity_type: 'company' });",
     usageExample: `// All companies in the workspace, newest first.
 export default async (_ctx, client) => {
-  return client.entities.list({ entity_type: 'company', sort_by: 'created_at', sort_order: 'desc' });
+  const { entities, metadata } = await client.entities.list({
+    entity_type: 'company',
+    sort_by: 'created_at',
+    sort_order: 'desc',
+  });
+  return { count: metadata.total_count, page: entities };
 };`,
   },
   "entities.get": {
@@ -175,14 +182,31 @@ export default async (_ctx, client) => {
     summary: "Read a knowledge event by id, or watcher-window context.",
     access: "read",
   },
+  "knowledge.delete": {
+    summary:
+      "Soft-delete one or more knowledge events your org owns by writing a tombstone superseding event. The original is hidden from default search/query/read paths via the `current_event_records` view; the full row stays on disk and is recoverable via `include_superseded`. Only events with `events.organization_id = caller` are touched — cross-org events visible via entity/connection bridges are reported in `not_found_ids`, and events already superseded come back as `already_superseded_ids`. Returns `{ deleted_ids, tombstone_ids, not_found_ids, already_superseded_ids }`. Pair with `knowledge.save({ supersedes_event_id, content: ... })` when you want to *replace* an event rather than just hide it.",
+    access: "write",
+    example: "await client.knowledge.delete(2321593);",
+    usageExample: `// Hide a smoke-test write that should not have landed.
+export default async (_ctx, client) => {
+  const result = await client.knowledge.delete({
+    event_ids: [2321593, 2321594],
+    reason: 'smoke test cleanup',
+  });
+  return result;
+};`,
+  },
 
   // watchers
   "watchers.list": {
-    summary: "List watchers, optionally filtered by entity.",
+    summary:
+      "List watchers, optionally filtered by entity. Returns `{ watchers: [...] }`.",
     access: "read",
-    example: "const ws = await client.watchers.list({ entity_id: 42 });",
+    example:
+      "const { watchers } = await client.watchers.list({ entity_id: 42 });",
     usageExample: `export default async (_ctx, client) => {
-  return client.watchers.list({ entity_id: 42 });
+  const { watchers } = await client.watchers.list({ entity_id: 42 });
+  return watchers;
 };`,
   },
   "watchers.get": {
