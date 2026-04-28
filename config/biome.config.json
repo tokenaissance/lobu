@@ -22,7 +22,6 @@
       "!**/.astro/**",
       "!**/tmp/**",
       "!**/.connector-child-*.mjs",
-      "!**/provision-careops-watchers*",
       "!**/*.css",
       "!**/packages/owletto-backend/**",
       "!**/packages/owletto-cli/**",
