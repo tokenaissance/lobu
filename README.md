@@ -21,12 +21,12 @@ https://github.com/user-attachments/assets/d72a9286-0325-4b8b-afc0-c1efe9c96f4e
 
 ## Quick Start
 
-Scaffold and run via the CLI. Lobu boots as a single Node process; you bring your own Postgres + Redis (managed instances or local — `brew services start postgresql redis`).
+Scaffold and run via the CLI. Lobu boots as a single Node process; you bring your own Postgres (pgvector required — managed instance or local via `brew services start postgresql`).
 
 ```bash
 npx @lobu/cli@latest init my-bot
 cd my-bot
-# edit .env to set DATABASE_URL and REDIS_URL
+# edit .env to set DATABASE_URL
 npx @lobu/cli@latest run
 ```
 
@@ -47,7 +47,7 @@ npx owletto@latest init
 
 ### Deployment
 
-Single-process Node app. Run it however you run Node — `node`, `pm2`, `systemd`, or another process supervisor. The app needs `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL` reachable from its environment; no orchestrator is required.
+Single-process Node app. Run it however you run Node — `node`, `pm2`, `systemd`, or another process supervisor. The app needs `DATABASE_URL` (Postgres + pgvector) reachable from its environment; no orchestrator is required and there is no Helm chart to install.
 
 - **Local dev** (contributing to Lobu itself): clone, `make setup`, `make dev` (boots embedded gateway + workers + Vite HMR on `:8787`).
 - **Production**: `bun run --cwd packages/owletto-backend build:server`, then `node packages/owletto-backend/dist/server.bundle.mjs` under your process supervisor of choice.
@@ -62,7 +62,7 @@ flowchart LR
   Discord[Discord] <--> GW
   API[REST API] <--> GW
 
-  GW <--> Redis[(Redis)]
+  GW <--> PG[(Postgres)]
   GW -->|spawn| W[Worker]
 
   subgraph Sandbox
@@ -118,7 +118,7 @@ Lobu is the **infrastructure layer** for autonomous agents. Frameworks like Lang
 | Onboarding | Config page with per-provider OAuth | CLI setup |
 | MCP access | Proxied through gateway, secrets isolated | Direct from agent |
 | Network | Sandboxed, domain-filtered egress | No built-in isolation |
-| Deployment | Single Node process (BYO Postgres + Redis) | Single node |
+| Deployment | Single Node process (BYO Postgres) | Single node |
 
 ## Security and Privacy
 

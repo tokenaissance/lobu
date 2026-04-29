@@ -1,8 +1,9 @@
 /**
  * Lobu Gateway — embedded initialization
  *
- * Embeds @lobu/gateway directly into Owletto's Hono server using PostgreSQL-backed
- * stores and bridging Owletto's Better Auth sessions to Lobu's settings auth.
+ * Initializes the in-process Lobu gateway (now living under ../gateway/) using
+ * PostgreSQL-backed stores and bridging Owletto's Better Auth sessions to
+ * Lobu's settings auth.
  */
 
 import crypto from 'node:crypto';
@@ -12,6 +13,13 @@ import type { Hono } from 'hono';
 import { Hono as HonoApp } from 'hono';
 import { createAuth } from '../auth';
 import { getDb } from '../db/client';
+import { ApiPlatform } from '../gateway/api';
+import { createGatewayApp } from '../gateway/cli/gateway';
+import { ChatInstanceManager, ChatResponseBridge } from '../gateway/connections';
+import { buildGatewayConfig } from '../gateway/config/index';
+import { Gateway } from '../gateway/gateway-main';
+import { Orchestrator } from '../gateway/orchestration/index';
+import { SecretStoreRegistry } from '../gateway/secrets/index';
 import type { Env } from '../index';
 import logger from '../utils/logger';
 import { getConfiguredPublicOrigin } from '../utils/public-origin';
@@ -52,58 +60,6 @@ function ensureEmbeddedWorkerLauncher(): void {
   }
 }
 
-async function hydratePersistedAgentSettings(agentSettingsStore: any): Promise<void> {
-  const sql = getDb();
-  const rows = await sql`
-    SELECT id, model, model_selection, provider_model_preferences,
-           network_config, nix_config, mcp_servers, mcp_install_notified,
-           soul_md, user_md, identity_md, skills_config, tools_config,
-           plugins_config, auth_profiles, installed_providers,
-           verbose_logging, template_agent_id
-    FROM agents
-    WHERE model IS NOT NULL
-       OR provider_model_preferences <> '{}'::jsonb
-       OR mcp_servers <> '{}'::jsonb
-       OR mcp_install_notified <> '{}'::jsonb
-       OR soul_md <> ''
-       OR user_md <> ''
-       OR identity_md <> ''
-       OR skills_config <> '{"skills":[]}'::jsonb
-       OR tools_config <> '{}'::jsonb
-       OR plugins_config <> '{}'::jsonb
-       OR jsonb_array_length(auth_profiles) > 0
-       OR jsonb_array_length(installed_providers) > 0
-       OR verbose_logging = true
-       OR template_agent_id IS NOT NULL
-  `;
-
-  for (const row of rows as Array<Record<string, any>>) {
-    await agentSettingsStore.saveSettings(row.id, {
-      ...(row.model ? { model: row.model } : {}),
-      ...(row.model_selection ? { modelSelection: row.model_selection } : {}),
-      ...(row.provider_model_preferences
-        ? { providerModelPreferences: row.provider_model_preferences }
-        : {}),
-      ...(row.network_config ? { networkConfig: row.network_config } : {}),
-      ...(row.nix_config ? { nixConfig: row.nix_config } : {}),
-      ...(row.mcp_servers ? { mcpServers: row.mcp_servers } : {}),
-      ...(row.mcp_install_notified ? { mcpInstallNotified: row.mcp_install_notified } : {}),
-      ...(row.soul_md ? { soulMd: row.soul_md } : {}),
-      ...(row.user_md ? { userMd: row.user_md } : {}),
-      ...(row.identity_md ? { identityMd: row.identity_md } : {}),
-      ...(row.skills_config ? { skillsConfig: row.skills_config } : {}),
-      ...(row.tools_config ? { toolsConfig: row.tools_config } : {}),
-      ...(row.plugins_config ? { pluginsConfig: row.plugins_config } : {}),
-      ...(row.auth_profiles ? { authProfiles: row.auth_profiles } : {}),
-      ...(row.installed_providers ? { installedProviders: row.installed_providers } : {}),
-      ...(row.verbose_logging !== undefined ? { verboseLogging: row.verbose_logging } : {}),
-      ...(row.template_agent_id ? { templateAgentId: row.template_agent_id } : {}),
-    });
-  }
-
-  logger.info({ count: rows.length }, '[Lobu] Hydrated persisted agent settings into runtime');
-}
-
 function ensureEmbeddedGatewaySecrets(): void {
   if (!process.env.ENCRYPTION_KEY) {
     if (process.env.OWLETTO_ALLOW_EPHEMERAL_ENCRYPTION_KEY === '1') {
@@ -113,7 +69,7 @@ function ensureEmbeddedGatewaySecrets(): void {
       );
     } else {
       throw new Error(
-        'ENCRYPTION_KEY is required when REDIS_URL enables the embedded Lobu gateway. Set ENCRYPTION_KEY explicitly or opt into ephemeral local keys with OWLETTO_ALLOW_EPHEMERAL_ENCRYPTION_KEY=1.'
+        'ENCRYPTION_KEY is required for the embedded Lobu gateway. Set ENCRYPTION_KEY explicitly or opt into ephemeral local keys with OWLETTO_ALLOW_EPHEMERAL_ENCRYPTION_KEY=1.'
       );
     }
   }
@@ -180,29 +136,17 @@ async function startSlackSocketMode(manager: any): Promise<void> {
 
 /**
  * Initialize the embedded Lobu gateway.
- * Returns the Hono app to mount, or null if Redis is not configured.
+ * Returns the Hono app to mount, or null if DATABASE_URL is not configured.
  */
 export async function initLobuGateway(): Promise<Hono | null> {
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    logger.info('[Lobu] REDIS_URL not set — embedded gateway disabled');
+  if (!process.env.DATABASE_URL) {
+    logger.info('[Lobu] DATABASE_URL not set — embedded gateway disabled');
     return null;
   }
 
   ensureEmbeddedGatewaySecrets();
   ensureEmbeddedWorkerLauncher();
   try {
-    const {
-      ApiPlatform,
-      ChatInstanceManager,
-      ChatResponseBridge,
-      Gateway,
-      Orchestrator,
-      SecretStoreRegistry,
-      buildGatewayConfig,
-      createGatewayApp,
-    } = await import('@lobu/gateway');
-
     const publicWebUrl =
       getConfiguredPublicOrigin() || `http://localhost:${process.env.PORT || '8787'}`;
     const publicUrl = new URL('/lobu/', publicWebUrl).toString().replace(/\/$/, '');
@@ -220,7 +164,6 @@ export async function initLobuGateway(): Promise<Hono | null> {
     }
 
     const gatewayConfig = buildGatewayConfig({
-      queues: { connectionString: redisUrl },
       mcp: { publicGatewayUrl: publicUrl },
     });
 
@@ -252,9 +195,7 @@ export async function initLobuGateway(): Promise<Hono | null> {
     await gateway.start();
 
     coreServices = gateway.getCoreServices();
-    await hydratePersistedAgentSettings(coreServices.getAgentSettingsStore());
     await orchestrator.injectCoreServices(
-      coreServices.getQueue().getRedisClient(),
       coreServices.getSecretStore(),
       coreServices.getProviderCatalogService(),
       coreServices.getGrantStore() ?? undefined,

@@ -10,6 +10,9 @@ import type { SkillConfig } from '@lobu/core';
 import { Hono } from 'hono';
 import { mcpAuth } from '../auth/middleware';
 import { getDb } from '../db/client';
+import { OAuthClient } from '../gateway/auth/oauth/client';
+import { CLAUDE_PROVIDER } from '../gateway/auth/oauth/providers';
+import { createAuthProfileLabel } from '../gateway/auth/settings/auth-profiles-manager';
 import type { Env } from '../index';
 import { getConfiguredPublicOrigin } from '../utils/public-origin';
 import { countRuntimeMessagingClientsByAgent } from './client-routes';
@@ -182,9 +185,7 @@ function normalizeRuntimeProvider(provider: any, models: ProviderModelOption[]):
   };
 }
 
-async function getClaudeOAuthRuntime() {
-  const { CLAUDE_PROVIDER, OAuthClient, createAuthProfileLabel } = await import('@lobu/gateway');
-
+function getClaudeOAuthRuntime() {
   return {
     oauthClient: new OAuthClient(CLAUDE_PROVIDER),
     createAuthProfileLabel,
@@ -527,7 +528,7 @@ routes.get('/:agentId/providers/:providerId/oauth/start', mcpAuth, async (c) => 
       return c.json({ error: 'Embedded Lobu auth is not available' }, 503);
     }
 
-    const { oauthClient } = await getClaudeOAuthRuntime();
+    const { oauthClient } = getClaudeOAuthRuntime();
     const codeVerifier = oauthClient.generateCodeVerifier();
     const state = await oauthStateStore.create({
       userId: user.id,
@@ -580,7 +581,7 @@ routes.post('/:agentId/providers/:providerId/oauth/code', mcpAuth, async (c) => 
     if (stateData.agentId !== agentId || stateData.userId !== user.id) {
       return c.json({ error: 'OAuth state does not match this agent session' }, 403);
     }
-    const { oauthClient, createAuthProfileLabel } = await getClaudeOAuthRuntime();
+    const { oauthClient, createAuthProfileLabel } = getClaudeOAuthRuntime();
 
     try {
       const credentials = await oauthClient.exchangeCodeForToken(

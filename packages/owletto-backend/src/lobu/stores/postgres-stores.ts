@@ -1,14 +1,13 @@
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import type {
-  AgentAccessStore,
-  AgentConfigStore,
-  AgentConnectionStore,
-  AgentMetadata,
-  AgentSettings,
-  ChannelBinding,
-  Grant,
-  StoredConnection,
+import {
+  inferGrantKind,
+  type AgentAccessStore,
+  type AgentConfigStore,
+  type AgentConnectionStore,
+  type AgentMetadata,
+  type AgentSettings,
+  type ChannelBinding,
+  type Grant,
+  type StoredConnection,
 } from '@lobu/core';
 import { getDb } from '../../db/client';
 import { getOrgId, tryGetOrgId } from './org-context';
@@ -111,101 +110,6 @@ function rowToMetadata(row: Record<string, any>): AgentMetadata {
   };
 }
 
-let runtimeRedisClient: any | undefined;
-const runtimeRequire = createRequire(import.meta.url);
-
-function loadRedisModule(): any | null {
-  try {
-    return runtimeRequire('ioredis');
-  } catch {}
-
-  const packageHints = ['@lobu/core', '@lobu/gateway', '@chat-adapter/state-ioredis'];
-
-  for (const hint of packageHints) {
-    try {
-      const entryPath = runtimeRequire.resolve(hint);
-      const redisPath = runtimeRequire.resolve('ioredis', { paths: [dirname(entryPath)] });
-      return runtimeRequire(redisPath);
-    } catch {
-      // Try next known package root.
-    }
-  }
-
-  return null;
-}
-
-function getRuntimeRedisClient(): any | null {
-  if (runtimeRedisClient !== undefined) return runtimeRedisClient;
-
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    runtimeRedisClient = null;
-    return runtimeRedisClient;
-  }
-
-  try {
-    const Redis = loadRedisModule();
-    if (!Redis) {
-      runtimeRedisClient = null;
-      return runtimeRedisClient;
-    }
-    runtimeRedisClient = new Redis(redisUrl, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-    });
-  } catch {
-    runtimeRedisClient = null;
-  }
-
-  return runtimeRedisClient;
-}
-
-async function getRuntimeJson(key: string): Promise<Record<string, any> | null> {
-  const redis = getRuntimeRedisClient();
-  if (!redis) return null;
-
-  try {
-    if (typeof redis.status === 'string' && redis.status === 'wait') {
-      await redis.connect();
-    }
-    const raw = await redis.get(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-async function setRuntimeJson(key: string, value: Record<string, any>): Promise<void> {
-  const redis = getRuntimeRedisClient();
-  if (!redis) return;
-
-  try {
-    if (typeof redis.status === 'string' && redis.status === 'wait') {
-      await redis.connect();
-    }
-    await redis.set(key, JSON.stringify(value));
-  } catch {
-    // Best-effort mirror into Lobu runtime state.
-  }
-}
-
-async function deleteRuntimeKey(key: string): Promise<void> {
-  const redis = getRuntimeRedisClient();
-  if (!redis) return;
-
-  try {
-    if (typeof redis.status === 'string' && redis.status === 'wait') {
-      await redis.connect();
-    }
-    await redis.del(key);
-  } catch {
-    // Best-effort mirror into Lobu runtime state.
-  }
-}
-
 function withDefinedValues<T extends Record<string, any>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as T;
 }
@@ -225,15 +129,9 @@ async function resolveTemplateAgentId(
     WHERE id = ${agentId} AND organization_id = ${orgId}
   `;
 
-  let parentConnectionId = metadataRows[0]?.parent_connection_id as string | undefined;
-
-  if (!parentConnectionId) {
-    const runtimeMetadata = await getRuntimeJson(`agent_metadata:${agentId}`);
-    parentConnectionId =
-      typeof runtimeMetadata?.parentConnectionId === 'string'
-        ? runtimeMetadata.parentConnectionId
-        : undefined;
-  }
+  const parentConnectionId = metadataRows[0]?.parent_connection_id as
+    | string
+    | undefined;
 
   if (!parentConnectionId) return undefined;
 
@@ -248,10 +146,7 @@ async function resolveTemplateAgentId(
     return connectionRows[0].agent_id;
   }
 
-  const runtimeConnection = await getRuntimeJson(`connection:${parentConnectionId}`);
-  return typeof runtimeConnection?.templateAgentId === 'string'
-    ? runtimeConnection.templateAgentId
-    : undefined;
+  return undefined;
 }
 
 const SECRET_PATTERN = /(?:credential|secret|token|password|api(?:_|-)?key|authorization)/i;
@@ -329,6 +224,7 @@ function rowToChannelBinding(row: Record<string, any>): ChannelBinding {
 function rowToGrant(row: Record<string, any>): Grant {
   return {
     pattern: row.pattern,
+    kind: inferGrantKind(row.pattern),
     expiresAt: row.expires_at instanceof Date ? row.expires_at.getTime() : (row.expires_at ?? null),
     grantedAt:
       row.granted_at instanceof Date ? row.granted_at.getTime() : (row.granted_at ?? Date.now()),
@@ -392,11 +288,6 @@ export function createPostgresAgentConfigStore(): AgentConfigStore {
           updated_at = ${now}
         WHERE id = ${agentId} AND organization_id = ${orgId}
       `;
-
-      await setRuntimeJson(`agent:settings:${agentId}`, {
-        ...withDefinedValues(settings as Record<string, any>),
-        updatedAt: now.getTime(),
-      });
     },
     async updateSettings(agentId, updates) {
       const existing = await store.getSettings(agentId);
@@ -416,8 +307,6 @@ export function createPostgresAgentConfigStore(): AgentConfigStore {
           template_agent_id = NULL, updated_at = now()
         WHERE id = ${agentId} AND organization_id = ${orgId}
       `;
-
-      await deleteRuntimeKey(`agent:settings:${agentId}`);
     },
     async hasSettings(agentId) {
       return store.hasAgent(agentId);
@@ -710,12 +599,25 @@ export function createPostgresAgentConnectionStore(): AgentConnectionStore {
     },
     async createChannelBinding(binding) {
       const sql = getDb();
-      await sql`
-        INSERT INTO agent_channel_bindings (agent_id, platform, channel_id, team_id, created_at)
-        VALUES (${binding.agentId}, ${binding.platform}, ${binding.channelId}, ${binding.teamId ?? null}, now())
-        ON CONFLICT (platform, channel_id, team_id) DO UPDATE SET
-          agent_id = EXCLUDED.agent_id
-      `;
+      if (binding.teamId) {
+        await sql`
+          INSERT INTO agent_channel_bindings (agent_id, platform, channel_id, team_id, created_at)
+          VALUES (${binding.agentId}, ${binding.platform}, ${binding.channelId}, ${binding.teamId}, now())
+          ON CONFLICT (platform, channel_id, team_id) DO UPDATE SET
+            agent_id = EXCLUDED.agent_id
+        `;
+      } else {
+        // PG treats NULL as distinct under the (platform, channel_id, team_id)
+        // UNIQUE; the team_id IS NULL branch upserts via the partial unique
+        // index agent_channel_bindings_no_team_unique.
+        await sql`
+          INSERT INTO agent_channel_bindings (agent_id, platform, channel_id, team_id, created_at)
+          VALUES (${binding.agentId}, ${binding.platform}, ${binding.channelId}, NULL, now())
+          ON CONFLICT (platform, channel_id)
+            WHERE team_id IS NULL
+            DO UPDATE SET agent_id = EXCLUDED.agent_id
+        `;
+      }
     },
     async deleteChannelBinding(platform, channelId, teamId) {
       const sql = getDb();

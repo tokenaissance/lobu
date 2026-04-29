@@ -442,15 +442,15 @@ turns:
     console.log();
 
     const gatewayUrl = `http://localhost:${gatewayPort}`;
-    console.log(chalk.cyan("  3. Set DATABASE_URL and REDIS_URL in .env:"));
+    console.log(chalk.cyan("  3. Set DATABASE_URL in .env:"));
     console.log(
       chalk.dim(
-        "     Lobu connects to a user-provided Postgres + Redis. Run them yourself"
+        "     Lobu connects to a user-provided Postgres. Run one yourself"
       )
     );
     console.log(
       chalk.dim(
-        "     (managed instances or local: e.g. `brew services start postgresql redis`)\n"
+        "     (managed instance or local: e.g. `brew services start postgresql`)\n"
       )
     );
     if (owlettoUrl) {

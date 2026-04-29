@@ -14,9 +14,10 @@ export type {
   ChannelBinding,
   ConnectionSettings,
   Grant,
+  GrantKind,
   StoredConnection,
 } from "./agent-store";
-export { findTemplateAgentId } from "./agent-store";
+export { findTemplateAgentId, inferGrantKind } from "./agent-store";
 // Agent Settings API response types (for UI consumers)
 export type {
   AgentConfigResponse,
@@ -31,7 +32,6 @@ export type {
   ProviderInfo,
   ProviderState,
   ProviderStatus,
-  Schedule,
   SettingsSnapshot,
   Skill,
   SkillMcpServerInfo,
@@ -63,7 +63,6 @@ export {
   type OwlettoMemoryEntry as TomlOwlettoMemoryEntry,
   type OwlettoProfileEntry as TomlOwlettoProfileEntry,
   type ProviderEntry as TomlProviderEntry,
-  type ScheduleEntry as TomlScheduleEntry,
   type SkillsEntry as TomlSkillsEntry,
   type ToolsEntry,
   type ToolsEntry as TomlToolsEntry,
@@ -104,9 +103,6 @@ export type {
   ConfigProviderMeta,
   ProviderConfigEntry,
 } from "./provider-config-types";
-// Redis & worker helpers
-export * from "./redis/base-store";
-export * from "./redis/json-helpers";
 export * from "./secret-refs";
 // Observability
 export { getSentry, initSentry } from "./sentry";
@@ -120,7 +116,6 @@ export type {
   CliBackendConfig,
   ConversationMessage,
   DeclaredCredential,
-  DeclaredSchedule,
   DomainJudgeRule,
   HistoryMessage,
   InstalledProvider,
@@ -135,7 +130,6 @@ export type {
   NixConfig,
   ProviderModelPreferences,
   RegistryEntry,
-  ScheduleConcurrency,
   SessionContext,
   SkillConfig,
   SkillMcpServer,
