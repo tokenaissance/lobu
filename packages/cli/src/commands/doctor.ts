@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import chalk from "chalk";
 import { checkMemoryHealth } from "./memory/_lib/openclaw-cmd.js";
+import { resolveServerUrl } from "./memory/_lib/openclaw-auth.js";
 
 interface Check {
   name: string;
@@ -33,6 +34,23 @@ function checkNodeVersion(): Check {
   };
 }
 
+async function checkServerReachable(url: string): Promise<Check> {
+  const origin = new URL(url).origin;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(origin, { signal: controller.signal });
+    clearTimeout(timer);
+    return {
+      name: "server",
+      status: res.ok ? "ok" : "warn",
+      detail: `${res.status} ${origin}`,
+    };
+  } catch {
+    return { name: "server", status: "fail", detail: `unreachable: ${origin}` };
+  }
+}
+
 interface DoctorOptions {
   memoryOnly?: boolean;
 }
@@ -50,8 +68,8 @@ export async function doctorCommand(
   checks.push(checkNodeVersion());
   checks.push(checkBinaryExists("git"));
 
-  // Full `lobu doctor` keeps memory checks lightweight; use
-  // `lobu doctor --memory-only` for authenticated MCP validation.
+  const serverUrl = resolveServerUrl();
+  if (serverUrl) checks.push(await checkServerReachable(serverUrl));
 
   const icons = {
     ok: chalk.green("✓"),

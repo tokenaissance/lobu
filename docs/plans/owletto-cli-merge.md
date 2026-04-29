@@ -23,7 +23,7 @@ Sequel to `owletto-absorption.md`. That plan said flattening the `owletto-*` pre
 
 ## Locked decisions
 
-1. **`owletto` bin is removed outright.** No wrapper, no deprecation release. `release-please-config.json` drops the `owletto` package entry. Anyone with `tokenCommand: "npx owletto token"` in an OpenClaw config updates to `npx -y @lobu/cli memory token` — surface is small enough that doc updates cover it.
+1. **`owletto` bin is removed outright.** No wrapper, no deprecation release. `release-please-config.json` drops the `owletto` package entry. Memory auth is unified with top-level `lobu login`, so anyone with `tokenCommand: "npx owletto token"` in an OpenClaw config updates to `npx -y @lobu/cli token --raw` — surface is small enough that doc updates cover it.
 2. **`init` becomes one command.** `lobu init` runs scaffold + memory wiring in one wizard (always asks "enable Owletto memory? [Y/n]", default yes, default URL `http://localhost:8787/mcp`). For existing projects, `lobu memory init` calls the same wizard's wiring stage only. The standalone `owletto init` is deleted.
 3. **`configure` and `browser-auth` stay**, namespaced under `lobu memory configure` / `lobu memory browser-auth`. They remain the supported path for wiring non-lobu OpenClaw agents into the memory backend.
 
@@ -82,7 +82,7 @@ Health surface:
 
 - `.github/workflows/ci.yml:87, 258` — drop `owletto-cli` from the publish job; keep test job pointing at the now-library package.
 - `config/knip.ts`, `config/biome.config.json`, `tsconfig.json` — adjust paths if needed after the rename.
-- `packages/owletto-openclaw/README.md` and `openclaw.plugin.json` description — reference `npx -y @lobu/cli memory token` as the canonical `tokenCommand` example.
+- `packages/owletto-openclaw/README.md` and `openclaw.plugin.json` description — reference `npx -y @lobu/cli token --raw` as the canonical `tokenCommand` example (auth is unified with top-level `lobu login`, no separate memory token).
 
 ### 7. Doc + skill sweep
 
@@ -96,9 +96,9 @@ Health surface:
 
 ### Validation (run before pushing)
 
-- `lobu memory start` boots the same runtime as the old `owletto start`
+- `lobu run` boots the same runtime as the old `owletto start`
 - `lobu memory run search_knowledge '{"query":"x"}'` round-trips through gateway proxy
-- `lobu memory token --raw` prints a usable token
+- `lobu token --raw` prints a usable bearer that the OpenClaw plugin can use
 - `lobu init my-test` walks scaffold → memory wiring → produces a working project
 - `lobu doctor` is green when DB + memory MCP are reachable
 - `make build-packages` clean

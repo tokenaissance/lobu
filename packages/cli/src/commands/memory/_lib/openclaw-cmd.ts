@@ -3,7 +3,6 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { ApiError, ValidationError } from "./errors.js";
 import {
-  getSessionForOrg,
   getUsableToken,
   mcpUrlForOrg,
   normalizeMcpUrl,
@@ -170,37 +169,6 @@ function writeJsonObject(filePath: string, payload: Record<string, unknown>) {
   writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
-export interface TokenOptions {
-  url?: string;
-  org?: string;
-  raw?: boolean;
-  storePath?: string;
-}
-
-export async function printMemoryToken(opts: TokenOptions = {}): Promise<void> {
-  const {
-    token: accessToken,
-    session,
-    mcpUrl,
-  } = await resolveSessionAndUrl(opts.url, opts.org, opts.storePath);
-  const org = resolveOrg(opts.org, session, opts.storePath);
-
-  if (opts.raw) {
-    process.stdout.write(`${accessToken}\n`);
-    return;
-  }
-
-  if (isJson()) {
-    printJson({ mcpUrl, org: org || null, tokenType: "Bearer", accessToken });
-    return;
-  }
-
-  printText(`mcpUrl: ${mcpUrl}`);
-  printText(`org: ${org || "(none)"}`);
-  printText("tokenType: Bearer");
-  printText(`accessToken: ${accessToken}`);
-}
-
 export interface HealthOptions {
   url?: string;
   org?: string;
@@ -321,13 +289,4 @@ export function configureMemoryPlugin(opts: ConfigureOptions = {}): void {
   printText(`Plugin: ${pluginId}`);
   printText(`mcpUrl: ${resolvedMcpUrl}`);
   printText(`tokenCommand: ${tokenCommand}`);
-}
-
-export function resolveConfiguredOrgUrl(
-  org: string,
-  storePath?: string
-): string {
-  const session = getSessionForOrg(org, storePath);
-  if (!session) throw new ValidationError(`Invalid org: ${org}`);
-  return session.key;
 }
