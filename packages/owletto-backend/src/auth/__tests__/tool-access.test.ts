@@ -447,7 +447,7 @@ describe('first-party tool-name coverage', () => {
     assertRegistered(used);
   });
 
-  // CLI bootstrap tools that the `owletto browser-auth` flow drives via the
+  // CLI bootstrap tools that the `lobu memory browser-auth` flow drives via the
   // REST proxy (`POST /api/{slug}/{toolName}`). They must be registered AND
   // `internal: true` so they stay off the external MCP surface — no external
   // MCP client should see CLI bootstrap tools in `tools/list`.
@@ -470,7 +470,7 @@ describe('first-party tool-name coverage', () => {
     // for these tools — never `mcpRpc(..., 'tools/call', ...)`. This drift
     // detector fails the moment someone re-introduces an MCP RPC call site.
     if (!present(cliSrcRoot)) return;
-    const browserAuth = join(cliSrcRoot, 'commands', 'browser-auth.ts');
+    const browserAuth = join(cliSrcRoot, '_lib', 'browser-auth-cmd.ts');
     if (!present(browserAuth)) return;
     const content = readFileSync(browserAuth, 'utf-8');
     expect(content).not.toMatch(/'tools\/call'/);

@@ -2,7 +2,6 @@
  * Shared init wizard logic — detect agents, authenticate, configure.
  */
 
-import { spawnSync } from "node:child_process";
 import * as p from "@clack/prompts";
 import { type DetectedAgent, detectAgents } from "./agent-detect.js";
 import { getInstallTarget, INSTALL_TARGETS } from "./install-targets.js";
@@ -41,40 +40,27 @@ async function authenticate(mcpUrl: string, skipAuth: boolean): Promise<void> {
 
   const existing = await getUsableToken(mcpUrl);
   if (existing) {
-    const org = existing.session.org;
-    p.log.success(`Already logged in${org ? ` — workspace: ${org}` : ""}`);
-
-    const reuse = await p.confirm({ message: "Continue with this session?" });
-    if (p.isCancel(reuse)) {
-      p.cancel("Cancelled.");
-      process.exit(0);
-    }
-    if (reuse) return;
+    p.log.success("Already logged in with Lobu");
+    return;
   }
 
-  p.log.info("Logging in to Owletto...");
-
-  const loginResult = spawnSync(
-    process.execPath,
-    [process.argv[1] ?? "", "memory", "login", mcpUrl],
-    {
-      stdio: "inherit",
-      timeout: 300_000,
-    }
-  );
-
-  if (loginResult.status !== 0) {
-    p.log.error(
-      `Login failed. You can retry with: lobu memory login ${mcpUrl}`
+  const shouldLogin = await p.confirm({
+    message: "Log in with Lobu now?",
+    initialValue: true,
+  });
+  if (p.isCancel(shouldLogin)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+  if (!shouldLogin) {
+    p.log.info(
+      "Skipping authentication. Run `lobu login` when you need to call memory tools."
     );
-    const cont = await p.confirm({
-      message: "Continue without authentication?",
-    });
-    if (p.isCancel(cont) || !cont) {
-      p.cancel("Cancelled.");
-      process.exit(0);
-    }
+    return;
   }
+
+  const { loginCommand } = await import("../../login.js");
+  await loginCommand({});
 }
 
 function formatDetectionLine(agent: DetectedAgent): string {

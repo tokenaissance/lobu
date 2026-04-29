@@ -11,24 +11,15 @@ interface OrgOptions {
 
 export function memoryOrgCurrentCommand(options: OrgOptions = {}): void {
   const { session, key } = getActiveSession(options.storePath);
-
-  if (!session || !key) {
-    if (isJson()) {
-      printJson({ org: null });
-    } else {
-      printText("No active session. Run: lobu memory login");
-    }
-    return;
-  }
-
-  const org = resolveOrg(undefined, session);
+  const org = resolveOrg(undefined, session, options.storePath);
 
   if (isJson()) {
     printJson({ org: org || null, server: key });
-  } else {
-    printText(`org: ${org || "(none)"}`);
-    printText(`server: ${key}`);
+    return;
   }
+
+  printText(`org: ${org || "(none)"}`);
+  printText(`server: ${key || "(none)"}`);
 }
 
 export function memoryOrgSetCommand(
@@ -40,6 +31,6 @@ export function memoryOrgSetCommand(
   if (isJson()) {
     printJson({ org: orgSlug });
   } else {
-    printText(`Default org: ${orgSlug}`);
+    printText(`Default memory org: ${orgSlug}`);
   }
 }

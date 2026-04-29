@@ -1,5 +1,5 @@
 /**
- * Owletto project YAML schema definitions.
+ * Lobu memory project YAML schema definitions.
  *
  * These types define the canonical format for project-local memory files:
  *   - models/*.y{a,}ml    — entity types, relationship types, watchers
@@ -115,7 +115,7 @@ function checkVersion(
     errors.push({
       file,
       field: "version",
-      message: `version ${v} is not supported by this CLI (max: ${CURRENT_SCHEMA_VERSION}). Upgrade owletto.`,
+      message: `version ${v} is not supported by this CLI (max: ${CURRENT_SCHEMA_VERSION}). Upgrade @lobu/cli.`,
     });
     return false;
   }

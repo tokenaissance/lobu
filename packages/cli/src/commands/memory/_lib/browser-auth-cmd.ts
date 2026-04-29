@@ -513,7 +513,7 @@ export async function captureBrowserAuth(
   // --check: verify stored cookies on an auth profile
   if (args.check) {
     if (!args.authProfileSlug) {
-      printText("--check requires --authProfileSlug");
+      printText("--check requires --auth-profile-slug");
       process.exitCode = 1;
       return;
     }
@@ -688,7 +688,7 @@ export async function captureBrowserAuth(
       "  1. Sign into the site in the dedicated Chrome window if needed."
     );
     printText(
-      `  2. Run: lobu memory browser-auth --connector ${connectorKey}${args.authProfileSlug ? ` --authProfileSlug ${args.authProfileSlug}` : ""} --check`
+      `  2. Run: lobu memory browser-auth --connector ${connectorKey}${args.authProfileSlug ? ` --auth-profile-slug ${args.authProfileSlug}` : ""} --check`
     );
     return;
   }
@@ -822,7 +822,7 @@ export async function captureBrowserAuth(
   } else {
     printText("\nCookies ready. To store on a browser auth profile:");
     printText(
-      `  lobu memory browser-auth --connector ${connectorKey} --authProfileSlug <SLUG> --chromeProfile "${selectedProfile.name}"`
+      `  lobu memory browser-auth --connector ${connectorKey} --auth-profile-slug <SLUG> --chrome-profile "${selectedProfile.name}"`
     );
   }
 }

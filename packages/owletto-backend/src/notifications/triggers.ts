@@ -93,7 +93,7 @@ export async function notifyBrowserAuthExpired(params: {
     body:
       'Session needs re-authentication.\n' +
       'Enable remote debugging in Chrome: chrome://inspect/#remote-debugging\n' +
-      `Or run: owletto browser-auth --connector ${params.connectorKey} --authProfileSlug ${params.authProfileSlug}`,
+      `Or run: lobu memory browser-auth --connector ${params.connectorKey} --auth-profile-slug ${params.authProfileSlug}`,
     resourceType: 'connection',
     resourceId: String(params.connectionId),
     resourceUrl: orgSlug ? `/${orgSlug}/connectors` : undefined,

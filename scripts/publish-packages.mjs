@@ -20,9 +20,9 @@ const REPO_ROOT = process.cwd();
 
 const PACKAGES = [
   { dir: "packages/core", transform: transformCorePublish },
+  { dir: "packages/owletto-sdk", transform: rewriteWorkspaceRefs },
   { dir: "packages/worker", transform: rewriteWorkspaceRefs },
   { dir: "packages/cli", transform: rewriteWorkspaceRefs },
-  { dir: "packages/owletto-sdk", transform: rewriteWorkspaceRefs },
   { dir: "packages/owletto-openclaw", transform: rewriteWorkspaceRefs },
 ];
 

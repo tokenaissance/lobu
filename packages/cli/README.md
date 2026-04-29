@@ -22,10 +22,9 @@ npx @lobu/cli@latest skills list
 npx @lobu/cli@latest skills add lobu
 ```
 
-Install the Owletto starter skill separately with the Owletto CLI:
+The bundled Lobu starter skill includes memory guidance. Configure local MCP clients when needed:
 
 ```bash
-npx @lobu/cli@latest memory skills add owletto
 npx @lobu/cli@latest memory init
 ```
 

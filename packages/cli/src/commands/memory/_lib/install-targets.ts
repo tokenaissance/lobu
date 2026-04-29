@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { openInBrowser } from "./browser.js";
+import { checkMemoryHealth, configureMemoryPlugin } from "./openclaw-cmd.js";
 
 interface ConfigureResult {
   status: "configured" | "handoff" | "manual" | "failed";
@@ -25,24 +26,11 @@ function runCommand(cmd: string, args: string[], timeoutMs = 30_000): string {
   }).trim();
 }
 
-/** Run a lobu memory subcommand using the current process entry point (works via npx). */
-function runLobuMemoryCli(args: string[], timeoutMs = 30_000): string {
-  return execFileSync(
-    process.execPath,
-    [process.argv[1] ?? "", "memory", ...args],
-    {
-      encoding: "utf-8",
-      timeout: timeoutMs,
-      stdio: ["ignore", "pipe", "pipe"],
-    }
-  ).trim();
-}
-
 function buildCursorInstallLink(mcpUrl: string): string {
   const config = Buffer.from(JSON.stringify({ url: mcpUrl })).toString(
     "base64"
   );
-  const params = new URLSearchParams({ name: "owletto", config });
+  const params = new URLSearchParams({ name: "lobu", config });
   return `https://cursor.com/en-US/install-mcp?${params.toString()}`;
 }
 
@@ -67,22 +55,22 @@ function upsertCursorMcpServer(
       ? (config.mcpServers as Record<string, unknown>)
       : {};
   const currentServers = { ...existingMcpServers } as Record<string, unknown>;
-  const currentOwletto = currentServers.owletto;
-  const nextOwletto = { url: mcpUrl };
+  const currentLobu = currentServers.lobu;
+  const nextLobu = { url: mcpUrl };
 
   const wasConfigured =
-    currentOwletto &&
-    typeof currentOwletto === "object" &&
-    "url" in currentOwletto &&
-    (currentOwletto as { url?: unknown }).url === mcpUrl;
+    currentLobu &&
+    typeof currentLobu === "object" &&
+    "url" in currentLobu &&
+    (currentLobu as { url?: unknown }).url === mcpUrl;
 
-  currentServers.owletto = nextOwletto;
+  currentServers.lobu = nextLobu;
   config.mcpServers = currentServers;
 
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 
   if (wasConfigured) return "unchanged";
-  return currentOwletto ? "updated" : "added";
+  return currentLobu ? "updated" : "added";
 }
 
 export const INSTALL_TARGETS: InstallTarget[] = [
@@ -97,7 +85,7 @@ export const INSTALL_TARGETS: InstallTarget[] = [
           "add",
           "--transport",
           "http",
-          "owletto",
+          "lobu",
           mcpUrl,
         ]);
         return { status: "configured", message: "MCP server added" };
@@ -112,7 +100,7 @@ export const INSTALL_TARGETS: InstallTarget[] = [
     mode: "auto",
     async configure(mcpUrl) {
       try {
-        runCommand("codex", ["mcp", "add", "owletto", "--url", mcpUrl]);
+        runCommand("codex", ["mcp", "add", "lobu", "--url", mcpUrl]);
         return { status: "configured", message: "MCP server added" };
       } catch (e) {
         return { status: "failed", message: (e as Error).message };
@@ -130,7 +118,7 @@ export const INSTALL_TARGETS: InstallTarget[] = [
           "add",
           "--transport",
           "http",
-          "owletto",
+          "lobu",
           mcpUrl,
         ]);
         return { status: "configured", message: "MCP server added" };
@@ -157,7 +145,7 @@ export const INSTALL_TARGETS: InstallTarget[] = [
         };
       }
       try {
-        runLobuMemoryCli(["configure", "--url", mcpUrl]);
+        configureMemoryPlugin({ url: mcpUrl });
       } catch (e) {
         return {
           status: "failed",
@@ -165,7 +153,7 @@ export const INSTALL_TARGETS: InstallTarget[] = [
         };
       }
       try {
-        runLobuMemoryCli(["health", "--url", mcpUrl]);
+        await checkMemoryHealth({ url: mcpUrl });
         return {
           status: "configured",
           message: "Plugin installed and verified",
@@ -222,7 +210,7 @@ export const INSTALL_TARGETS: InstallTarget[] = [
       return { status: "manual", message: "Finish setup in ChatGPT settings" };
     },
     manualInstructions(mcpUrl) {
-      return `Settings → Integrations → Model Context Protocol → Add Server\nName: Owletto\nURL: ${mcpUrl}`;
+      return `Settings → Integrations → Model Context Protocol → Add Server\nName: Lobu\nURL: ${mcpUrl}`;
     },
   },
   {

@@ -14,7 +14,7 @@ async function chooseMcpUrl(urlFlag?: string): Promise<string> {
   if (urlFlag) return normalizeMcpUrl(urlFlag);
 
   const mode = await p.select({
-    message: "Which Owletto MCP endpoint should your agents use?",
+    message: "Which Lobu memory MCP endpoint should your agents use?",
     options: [
       { value: "cloud", label: "Lobu Cloud", hint: "https://lobu.ai/mcp" },
       {
@@ -35,7 +35,7 @@ async function chooseMcpUrl(urlFlag?: string): Promise<string> {
   if (mode === "local") return normalizeMcpUrl("http://localhost:8787");
 
   const url = await p.text({
-    message: "Enter your Owletto MCP URL:",
+    message: "Enter your Lobu memory MCP URL:",
     placeholder: "https://your-server.com/mcp",
     validate(value) {
       if (!value) return "URL is required";

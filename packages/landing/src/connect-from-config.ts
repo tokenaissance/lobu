@@ -118,7 +118,7 @@ const connectFromClientConfigs: Record<
     valueProp:
       "Layer structured, shareable Owletto memory on top of OpenClaw's built-in filesystem memory — the plugin extends OpenClaw's filesystem plugin and can optionally take over its memory slot, so different OpenClaw agents can talk to each other through the same Owletto graph.",
     installPrompt:
-      "Install Owletto in OpenClaw. Run:\n\n  openclaw plugins install owletto-openclaw-plugin\n  owletto login https://lobu.ai/mcp\n  owletto configure\n  owletto health\n\nThe plugin extends OpenClaw's filesystem plugin and can replace its memory slot. After install, point me at the Owletto workspace I should use as shared memory across my OpenClaw agents.",
+      "Install Lobu memory in OpenClaw. Run:\n\n  openclaw plugins install owletto-openclaw-plugin\n  lobu login\n  lobu memory configure --url https://lobu.ai/mcp --org <org-slug>\n  lobu memory health --url https://lobu.ai/mcp --org <org-slug>\n\nThe plugin extends OpenClaw's filesystem plugin and can replace its memory slot. After install, point me at the Lobu memory workspace I should use as shared memory across my OpenClaw agents.",
     npmPackage: {
       name: "@lobu/owletto-openclaw",
       registryUrl: "https://www.npmjs.com/package/@lobu/owletto-openclaw",
@@ -131,16 +131,16 @@ const connectFromClientConfigs: Record<
     docsSetupTitle: "Install in OpenClaw",
     docsSetupSteps: [
       "Install the plugin: `openclaw plugins install owletto-openclaw-plugin`.",
-      "Log in to Lobu: `owletto login https://lobu.ai/mcp`.",
-      "Wire it into OpenClaw: `owletto configure` (writes the plugin config and, if you opt in, takes over the filesystem memory slot).",
-      "Verify: `owletto health`.",
+      "Log in to Lobu: `lobu login`.",
+      "Wire it into OpenClaw: `lobu memory configure --url https://lobu.ai/mcp --org <org-slug>` (writes the plugin config and, if you opt in, takes over the filesystem memory slot).",
+      "Verify: `lobu memory health --url https://lobu.ai/mcp --org <org-slug>`.",
     ],
     docsSetupNote:
-      "The plugin extends OpenClaw's filesystem plugin. Leave that plugin enabled if you want both, or let `owletto configure` swap Owletto in as the memory slot.",
+      "The plugin extends OpenClaw's filesystem plugin. Leave that plugin enabled if you want both, or let `lobu memory configure` swap Lobu memory in as the memory slot.",
     docsExtraSection: {
       title: "Cross-agent memory",
       paragraphs: [
-        "Once two OpenClaw agents point at the same Owletto workspace, they read and write the same entities, observations, and decisions — that is how a team of OpenClaw agents stays coherent without copy-pasting context.",
+        "Once two OpenClaw agents point at the same Lobu memory workspace, they read and write the same entities, observations, and decisions — that is how a team of OpenClaw agents stays coherent without copy-pasting context.",
       ],
     },
     docsRelated: [

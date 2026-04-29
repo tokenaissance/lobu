@@ -13,14 +13,8 @@ function copyDirIfExists(src, dest) {
 // Copy templates
 copyDirIfExists("src/templates", "dist/templates");
 
-// Copy bundled starter skills (lobu + memory skills, formerly bundled separately
-// in @lobu/owletto-cli prior to the CLI merge).
+// Copy the single bundled Lobu starter skill (includes memory guidance).
 copyDirIfExists("../../skills/lobu", "dist/bundled-skills/lobu");
-copyDirIfExists("../../skills/owletto", "dist/bundled-skills/owletto");
-copyDirIfExists(
-  "../../skills/owletto-openclaw",
-  "dist/bundled-skills/owletto-openclaw"
-);
 
 // Copy mcp-servers.json
 const jsonSrc = "src/mcp-servers.json";

@@ -13,18 +13,12 @@ openclaw plugins install owletto-openclaw-plugin
 Then log in and configure against your Lobu memory MCP endpoint:
 
 ```bash
-owletto login <mcp-url>
-owletto configure
-owletto health
+lobu login
+lobu memory configure --url <mcp-url> --org <org-slug>
+lobu memory health --url <mcp-url> --org <org-slug>
 ```
 
-Replace `<mcp-url>` with your workspace MCP URL (for example `https://owletto.com/mcp/acme`, or `http://localhost:8787/mcp` for the local runtime).
-
-For headless environments without browser access:
-
-```bash
-owletto login --device <mcp-url>
-```
+Replace `<mcp-url>` with your workspace MCP URL (for example `https://lobu.ai/mcp/acme`, or `http://localhost:8787/mcp` for the local runtime). `lobu memory configure` writes a `tokenCommand` that uses `lobu token --raw`, so the plugin reuses the top-level Lobu CLI login.
 
 ## Configuration
 

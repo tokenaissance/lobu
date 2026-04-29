@@ -53,7 +53,7 @@ The orgless MCP endpoint at [https://lobu.ai/mcp](https://lobu.ai/mcp) exposes `
 - [SKILL.md](https://lobu.ai/reference/skill-md/)
 - [Providers](https://lobu.ai/reference/providers/)
 - [CLI](https://lobu.ai/reference/cli/)
-- [Owletto CLI](https://lobu.ai/reference/lobu-memory/)
+- [Lobu Memory CLI](https://lobu.ai/reference/lobu-memory/)
 
 ## Project
 

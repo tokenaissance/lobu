@@ -230,10 +230,10 @@ npx @lobu/cli@latest skills add lobu --force
 | `list` | Show bundled Lobu starter skills |
 | `add <id>` | Copy a bundled starter skill into `skills/<id>` |
 
-Use the Owletto CLI to install Owletto starter skills separately:
+The bundled Lobu starter skill includes memory guidance:
 
 ```bash
-npx @lobu/cli@latest memory skills add owletto
+npx @lobu/cli@latest skills add lobu
 ```
 
 ---
@@ -264,8 +264,8 @@ npx @lobu/cli@latest skills add lobu
 npx @lobu/cli@latest providers add gemini
 npx @lobu/cli@latest secrets set GEMINI_API_KEY ...
 
-# Optional: install the Owletto starter skill separately
-npx @lobu/cli@latest memory skills add owletto
+# Optional: install the bundled Lobu starter skill
+npx @lobu/cli@latest skills add lobu
 
 # 3. Validate
 npx @lobu/cli@latest validate

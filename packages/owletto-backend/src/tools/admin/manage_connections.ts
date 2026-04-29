@@ -1081,7 +1081,7 @@ async function handleConnect(
       auth_profile_slug: authSelection.authProfile?.slug ?? undefined,
       instructions:
         `Complete browser auth for profile '${authSelection.authProfile?.slug}'. ` +
-        `Run: owletto browser-auth --connector ${args.connector_key} --authProfileSlug ${authSelection.authProfile?.slug}`,
+        `Run: lobu memory browser-auth --connector ${args.connector_key} --auth-profile-slug ${authSelection.authProfile?.slug}`,
       view_url: buildSetupUrl({ connectorKey: args.connector_key }),
     };
   }

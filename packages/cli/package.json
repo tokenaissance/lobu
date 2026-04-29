@@ -8,7 +8,7 @@
     "lobu": "bin/lobu.js"
   },
   "scripts": {
-    "build": "tsc && node scripts/build.cjs",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node scripts/build.cjs",
     "dev": "tsc --watch"
   },
   "keywords": [
@@ -99,7 +99,7 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "optionalDependencies": {
     "isolated-vm": "^6.1.2"

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import chalk from "chalk";
-import { getActiveSession } from "./memory/_lib/openclaw-auth.js";
+import { checkMemoryHealth } from "./memory/_lib/openclaw-cmd.js";
 
 interface Check {
   name: string;
@@ -28,25 +28,9 @@ function checkNodeVersion(): Check {
   const major = Number.parseInt(version.slice(1), 10);
   return {
     name: "node",
-    status: major >= 20 ? "ok" : "warn",
+    status: major >= 22 ? "ok" : "warn",
     detail: version,
   };
-}
-
-async function checkUrl(name: string, url: string): Promise<Check> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-    return {
-      name,
-      status: res.ok ? "ok" : "warn",
-      detail: `${res.status} ${url}`,
-    };
-  } catch {
-    return { name, status: "fail", detail: `unreachable: ${url}` };
-  }
 }
 
 interface DoctorOptions {
@@ -56,24 +40,18 @@ interface DoctorOptions {
 export async function doctorCommand(
   options: DoctorOptions = {}
 ): Promise<void> {
+  if (options.memoryOnly) {
+    await checkMemoryHealth();
+    return;
+  }
+
   const checks: Check[] = [];
 
-  if (!options.memoryOnly) {
-    checks.push(checkNodeVersion());
-    checks.push(checkBinaryExists("git"));
-  }
+  checks.push(checkNodeVersion());
+  checks.push(checkBinaryExists("git"));
 
-  const { session } = getActiveSession();
-  if (session?.mcpUrl) {
-    const origin = new URL(session.mcpUrl).origin;
-    checks.push(await checkUrl("memory MCP", origin));
-  } else if (options.memoryOnly) {
-    checks.push({
-      name: "memory MCP",
-      status: "warn",
-      detail: "no active session — run `lobu memory login`",
-    });
-  }
+  // Full `lobu doctor` keeps memory checks lightweight; use
+  // `lobu doctor --memory-only` for authenticated MCP validation.
 
   const icons = {
     ok: chalk.green("✓"),

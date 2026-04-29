@@ -26,7 +26,7 @@ export function getBrowserCookies(
   const cookies = (checkpoint as any)?.cookies ?? sessionCookies;
   if (!cookies || cookies.length === 0) {
     throw new Error(
-      `No browser cookies found. Run: owletto browser-auth --connector ${connectorKey} --authProfileSlug <SLUG>`
+      `No browser cookies found. Run: lobu memory browser-auth --connector ${connectorKey} --auth-profile-slug <SLUG>`
     );
   }
   return cookies;
@@ -42,7 +42,7 @@ export function validateCookieNotExpired(
     const expiresAt = new Date(cookie.expires * 1000);
     if (expiresAt < new Date()) {
       throw new Error(
-        `${cookieName} expired on ${expiresAt.toISOString()}. Re-run: owletto browser-auth --connector ${connectorKey} --authProfileSlug <SLUG>`
+        `${cookieName} expired on ${expiresAt.toISOString()}. Re-run: lobu memory browser-auth --connector ${connectorKey} --auth-profile-slug <SLUG>`
       );
     }
   }

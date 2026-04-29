@@ -16,17 +16,7 @@ const starterSkills = [
   {
     product: "Lobu",
     install: "npx @lobu/cli@latest skills add lobu",
-    adds: "The Lobu starter skill in skills/lobu/",
-  },
-  {
-    product: "Owletto",
-    install: "npx @lobu/cli@latest memory skills add owletto",
-    adds: "The Owletto starter skill in skills/owletto/",
-  },
-  {
-    product: "Owletto",
-    install: "npx @lobu/cli@latest memory skills add owletto-openclaw",
-    adds: "The OpenClaw-specific Owletto starter skill",
+    adds: "The Lobu starter skill in skills/lobu/ (includes memory guidance)",
   },
 ];
 
@@ -35,9 +25,8 @@ export function SkillsRegistryTable() {
     <div>
       <h2>Starter Skills</h2>
       <p>
-        Lobu and Owletto ship separate starter-skill installers. After install,
-        Lobu still discovers local skills from{" "}
-        <code>skills/&lt;name&gt;/SKILL.md</code> or{" "}
+        Lobu ships one starter-skill installer. After install, Lobu discovers
+        local skills from <code>skills/&lt;name&gt;/SKILL.md</code> or{" "}
         <code>agents/&lt;agent-id&gt;/skills/&lt;name&gt;/SKILL.md</code>.
       </p>
       <div style={{ overflowX: "auto" }}>

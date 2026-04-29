@@ -30,7 +30,7 @@ export async function memoryRunCommand(
       const base = serverUrl || resolveMcpEndpoint();
       if (!base)
         throw new ValidationError(
-          "Server URL required. Run: lobu memory login"
+          "Server URL required. Pass --url or set LOBU_MEMORY_URL."
         );
       mcpUrl = mcpUrlForOrg(base, org);
     }
@@ -38,7 +38,9 @@ export async function memoryRunCommand(
     const serverUrl = resolveServerUrl(options.url);
     const resolved = serverUrl || resolveMcpEndpoint();
     if (!resolved)
-      throw new ValidationError("Server URL required. Run: lobu memory login");
+      throw new ValidationError(
+        "Server URL required. Pass --url or set LOBU_MEMORY_URL."
+      );
     mcpUrl = resolved;
   }
 

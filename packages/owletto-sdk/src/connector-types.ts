@@ -129,7 +129,7 @@ export interface ConnectorAuthBrowser {
   description?: string;
   /**
    * How browser auth is captured:
-   * - 'cli': Extract cookies from Chrome profile via `owletto browser-auth` CLI
+   * - 'cli': Extract cookies from Chrome profile via `lobu memory browser-auth`
    * - 'cdp': Connect to a running Chrome instance via Chrome DevTools Protocol.
    *          Requires Chrome launched with --remote-debugging-port=9222.
    *          Used for services (like Google) that block headless browsers.

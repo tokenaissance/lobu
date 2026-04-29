@@ -68,7 +68,7 @@ export class BrowserAuthCascadeError extends Error {
       'Browser authentication failed. Tried:\n' +
         lines.join('\n') +
         '\n\nFix: Enable remote debugging in Chrome (chrome://inspect/#remote-debugging)\n' +
-        'Or run: owletto browser-auth --connector <key> --authProfileSlug <slug>'
+        'Or run: lobu memory browser-auth --connector <key> --auth-profile-slug <slug>'
     );
     this.name = 'BrowserAuthCascadeError';
     this.attempts = attempts;

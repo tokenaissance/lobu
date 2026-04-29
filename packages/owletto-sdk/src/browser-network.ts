@@ -200,7 +200,7 @@ export async function browserNetworkSync<TItem>(opts: {
         const msg =
           backend === 'cdp'
             ? 'Authentication check failed via CDP — you may not be logged in to this site in Chrome'
-            : 'Authentication failed — cookies may be expired. Re-run: owletto browser-auth';
+            : 'Authentication failed — cookies may be expired. Re-run: lobu memory browser-auth';
         throw new Error(msg);
       }
     }

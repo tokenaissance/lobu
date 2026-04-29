@@ -1,215 +1,154 @@
 ---
-title: Owletto CLI Reference
-description: What the owletto CLI does, how it authenticates, how it installs Owletto starter skills, and how to use it to run Owletto tools directly.
+title: Lobu Memory CLI Reference
+description: Use the Lobu CLI to configure memory MCP endpoints, seed workspaces, run memory tools, and wire local MCP clients.
 ---
 
-The `owletto` CLI starts local Owletto runtimes, installs bundled Owletto starter skills, configures agent clients, and runs Owletto tools directly.
+Lobu memory commands live under `lobu memory`. Authentication is shared with the rest of the CLI: run `lobu login` once, then memory commands reuse that session.
 
 - Hosted: [app.lobu.ai](https://app.lobu.ai)
+- Default MCP endpoint: `https://lobu.ai/mcp`
 
-## Install And Run
+## Install And Authenticate
 
 ```bash
 # Run without installing
-npx @lobu/cli@latest memory <command>
+npx @lobu/cli@latest <command>
 
 # Or install globally
-npm install -g owletto
-owletto <command>
+npm install -g @lobu/cli
+lobu <command>
+
+# Authenticate once for all Lobu CLI commands
+lobu login
 ```
 
-The published package name is `owletto`.
+Use `lobu token --raw` when another local tool needs a bearer token command.
 
-## Core Commands
+## Runtime
 
-### `owletto start`
-
-Starts a local Owletto runtime.
+`lobu run` is the only local boot path. There is no separate memory runtime command.
 
 ```bash
-# `lobu memory start` was retired — `lobu run` is the only boot path
-# `lobu memory start` was retired — `lobu run` is the only boot path
+lobu run
 ```
 
-Default behavior:
+## Client Wiring
 
-- listens on `http://localhost:8787`
-- uses embedded Postgres (`PGlite`) by default
-- stores local data in `~/.owletto/data/` for packaged installs
-- uses `./data/` when running from an `owletto` repo checkout
+### `lobu memory init`
 
-If `DATABASE_URL` is set, the CLI starts the server against external Postgres instead.
-
-### `owletto skills`
-
-Installs bundled Owletto starter skills into a local `skills/` directory.
+Configures local MCP-capable clients to use a Lobu memory MCP endpoint.
 
 ```bash
-npx @lobu/cli@latest memory skills list
-npx @lobu/cli@latest memory skills add owletto
-npx @lobu/cli@latest memory skills add owletto-openclaw
+lobu memory init
+lobu memory init --url http://localhost:8787/mcp
 ```
 
-Use:
+The wizard detects supported clients and auto-configures them when possible. Browser-managed clients fall back to manual setup instructions.
 
-- `owletto` for generic Owletto memory and tool workflows
-- `owletto-openclaw` for OpenClaw-specific memory plugin setup
+### `lobu memory configure`
 
-### `owletto init`
-
-Configures local agent clients to use an Owletto MCP endpoint.
+Writes OpenClaw plugin config for `@lobu/owletto-openclaw`. The generated plugin config uses `lobu token --raw`, so it reuses top-level `lobu login` authentication.
 
 ```bash
-npx @lobu/cli@latest memory init
-npx @lobu/cli@latest memory init --url http://localhost:8787/mcp
+openclaw plugins install owletto-openclaw-plugin
+lobu login
+lobu memory configure --url https://lobu.ai/mcp --org my-org
+lobu memory health --url https://lobu.ai/mcp --org my-org
 ```
 
-Detects supported clients and auto-configures them when possible. Falls back to manual steps when needed.
+## Health
 
-## Authentication
+### `lobu memory health`
 
-### `owletto login`
-
-Authenticates the CLI against an Owletto MCP server using OAuth.
+Checks that the current Lobu login can authenticate to the MCP endpoint and list available tools.
 
 ```bash
-npx @lobu/cli@latest memory login https://lobu.ai/mcp
-```
-
-By default, the CLI opens a browser and completes an authorization-code flow with a local callback server.
-
-Useful flags:
-
-- `--device` uses device-code login for headless environments or browserless agents
-- `--noOpen` prints the login URL instead of opening a browser
-- `--scope` overrides the requested OAuth scopes
-
-Example for a headless box:
-
-```bash
-npx @lobu/cli@latest memory login https://lobu.ai/mcp --device
-```
-
-### `owletto token`
-
-Prints a usable access token from the saved session.
-
-```bash
-npx @lobu/cli@latest memory token
-npx @lobu/cli@latest memory token --raw
-```
-
-This is mainly useful for integrations or plugin setups that need a token command.
-
-### `owletto health`
-
-Checks that the saved session is valid and that the CLI can reach the MCP endpoint.
-
-```bash
-npx @lobu/cli@latest memory health
+lobu memory health
+lobu memory health --org my-org
+lobu doctor --memory-only
 ```
 
 ## Organization Selection
 
-Owletto sessions are organization-aware. After login, set the default org if needed:
+### `lobu memory org`
+
+Stores the default memory organization for commands that need an org-scoped MCP URL.
 
 ```bash
-npx @lobu/cli@latest memory org current
-npx @lobu/cli@latest memory org set my-org
+lobu memory org current
+lobu memory org set my-org
 ```
 
-You can also override organization and server selection per command:
+You can also override per-command with:
 
 - `--org <slug>`
 - `--url <mcp-url>`
-- `OWLETTO_ORG`
-- `OWLETTO_URL`
+- `LOBU_MEMORY_ORG`
+- `LOBU_MEMORY_URL`
 
 ## Run MCP Tools Directly
 
-### `owletto run`
+### `lobu memory run`
 
 Lists tools when called without arguments, or executes a tool when given a tool name and JSON params.
 
 ```bash
 # List available tools
-npx @lobu/cli@latest memory run
+lobu memory run --org my-org
 
 # Search knowledge
-npx @lobu/cli@latest memory run search_knowledge '{"query":"Acme"}'
+lobu memory run search_knowledge '{"query":"Acme"}' --org my-org
 
 # Save new knowledge
-npx @lobu/cli@latest memory run save_knowledge '{"content":"Prefers weekly summaries","semantic_type":"preference","metadata":{}}'
+lobu memory run save_knowledge '{"content":"Prefers weekly summaries","semantic_type":"preference","metadata":{}}' --org my-org
 
-# Discover SDK methods (namespaces, signatures, examples)
-npx @lobu/cli@latest memory run search '{"query":"watchers.create"}'
+# Discover SDK methods
+lobu memory run search '{"query":"watchers.create"}' --org my-org
 
 # Run a TypeScript script over the typed client SDK
-npx @lobu/cli@latest memory run execute '{"script":"export default async (ctx, client) => client.entities.list({ entity_type: \"company\", limit: 5 })"}'
+lobu memory run execute '{"script":"export default async (ctx, client) => client.entities.list({ entity_type: \"company\", limit: 5 })"}' --org my-org
 ```
 
-This is the most direct way to inspect or test Owletto behavior outside an agent runtime.
+## Seed Project Memory
 
-### Which MCP tools are available?
+### `lobu memory seed`
 
-The exact tool list depends on the endpoint and your session scope. Run `owletto run` with no arguments to see what is available.
-
-**Core memory:** `search_knowledge`, `save_knowledge`
-
-**SDK surface:** `search` (method discovery), `execute` (run TS over the typed `ClientSDK` — replaces the previous `manage_*` MCP tools; reach handlers via `client.<namespace>.<method>(...)` from inside the script)
-
-**Read-only SQL:** `query_sql` (admin/owner only)
-
-**Organization:** `list_organizations`, `switch_organization` (exposed on both unscoped and scoped endpoints)
-
-## Other Useful Commands
-
-### `owletto doctor`
-
-Checks local prerequisites such as Node, Docker, and current server reachability.
+Provisions a memory workspace from `[memory.owletto]` in `lobu.toml`, `./models`, and optional `./data`.
 
 ```bash
-npx @lobu/cli@latest memory doctor
+lobu memory seed
+lobu memory seed --dry-run
+lobu memory seed --org my-org --url https://lobu.ai/mcp
 ```
 
-### `owletto browser-auth`
+## Browser Auth
 
-Captures browser-based auth or cookie state for connectors that rely on a real browser session.
+### `lobu memory browser-auth`
 
-This is mainly for connector setup, not day-to-day memory usage.
-
-### `owletto configure`
-
-Writes OpenClaw plugin config for `@lobu/owletto-openclaw` using an `owletto token` command.
-
-## Typical Install Flow
-
-For most users, the shortest path is:
+Captures browser cookie state for connectors that rely on a real browser session.
 
 ```bash
-npx @lobu/cli@latest memory skills add owletto
-npx @lobu/cli@latest memory init
+lobu memory browser-auth --connector x --auth-profile-slug my-profile
+lobu memory browser-auth --connector x --auth-profile-slug my-profile --check
 ```
 
-That gives the agent both:
+Useful flags:
 
-- the **Owletto skill** so it knows how to use Owletto well
-- the **MCP configuration** so it can actually connect to Owletto
+- `--chrome-profile <name>` chooses a local Chrome profile
+- `--launch-cdp` launches a dedicated remote-debugging Chrome profile
+- `--dedicated-profile <name>` names the dedicated profile
 
-## Repo-Local Development
+## Skills
 
-When working inside the `owletto` repository itself, you can run the TypeScript entrypoint directly:
+The old standalone Owletto starter skills are folded into the bundled Lobu starter skill:
 
 ```bash
-bun run packages/cli/bin/lobu.js memory start
-bun run packages/cli/bin/lobu.js memory skills list
-bun run packages/cli/bin/lobu.js memory init
-bun run packages/cli/bin/lobu.js memory run search_knowledge '{"query":"spotify"}'
+lobu skills add lobu
 ```
 
-## How This Fits With Lobu
+Local skills are still discovered from `skills/<id>/SKILL.md` and `agents/<agent-id>/skills/<id>/SKILL.md`.
 
-Use the Lobu CLI to scaffold and run Lobu projects. Use the `owletto` CLI to install the Owletto skill, configure clients, and operate Owletto itself.
+## Related
 
 - Lobu CLI: [CLI Reference](/reference/cli/)
 - Memory docs: [Memory](/getting-started/memory/)

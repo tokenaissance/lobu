@@ -1,6 +1,6 @@
 ---
 title: Skills
-description: How Lobu skills work, where they live, and how Lobu and Owletto starter skills are installed separately.
+description: How Lobu skills work, where they live, and how to install the bundled Lobu starter skill.
 ---
 
 import { SkillsRegistryTable } from "../../../components/SkillsRegistryTable";
@@ -14,24 +14,15 @@ A **skill** is a reusable capability bundle for an agent. In Lobu, skills can ad
 
 Lobu still discovers local `SKILL.md` files at runtime. The CLI starter-skill commands simply copy a bundled skill folder into your local `skills/` directory so you can commit it and customize it.
 
-## Separate Starter Skills
+## Bundled Starter Skill
 
-Lobu and Owletto are separate products, so their starter skills install separately too.
+The bundled Lobu starter skill includes project, runtime, and memory guidance.
 
 ```bash
-# Install the Lobu starter skill
 npx @lobu/cli@latest skills add lobu
-
-# Install the Owletto starter skill
-npx owletto@latest skills add owletto
-
-# Install the Owletto OpenClaw variant
-npx owletto@latest skills add owletto-openclaw
 ```
 
-- Use the **Lobu** skill when the agent should understand Lobu projects, `lobu.toml`, prompt files, evals, and project structure.
-- Use the **Owletto** skill when the agent should understand Owletto memory, knowledge tools, watchers, and client setup.
-- Use **both** when you are building Lobu agents that also rely on Owletto memory.
+Use the **Lobu** skill when the agent should understand Lobu projects, `lobu.toml`, prompt files, evals, project structure, memory tools, watchers, and client setup.
 
 <SkillsRegistryTable client:load />
 
@@ -82,14 +73,14 @@ See [Tool Policy](/guides/tool-policy/) for that split.
 Skills and memory are related but different:
 
 - **Skills** teach the agent how to work and what capabilities to request.
-- **Owletto** is the separate long-term memory and integrations product.
-- **Lobu** can optionally use Owletto as its memory backend through `[memory.owletto]` in `lobu.toml`.
+- **Lobu memory** is the long-term memory and integrations surface.
+- **Lobu** can enable memory through `[memory.owletto]` in `lobu.toml`.
 
-Installing the Owletto skill does not by itself wire Lobu to Owletto memory. That runtime wiring lives in Lobu configuration. See [Memory](/getting-started/memory/) for that setup.
+Installing the Lobu starter skill teaches the agent the workflow; runtime wiring still lives in Lobu configuration. See [Memory](/getting-started/memory/) for that setup.
 
 ## Read Next
 
 - [SKILL.md Reference](/reference/skill-md/)
 - [Memory](/getting-started/memory/)
 - [`lobu.toml` Reference](/reference/lobu-toml/)
-- [Owletto CLI Reference](/reference/owletto-cli/)
+- [Lobu Memory CLI Reference](/reference/lobu-memory/)

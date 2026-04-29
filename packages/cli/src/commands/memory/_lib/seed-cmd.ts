@@ -585,22 +585,20 @@ async function resolveAuth(
         return { token: result.token, mcpUrl: orgUrl, orgSlug: org };
       }
     }
-    throw new ValidationError(
-      `No session for org "${org}". Run: owletto login <server-url>/mcp/${org}`
-    );
+    throw new ValidationError("Not logged in. Run: lobu login");
   }
 
   const serverUrl = resolveServerUrl(urlFlag, storePath);
   const result = await getUsableToken(serverUrl || undefined, storePath);
   if (!result) {
-    throw new ValidationError("No active session. Run: owletto login");
+    throw new ValidationError("Not logged in. Run: lobu login");
   }
 
   const resolvedOrg =
     orgFromMcpUrl(result.session.mcpUrl) || result.session.org;
   if (!resolvedOrg) {
     throw new ValidationError(
-      "Cannot determine org from session. Use --org flag or set OWLETTO_ORG."
+      "Cannot determine org. Use --org or set LOBU_MEMORY_ORG."
     );
   }
 

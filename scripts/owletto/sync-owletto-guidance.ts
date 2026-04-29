@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderSkillMemorySection } from '../../packages/owletto-openclaw/src/owletto-guidance.ts';
 
-const SKILL_PATH = resolve(process.cwd(), 'skills/owletto/SKILL.md');
+const SKILL_PATH = resolve(process.cwd(), 'skills/lobu/SKILL.md');
 const START_MARKER = '<!-- owletto-memory-guidance:start -->';
 const END_MARKER = '<!-- owletto-memory-guidance:end -->';
 

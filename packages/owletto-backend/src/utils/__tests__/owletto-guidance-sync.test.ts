@@ -6,10 +6,10 @@ import {
   renderSkillMemorySection,
 } from '../../../../owletto-openclaw/src/owletto-guidance';
 
-// Skill lives at <repo-root>/skills/owletto/SKILL.md. Resolve relative to this
+// Memory guidance now lives in the bundled Lobu skill. Resolve relative to this
 // file so the test works regardless of `process.cwd()` (worktrees, vitest's
 // per-package cwd, IDE runners).
-const skillPath = resolve(__dirname, '../../../../../skills/owletto/SKILL.md');
+const skillPath = resolve(__dirname, '../../../../../skills/lobu/SKILL.md');
 const START_MARKER = '<!-- owletto-memory-guidance:start -->';
 const END_MARKER = '<!-- owletto-memory-guidance:end -->';
 

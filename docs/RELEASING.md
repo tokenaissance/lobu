@@ -64,7 +64,7 @@ After a local publish, land a `chore(release)` commit on `main` so `.release-ple
 ## Verify
 
 ```bash
-for pkg in @lobu/core @lobu/worker @lobu/cli @lobu/owletto-sdk @lobu/owletto-openclaw owletto; do
+for pkg in @lobu/core @lobu/worker @lobu/cli @lobu/owletto-sdk @lobu/owletto-openclaw; do
   npm view "$pkg" version
 done
 ```

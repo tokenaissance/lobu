@@ -209,29 +209,11 @@ const memorySchema = z.object({
   owletto: owlettoMemorySchema.optional(),
 });
 
-// ── Owletto CLI ────────────────────────────────────────────────────────────
-
-const owlettoProfileSchema = z
-  .object({
-    url: z.string().optional(),
-    api_url: z.string().optional(),
-    mcp_url: z.string().optional(),
-    database_url: z.string().optional(),
-    embeddings_url: z.string().optional(),
-    env_file: z.string().optional(),
-  })
-  .passthrough();
-
-const owlettoSchema = z.object({
-  profiles: z.record(z.string(), owlettoProfileSchema).optional(),
-});
-
 // ── Top Level ───────────────────────────────────────────────────────────────
 
 export const lobuConfigSchema = z.object({
   agents: z.record(z.string().regex(/^[a-z0-9][a-z0-9-]*$/), agentEntrySchema),
   memory: memorySchema.optional(),
-  owletto: owlettoSchema.optional(),
 });
 
 // ── Inferred Types ──────────────────────────────────────────────────────────
@@ -248,5 +230,3 @@ export type ToolsEntry = z.infer<typeof toolsSchema>;
 export type WorkerEntry = z.infer<typeof workerSchema>;
 export type OwlettoMemoryEntry = z.infer<typeof owlettoMemorySchema>;
 export type MemoryEntry = z.infer<typeof memorySchema>;
-export type OwlettoProfileEntry = z.infer<typeof owlettoProfileSchema>;
-export type OwlettoEntry = z.infer<typeof owlettoSchema>;

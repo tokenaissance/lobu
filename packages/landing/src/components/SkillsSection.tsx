@@ -804,17 +804,10 @@ export function SkillsSection(props: {
               style={{ backgroundColor: "var(--color-page-surface-dim)" }}
             >
               npx @lobu/cli@latest skills add lobu
-            </code>{" "}
-            and install Owletto separately with{" "}
-            <code
-              class="text-[11px] px-1 py-0.5 rounded"
-              style={{ backgroundColor: "var(--color-page-surface-dim)" }}
-            >
-              npx @lobu/cli@latest memory skills add owletto
             </code>
-            . Local <code>SKILL.md</code> files are still discovered
-            automatically. The cards below show the kinds of MCP servers and
-            providers those skills can bundle.
+            . It includes memory guidance. Local <code>SKILL.md</code> files are
+            still discovered automatically. The cards below show the kinds of
+            MCP servers and providers those skills can bundle.
           </p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {registryGroups.map((group) => (

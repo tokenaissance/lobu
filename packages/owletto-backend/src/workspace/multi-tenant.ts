@@ -6,6 +6,7 @@ import type { AuthInfo } from '../auth/oauth/types';
 import { PersonalAccessTokenService } from '../auth/tokens';
 import { isPublicReadable } from '../auth/tool-access';
 import { getDb, simpleQuery } from '../db/client';
+import { CliTokenService } from '../gateway/auth/cli/token-service';
 import type { Env } from '../index';
 import logger from '../utils/logger';
 import { getConfiguredPublicOrigin } from '../utils/public-origin';
@@ -235,9 +236,83 @@ export class MultiTenantProvider implements WorkspaceProvider {
     // 1) Bearer token auth (PAT or OAuth)
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
-      const authInfo = token.startsWith('owl_pat_')
+      const isPat = token.startsWith('owl_pat_');
+      const authInfo = isPat
         ? await new PersonalAccessTokenService(sql).verify(token)
         : await new OAuthProvider(sql, baseUrl).verifyAccessToken(token);
+
+      if (!authInfo && !isPat) {
+        const cliIdentity = await new CliTokenService().verifyAccessToken(token);
+        if (cliIdentity) {
+          let effectiveOrgId = requestedOrgId;
+
+          if (!effectiveOrgId) {
+            if (isUnscopedMcpRoute) {
+              await setContextAndContinue({
+                mcpIsAuthenticated: true,
+                organizationId: null,
+                memberRole: null,
+                user: {
+                  id: cliIdentity.userId,
+                  email: cliIdentity.email ?? '',
+                  name: cliIdentity.name ?? '',
+                  emailVerified: false,
+                },
+                session: {
+                  id: cliIdentity.sessionId,
+                  userId: cliIdentity.userId,
+                  token,
+                  expiresAt: new Date(cliIdentity.expiresAt),
+                },
+              });
+              return undefined;
+            }
+            return c.json(
+              {
+                error: 'invalid_request',
+                error_description: 'Organization slug required in URL (e.g. /mcp/{org})',
+              },
+              400
+            );
+          }
+
+          const role = await getMembershipRole(effectiveOrgId, cliIdentity.userId, {
+            bypassCache: true,
+          });
+          const allowPublicOrgWithoutMembership =
+            !role && requestedOrgId === effectiveOrgId && requestedOrgVisibility === 'public';
+
+          if (!role && !allowPublicOrgWithoutMembership) {
+            return c.json(
+              {
+                error: 'forbidden',
+                error_description: 'Token owner is not a member of this organization',
+              },
+              403
+            );
+          }
+
+          await setContextAndContinue({
+            mcpIsAuthenticated: true,
+            organizationId: effectiveOrgId,
+            memberRole: role,
+            user: {
+              id: cliIdentity.userId,
+              email: cliIdentity.email ?? '',
+              name: cliIdentity.name ?? '',
+              emailVerified: false,
+            },
+            session: {
+              id: cliIdentity.sessionId,
+              userId: cliIdentity.userId,
+              token,
+              expiresAt: new Date(cliIdentity.expiresAt),
+              activeOrganizationId: effectiveOrgId,
+            },
+          });
+          return undefined;
+        }
+      }
 
       if (!authInfo) {
         return c.json(

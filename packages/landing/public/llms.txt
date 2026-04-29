@@ -45,7 +45,7 @@
 - [SKILL.md](https://lobu.ai/reference/skill-md/)
 - [Providers](https://lobu.ai/reference/providers/)
 - [REST API reference](https://lobu.ai/reference/api-reference/)
-- [Lobu memory CLI](https://lobu.ai/reference/owletto-cli/)
+- [Lobu memory CLI](https://lobu.ai/reference/lobu-memory/)
 
 ## Guides
 

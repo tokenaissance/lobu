@@ -196,7 +196,7 @@ export async function initCommand(
     });
     envSecrets.push({ envVar: "MEMORY_URL", value: owlettoUrl });
   }
-  // "none" — no Owletto scaffold, gateway defaults to filesystem memory
+  // "none" — no memory scaffold, gateway defaults to filesystem memory
 
   // Observability — OTEL tracing endpoint
   const otelEndpoint = await input({
@@ -409,24 +409,6 @@ turns:
 
     spinner.succeed("Project created successfully!");
 
-    // Wire memory plugin config for selected agent runtime if memory was enabled
-    if (includeOwlettoMemory && owlettoUrl) {
-      try {
-        const { runMemoryInit } = await import("./memory/init.js");
-        await runMemoryInit({
-          url: owlettoUrl,
-          agent: projectName,
-          skipAuth: true,
-        });
-      } catch (error) {
-        console.warn(
-          chalk.yellow(
-            `\n  Note: memory plugin wiring skipped (${error instanceof Error ? error.message : "unknown error"}). Run \`lobu memory init\` later to wire it up.`
-          )
-        );
-      }
-    }
-
     // Print next steps
     console.log(chalk.green("\n✓ Lobu initialized!\n"));
     console.log(chalk.bold("Next steps:\n"));
@@ -450,10 +432,10 @@ turns:
     );
     if (includeOwlettoMemory) {
       console.log(
-        chalk.dim("     - models/                      (Owletto model files)")
+        chalk.dim("     - models/                      (memory model files)")
       );
       console.log(
-        chalk.dim("     - data/                        (Owletto seed data)")
+        chalk.dim("     - data/                        (memory seed data)")
       );
     }
     console.log(chalk.dim("     - .env                         (secrets)"));
@@ -473,7 +455,12 @@ turns:
     );
     if (owlettoUrl) {
       console.log(chalk.cyan("  Lobu memory:"));
-      console.log(chalk.dim(`     ${owlettoUrl}\n`));
+      console.log(chalk.dim(`     ${owlettoUrl}`));
+      console.log(
+        chalk.dim(
+          "     Run `lobu memory init` to configure local MCP clients.\n"
+        )
+      );
     }
     console.log(chalk.cyan("  4. Start the services:"));
     console.log(chalk.dim("     npx @lobu/cli@latest run\n"));

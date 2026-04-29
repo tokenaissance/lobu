@@ -181,7 +181,7 @@ authSchema: {
   methods: [{
     type: 'browser',
     capture: 'cli',             // How auth is captured:
-                                //   'cli'  - Extract cookies from Chrome via `owletto browser-auth` CLI
+                                //   'cli'  - Extract cookies from Chrome via `lobu memory browser-auth`
                                 //   'cdp'  - Connect to Chrome via DevTools Protocol (port 9222)
     requiredDomains: [           // Cookie domains to extract (for 'cli' capture)
       'x.com',

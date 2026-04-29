@@ -15,6 +15,19 @@ async function getPackageVersion(): Promise<string> {
   return pkg.version ?? "0.0.0";
 }
 
+function handleCliError(error: unknown): void {
+  const exitCode =
+    typeof error === "object" &&
+    error !== null &&
+    "exitCode" in error &&
+    typeof (error as { exitCode?: unknown }).exitCode === "number"
+      ? (error as { exitCode: number }).exitCode
+      : 1;
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(chalk.red("\n  Error:"), message);
+  process.exitCode = exitCode;
+}
+
 export async function runCli(
   argv: readonly string[] = process.argv
 ): Promise<void> {
@@ -175,6 +188,17 @@ export async function runCli(
     .action(async (options: { context?: string }) => {
       const { whoamiCommand } = await import("./commands/whoami.js");
       await whoamiCommand(options);
+    });
+
+  // ─── token ──────────────────────────────────────────────────────────
+  program
+    .command("token")
+    .description("Print the current Lobu access token")
+    .option("-c, --context <name>", "Use a named context")
+    .option("--raw", "Print token only (no labels)")
+    .action(async (options: { context?: string; raw?: boolean }) => {
+      const { tokenCommand } = await import("./commands/token.js");
+      await tokenCommand(options);
     });
 
   // ─── context ────────────────────────────────────────────────────────
@@ -344,13 +368,11 @@ export async function runCli(
     });
 
   // ─── memory ─────────────────────────────────────────────────────────
-  // Was the standalone `owletto` CLI; now merged in. `lobu run` is the
-  // only boot path (gateway + memory MCP in one process), so there's no
-  // `lobu memory start`. External MCP clients point at the gateway's
-  // /mcp endpoint via `lobu memory configure`.
+  // Memory operations live under the Lobu CLI. Auth is top-level (`lobu login`);
+  // memory subcommands only configure endpoints and call tools.
   const memory = program
     .command("memory")
-    .description("Owletto memory MCP — auth, tools, skills, configuration");
+    .description("Lobu memory MCP — tools, seeding, and client configuration");
 
   const memoryOrg = memory
     .command("org")
@@ -358,20 +380,18 @@ export async function runCli(
   memoryOrg
     .command("current")
     .description("Show the active org")
-    .option("--store-path <path>", "Custom auth store path")
-    .action(async (options: { storePath?: string }) => {
+    .action(async () => {
       const { memoryOrgCurrentCommand } = await import(
         "./commands/memory/org.js"
       );
-      memoryOrgCurrentCommand(options);
+      memoryOrgCurrentCommand();
     });
   memoryOrg
     .command("set <slug>")
     .description("Set the active org slug")
-    .option("--store-path <path>", "Custom auth store path")
-    .action(async (slug: string, options: { storePath?: string }) => {
+    .action(async (slug: string) => {
       const { memoryOrgSetCommand } = await import("./commands/memory/org.js");
-      memoryOrgSetCommand(slug, options);
+      memoryOrgSetCommand(slug);
     });
 
   memory
@@ -391,79 +411,16 @@ export async function runCli(
     );
 
   memory
-    .command("login [url]")
-    .description("Authenticate via OAuth (device flow optional)")
-    .option(
-      "--oauth-base-url <url>",
-      "OAuth issuer override (defaults to server origin)"
-    )
-    .option(
-      "--scope <scope>",
-      "OAuth scope string",
-      "mcp:read mcp:write profile:read"
-    )
-    .option(
-      "--timeout-sec <seconds>",
-      "Callback wait timeout in seconds",
-      "300"
-    )
-    .option("--no-open", "Print the auth URL but do not open the browser")
-    .option("--device", "Use device-code flow (no local callback server)")
-    .option("--store-path <path>", "Custom auth store path")
-    .action(
-      async (
-        url: string | undefined,
-        options: {
-          oauthBaseUrl?: string;
-          scope?: string;
-          timeoutSec?: string;
-          noOpen?: boolean;
-          device?: boolean;
-          storePath?: string;
-        }
-      ) => {
-        const { memoryLoginCommand } = await import(
-          "./commands/memory/login.js"
-        );
-        await memoryLoginCommand(url, options);
-      }
-    );
-
-  memory
-    .command("token")
-    .description("Print a usable OAuth access token")
-    .option("--url <url>", "Server URL override")
-    .option("--org <slug>", "Org slug override")
-    .option("--raw", "Print token only (no labels)")
-    .option("--store-path <path>", "Custom auth store path")
-    .action(
-      async (options: {
-        url?: string;
-        org?: string;
-        raw?: boolean;
-        storePath?: string;
-      }) => {
-        const { memoryTokenCommand } = await import(
-          "./commands/memory/token.js"
-        );
-        await memoryTokenCommand(options);
-      }
-    );
-
-  memory
     .command("health")
-    .description("Validate auth session + MCP connectivity")
+    .description("Validate Lobu login + MCP connectivity")
     .option("--url <url>", "Server URL override")
     .option("--org <slug>", "Org slug override")
-    .option("--store-path <path>", "Custom auth store path")
-    .action(
-      async (options: { url?: string; org?: string; storePath?: string }) => {
-        const { memoryHealthCommand } = await import(
-          "./commands/memory/health.js"
-        );
-        await memoryHealthCommand(options);
-      }
-    );
+    .action(async (options: { url?: string; org?: string }) => {
+      const { memoryHealthCommand } = await import(
+        "./commands/memory/health.js"
+      );
+      await memoryHealthCommand(options);
+    });
 
   memory
     .command("configure")
@@ -471,6 +428,7 @@ export async function runCli(
       "Write OpenClaw plugin config pointing at the active memory MCP"
     )
     .option("--url <url>", "Server URL override")
+    .option("--org <slug>", "Org slug override")
     .option(
       "--config-path <path>",
       "OpenClaw config path (defaults to ~/.openclaw/openclaw.json)"
@@ -482,6 +440,7 @@ export async function runCli(
     .action(
       async (options: {
         url?: string;
+        org?: string;
         configPath?: string;
         tokenCommand?: string;
       }) => {
@@ -495,7 +454,7 @@ export async function runCli(
   memory
     .command("seed [path]")
     .description(
-      "Provision an Owletto workspace from [memory.owletto] in lobu.toml + ./models + optional ./data"
+      "Provision a Lobu memory workspace from [memory.owletto] in lobu.toml + ./models + optional ./data"
     )
     .option("--dry-run", "Log what would be created without mutating")
     .option(
@@ -503,7 +462,6 @@ export async function runCli(
       "Org slug override (defaults to [memory.owletto].org)"
     )
     .option("--url <url>", "Server URL override")
-    .option("--store-path <path>", "Custom auth store path")
     .action(
       async (
         pathArg: string | undefined,
@@ -511,7 +469,6 @@ export async function runCli(
           dryRun?: boolean;
           org?: string;
           url?: string;
-          storePath?: string;
         }
       ) => {
         const { memorySeedCommand } = await import("./commands/memory/seed.js");
@@ -582,31 +539,9 @@ export async function runCli(
       }
     );
 
-  const memorySkills = memory
-    .command("skills")
-    .description("Bundled memory starter skills");
-  memorySkills
-    .command("list")
-    .description("List bundled memory starter skills")
-    .action(async () => {
-      const { memorySkillsListCommand } = await import(
-        "./commands/memory/skills/list.js"
-      );
-      memorySkillsListCommand();
-    });
-  memorySkills
-    .command("add <skillId>")
-    .description("Install a bundled memory skill into ./skills/<id>")
-    .option("--dir <path>", "Target directory (defaults to cwd)")
-    .option("--force", "Overwrite an existing skills/<id> directory")
-    .action(
-      async (skillId: string, options: { dir?: string; force?: boolean }) => {
-        const { memorySkillsAddCommand } = await import(
-          "./commands/memory/skills/add.js"
-        );
-        memorySkillsAddCommand(skillId, options);
-      }
-    );
-
-  await program.parseAsync(argv);
+  try {
+    await program.parseAsync(argv);
+  } catch (error) {
+    handleCliError(error);
+  }
 }

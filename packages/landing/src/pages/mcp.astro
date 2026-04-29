@@ -6,7 +6,7 @@ import { Nav } from "../components/Nav";
 
 const mcpUrl = "https://lobu.ai/mcp";
 const claudeCodeCommand = `claude mcp add --transport http lobu ${mcpUrl}`;
-const owlettoLoginCommand = `npx owletto@latest login ${mcpUrl}`;
+const openClawCommand = `lobu memory configure --url ${mcpUrl} --org <org-slug>`;
 
 const clients = [
   {
@@ -28,7 +28,7 @@ const clients = [
   {
     name: "OpenClaw",
     href: "/connect-from/openclaw/",
-    body: owlettoLoginCommand,
+    body: openClawCommand,
     mono: true,
   },
 ];

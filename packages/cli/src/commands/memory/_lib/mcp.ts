@@ -76,7 +76,7 @@ type JsonRpcResponse<T = unknown> = {
 
 /**
  * Resolve the MCP endpoint URL.
- * Priority: explicit config > OWLETTO_URL env > active session server.
+ * Priority: explicit config > LOBU_MEMORY_URL env > saved memory server > default cloud server.
  */
 export function resolveMcpEndpoint(config?: {
   mcpUrl?: unknown;
@@ -203,7 +203,7 @@ export async function mcpRpc(
 }
 
 /**
- * Call an Owletto tool over the REST proxy at `POST /api/{orgSlug}/{toolName}`.
+ * Call a Lobu memory tool over the REST proxy at `POST /api/{orgSlug}/{toolName}`.
  *
  * Reuses the same auth resolution and localhost/docker-host fallback as
  * `mcpRpc`. Returns the raw handler result as parsed JSON (no MCP envelope).
@@ -228,7 +228,7 @@ export async function restToolCall<T = unknown>(
   const orgSlug = orgFromMcpUrl(mcpUrl) ?? tokenResult?.session.org ?? null;
   if (!orgSlug) {
     throw new ApiError(
-      `Cannot call ${toolName}: no org slug on MCP URL ${mcpUrl} or active session. Reconnect with: owletto login <server>/mcp/<org>`
+      `Cannot call ${toolName}: no org slug on MCP URL ${mcpUrl}. Use --org or run: lobu memory org set <org>`
     );
   }
 
