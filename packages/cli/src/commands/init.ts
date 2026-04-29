@@ -409,6 +409,24 @@ turns:
 
     spinner.succeed("Project created successfully!");
 
+    // Wire memory plugin config for selected agent runtime if memory was enabled
+    if (includeOwlettoMemory && owlettoUrl) {
+      try {
+        const { runMemoryInit } = await import("./memory/init.js");
+        await runMemoryInit({
+          url: owlettoUrl,
+          agent: projectName,
+          skipAuth: true,
+        });
+      } catch (error) {
+        console.warn(
+          chalk.yellow(
+            `\n  Note: memory plugin wiring skipped (${error instanceof Error ? error.message : "unknown error"}). Run \`lobu memory init\` later to wire it up.`
+          )
+        );
+      }
+    }
+
     // Print next steps
     console.log(chalk.green("\n✓ Lobu initialized!\n"));
     console.log(chalk.bold("Next steps:\n"));

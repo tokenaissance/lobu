@@ -23,7 +23,6 @@
       "!**/.connector-child-*.mjs",
       "!**/*.css",
       "!**/packages/owletto-backend/**",
-      "!**/packages/owletto-cli/**",
       "!**/packages/owletto-sdk/**",
       "!**/packages/owletto-openclaw/**",
       "!**/packages/owletto-worker/**",

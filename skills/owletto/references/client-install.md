@@ -3,7 +3,7 @@
 Install the Owletto starter skill first:
 
 ```bash
-npx owletto@latest skills add owletto
+npx @lobu/cli@latest memory skills add owletto
 ```
 
 Then use the workspace or org-scoped MCP URL provided by the product surface. Do not replace it with a hardcoded hosted URL unless the user asked for that exact instance.

@@ -177,7 +177,7 @@ export const technicalLinks = {
   mcpProxy: { label: "MCP proxy", href: "/guides/mcp-proxy/" },
   connectorSdk: {
     label: "Connector SDK",
-    href: "/reference/owletto-cli/#connector-sdk",
+    href: "/reference/lobu-memory/#connector-sdk",
   },
   memoryDocs: { label: "Memory docs", href: "/getting-started/memory/" },
   slackInstall: { label: "Slack install", href: "/platforms/slack/" },

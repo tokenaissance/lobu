@@ -4,8 +4,6 @@ const config: KnipConfig = {
   ignore: [
     // Submodule — cleaned up via its own repo / PR.
     "packages/owletto-web/**",
-    // Bundled into owletto-cli at build time; not a separate workspace.
-    "packages/owletto-cli/runtime/**",
   ],
   // Bun-style "npm:foo@x" import specifiers used by connectors.
   ignoreUnresolved: ["^npm:"],
@@ -43,7 +41,8 @@ const config: KnipConfig = {
     },
     "packages/owletto-backend": {
       entry: [
-        // Embedded server boot path used by owletto-cli `start`.
+        // Embedded server boot path; previously also used by `owletto start`
+        // before the CLI merge collapsed everything onto `lobu run`.
         "src/start-local.ts",
         // Reached via cross-workspace import from scripts/owletto/sync-local.ts.
         "src/lib/feed-sync.ts",
@@ -78,18 +77,12 @@ const config: KnipConfig = {
         "@providers-config",
       ],
     },
-    "packages/owletto-cli": {
-      entry: [
-        // Ambient module declaration; not imported.
-        "src/node-sqlite.ts",
-        // bun:test files in src/lib/.
-        "src/**/*.test.ts",
-      ],
-    },
     "packages/cli": {
       entry: [
         // Tests in __tests__/ run via `bun test packages/cli` in CI.
         "src/__tests__/**/*.test.ts",
+        // Ambient module declaration for node:sqlite (used by memory browser-auth).
+        "src/types/node-sqlite.d.ts",
       ],
     },
     ".": {

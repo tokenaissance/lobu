@@ -361,7 +361,9 @@ describe('first-party tool-name coverage', () => {
   // invariants.
   const __dirname = dirname(fileURLToPath(import.meta.url));
   const webSrcRoot = join(__dirname, '..', '..', '..', '..', 'owletto-web', 'src');
-  const cliSrcRoot = join(__dirname, '..', '..', '..', '..', 'owletto-cli', 'src');
+  // The standalone owletto-cli package was merged into @lobu/cli's `memory`
+  // namespace; the REST callTool(...) sites moved to packages/cli/src/commands/memory/.
+  const cliSrcRoot = join(__dirname, '..', '..', '..', '..', 'cli', 'src', 'commands', 'memory');
 
   function present(path: string): boolean {
     try {
@@ -436,7 +438,7 @@ describe('first-party tool-name coverage', () => {
     assertRegistered(new Set([...apiCallNames, ...hookFactoryNames]));
   });
 
-  it('every owletto-cli REST callTool(ctx, name) is registered', () => {
+  it('every lobu memory REST callTool(ctx, name) is registered', () => {
     if (!present(cliSrcRoot)) return;
     const used = extractMatches(
       cliSrcRoot,

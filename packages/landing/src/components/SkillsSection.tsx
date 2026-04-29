@@ -810,7 +810,7 @@ export function SkillsSection(props: {
               class="text-[11px] px-1 py-0.5 rounded"
               style={{ backgroundColor: "var(--color-page-surface-dim)" }}
             >
-              npx owletto@latest skills add owletto
+              npx @lobu/cli@latest memory skills add owletto
             </code>
             . Local <code>SKILL.md</code> files are still discovered
             automatically. The cards below show the kinds of MCP servers and

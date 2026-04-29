@@ -40,11 +40,6 @@
           "type": "json",
           "path": "packages/owletto-openclaw/package.json",
           "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": "packages/owletto-cli/package.json",
-          "jsonpath": "$.version"
         }
       ]
     }

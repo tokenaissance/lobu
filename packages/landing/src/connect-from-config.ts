@@ -75,7 +75,7 @@ const connectFromClientConfigs: Record<
       "ChatGPT discovers the available memory tools automatically once the MCP connection is approved.",
     docsRelated: [
       { label: "Memory", href: "/getting-started/memory/" },
-      { label: "Owletto CLI Reference", href: "/reference/owletto-cli/" },
+      { label: "Lobu memory CLI", href: "/reference/lobu-memory/" },
     ],
   },
   claude: {
@@ -107,7 +107,7 @@ const connectFromClientConfigs: Record<
     docsRelated: [
       { label: "Memory", href: "/getting-started/memory/" },
       { label: "Skills", href: "/getting-started/skills/" },
-      { label: "Owletto CLI Reference", href: "/reference/owletto-cli/" },
+      { label: "Lobu memory CLI", href: "/reference/lobu-memory/" },
     ],
   },
   openclaw: {
@@ -145,7 +145,7 @@ const connectFromClientConfigs: Record<
     },
     docsRelated: [
       { label: "Memory", href: "/getting-started/memory/" },
-      { label: "Owletto CLI Reference", href: "/reference/owletto-cli/" },
+      { label: "Lobu memory CLI", href: "/reference/lobu-memory/" },
     ],
   },
 };

@@ -20,12 +20,12 @@ const starterSkills = [
   },
   {
     product: "Owletto",
-    install: "npx owletto@latest skills add owletto",
+    install: "npx @lobu/cli@latest memory skills add owletto",
     adds: "The Owletto starter skill in skills/owletto/",
   },
   {
     product: "Owletto",
-    install: "npx owletto@latest skills add owletto-openclaw",
+    install: "npx @lobu/cli@latest memory skills add owletto-openclaw",
     adds: "The OpenClaw-specific Owletto starter skill",
   },
 ];

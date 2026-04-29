@@ -1,6 +1,6 @@
 # Releasing
 
-Six packages ship to npm as a synchronized release: `@lobu/core`, `@lobu/worker`, `@lobu/cli`, `@lobu/owletto-sdk`, `@lobu/owletto-openclaw`, `owletto` (unscoped; source at `packages/owletto-cli`). [release-please](https://github.com/googleapis/release-please) reads conventional commits on `main` and drives versioning; publishing uses npm OIDC trusted publishing (no `NPM_TOKEN`, no OTP).
+Five packages ship to npm as a synchronized release: `@lobu/core`, `@lobu/worker`, `@lobu/cli`, `@lobu/owletto-sdk`, `@lobu/owletto-openclaw`. (The previously published `owletto` unscoped package was retired when its commands moved into `@lobu/cli` as the `lobu memory` namespace.) [release-please](https://github.com/googleapis/release-please) reads conventional commits on `main` and drives versioning; publishing uses npm OIDC trusted publishing (no `NPM_TOKEN`, no OTP).
 
 ## Flow
 

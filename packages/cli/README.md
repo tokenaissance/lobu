@@ -25,8 +25,8 @@ npx @lobu/cli@latest skills add lobu
 Install the Owletto starter skill separately with the Owletto CLI:
 
 ```bash
-npx owletto@latest skills add owletto
-npx owletto@latest init
+npx @lobu/cli@latest memory skills add owletto
+npx @lobu/cli@latest memory init
 ```
 
 ## Commands

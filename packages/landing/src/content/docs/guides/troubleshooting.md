@@ -120,7 +120,7 @@ curl http://localhost:8787/health
 # - MEMORY_URL is optional; use it mainly for custom external Owletto URLs
 
 # Test connection
-npx owletto@latest health
+npx @lobu/cli@latest memory health
 ```
 
 ## Slow responses
