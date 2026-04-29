@@ -192,28 +192,16 @@ export async function initLobuGateway(): Promise<Hono | null> {
   ensureEmbeddedGatewaySecrets();
   ensureEmbeddedWorkerLauncher();
   try {
-    const { Gateway, buildGatewayConfig, createGatewayApp, SecretStoreRegistry } = await import(
-      '@lobu/gateway'
-    );
-    const entryUrl = import.meta.resolve('@lobu/gateway');
-    const distRoot = entryUrl.replace(/dist\/index\.js$/, 'dist');
-    const { Orchestrator } = (await import(`${distRoot}/orchestration/index.js`)) as {
-      Orchestrator: new (
-        config: unknown
-      ) => {
-        start: () => Promise<void>;
-        stop: () => Promise<void>;
-        injectCoreServices: (
-          redisClient: unknown,
-          providerCatalogService: unknown,
-          grantStore?: unknown
-        ) => Promise<void>;
-      };
-    };
-    const { ChatInstanceManager, ChatResponseBridge } = await import(
-      '@lobu/gateway/dist/connections'
-    );
-    const { ApiPlatform } = await import('@lobu/gateway/dist/api');
+    const {
+      ApiPlatform,
+      ChatInstanceManager,
+      ChatResponseBridge,
+      Gateway,
+      Orchestrator,
+      SecretStoreRegistry,
+      buildGatewayConfig,
+      createGatewayApp,
+    } = await import('@lobu/gateway');
 
     const publicWebUrl =
       getConfiguredPublicOrigin() || `http://localhost:${process.env.PORT || '8787'}`;
@@ -233,7 +221,6 @@ export async function initLobuGateway(): Promise<Hono | null> {
 
     const gatewayConfig = buildGatewayConfig({
       queues: { connectionString: redisUrl },
-      orchestration: { deploymentMode: 'embedded' },
       mcp: { publicGatewayUrl: publicUrl },
     });
 
@@ -268,8 +255,10 @@ export async function initLobuGateway(): Promise<Hono | null> {
     await hydratePersistedAgentSettings(coreServices.getAgentSettingsStore());
     await orchestrator.injectCoreServices(
       coreServices.getQueue().getRedisClient(),
+      coreServices.getSecretStore(),
       coreServices.getProviderCatalogService(),
-      coreServices.getGrantStore()
+      coreServices.getGrantStore() ?? undefined,
+      coreServices.getPolicyStore() ?? undefined
     );
     logger.info('[Lobu] Embedded orchestrator injected core services');
 

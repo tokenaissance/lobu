@@ -15,7 +15,7 @@ This page compares Lobu against alternatives for deploying agents to production.
 | **Multi-tenant** | Per-user/channel isolation | Single user | Per-thread sandbox | Per-conversation |
 | **Platforms** | Slack, Telegram, WhatsApp, Discord, Teams, Google Chat, REST API | CLI and API | API endpoints (MCP, A2A, Agent Protocol) | API |
 | **Embeddable** | Mount inside Next.js, Express, Hono, Fastify | No | No | No |
-| **Self-hosted** | Docker, Kubernetes | Single process | LangSmith hosted (self-host option) | Cloud only |
+| **Self-hosted** | Single Node process (BYO Postgres + Redis) | Single process | LangSmith hosted (self-host option) | Cloud only |
 | **Model support** | Any provider via config | Any provider | Any LangChain-compatible provider | Anthropic only |
 | **Runtime** | OpenClaw | OpenClaw | LangGraph | Claude |
 | **Network isolation** | Gateway-mediated egress, domain filtering | Host network | Sandbox-level | Platform-managed |
@@ -54,46 +54,31 @@ Multi-session conversational memory.
 
 See the [memory benchmarks methodology](/guides/memory-benchmarks/) for fairness guardrails and reproduction steps.
 
-## Sandboxing and deployment modes
+## Sandboxing model
 
-Lobu offers three deployment modes, each with different isolation guarantees.
+Lobu runs as a single Node process. Each user/channel gets its own worker subprocess that the gateway spawns on demand.
 
-### Kubernetes (production, on-premise)
-
-Each user session gets its own **pod** with:
-- **Pod-level isolation** — constrained resources, separate PID/network namespaces
-- **NetworkPolicies** — workers cannot reach the internet directly; all egress routes through the gateway proxy
-- **RBAC** — gateway has minimum permissions to create/delete worker resources
-- **PVC per session** — workspace files persist across restarts while remaining isolated per user
-- **Runtime hardening** — designed to run with **gVisor** (GCP), **Kata Containers**, or **Firecracker microVMs** where available
-
-The strongest isolation model, suited for on-premise deployments where compliance requires agent-generated code cannot escape its sandbox.
-
-### Docker Compose (single-machine production)
-
-Each user session gets its own **container** on an internal Docker network:
-- Workers are not exposed to the host network
-- All outbound traffic routes through the gateway HTTP proxy with domain filtering
-- Scoped workspace volumes per session
-
-Good for single-machine deployments and local development.
-
-### Embedded (library mode, no Docker required)
+### Embedded (single-process, BYO Postgres + Redis)
 
 Uses [just-bash](https://github.com/nicholasgasior/just-bash) (virtual bash) + **Nix** for reproducible packages. Each user gets an isolated virtual filesystem and bash session at ~50MB memory footprint. Tested at **300 concurrent instances on a single machine**.
 
-Mount Lobu inside Next.js, Express, Hono, Fastify, or Bun — no Docker or Kubernetes needed. See [Embed in Your App](/deployment/embedding/).
+- **Subprocess boundary per user** — `child_process.spawn` per session; SIGKILL recoverable.
+- **Workspace persistence** — `./workspaces/{agentId}/` survives gateway restarts.
+- **Egress through gateway proxy** — workers run with `HTTP_PROXY=http://localhost:8118`; allowlist/blocklist + LLM egress judge enforced at the proxy.
+- **Linux production hardening** — when `systemd-run` is available, the worker spawn becomes a transient unit with `MemoryMax`, `CPUQuota`, `IPAddressDeny=any` (kernel-level egress), capability drops, and `NoNewPrivileges`. macOS dev hosts fall back to plain spawn.
+
+Mount Lobu inside Next.js, Express, Hono, Fastify, or Bun — no separate orchestrator needed. See [Embed in Your App](/deployment/embedding/).
 
 ### Comparison to other sandboxing approaches
 
-| | Lobu (K8s) | Lobu (Docker) | Lobu (Embedded) | E2B | DeepAgents Deploy |
-|---|---|---|---|---|---|
-| Isolation | Pod + gVisor/Kata | Container | Virtual fs + Nix | Firecracker microVM | Daytona/Modal/Runloop |
-| Self-hosted | Yes | Yes | Yes | Cloud API | LangSmith hosted |
-| Network control | Gateway proxy + domain filtering | Gateway proxy + domain filtering | Gateway proxy | Sandbox-level | Sandbox-level |
-| Startup time | Seconds (pod creation) | Seconds (container creation) | Instant (in-process) | <200ms | Varies by provider |
-| Persistence | PVC per session | Volume per session | Directory per session | 24hr max | Thread-scoped, resets on restart |
-| Per-user isolation | Yes | Yes | Yes | Per-sandbox | Per-thread |
+| | Lobu | E2B | DeepAgents Deploy |
+|---|---|---|---|
+| Isolation | Subprocess + just-bash + isolated-vm + (Linux) systemd-run | Firecracker microVM | Daytona/Modal/Runloop |
+| Self-hosted | Yes (single Node process) | Cloud API | LangSmith hosted |
+| Network control | Gateway proxy + domain filtering + IPAddressDeny on Linux | Sandbox-level | Sandbox-level |
+| Startup time | Instant (in-process gateway, subprocess workers) | <200ms | Varies by provider |
+| Persistence | Directory per agent | 24hr max | Thread-scoped, resets on restart |
+| Per-user isolation | Yes (per-channel/DM subprocess) | Per-sandbox | Per-thread |
 
 ## MCP proxy and credential isolation
 
@@ -116,7 +101,7 @@ Hosted platforms (DeepAgents Deploy, Claude Managed Agents) require sending your
 Lobu runs entirely on your infrastructure:
 - **Data stays in your network** — Redis, workspaces, and memory are all self-hosted
 - **No external dependencies** — the gateway, workers, and MCP proxy run on your machines
-- **Network-level isolation** — workers on an internal network with gateway-mediated egress
+- **Network-level isolation** — workers use gateway-mediated egress, with kernel-level loopback-only enforcement on Linux production hosts
 - **Credential separation** — secrets never leave the gateway process
 - **Audit everything** — gateway logs all LLM calls, MCP tool invocations, and network requests
 - **Air-gapped compatible** — with local LLM providers (Ollama, vLLM), Lobu can run fully disconnected
@@ -142,11 +127,11 @@ OpenClaw (~800k LOC) was designed as a **single-tenant, single-user system**. Pr
 |---|---|---|
 | Architecture | Multi-tenant gateway + isolated workers | Single-tenant, single-user |
 | Platform delivery | Slack, Telegram, WhatsApp, Discord, Teams, Google Chat, REST API | CLI and API |
-| Worker isolation | Sandboxed containers, no direct internet | Runs on host |
+| Worker isolation | Subprocess + just-bash + (Linux) systemd-run hardening | Runs on host |
 | Secret handling | Gateway proxy injects credentials | Direct env vars |
 | Egress control | Domain allowlists via HTTP proxy | Host network |
 | Scale-to-zero | Built-in idle timeout and wake | Always running |
-| Deployment | Docker Compose, Kubernetes, or embedded | Single process |
+| Deployment | Single Node process (BYO Postgres + Redis) | Single process |
 
 Inside each Lobu worker, the full OpenClaw runtime runs untouched. Lobu rewrites only the gateway layer (~40k LOC) to be multi-tenant.
 
@@ -196,10 +181,10 @@ Claude Managed Agents is Anthropic's hosted agent platform.
 
 What "we'll build it ourselves" entails:
 
-- **Sandboxing**: per-user container orchestration with workspace persistence
+- **Sandboxing**: per-user worker lifecycle with workspace persistence
 - **Platform adapters**: Slack Events API, Telegram long-polling, WhatsApp webhooks, each with their own auth flows
 - **Credential isolation**: proxy layer that injects secrets without exposing them to agent code
-- **Network policy**: domain-filtered egress on an internal network
+- **Network policy**: domain-filtered egress through a gateway proxy
 - **MCP proxy**: secret injection, OAuth token refresh, and routing for MCP servers
 - **Scale-to-zero**: idle detection, teardown, and wake-on-message
 - **Eval framework**: automated quality testing across models

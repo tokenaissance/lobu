@@ -32,22 +32,10 @@ const GATEWAY_DEFAULTS = {
   PUBLIC_GATEWAY_URL: "",
   QUEUE_DIRECT_MESSAGE: "direct_message",
   QUEUE_MESSAGE_QUEUE: "message_queue",
-  WORKER_IMAGE_REPOSITORY: "lobu-worker",
-  WORKER_IMAGE_TAG: "latest",
-  WORKER_IMAGE_DIGEST: "",
-  WORKER_IMAGE_PULL_POLICY: "Always",
-  WORKER_IMAGE_PULL_SECRETS: "",
-  WORKER_SERVICE_ACCOUNT_NAME: "lobu-worker",
-  WORKER_RUNTIME_CLASS_NAME: "kata",
   WORKER_STARTUP_TIMEOUT_SECONDS: 90,
-  WORKER_CPU_REQUEST: "100m",
-  WORKER_MEMORY_REQUEST: "256Mi",
-  WORKER_CPU_LIMIT: "1000m",
-  WORKER_MEMORY_LIMIT: "2Gi",
   WORKER_IDLE_CLEANUP_MINUTES: 60,
   MAX_WORKER_DEPLOYMENTS: 100,
   WORKER_STALE_TIMEOUT_MINUTES: 10,
-  KUBERNETES_NAMESPACE: "lobu",
   CLEANUP_INITIAL_DELAY_MS: TIME.FIVE_SECONDS_MS,
   CLEANUP_INTERVAL_MS: 60000,
   CLEANUP_VERY_OLD_DAYS: 7,
@@ -55,10 +43,7 @@ const GATEWAY_DEFAULTS = {
   SOCKET_STALE_THRESHOLD_MS: 15 * TIME.MINUTE_MS,
   SOCKET_PROTECT_ACTIVE_WORKERS: true,
   LOBU_DEV_PROJECT_PATH: "/app",
-  COMPOSE_PROJECT_NAME: "lobu",
-  DISPATCHER_SERVICE_NAME: "lobu-dispatcher",
   LOG_LEVEL: "INFO" as const,
-  KUBECONFIG: "~/.kube/config",
   EMBEDDED_MAX_CONCURRENT_SESSIONS: 100,
   EMBEDDED_MAX_MEMORY_PER_SESSION_MB: 256,
   EMBEDDED_BASH_MAX_COMMAND_COUNT: 50_000,
@@ -132,7 +117,6 @@ export interface GatewayConfig {
   orchestration: OrchestratorConfig;
   mcp: {
     publicGatewayUrl: string;
-    internalGatewayUrl: string;
   };
   secrets: {
     /** Redis-backed writable secret store (encrypts via ENCRYPTION_KEY). */
@@ -163,12 +147,9 @@ export function loadEnvFile(envPath?: string): void {
     : path.resolve(process.cwd(), ".env");
 
   if (existsSync(resolvedPath)) {
-    // Match the .env-as-single-source-of-truth contract used by
-    // docker-compose (see PR #209: compose no longer re-exports
-    // `DEPLOYMENT_MODE` from the shell). `override: true` means values in
-    // the file win over stale shell exports inherited from the user's
-    // environment, so `lobu gateway --env .env` and `docker compose up`
-    // behave consistently. Production (`NODE_ENV=production`) skips this
+    // .env is the single source of truth for dev. `override: true` so
+    // values in the file win over stale shell exports inherited from the
+    // user's environment. Production (`NODE_ENV=production`) skips this
     // path entirely, so real deployments are unaffected.
     dotenvConfig({ path: resolvedPath, override: true });
     logger.debug(`Loaded environment variables from ${resolvedPath}`);
@@ -183,16 +164,17 @@ export function loadEnvFile(envPath?: string): void {
 
 /**
  * Derive the internal gateway URL for worker→gateway communication.
- * In K8s, uses DISPATCHER_SERVICE_NAME + namespace. In Docker, defaults to "gateway".
+ * Embedded workers are subprocesses on the same host; the gateway is
+ * served by `@lobu/owletto-backend` on `PORT` under the `/lobu` mount.
+ * `DISPATCHER_URL` is honoured if set so a caller can override (e.g. a
+ * separate network namespace).
  */
 export function getInternalGatewayUrl(): string {
-  const dispatcherService = process.env.DISPATCHER_SERVICE_NAME;
-  if (dispatcherService) {
-    const namespace = process.env.KUBERNETES_NAMESPACE || "lobu";
-    return `http://${dispatcherService}.${namespace}.svc.cluster.local:8080`;
+  if (process.env.DISPATCHER_URL) {
+    return process.env.DISPATCHER_URL;
   }
-  const port = process.env.GATEWAY_PORT || "8080";
-  return `http://gateway:${port}`;
+  const port = process.env.PORT || process.env.GATEWAY_PORT || "8787";
+  return `http://127.0.0.1:${port}/lobu`;
 }
 
 /**
@@ -324,13 +306,48 @@ function buildEmbeddedWorkerPaths(projectRoot: string): {
   // paths — workers are spawned with cwd=workspaceDir, so relative entries
   // would resolve against the workspace and fail.
   const root = path.resolve(projectRoot);
-  return {
-    entryPoint: path.join(root, "packages/worker/src/index.ts"),
-    binPathEntries: [
-      path.join(root, "node_modules/.bin"),
-      path.join(root, "packages/worker/node_modules/.bin"),
-    ],
-  };
+  const explicitEntryPoint = process.env.LOBU_WORKER_ENTRYPOINT;
+  const explicitBinPathEntries = process.env.LOBU_WORKER_BIN_PATHS?.split(
+    path.delimiter
+  ).filter(Boolean);
+  const monorepoEntryPoint = path.join(root, "packages/worker/src/index.ts");
+  const monorepoBinPathEntries = [
+    path.join(root, "node_modules/.bin"),
+    path.join(root, "packages/worker/node_modules/.bin"),
+  ];
+
+  if (explicitEntryPoint) {
+    return {
+      entryPoint: path.resolve(explicitEntryPoint),
+      binPathEntries: explicitBinPathEntries ?? monorepoBinPathEntries,
+    };
+  }
+
+  if (existsSync(monorepoEntryPoint)) {
+    return {
+      entryPoint: monorepoEntryPoint,
+      binPathEntries: monorepoBinPathEntries,
+    };
+  }
+
+  try {
+    const workerPackageJson = createRequire(__filename).resolve(
+      "@lobu/worker/package.json"
+    );
+    const workerPackageRoot = path.dirname(workerPackageJson);
+    return {
+      entryPoint: path.join(workerPackageRoot, "dist/index.js"),
+      binPathEntries: [
+        path.join(workerPackageRoot, "node_modules/.bin"),
+        path.resolve(workerPackageRoot, "..", "..", ".bin"),
+      ],
+    };
+  } catch {
+    return {
+      entryPoint: monorepoEntryPoint,
+      binPathEntries: monorepoBinPathEntries,
+    };
+  }
 }
 
 /**
@@ -423,11 +440,6 @@ export function buildGatewayConfig(
         process.env.SECRET_PROXY_UPSTREAM_URL || process.env.ANTHROPIC_BASE_URL,
     },
     orchestration: {
-      deploymentMode: process.env.DEPLOYMENT_MODE as
-        | "embedded"
-        | "docker"
-        | "kubernetes"
-        | undefined,
       queues: {
         connectionString,
         retryLimit: getOptionalNumber(
@@ -443,59 +455,10 @@ export function buildGatewayConfig(
           TIME.HOUR_SECONDS,
       },
       worker: {
-        image: {
-          repository: getOptionalEnv(
-            "WORKER_IMAGE_REPOSITORY",
-            DEFAULTS.WORKER_IMAGE_REPOSITORY
-          ),
-          tag: getOptionalEnv("WORKER_IMAGE_TAG", DEFAULTS.WORKER_IMAGE_TAG),
-          digest: getOptionalEnv(
-            "WORKER_IMAGE_DIGEST",
-            DEFAULTS.WORKER_IMAGE_DIGEST
-          ),
-          pullPolicy: getOptionalEnv(
-            "WORKER_IMAGE_PULL_POLICY",
-            DEFAULTS.WORKER_IMAGE_PULL_POLICY
-          ),
-        },
-        imagePullSecrets: getOptionalEnv(
-          "WORKER_IMAGE_PULL_SECRETS",
-          DEFAULTS.WORKER_IMAGE_PULL_SECRETS
-        )
-          .split(",")
-          .map((secret) => secret.trim())
-          .filter(Boolean),
-        serviceAccountName: getOptionalEnv(
-          "WORKER_SERVICE_ACCOUNT_NAME",
-          DEFAULTS.WORKER_SERVICE_ACCOUNT_NAME
-        ),
-        runtimeClassName: getOptionalEnv(
-          "WORKER_RUNTIME_CLASS_NAME",
-          DEFAULTS.WORKER_RUNTIME_CLASS_NAME
-        ),
         startupTimeoutSeconds: getOptionalNumber(
           "WORKER_STARTUP_TIMEOUT_SECONDS",
           DEFAULTS.WORKER_STARTUP_TIMEOUT_SECONDS
         ),
-        resources: {
-          requests: {
-            cpu: getOptionalEnv(
-              "WORKER_CPU_REQUEST",
-              DEFAULTS.WORKER_CPU_REQUEST
-            ),
-            memory: getOptionalEnv(
-              "WORKER_MEMORY_REQUEST",
-              DEFAULTS.WORKER_MEMORY_REQUEST
-            ),
-          },
-          limits: {
-            cpu: getOptionalEnv("WORKER_CPU_LIMIT", DEFAULTS.WORKER_CPU_LIMIT),
-            memory: getOptionalEnv(
-              "WORKER_MEMORY_LIMIT",
-              DEFAULTS.WORKER_MEMORY_LIMIT
-            ),
-          },
-        },
         idleCleanupMinutes: getOptionalNumber(
           "WORKER_IDLE_CLEANUP_MINUTES",
           DEFAULTS.WORKER_IDLE_CLEANUP_MINUTES
@@ -504,18 +467,10 @@ export function buildGatewayConfig(
           "MAX_WORKER_DEPLOYMENTS",
           DEFAULTS.MAX_WORKER_DEPLOYMENTS
         ),
-        // Embedded-mode paths. Resolved from the monorepo root pointed at by
-        // LOBU_DEV_PROJECT_PATH (defaults to cwd so CLI invocations from the
-        // repo root still work). Docker/K8s modes ignore these — the worker
-        // image bakes the entrypoint in.
+        // Embedded-mode paths. Prefer monorepo source for local development;
+        // published CLIs fall back to the installed @lobu/worker package.
         ...buildEmbeddedWorkerPaths(
           process.env.LOBU_DEV_PROJECT_PATH || process.cwd()
-        ),
-      },
-      kubernetes: {
-        namespace: getOptionalEnv(
-          "KUBERNETES_NAMESPACE",
-          DEFAULTS.KUBERNETES_NAMESPACE
         ),
       },
       cleanup: {
@@ -535,7 +490,6 @@ export function buildGatewayConfig(
     },
     mcp: {
       publicGatewayUrl,
-      internalGatewayUrl: getInternalGatewayUrl(),
     },
     secrets: {
       redis: {
@@ -596,13 +550,6 @@ export function displayGatewayConfig(config: GatewayConfig): void {
   );
 
   console.log("\nOrchestration:");
-  console.log(
-    `  Worker Image: ${config.orchestration.worker.image.repository}`
-  );
-  console.log(`  Worker Tag: ${config.orchestration.worker.image.tag}`);
-  if (config.orchestration.worker.image.digest) {
-    console.log(`  Worker Digest: ${config.orchestration.worker.image.digest}`);
-  }
   console.log(
     `  Max Deployments: ${config.orchestration.worker.maxDeployments}`
   );

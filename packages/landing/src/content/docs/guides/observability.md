@@ -17,11 +17,10 @@ Each incoming message creates a root span that propagates through the full reque
 
 1. **message_received** — gateway ingests message from API or platform (Slack, Telegram, etc.)
 2. **queue_processing** — message consumer picks up the job
-3. **worker_creation** — gateway creates worker container/pod
-4. **pvc_setup** — persistent volume setup (Kubernetes only)
-5. **job_received** — worker receives the job
-6. **exec_execution** — sandbox command execution (if applicable)
-7. **agent_execution** — agent runs the prompt
+3. **worker_creation** — gateway spawns the worker subprocess
+4. **job_received** — worker receives the job
+5. **exec_execution** — sandbox command execution (if applicable)
+6. **agent_execution** — agent runs the prompt
 
 **Response path (worker → platform):**
 
@@ -44,34 +43,20 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
 
 Both gateway and worker initialize tracing on startup when this is set. The gateway passes the endpoint to workers automatically. You can also set this during `lobu init`.
 
-### Docker setup
+### Local Tempo + Grafana
 
-Add a Tempo service to your `docker-compose.yml`:
+Lobu doesn't bundle observability infrastructure. Run Tempo and Grafana however you prefer — managed (Grafana Cloud), a separate compose file, or directly via `docker run` / `podman run`. Then point Lobu at the OTLP endpoint via `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
-```yaml
-tempo:
-  image: grafana/tempo:latest
-  command: ["-config.file=/etc/tempo.yaml"]
-  volumes:
-    - ./tempo.yaml:/etc/tempo.yaml
-    - tempo-data:/var/tempo
-  ports:
-    - "4318:4318"   # OTLP HTTP
-    - "3200:3200"   # Tempo query API
+For a minimal local stack:
 
-grafana:
-  image: grafana/grafana:latest
-  ports:
-    - "3001:3000"
-  environment:
-    - GF_AUTH_ANONYMOUS_ENABLED=true
-    - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-  volumes:
-    - grafana-data:/var/lib/grafana
+```bash
+docker run -d --name tempo -p 4318:4318 -p 3200:3200 \
+  -v "$PWD/tempo.yaml:/etc/tempo.yaml" -v tempo-data:/var/tempo \
+  grafana/tempo:latest -config.file=/etc/tempo.yaml
 
-volumes:
-  tempo-data:
-  grafana-data:
+docker run -d --name grafana -p 3001:3000 \
+  -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
+  -v grafana-data:/var/lib/grafana grafana/grafana:latest
 ```
 
 Minimal `tempo.yaml`:
@@ -100,43 +85,9 @@ metrics_generator:
 
 Then add `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317` to your `.env` and restart.
 
-### Kubernetes setup
-
-Enable Tempo in your Helm values:
-
-```yaml
-tempo:
-  enabled: true
-  tempo:
-    storage:
-      trace:
-        backend: local
-        local:
-          path: /var/tempo/traces
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: "0.0.0.0:4317"
-          http:
-            endpoint: "0.0.0.0:4318"
-  persistence:
-    enabled: true
-    size: 10Gi
-
-grafana:
-  enabled: true
-  namespace: "monitoring"
-  lokiUrl: "http://loki:3100"
-```
-
-The Helm chart automatically:
-- Configures Tempo and Loki datasources in Grafana with cross-linking (logs ↔ traces)
-- Deploys the "Lobu Message Traces" dashboard
-
 ### Grafana dashboard
 
-The built-in dashboard (`charts/lobu/grafana-dashboard.json`) provides:
+A reference Grafana dashboard JSON is published with each release. It provides:
 
 - **Messages processed per minute** — throughput time series
 - **Recent stage completions** — table of recent traces with stage and duration
@@ -172,12 +123,17 @@ Lobu uses a console logger by default (unbuffered, 12-factor compliant). Logs ar
 
 ### Viewing logs
 
-```bash
-# Docker
-docker compose -f docker/docker-compose.yml logs -f gateway
+Logs come from the single Lobu Node process's stdout/stderr. View them however you supervise the process:
 
-# Kubernetes
-kubectl logs -f deployment/lobu-gateway -n lobu
+```bash
+# Foreground
+lobu run
+
+# systemd
+journalctl -u lobu -f
+
+# pm2
+pm2 logs lobu
 ```
 
 ## Error monitoring (Sentry)

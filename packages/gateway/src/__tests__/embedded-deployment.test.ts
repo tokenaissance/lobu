@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
+import path from "node:path";
 import { ErrorCode, OrchestratorError } from "@lobu/core";
 import type {
   MessagePayload,
@@ -59,6 +60,7 @@ import { EmbeddedDeploymentManager } from "../orchestration/impl/embedded-deploy
 // ---------------------------------------------------------------------------
 const TEST_ENCRYPTION_KEY =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const originalDisableSystemdRun = process.env.LOBU_DISABLE_SYSTEMD_RUN;
 
 const TEST_CONFIG: OrchestratorConfig = {
   queues: {
@@ -68,21 +70,11 @@ const TEST_CONFIG: OrchestratorConfig = {
     expireInSeconds: 300,
   },
   worker: {
-    image: {
-      repository: "lobu-worker",
-      tag: "latest",
-      pullPolicy: "IfNotPresent",
-    },
     entryPoint: "/test/packages/worker/src/index.ts",
     binPathEntries: ["/test/node_modules/.bin"],
-    resources: {
-      requests: { cpu: "100m", memory: "128Mi" },
-      limits: { cpu: "500m", memory: "512Mi" },
-    },
     idleCleanupMinutes: 30,
     maxDeployments: 10,
   },
-  kubernetes: { namespace: "default" },
   cleanup: {
     initialDelayMs: 5000,
     intervalMs: 60000,
@@ -118,6 +110,7 @@ describe("EmbeddedDeploymentManager", () => {
 
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+    process.env.LOBU_DISABLE_SYSTEMD_RUN = "1";
     manager = new EmbeddedDeploymentManager(TEST_CONFIG);
     mockChildProcesses.length = 0;
     mockSpawn.mockClear();
@@ -126,6 +119,11 @@ describe("EmbeddedDeploymentManager", () => {
 
   afterEach(() => {
     mkdirSyncSpy.mockRestore();
+    if (originalDisableSystemdRun === undefined) {
+      delete process.env.LOBU_DISABLE_SYSTEMD_RUN;
+    } else {
+      process.env.LOBU_DISABLE_SYSTEMD_RUN = originalDisableSystemdRun;
+    }
   });
 
   // =========================================================================
@@ -175,6 +173,27 @@ describe("EmbeddedDeploymentManager", () => {
       expect(mockChildProcesses).toHaveLength(1);
       expect(mockChildProcesses[0]).toBeDefined();
       expect(mockSpawn.mock.calls.at(-1)?.[0]).toBe(process.execPath);
+    });
+
+    test("compiled worker entry points run with Node", async () => {
+      const jsManager = new EmbeddedDeploymentManager({
+        ...TEST_CONFIG,
+        worker: {
+          ...TEST_CONFIG.worker,
+          entryPoint: "/test/packages/worker/dist/index.js",
+        },
+      });
+      const msg = createTestMessagePayload();
+
+      await jsManager.ensureDeployment("worker-1", "user-1", "user-1", msg);
+
+      const expectedNode = path.basename(process.execPath).startsWith("node")
+        ? process.execPath
+        : "node";
+      expect(mockSpawn.mock.calls.at(-1)?.[0]).toBe(expectedNode);
+      expect(mockSpawn.mock.calls.at(-1)?.[1]).toEqual([
+        "/test/packages/worker/dist/index.js",
+      ]);
     });
 
     test("ensureDeployment with different names returns multiple entries", async () => {

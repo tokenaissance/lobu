@@ -33,15 +33,9 @@ export class WorkerConnectionManager {
   private agentDeployments: Map<string, Set<string>> = new Map();
   private heartbeatInterval: NodeJS.Timeout;
   private cleanupInterval: NodeJS.Timeout;
-  private useLocalhost: boolean;
 
   constructor() {
-    const mode = process.env.DEPLOYMENT_MODE || "";
-    this.useLocalhost = mode !== "kubernetes" && mode !== "k8s";
-    // Send heartbeat pings every 30 seconds
     this.heartbeatInterval = setInterval(() => this.sendHeartbeats(), 30000);
-
-    // Cleanup stale connections every 30 seconds
     this.cleanupInterval = setInterval(
       () => this.cleanupStaleConnections(),
       30000
@@ -59,10 +53,9 @@ export class WorkerConnectionManager {
     writer: SSEWriter,
     httpPort?: number
   ): void {
-    // In embedded/Docker mode workers run in-process, so use localhost.
-    // In Kubernetes mode each worker is a separate pod addressable by name.
-    const httpHost = this.useLocalhost ? "127.0.0.1" : deploymentName;
-    const httpUrl = httpPort ? `http://${httpHost}:${httpPort}` : undefined;
+    // Workers run as subprocesses on the same host; the gateway always
+    // reaches them on the loopback interface.
+    const httpUrl = httpPort ? `http://127.0.0.1:${httpPort}` : undefined;
 
     const connection: WorkerConnection = {
       deploymentName,

@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createLogger, ErrorCode, OrchestratorError } from "@lobu/core";
@@ -19,6 +19,103 @@ const logger = createLogger("orchestrator");
 
 /** Timeout (ms) to wait for graceful shutdown before SIGKILL. */
 const KILL_TIMEOUT_MS = 5_000;
+
+/**
+ * Detect once whether `systemd-run --user` is available. On Linux production
+ * hosts this lets us spawn each worker as a transient systemd unit with
+ * cgroup limits + IPAddressDeny + capability drops. macOS dev hosts and
+ * Linux hosts without user systemd fall back to plain `child_process.spawn`.
+ */
+let cachedSystemdRun: string | null | undefined;
+function locateSystemdRun(): string | null {
+  if (cachedSystemdRun !== undefined) return cachedSystemdRun;
+  if (process.platform !== "linux") {
+    cachedSystemdRun = null;
+    return cachedSystemdRun;
+  }
+  if (process.env.LOBU_DISABLE_SYSTEMD_RUN === "1") {
+    cachedSystemdRun = null;
+    return cachedSystemdRun;
+  }
+  try {
+    // Probe by dispatching a real transient unit: `--version` only prints the
+    // package version and does not exercise dbus. Some Linux hosts ship the
+    // binary with no user manager attached; we have to exercise the
+    // user-bus path that the worker spawn will later use, or workers fail
+    // at first request instead of falling back to plain spawn here.
+    //
+    //   --no-block  → return as soon as the request is queued (no waiting on
+    //                 the dispatched command); still requires a reachable bus
+    //   --collect   → auto-remove the transient unit when it exits, so the
+    //                 probe leaves no residue in the user manager
+    //   timeout     → guard against a hung dbus connection (rare, but cheap)
+    execFileSync(
+      "systemd-run",
+      ["--user", "--quiet", "--collect", "--no-block", "/bin/true"],
+      { stdio: "ignore", timeout: 3_000 }
+    );
+    cachedSystemdRun = "systemd-run";
+  } catch {
+    cachedSystemdRun = null;
+  }
+  return cachedSystemdRun;
+}
+
+/**
+ * Build the systemd-run argv prefix for a hardened transient scope. Defaults
+ * are tuned for a single Lobu worker; operators can override via
+ * LOBU_WORKER_MEMORY_MAX / LOBU_WORKER_CPU_QUOTA / LOBU_WORKER_TASKS_MAX.
+ */
+function buildSystemdRunArgs(opts: {
+  unitName: string;
+  workspaceDir: string;
+}): string[] {
+  const memMax = process.env.LOBU_WORKER_MEMORY_MAX || "512M";
+  const cpuQuota = process.env.LOBU_WORKER_CPU_QUOTA || "200%";
+  const tasksMax = process.env.LOBU_WORKER_TASKS_MAX || "64";
+  const fileMax = process.env.LOBU_WORKER_LIMIT_NOFILE || "1024";
+  return [
+    "--user",
+    "--scope",
+    "--quiet",
+    `--unit=${opts.unitName}`,
+    "-p",
+    "NoNewPrivileges=yes",
+    "-p",
+    "PrivateTmp=yes",
+    "-p",
+    "ProtectSystem=strict",
+    "-p",
+    "ProtectHome=yes",
+    "-p",
+    `ReadWritePaths=${opts.workspaceDir}`,
+    "-p",
+    `MemoryMax=${memMax}`,
+    "-p",
+    `CPUQuota=${cpuQuota}`,
+    "-p",
+    `TasksMax=${tasksMax}`,
+    "-p",
+    `LimitNOFILE=${fileMax}`,
+    "-p",
+    "IPAddressDeny=any",
+    "-p",
+    "IPAddressAllow=127.0.0.1",
+    "-p",
+    "CapabilityBoundingSet=",
+    "-p",
+    "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+  ];
+}
+
+function makeUnitName(deploymentName: string): string {
+  // systemd unit names allow only [A-Za-z0-9:_.\\-]; sanitize and add a
+  // short random tag so concurrent workers don't collide if a prior unit
+  // is still being torn down.
+  const safe = deploymentName.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 64);
+  const tag = Math.random().toString(36).slice(2, 8);
+  return `lobu-worker-${safe}-${tag}`;
+}
 
 interface EmbeddedWorkerEntry {
   process: ChildProcess;
@@ -48,6 +145,33 @@ function getBunExecutable(): string {
     : "bun";
 }
 
+function getNodeExecutable(): string {
+  return path.basename(process.execPath).startsWith("node")
+    ? process.execPath
+    : "node";
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_/:=.,+@%-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildWorkerInvocation(entryPoint: string): {
+  command: string;
+  args: string[];
+} {
+  const ext = path.extname(entryPoint);
+  if (ext === ".js" || ext === ".cjs" || ext === ".mjs") {
+    return { command: getNodeExecutable(), args: [entryPoint] };
+  }
+
+  return { command: getBunExecutable(), args: ["run", entryPoint] };
+}
+
+function buildShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map(shellQuote).join(" ");
+}
+
 export class EmbeddedDeploymentManager extends BaseDeploymentManager {
   private workers: Map<string, EmbeddedWorkerEntry> = new Map();
 
@@ -60,7 +184,21 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
   }
 
   protected getDispatcherHost(): string {
-    return "localhost";
+    // Match the systemd-run scope's IPAddressAllow=127.0.0.1 — IPv6 ::1
+    // resolution would be blocked under the hardened scope.
+    return "127.0.0.1";
+  }
+
+  /**
+   * Embedded gateway is served by `@lobu/owletto-backend` at the `/lobu`
+   * mount on the configured PORT (default 8787). Without overriding here,
+   * `BaseDeploymentManager` would hand workers the standalone gateway default
+   * port with no mount prefix, so the worker would 404 on every dispatch and
+   * provider-proxy call.
+   */
+  protected getDispatcherUrl(): string {
+    const port = process.env.PORT || process.env.GATEWAY_PORT || "8787";
+    return `http://${this.getDispatcherHost()}:${port}/lobu`;
   }
 
   private getWorkerEntryPoint(): string {
@@ -120,7 +258,6 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
     );
 
     commonEnvVars.WORKSPACE_DIR = workspaceDir;
-    commonEnvVars.DEPLOYMENT_MODE = "embedded";
     const embeddedPath = buildEmbeddedWorkerPath(
       this.config.worker.binPathEntries,
       commonEnvVars.PATH || process.env.PATH
@@ -135,29 +272,51 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
       commonEnvVars.JUST_BASH_ALLOWED_DOMAINS = JSON.stringify(allowedDomains);
     }
 
-    // Determine spawn command based on nix packages
+    // Determine spawn command based on nix packages. Monorepo development
+    // runs the TypeScript worker via Bun; published CLI installs resolve the
+    // compiled @lobu/worker dist entry and can run it with Node.
     const nixPackages = messageData?.nixConfig?.packages ?? [];
     const workerEntryPoint = this.getWorkerEntryPoint();
-    const bunExecutable = getBunExecutable();
+    const workerInvocation = buildWorkerInvocation(workerEntryPoint);
 
     let command: string;
     let spawnArgs: string[];
 
     if (nixPackages.length > 0) {
-      // Wrap in nix-shell so nix binaries are on PATH
+      // Wrap in nix-shell so nix binaries are on PATH.
       command = "nix-shell";
       spawnArgs = [
         "-p",
         ...nixPackages,
         "--run",
-        `${bunExecutable} run ${workerEntryPoint}`,
+        buildShellCommand(workerInvocation.command, workerInvocation.args),
       ];
       logger.info(
         `Spawning embedded worker ${deploymentName} with nix packages: ${nixPackages.join(", ")}`
       );
     } else {
-      command = bunExecutable;
-      spawnArgs = ["run", workerEntryPoint];
+      command = workerInvocation.command;
+      spawnArgs = workerInvocation.args;
+    }
+
+    // On Linux production hosts, wrap the worker in a transient systemd
+    // user scope: cgroup limits + IPAddressDeny + capability drops. Falls
+    // back transparently on macOS / Linux hosts without user systemd.
+    const systemdRun = locateSystemdRun();
+    if (systemdRun) {
+      const unitName = makeUnitName(deploymentName);
+      const innerCommand = command;
+      const innerArgs = spawnArgs;
+      command = systemdRun;
+      spawnArgs = [
+        ...buildSystemdRunArgs({ unitName, workspaceDir }),
+        "--",
+        innerCommand,
+        ...innerArgs,
+      ];
+      logger.info(
+        `Spawning embedded worker ${deploymentName} under systemd-run scope ${unitName}`
+      );
     }
 
     const child = spawn(command, spawnArgs, {
@@ -166,7 +325,17 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    // Pipe child stdout/stderr to gateway logger
+    // Spawn errors (binary missing, EACCES, fork failure) fire on the child
+    // *after* spawn() returns, so without an "error" listener Node would
+    // throw an unhandled exception and crash the gateway. Drop the entry
+    // and log so the next ensureDeployment can retry cleanly.
+    child.once("error", (err) => {
+      logger.error(
+        `Embedded worker ${deploymentName} spawn error: ${err.message}`
+      );
+      this.workers.delete(deploymentName);
+    });
+
     child.stdout?.on("data", (data: Buffer) => {
       for (const line of data.toString().trimEnd().split("\n")) {
         logger.info({ worker: deploymentName }, line);
@@ -178,22 +347,21 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
       }
     });
 
-    // Handle child exit (use once to prevent duplicate handler invocations)
     child.once("exit", (code, signal) => {
       const entry = this.workers.get(deploymentName);
       if (entry) {
         this.workers.delete(deploymentName);
-        if (signal) {
-          logger.info(
-            `Embedded worker ${deploymentName} exited with signal ${signal}`
-          );
-        } else if (code !== 0) {
-          logger.error(
-            `Embedded worker ${deploymentName} exited with code ${code}`
-          );
-        } else {
-          logger.info(`Embedded worker ${deploymentName} exited cleanly`);
-        }
+      }
+      if (signal) {
+        logger.info(
+          `Embedded worker ${deploymentName} exited with signal ${signal}`
+        );
+      } else if (code !== 0) {
+        logger.error(
+          `Embedded worker ${deploymentName} exited with code ${code}`
+        );
+      } else {
+        logger.info(`Embedded worker ${deploymentName} exited cleanly`);
       }
     });
 
@@ -216,7 +384,7 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
     const entry = this.workers.get(deploymentName);
 
     if (replicas === 0 && entry) {
-      this.killWorker(entry, deploymentName);
+      await this.killWorker(entry, deploymentName);
       logger.info(`Stopped embedded worker ${deploymentName}`);
     } else if (replicas === 1 && !entry) {
       logger.warn(
@@ -228,7 +396,7 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
   async deleteDeployment(deploymentName: string): Promise<void> {
     const entry = this.workers.get(deploymentName);
     if (entry) {
-      this.killWorker(entry, deploymentName);
+      await this.killWorker(entry, deploymentName);
       logger.info(`Stopped embedded worker: ${deploymentName}`);
     }
   }
@@ -261,20 +429,30 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
     }
   }
 
-  /** Send SIGTERM, then SIGKILL after timeout. */
-  private killWorker(entry: EmbeddedWorkerEntry, deploymentName: string): void {
+  /** Send SIGTERM, then SIGKILL after timeout. Resolves on child exit. */
+  private async killWorker(
+    entry: EmbeddedWorkerEntry,
+    deploymentName: string
+  ): Promise<void> {
     const child = entry.process;
 
-    // Delete from map first to prevent race with exit handler
+    // Delete from map first to prevent race with the exit handler.
     this.workers.delete(deploymentName);
 
-    // Check if already exited after map deletion
-    if (child.exitCode !== null || child.killed) return;
+    // Already exited — `exitCode`/`signalCode` are the only reliable
+    // indicators here. `child.killed` is set the moment we *send* a signal,
+    // so checking it would mis-treat "we just sent SIGTERM" as "already
+    // exited" and skip the SIGKILL escalation below.
+    if (child.exitCode !== null || child.signalCode !== null) return;
+
+    const exited = new Promise<void>((resolve) => {
+      child.once("exit", () => resolve());
+    });
 
     child.kill("SIGTERM");
 
     const killTimer = setTimeout(() => {
-      if (child.exitCode === null && !child.killed) {
+      if (child.exitCode === null && child.signalCode === null) {
         logger.warn(
           `Embedded worker ${deploymentName} did not exit after SIGTERM, sending SIGKILL`
         );
@@ -282,6 +460,10 @@ export class EmbeddedDeploymentManager extends BaseDeploymentManager {
       }
     }, KILL_TIMEOUT_MS);
 
-    child.once("exit", () => clearTimeout(killTimer));
+    try {
+      await exited;
+    } finally {
+      clearTimeout(killTimer);
+    }
   }
 }
