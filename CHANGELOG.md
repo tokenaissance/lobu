@@ -1,5 +1,54 @@
 # Changelog
 
+## [6.0.0](https://github.com/lobu-ai/lobu/compare/lobu-v5.0.0...lobu-v6.0.0) (2026-04-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* external MCP clients calling `manage_connections` or `manage_auth_profiles` directly will receive `Tool not found`. Move those callers to the REST proxy at `POST /api/{orgSlug}/{toolName}`.
+* **owletto-backend:** the `execute` MCP tool is removed. External MCP clients must switch to `run` (mutating scripts) or `query` (read-only scripts). The internal `manage_connections` and `manage_auth_profiles` tools are no longer visible on the public MCP surface; CLI/web flows continue to reach them via the REST proxy.
+
+### Features
+
+* **connectors:** add reddit user_activity feed ([#445](https://github.com/lobu-ai/lobu/issues/445)) ([f53c6a1](https://github.com/lobu-ai/lobu/commit/f53c6a1ce6ee63a548a0ef67dadd0dc06f529675))
+* drop Docker/K8s deployment modes — embedded-only ([5fef6c2](https://github.com/lobu-ai/lobu/commit/5fef6c27a4ce3474a6935ddd702c1f9233f46e5c))
+* **identity:** facts-as-events identity engine ([475baab](https://github.com/lobu-ai/lobu/commit/475baab3da2d13d1f45834e3f572ceb97fdc4ce3))
+* migrate browser-auth to REST, demote manage_* to internal MCP ([#439](https://github.com/lobu-ai/lobu/issues/439)) ([9f883a5](https://github.com/lobu-ai/lobu/commit/9f883a5d56c92665da27bce37886d97e665565d5))
+* **owletto-backend:** 401 + WWW-Authenticate for unauth /mcp ([#438](https://github.com/lobu-ai/lobu/issues/438)) ([ae703fa](https://github.com/lobu-ai/lobu/commit/ae703fa69478fc3d54a464ef3e7c99a51c3bff7c))
+* **owletto-backend:** split MCP execute into query (read-only) + run (full) ([#432](https://github.com/lobu-ai/lobu/issues/432)) ([aef8254](https://github.com/lobu-ai/lobu/commit/aef825435dbc4a5015b5f6cc35419940e245e6a5))
+* **worker:** per-exec OS sandbox for spawned binaries in embedded mode ([daa25d7](https://github.com/lobu-ai/lobu/commit/daa25d7065d2abe1584642d7c94378c8c707b6d2))
+
+
+### Bug Fixes
+
+* **connectors:** bundle pino + link-preview-js instead of externalising ([#448](https://github.com/lobu-ai/lobu/issues/448)) ([7486f39](https://github.com/lobu-ai/lobu/commit/7486f393197ab9d0b980800c9c2562e13566189a))
+* **db:** drop legacy event source id ([#419](https://github.com/lobu-ai/lobu/issues/419)) ([560c073](https://github.com/lobu-ai/lobu/commit/560c0731b10197bd8dc40c5781cfed517bffb111))
+* **db:** tenant-scoped FK on connections.auth_profile references ([#447](https://github.com/lobu-ai/lobu/issues/447)) ([891f7ab](https://github.com/lobu-ai/lobu/commit/891f7ab45abdd16e90377a7187c25f79e9491eb0))
+* **embedded:** default MEMORY_URL so dispatcher service tokens validate ([#451](https://github.com/lobu-ai/lobu/issues/451)) ([596cd9c](https://github.com/lobu-ai/lobu/commit/596cd9c877a838d663fae085ff159fe418f466b7))
+* **events:** make creator attribution nullable ([#418](https://github.com/lobu-ai/lobu/issues/418)) ([b7f59f5](https://github.com/lobu-ai/lobu/commit/b7f59f51f2041b5ffb42e2e025881190f599eac7))
+* **execute:** bundle backend so prod runs under Node + isolated-vm ([#433](https://github.com/lobu-ai/lobu/issues/433)) ([20afae5](https://github.com/lobu-ai/lobu/commit/20afae540b02983e47a38d8cb7650b15f2907a5d))
+* **execute:** harden sandbox runtime ([#427](https://github.com/lobu-ai/lobu/issues/427)) ([343cc03](https://github.com/lobu-ai/lobu/commit/343cc03962ef4e26e795664f7a07ca50716dc724))
+* **execute:** run backend under Node so isolated-vm loads ([#430](https://github.com/lobu-ai/lobu/issues/430)) ([71c74e1](https://github.com/lobu-ai/lobu/commit/71c74e18600c8d5c1c21c0638b994a05aefbc687))
+* **owletto-backend:** make classification reconciliation candidate query selective ([#454](https://github.com/lobu-ai/lobu/issues/454)) ([4b83739](https://github.com/lobu-ai/lobu/commit/4b837390d0de44a6003ffd0a10354512558091fc))
+* **owletto-backend:** MCP rough edges — org scope, paginated SDK examples, knowledge.delete tombstone ([#442](https://github.com/lobu-ai/lobu/issues/442)) ([6f2ae98](https://github.com/lobu-ai/lobu/commit/6f2ae988b802393f6653485cacac3727c91452c9))
+* **owletto-backend:** re-register list_watchers/get_watcher/read_knowledge for REST ([#434](https://github.com/lobu-ai/lobu/issues/434)) ([dac1603](https://github.com/lobu-ai/lobu/commit/dac1603f7e3c5988e3656e4753539351fd510308))
+* **public-pages:** serve scrapeable HTML for generic clients ([#415](https://github.com/lobu-ai/lobu/issues/415)) ([818c804](https://github.com/lobu-ai/lobu/commit/818c804fde615724d6b02c3a278345508b465919))
+* **public-pages:** skip SSR shell for signed-in users ([4c31a04](https://github.com/lobu-ai/lobu/commit/4c31a04543035ac0928bc22c623025031062dfbb))
+* **reddit:** request identity scope so /api/v1/me works ([#449](https://github.com/lobu-ai/lobu/issues/449)) ([2fc08d8](https://github.com/lobu-ai/lobu/commit/2fc08d80e3fa61eff7c6c386c4f63374cf16f4f7))
+* **watchers:** connector dep hygiene + dispatcher fail-closed ([#444](https://github.com/lobu-ai/lobu/issues/444)) ([b4bb37f](https://github.com/lobu-ai/lobu/commit/b4bb37fd62c26b085d0490972d3b261cab445db5))
+* **watchers:** include watcher_group_id in list response; bump owletto-web for inline version chip ([#435](https://github.com/lobu-ai/lobu/issues/435)) ([4f9db5a](https://github.com/lobu-ai/lobu/commit/4f9db5a1437d531e5263bf431dcefa076156c087))
+* **worker:** skip --import tsx when running under Bun ([#412](https://github.com/lobu-ai/lobu/issues/412)) ([39e031d](https://github.com/lobu-ai/lobu/commit/39e031d512561db27215a44469995ca11c043eb1))
+
+
+### Performance Improvements
+
+* **events:** fold visibility into get_content WHERE; drop entity lookup ([#455](https://github.com/lobu-ai/lobu/issues/455)) ([9f0566b](https://github.com/lobu-ai/lobu/commit/9f0566b04c4ded0d9b58d70497ede0b1a8b686c0))
+
+
+### Reverts
+
+* **execute:** drop runtime swap in [#430](https://github.com/lobu-ai/lobu/issues/430) — keep prod on bun ([#431](https://github.com/lobu-ai/lobu/issues/431)) ([f6115d8](https://github.com/lobu-ai/lobu/commit/f6115d8e9f79a8cf0d145db5c5c62f54387165ef))
+
 ## [5.0.0](https://github.com/lobu-ai/lobu/compare/lobu-v4.3.0...lobu-v5.0.0) (2026-04-27)
 
 

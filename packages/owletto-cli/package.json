@@ -1,6 +1,6 @@
 {
   "name": "owletto",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Unified CLI for Lobu memory — dev, deploy, and manage from one command",
   "type": "module",
   "bin": {
