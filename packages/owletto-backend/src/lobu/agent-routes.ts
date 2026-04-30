@@ -1079,6 +1079,8 @@ routes.delete('/:agentId/connections/:connId', mcpAuth, async (c) => {
 // ── Start connection ─────────────────────────────────────────────────────────
 
 routes.post('/:agentId/connections/:connId/start', mcpAuth, async (c) => {
+  const denied = requireSessionOrAdminPat(c);
+  if (denied) return denied;
   return withOrg(c, async () => {
     const { connId } = c.req.param();
     const chatManager = getChatInstanceManager();
@@ -1105,6 +1107,8 @@ routes.post('/:agentId/connections/:connId/start', mcpAuth, async (c) => {
 // ── Stop connection ──────────────────────────────────────────────────────────
 
 routes.post('/:agentId/connections/:connId/stop', mcpAuth, async (c) => {
+  const denied = requireSessionOrAdminPat(c);
+  if (denied) return denied;
   return withOrg(c, async () => {
     const { connId } = c.req.param();
     const chatManager = getChatInstanceManager();

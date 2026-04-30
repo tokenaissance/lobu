@@ -686,4 +686,28 @@ describe('admin-tier auth admission (requireSessionOrAdminPat)', () => {
     );
     expect(response.status).toBe(403);
   });
+
+  test('POST /:agentId/connections/:connId/start rejects a write-only PAT', async () => {
+    const app = await importAgentRoutes();
+    await seedAgent(ORG_A, 'lifecycle-host-start');
+    authStash.authSource = 'pat';
+    authStash.mcpAuthInfo = { scopes: ['mcp:read', 'mcp:write'] };
+    const response = await app.request(
+      '/lifecycle-host-start/connections/some-conn-id/start',
+      { method: 'POST' }
+    );
+    expect(response.status).toBe(403);
+  });
+
+  test('POST /:agentId/connections/:connId/stop rejects a write-only PAT', async () => {
+    const app = await importAgentRoutes();
+    await seedAgent(ORG_A, 'lifecycle-host-stop');
+    authStash.authSource = 'pat';
+    authStash.mcpAuthInfo = { scopes: ['mcp:read', 'mcp:write'] };
+    const response = await app.request(
+      '/lifecycle-host-stop/connections/some-conn-id/stop',
+      { method: 'POST' }
+    );
+    expect(response.status).toBe(403);
+  });
 });
